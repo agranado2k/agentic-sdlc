@@ -57,15 +57,15 @@ banner "1. Sourcing the dispatcher defines the derivation and runs nothing"
 # resolves a tier — with the suite's own arguments untouched, and nothing on
 # either stream. A dispatcher that ran when sourced would print its usage and
 # exit 2 here.
-t_run_split sh -c '_dispatch_here="$1"; . "$2"; command -v _budget_derive >/dev/null && echo "defined: _budget_derive"; command -v _budget_scope_props >/dev/null && echo "defined: _budget_scope_props"; command -v _budget_counters_text >/dev/null && echo "defined: _budget_counters_text"; shift 2; echo "args: $*"; case $- in *u*) echo "nounset: on" ;; *) echo "nounset: off" ;; esac' probe "$KIT/scripts" "$DISPATCH" a b
-s_assert_status 0 "sourcing the dispatcher with _dispatch_here set exits 0 — it ran no dispatch"
-s_assert_out_has "defined: _budget_derive" "…and defines _budget_derive"
-s_assert_out_has "defined: _budget_scope_props" "…and _budget_scope_props"
-s_assert_out_has "defined: _budget_counters_text" "…and _budget_counters_text"
-s_assert_out_has "args: a b" "…and leaves the sourcing shell's arguments alone"
-s_assert_out_has "nounset: off" "…and its options — the dispatcher's set -u is the dispatch's, below the seam"
-s_assert_out_lacks "usage:" "…without printing the usage"
-s_assert_err_lacks "dispatch:"
+t_exec sh -c '_dispatch_here="$1"; . "$2"; command -v _budget_derive >/dev/null && echo "defined: _budget_derive"; command -v _budget_scope_props >/dev/null && echo "defined: _budget_scope_props"; command -v _budget_counters_text >/dev/null && echo "defined: _budget_counters_text"; shift 2; echo "args: $*"; case $- in *u*) echo "nounset: on" ;; *) echo "nounset: off" ;; esac' probe "$KIT/scripts" "$DISPATCH" a b
+expect_status 0 "sourcing the dispatcher with _dispatch_here set exits 0 — it ran no dispatch"
+expect_out_has "defined: _budget_derive" "…and defines _budget_derive"
+expect_out_has "defined: _budget_scope_props" "…and _budget_scope_props"
+expect_out_has "defined: _budget_counters_text" "…and _budget_counters_text"
+expect_out_has "args: a b" "…and leaves the sourcing shell's arguments alone"
+expect_out_has "nounset: off" "…and its options — the dispatcher's set -u is the dispatch's, below the seam"
+expect_out_lacks "usage:" "…without printing the usage"
+expect_err_lacks "dispatch:"
 
 # Sourced WITHOUT _dispatch_here there is nowhere to find agents.lib.sh, and
 # the dispatcher says so rather than guessing from the sourcing script's $0
@@ -73,41 +73,41 @@ s_assert_err_lacks "dispatch:"
 # open and reads the status. The same branch is reached by EXECUTING a copy
 # under any other name — the detection is $0's, as scripts/agents.lib.sh's
 # is — so the message names both causes.
-t_run_split sh -c '. "$1"; echo "sourcing status $?"' probe "$DISPATCH"
-s_assert_out_has "sourcing status 2" "sourcing without _dispatch_here is refused with status 2 — and the sourcing shell goes on"
-s_assert_err_has "_dispatch_here"
-s_assert_err_has "a name other than agent-dispatch.sh"
+t_exec sh -c '. "$1"; echo "sourcing status $?"' probe "$DISPATCH"
+expect_out_has "sourcing status 2" "sourcing without _dispatch_here is refused with status 2 — and the sourcing shell goes on"
+expect_err_has "_dispatch_here"
+expect_err_has "a name other than agent-dispatch.sh"
 RENAMED="$SCRATCH/renamed"; mkdir -p "$RENAMED"
 cp "$DISPATCH" "$RENAMED/dispatch"; cp "$KIT/scripts/agents.lib.sh" "$RENAMED/agents.lib.sh"
-t_run_split sh "$RENAMED/dispatch" implementer --prompt 'x' --dry-run
-s_assert_status 2 "a copy executed under another name is refused, exit 2"
-s_assert_err_has "a name other than agent-dispatch.sh"
+t_exec sh "$RENAMED/dispatch" implementer --prompt 'x' --dry-run
+expect_status 2 "a copy executed under another name is refused, exit 2"
+expect_err_has "a name other than agent-dispatch.sh"
 
 # _budget_derive answers what the dry run shows, from the same fake host the
 # dispatch suite uses: 25% of the slice's 10008 tasks, 50% of 2091 MiB.
 t_fake_host "$SCRATCH/host" 10008 2141820
 # derive — source the seam against the fake host and print what it derived.
-derive() { t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" "$@" sh -c '_dispatch_here="$1"; . "$2"; _budget_derive; _budget_scope_props "$BUDGET_RUNG"; printf "mode=%s tasks=%s memory=%s rung=%s\nprops=%s\n" "$BUDGET_MODE" "$BUDGET_TASKS" "$BUDGET_MEMORY" "$BUDGET_RUNG" "$SCOPE_PROPS"' probe "$KIT/scripts" "$DISPATCH"; }
+derive() { t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" "$@" sh -c '_dispatch_here="$1"; . "$2"; _budget_derive; _budget_scope_props "$BUDGET_RUNG"; printf "mode=%s tasks=%s memory=%s rung=%s\nprops=%s\n" "$BUDGET_MODE" "$BUDGET_TASKS" "$BUDGET_MEMORY" "$BUDGET_RUNG" "$SCOPE_PROPS"' probe "$KIT/scripts" "$DISPATCH"; }
 derive
-s_assert_status 0 "_budget_derive derives against the fake host"
-s_assert_out_has "mode=derived tasks=2502 memory=1045" "…the same numbers the dispatch suite's dry run shows: 25% of 10008, 50% of 2091 MiB"
-s_assert_out_has "TasksMax=2502" "…and the scope properties carry the task ceiling"
-s_assert_out_has "OOMPolicy=continue" "…and the OOM policy the ADR amendment records"
+expect_status 0 "_budget_derive derives against the fake host"
+expect_out_has "mode=derived tasks=2502 memory=1045" "…the same numbers the dispatch suite's dry run shows: 25% of 10008, 50% of 2091 MiB"
+expect_out_has "TasksMax=2502" "…and the scope properties carry the task ceiling"
+expect_out_has "OOMPolicy=continue" "…and the OOM policy the ADR amendment records"
 # The policy file is read through the same reader: a ceiling in it clamps.
 CFG_SMALL="$SCRATCH/small.config.sh"
 printf "AGENT_BUDGET_TASKS_CEILING='300'\nAGENT_BUDGET_MEMORY_CEILING_MIB='600'\n" >"$CFG_SMALL"
 derive AGENTS_CONFIG="$CFG_SMALL"
-s_assert_out_has "tasks=300 memory=600" "the policy file's clamps apply through the seam"
+expect_out_has "tasks=300 memory=600" "the policy file's clamps apply through the seam"
 # The inherited case is the dispatcher's own: an outer budget in the
 # environment is taken as given and derives nothing.
 derive AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888
-s_assert_out_has "mode=inherited tasks=777 memory=888" "an outer dispatch's budget is inherited through the seam"
+expect_out_has "mode=inherited tasks=777 memory=888" "an outer dispatch's budget is inherited through the seam"
 # And a policy value that cannot be a budget is refused where the sourcing
 # shell can hear it: exit 2, never a default.
 printf "AGENT_BUDGET_TASKS_PERCENT='lots'\n" >"$CFG_SMALL"
 derive AGENTS_CONFIG="$CFG_SMALL"
-s_assert_status 2 "a policy value that is not a whole number is refused through the seam"
-s_assert_err_has "AGENT_BUDGET_TASKS_PERCENT"
+expect_status 2 "a policy value that is not a whole number is refused through the seam"
+expect_err_has "AGENT_BUDGET_TASKS_PERCENT"
 
 # ---------------------------------------------------------------------------
 banner "2. A suite that sources tests/lib.sh runs inside the budget, once"
@@ -153,7 +153,7 @@ unsetting() { sh -c 'unset AGENT_SUITE_BUDGET AGENT_DISPATCH_BUDGET_TASKS AGENT_
 # stub_on <host root> <env…> <suite> [args] — run a stub suite as a suite is
 # run, `sh <path>`, with those unset, that fake host in place and the start
 # count fresh; stub is the same on the fake host above.
-stub_on() { rm -f "$COUNT"; _so_host=$1; shift; t_run_split unsetting env AGENT_DISPATCH_HOST_ROOT="$_so_host" "$@"; }
+stub_on() { rm -f "$COUNT"; _so_host=$1; shift; t_exec unsetting env AGENT_DISPATCH_HOST_ROOT="$_so_host" "$@"; }
 stub() { stub_on "$HOST" "$@"; }
 starts() { [ -f "$COUNT" ] && wc -l <"$COUNT" | tr -d ' ' || echo 0; }
 
@@ -161,54 +161,54 @@ starts() { [ -f "$COUNT" ] && wc -l <"$COUNT" | tr -d ' ' || echo 0; }
 # stands and the test harness says so; 50% of 2091 MiB is 1045 MiB.
 echo 400 >"$SLICE/pids.max"
 stub sh "$GREEN"
-s_assert_status 0 "a green suite run through the test harness passes"
-s_assert_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…and runs inside the budget derived from the (fake) host, with the marker naming it"
-s_assert_out_has "forks: yes" "…and can fork inside it"
-s_assert_out_has "agents config: <unset>" "…with the environment it was started with — the kit's policy file stayed with the derivation"
-s_assert_err_has "below the floor"
-s_assert_err_lacks "already inside"
+expect_status 0 "a green suite run through the test harness passes"
+expect_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…and runs inside the budget derived from the (fake) host, with the marker naming it"
+expect_out_has "forks: yes" "…and can fork inside it"
+expect_out_has "agents config: <unset>" "…with the environment it was started with — the kit's policy file stayed with the derivation"
+expect_err_has "below the floor"
+expect_err_lacks "already inside"
 [ "$(starts)" = 2 ] && pass "the suite's file ran exactly twice — once bare, once inside the budget" ||
 	fail "the suite's file ran $(starts) time(s) — expected 2 (the marker is the recursion bound)"
-RUNG=$(printf '%s\n' "$S_OUT" | sed -n 's/^budget: applied: .*, rung //p')
+RUNG=$(printf '%s\n' "$T_OUT" | sed -n 's/^budget: applied: .*, rung //p')
 case "$RUNG" in
 scope | scope-tasks | rlimit | none) pass "the marker names the rung: $RUNG" ;;
 *) fail "the marker names no rung this suite knows: '$RUNG'" ;;
 esac
 # A suite's own status passes through the test harness untouched.
 stub STUB_EXIT=5 sh "$GREEN"
-s_assert_status 5 "a suite's own exit status passes through"
+expect_status 5 "a suite's own exit status passes through"
 # …and an AGENTS_CONFIG the operator exported reaches it as exported, never
 # replaced by the kit's.
 stub AGENTS_CONFIG=/operator/own.sh sh "$GREEN"
-s_assert_out_has "agents config: /operator/own.sh" "an AGENTS_CONFIG the operator exported reaches the suite as it was"
+expect_out_has "agents config: /operator/own.sh" "an AGENTS_CONFIG the operator exported reaches the suite as it was"
 # The trace's identity and policy are the exception: a session's hooks export
 # them, and a suite must start from none whatever the calling shell said —
 # in the run inside the budget too, not only in the bare one (#303).
 stub TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONFIG=/nowhere.sh TRACE_QUIET=1 sh "$GREEN"
-s_assert_out_has "trace: <end>" "the trace variables a calling shell exported do not reach the suite inside the budget"
+expect_out_has "trace: <end>" "the trace variables a calling shell exported do not reach the suite inside the budget"
 [ "$(starts)" = 2 ] && pass "…and that was the re-executed run, not a bare one" || fail "the scrubbed stub ran $(starts) time(s) — expected 2"
 
 # The off switch: the suite runs bare, once, and the test harness says so.
 stub AGENT_SUITE_BUDGET=off STUB_EXIT=3 sh "$GREEN"
-s_assert_status 3 "AGENT_SUITE_BUDGET=off runs the suite bare — its own status, as before"
-s_assert_out_has "budget: off" "…with no marker set"
-s_assert_err_has "AGENT_SUITE_BUDGET=off"
+expect_status 3 "AGENT_SUITE_BUDGET=off runs the suite bare — its own status, as before"
+expect_out_has "budget: off" "…with no marker set"
+expect_err_has "AGENT_SUITE_BUDGET=off"
 [ "$(starts)" = 1 ] && pass "…and the file ran once — nothing was re-executed" || fail "the file ran $(starts) time(s) with the budget off"
 
 # A value that is neither is refused before the suite runs: a typo must not
 # read as "inside".
 stub AGENT_SUITE_BUDGET=on sh "$GREEN"
-s_assert_status 2 "an unknown AGENT_SUITE_BUDGET value is refused, exit 2"
-s_assert_err_has "AGENT_SUITE_BUDGET"
-s_assert_out_lacks "budget:" "…and the suite body never ran"
+expect_status 2 "an unknown AGENT_SUITE_BUDGET value is refused, exit 2"
+expect_err_has "AGENT_SUITE_BUDGET"
+expect_out_lacks "budget:" "…and the suite body never ran"
 
 # Inside a dispatched worker the suite is already inside that worker's
 # budget (ADR-0006 clause 7): the test harness opens none of its own, says so,
 # and the suite runs once.
 stub AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 sh "$GREEN"
-s_assert_status 0 "inside a dispatched worker's budget the suite runs"
-s_assert_out_has "budget: <unset>" "…bare — no scope of its own"
-s_assert_err_has "dispatched worker"
+expect_status 0 "inside a dispatched worker's budget the suite runs"
+expect_out_has "budget: <unset>" "…bare — no scope of its own"
+expect_err_has "dispatched worker"
 [ "$(starts)" = 1 ] && pass "…and once" || fail "the file ran $(starts) time(s) inside a worker's budget"
 
 # The second recursion bound, for a run that lost the marker anyway (an
@@ -220,10 +220,10 @@ s_assert_err_has "dispatched worker"
 # fake host's own cgroup becomes a suite scope for this leg; the stub runs once.
 printf '0::/user.slice/user-1000.slice/user@1000.service/app.slice/suite-green-4242.scope\n' >"$HOST/proc/self/cgroup"
 stub sh "$GREEN"
-s_assert_status 2 "a run that lost its marker inside a suite scope is refused, exit 2 — the second recursion bound"
-s_assert_err_has "suite-green-4242.scope"
-s_assert_err_has "AGENT_SUITE_BUDGET"
-s_assert_out_lacks "budget:" "…and the suite body never ran"
+expect_status 2 "a run that lost its marker inside a suite scope is refused, exit 2 — the second recursion bound"
+expect_err_has "suite-green-4242.scope"
+expect_err_has "AGENT_SUITE_BUDGET"
+expect_out_lacks "budget:" "…and the suite body never ran"
 [ "$(starts)" = 1 ] && pass "…and the file ran once — no sibling scope was opened" || fail "the file ran $(starts) time(s) from inside a suite scope without its marker"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 
@@ -242,11 +242,11 @@ printf '0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-u99.scope
 echo 100 >"$OWN/pids.max"
 echo 67108864 >"$OWN/memory.max"
 stub sh "$GREEN"
-s_assert_status 0 "inside an operator's scope whose pids.max is the tightest on the path, the suite runs"
-s_assert_out_has "budget: applied: tasks 100, memory 64 MiB, rung inherited" "…in place, the marker naming that cgroup's ceilings"
-s_assert_err_has "already inside a bounded cgroup (run-u99.scope"
-s_assert_err_lacks "this host is small"
-s_assert_out_has "forks: yes" "…and it can fork"
+expect_status 0 "inside an operator's scope whose pids.max is the tightest on the path, the suite runs"
+expect_out_has "budget: applied: tasks 100, memory 64 MiB, rung inherited" "…in place, the marker naming that cgroup's ceilings"
+expect_err_has "already inside a bounded cgroup (run-u99.scope"
+expect_err_lacks "this host is small"
+expect_out_has "forks: yes" "…and it can fork"
 [ "$(starts)" = 2 ] && pass "…and the file ran twice — once bare, once in place with the marker" || fail "the file ran $(starts) time(s) inside an operator's scope"
 # The floor above the operator's cap: the slice is the tightest at 100, so
 # the derived ceiling is the floor, 256 — above the own cgroup's 200.
@@ -254,16 +254,16 @@ echo 200 >"$OWN/pids.max"
 rm -f "$OWN/memory.max"
 echo 100 >"$SLICE/pids.max"
 stub sh "$GREEN"
-s_assert_out_has "budget: applied: tasks 200, memory max, rung inherited" "a derived task ceiling above the own cgroup's pids.max runs in place too, under the cgroup's"
-s_assert_err_has "already inside a bounded cgroup (run-u99.scope"
+expect_out_has "budget: applied: tasks 200, memory max, rung inherited" "a derived task ceiling above the own cgroup's pids.max runs in place too, under the cgroup's"
+expect_err_has "already inside a bounded cgroup (run-u99.scope"
 echo 400 >"$SLICE/pids.max"
 # Memory alone: no task ceiling on the own cgroup, and a memory.max the
 # derived 1045 MiB would exceed.
 echo max >"$OWN/pids.max"
 echo 67108864 >"$OWN/memory.max"
 stub sh "$GREEN"
-s_assert_out_has "budget: applied: tasks max, memory 64 MiB, rung inherited" "a derived memory ceiling above the own cgroup's memory.max runs in place, under the cgroup's"
-s_assert_err_has "already inside a bounded cgroup (run-u99.scope"
+expect_out_has "budget: applied: tasks max, memory 64 MiB, rung inherited" "a derived memory ceiling above the own cgroup's memory.max runs in place, under the cgroup's"
+expect_err_has "already inside a bounded cgroup (run-u99.scope"
 rm -rf "$HOST/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service"
 # A container's root is every scope's ancestor — a scope opened there is a
 # child, bounded by the root's pids.max on top of its own — so the tightest
@@ -272,9 +272,9 @@ printf '0::/\n' >"$HOST/proc/self/cgroup"
 echo 2048 >"$HOST/sys/fs/cgroup/pids.max"
 echo 'cpu memory pids' >"$HOST/sys/fs/cgroup/cgroup.controllers"
 stub sh "$GREEN"
-s_assert_out_has "budget: applied: tasks 512, memory 1045 MiB, rung " "at a container's root the suite takes the derived budget — 25% of the root's 2048"
-s_assert_out_lacks "rung inherited" "…in a scope of its own, which is the root's child"
-s_assert_err_lacks "already inside"
+expect_out_has "budget: applied: tasks 512, memory 1045 MiB, rung " "at a container's root the suite takes the derived budget — 25% of the root's 2048"
+expect_out_lacks "rung inherited" "…in a scope of its own, which is the root's child"
+expect_err_lacks "already inside"
 rm -f "$HOST/sys/fs/cgroup/pids.max" "$HOST/sys/fs/cgroup/cgroup.controllers"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 
@@ -324,10 +324,10 @@ exit 0
 EOF
 if [ "$RUNG" = scope ]; then
 	stub sh "$FORKER"
-	s_assert_status 71 "a fork loop stops at the task ceiling and the suite exits 71"
-	s_assert_out_has "FAIL" "…the test harness reports it as a FAILURE of that suite"
-	s_assert_out_has "hit its TASK ceiling (256 tasks)" "…naming the ceiling it hit"
-	s_assert_out_has "forker begins" "…after the suite's own output"
+	expect_status 71 "a fork loop stops at the task ceiling and the suite exits 71"
+	expect_out_has "FAIL" "…the test harness reports it as a FAILURE of that suite"
+	expect_out_has "hit its TASK ceiling (256 tasks)" "…naming the ceiling it hit"
+	expect_out_has "forker begins" "…after the suite's own output"
 	if sh -c 'exit 0'; then
 		pass "a command in the calling shell right after the runaway still forks"
 	else
@@ -336,9 +336,9 @@ if [ "$RUNG" = scope ]; then
 	# 50% of 800 MiB is below the memory floor; the floor, 512 MiB, stands.
 	printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:     819200 kB\n' >"$HOST/proc/meminfo"
 	stub sh "$GREEDY"
-	s_assert_status 71 "a greedy allocation stops at the memory ceiling and the suite exits 71"
-	s_assert_out_has "hit its MEMORY ceiling (512 MiB)" "…naming the ceiling it hit"
-	s_assert_out_lacks "greedy allocated it all" "…the greedy process was OOM-killed before it finished"
+	expect_status 71 "a greedy allocation stops at the memory ceiling and the suite exits 71"
+	expect_out_has "hit its MEMORY ceiling (512 MiB)" "…naming the ceiling it hit"
+	expect_out_lacks "greedy allocated it all" "…the greedy process was OOM-killed before it finished"
 	printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
 else
 	printf '  --    the scope rung is not offered here (rung: %s) — the scope legs are skipped; CI runs them where it can\n' "$RUNG"
@@ -368,13 +368,13 @@ printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable: 
 echo 'cpu memory pids' >"$HOST_RL/sys/fs/cgroup/cgroup.controllers"
 rlstub() { stub_on "$HOST_RL" PATH="$NOSD:$PATH" "$@"; }
 rlstub sh "$GREEN"
-s_assert_status 0 "a green suite runs under the rlimit rung"
-s_assert_out_has "rung rlimit" "…and its marker names the rung"
-s_assert_out_has "nproc: $RL_TASKS" "…the task ceiling is the suite shell's process limit (25% of the fake per-user limit)"
-s_assert_out_has "data: $((1045 * 1024))" "…and the memory ceiling its data limit, in KiB"
-s_assert_out_has "forks: yes" "…and it can still fork"
-s_assert_err_has "weaker"
-s_assert_err_has "never a FAIL line naming the ceiling"
+expect_status 0 "a green suite runs under the rlimit rung"
+expect_out_has "rung rlimit" "…and its marker names the rung"
+expect_out_has "nproc: $RL_TASKS" "…the task ceiling is the suite shell's process limit (25% of the fake per-user limit)"
+expect_out_has "data: $((1045 * 1024))" "…and the memory ceiling its data limit, in KiB"
+expect_out_has "forks: yes" "…and it can still fork"
+expect_err_has "weaker"
+expect_err_has "never a FAIL line naming the ceiling"
 [ "$(starts)" = 2 ] && pass "…and the file ran twice — once bare, once inside" || fail "the file ran $(starts) time(s) under the rlimit rung"
 # A fork loop under that ceiling is refused inside the suite's own shell. A
 # hit is not observable on this rung (ADR-0006 clause 6): the status is the
@@ -382,13 +382,13 @@ s_assert_err_has "never a FAIL line naming the ceiling"
 # error is what says so, the note above has said that is how it shows, and
 # the calling shell still forks.
 rlstub sh "$FORKER"
-case "$S_STATUS" in
-71 | 124) fail "a fork loop on the rlimit rung should pass the suite's own status through, got $S_STATUS"; _s_dump ;;
-0) fail "a fork loop on the rlimit rung ran whole — the limit did not land in the suite's shell"; _s_dump ;;
-*) pass "a fork loop on the rlimit rung passes the suite's own status through ($S_STATUS) — not 71" ;;
+case "$T_STATUS" in
+71 | 124) fail "a fork loop on the rlimit rung should pass the suite's own status through, got $T_STATUS"; printf "%s\n" "$T_OUT" | sed "s/^/        > /"; printf "%s\n" "$T_ERR" | sed "s/^/        | /" ;;
+0) fail "a fork loop on the rlimit rung ran whole — the limit did not land in the suite's shell"; printf "%s\n" "$T_OUT" | sed "s/^/        > /"; printf "%s\n" "$T_ERR" | sed "s/^/        | /" ;;
+*) pass "a fork loop on the rlimit rung passes the suite's own status through ($T_STATUS) — not 71" ;;
 esac
-s_assert_err_has "fork"
-s_assert_out_has "forker begins" "…the suite ran, its forks refused inside its own shell"
+expect_err_has "fork"
+expect_out_has "forker begins" "…the suite ran, its forks refused inside its own shell"
 if sh -c 'exit 0'; then
 	pass "a command in the calling shell right after the runaway still forks"
 else
@@ -410,15 +410,15 @@ if [ "$RUNG" = scope ]; then
 	SDREFUSE="$SCRATCH/sd-refuse"; mkdir -p "$SDREFUSE"
 	printf '#!/bin/sh\necho "Failed to start transient scope unit: Access denied" >&2\nexit 1\n' >"$SDREFUSE/systemd-run"; chmod +x "$SDREFUSE/systemd-run"
 	stub_on "$HOST_RL" PATH="$SDREFUSE:$PATH" sh "$GREEN"
-	s_assert_status 0 "a scope that refuses to open still runs the suite"
-	s_assert_out_has "rung rlimit" "…under the rlimit rung"
-	s_assert_err_has "Access denied"
-	s_assert_err_has "cannot open"
+	expect_status 0 "a scope that refuses to open still runs the suite"
+	expect_out_has "rung rlimit" "…under the rlimit rung"
+	expect_err_has "Access denied"
+	expect_err_has "cannot open"
 	SDFAKE="$SCRATCH/sd-fake"; mkdir -p "$SDFAKE"
 	printf '#!/bin/sh\nexit 0\n' >"$SDFAKE/systemd-run"; chmod +x "$SDFAKE/systemd-run"
 	stub_on "$HOST_RL" PATH="$SDFAKE:$PATH" sh "$GREEN"
-	s_assert_status 0 "a scope whose wrapper never wrote a verdict passes the run's status through"
-	s_assert_err_has "verdict is missing"
+	expect_status 0 "a scope whose wrapper never wrote a verdict passes the run's status through"
+	expect_err_has "verdict is missing"
 else
 	printf '  --    the scope rung is not offered here (rung: %s) — the scope legs are skipped\n' "$RUNG"
 fi

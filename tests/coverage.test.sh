@@ -44,7 +44,7 @@ mkdir -p "$SCRATCH/draft"
 prd() { printf "$1" >"$SCRATCH/prd"; }
 ticket() { printf "$2" >"$SCRATCH/draft/$1"; }
 fresh() { rm -f "$SCRATCH/draft/"*; }
-run() { t_run_split sh "$COVERAGE" "$SCRATCH/prd" "$@"; }
+run() { t_exec sh "$COVERAGE" "$SCRATCH/prd" "$@"; }
 T() { printf '%s\n' "$SCRATCH/draft/$1"; }
 
 # ---------------------------------------------------------------------------
@@ -63,13 +63,13 @@ fresh
 ticket 1 'A slice.\n\nCovers: R1\nTier: implementer\n'
 ticket 2 'Another slice.\n\nCovers: R2, R1\n'
 run "$(T 1)" "$(T 2)"
-s_assert_resolved "" "process/R6: a covered PRD and covering tickets — exit 0, stdout empty"
-[ -z "$S_ERR" ] && pass "process/R6: and nothing on stderr" || fail "process/R6: stderr should be empty — got '$S_ERR'"
+expect_resolved "" "process/R6: a covered PRD and covering tickets — exit 0, stdout empty"
+[ -z "$T_ERR" ] && pass "process/R6: and nothing on stderr" || fail "process/R6: stderr should be empty — got '$T_ERR'"
 
 # Spacing inside the list is free; the ids are what count.
 ticket 2 'Covers: R2,R1\n'
 run "$(T 1)" "$(T 2)"
-s_assert_resolved "" "process/R5: a list with no space after a comma still covers"
+expect_resolved "" "process/R5: a list with no space after a comma still covers"
 
 # ---------------------------------------------------------------------------
 banner "2. An uncovered requirement is named, exit 1 (process/R6)"
@@ -79,8 +79,8 @@ fresh
 ticket 1 'Covers: R1, R3\n'
 ticket 2 'Covers: R3\n'
 run "$(T 1)" "$(T 2)"
-s_assert_status 1 "process/R6: a requirement no ticket covers exits 1"
-s_assert_out_is "uncovered: R2
+expect_status 1 "process/R6: a requirement no ticket covers exits 1"
+expect_out_is "uncovered: R2
 uncovered: R4" "process/R6: each uncovered requirement on its own line, in the PRD's order, and nothing else"
 
 # A PRD that repeats a requirement id names it once: the list is of
@@ -89,15 +89,15 @@ prd 'R1. The tool SHALL a.\nR2. The tool SHALL b.\nR1. The tool SHALL a, said ag
 fresh
 ticket 1 'Covers: R2\n'
 run "$(T 1)"
-s_assert_status 1 "process/R6: a repeated, uncovered requirement id exits 1"
-s_assert_out_is "uncovered: R1" "process/R6: a requirement id the PRD repeats is named once, at its first line"
+expect_status 1 "process/R6: a repeated, uncovered requirement id exits 1"
+expect_out_is "uncovered: R1" "process/R6: a requirement id the PRD repeats is named once, at its first line"
 
 # Trailing whitespace on a Covers: line is not part of the last id.
 prd 'R1. The tool SHALL a.\nR2. The tool SHALL b.\n'
 fresh
 ticket 1 'Covers: R1, R2 \t \n'
 run "$(T 1)"
-s_assert_resolved "" "process/R5: trailing spaces and a tab after the last id still cover it"
+expect_resolved "" "process/R5: trailing spaces and a tab after the last id still cover it"
 
 # ---------------------------------------------------------------------------
 banner "3. An orphan ticket is named, exit 1 (process/R5 process/R6)"
@@ -107,8 +107,8 @@ fresh
 ticket 1 'Covers: R1\n'
 ticket 2 'A ticket that names no requirement at all.\nTier: implementer\n'
 run "$(T 1)" "$(T 2)"
-s_assert_status 1 "process/R6: a ticket with no Covers: line and no exemption exits 1"
-s_assert_out_is "orphan: 2" "process/R6: the orphan is named by its label, and nothing else"
+expect_status 1 "process/R6: a ticket with no Covers: line and no exemption exits 1"
+expect_out_is "orphan: 2" "process/R6: the orphan is named by its label, and nothing else"
 
 # Both lists at once: uncovered first, then orphans, each in its own order.
 prd 'R1. The tool SHALL a.\nR2. The tool SHALL b.\n'
@@ -117,8 +117,8 @@ ticket 3 'Covers: R1\n'
 ticket 1 'no covers\n'
 ticket 2 'no covers either\n'
 run "$(T 3)" "$(T 1)" "$(T 2)"
-s_assert_status 1 "process/R6: an uncovered requirement and orphans together exit 1"
-s_assert_out_is "uncovered: R2
+expect_status 1 "process/R6: an uncovered requirement and orphans together exit 1"
+expect_out_is "uncovered: R2
 orphan: 1
 orphan: 2" "process/R6: both lists, uncovered first, orphans in the order the tickets were given"
 
@@ -131,20 +131,20 @@ for kind in prefactor open-issue release; do
 	ticket 1 'Covers: R1\n'
 	ticket 2 "Covers: none ($kind)\\n"
 	run "$(T 1)" "$(T 2)"
-	s_assert_resolved "" "process/R5: 'Covers: none ($kind)' is exempt — not an orphan"
+	expect_resolved "" "process/R5: 'Covers: none ($kind)' is exempt — not an orphan"
 done
 # An exemption outside the three kinds is no exemption: it is malformed.
 fresh
 ticket 1 'Covers: R1\n'
 ticket 2 'Covers: none (cleanup)\n'
 run "$(T 1)" "$(T 2)"
-s_assert_status 2 "process/R5: 'none (cleanup)' — a kind outside the three — is refused, exit 2"
-s_assert_out_is "" "process/R5: a refusal prints nothing on stdout"
+expect_status 2 "process/R5: 'none (cleanup)' — a kind outside the three — is refused, exit 2"
+expect_out_is "" "process/R5: a refusal prints nothing on stdout"
 fresh
 ticket 1 'Covers: R1\n'
 ticket 2 'Covers: none\n'
 run "$(T 1)" "$(T 2)"
-s_assert_status 2 "process/R5: a bare 'none' says no kind — refused, exit 2"
+expect_status 2 "process/R5: a bare 'none' says no kind — refused, exit 2"
 
 # ---------------------------------------------------------------------------
 banner "5. A malformed Covers: line is refused, naming the ticket, never the line (process/R5 process/R7)"
@@ -154,14 +154,14 @@ for bad in 'Covers: R1, SECRET-PROSE' 'Covers:' 'Covers: R1,' 'Covers: r1' 'Cove
 	fresh
 	ticket 7 "$bad\\n"
 	run "$(T 7)"
-	s_assert_status 2 "process/R5: '$bad' is refused, exit 2"
-	s_assert_out_is "" "process/R5: … nothing on stdout"
-	case "$S_ERR" in
+	expect_status 2 "process/R5: '$bad' is refused, exit 2"
+	expect_out_is "" "process/R5: … nothing on stdout"
+	case "$T_ERR" in
 	*7*) pass "process/R5: … stderr names the ticket's label" ;;
-	*) fail "process/R5: … stderr should name the ticket's label 7 — got '$S_ERR'" ;;
+	*) fail "process/R5: … stderr should name the ticket's label 7 — got '$T_ERR'" ;;
 	esac
-	case "$S_ERR" in
-	*SECRET-PROSE* | *rm\ -rf* | *Ledger/*) fail "process/R7: … stderr echoed the refused line's text: '$S_ERR'" ;;
+	case "$T_ERR" in
+	*SECRET-PROSE* | *rm\ -rf* | *Ledger/*) fail "process/R7: … stderr echoed the refused line's text: '$T_ERR'" ;;
 	*) pass "process/R7: … stderr carries none of the refused line's text" ;;
 	esac
 done
@@ -169,14 +169,14 @@ done
 fresh
 ticket 7 'Covers: leaky-area/R1\nCovers: R2\n'
 run "$(T 7)"
-s_assert_status 2 "process/R5: a ticket with two Covers: lines is refused, exit 2"
-s_assert_out_is "" "process/R5: … nothing on stdout"
-case "$S_ERR" in
+expect_status 2 "process/R5: a ticket with two Covers: lines is refused, exit 2"
+expect_out_is "" "process/R5: … nothing on stdout"
+case "$T_ERR" in
 *7*) pass "process/R5: … stderr names the ticket's label" ;;
-*) fail "process/R5: … stderr should name the ticket's label 7 — got '$S_ERR'" ;;
+*) fail "process/R5: … stderr should name the ticket's label 7 — got '$T_ERR'" ;;
 esac
-case "$S_OUT$S_ERR" in
-*leaky* | *R1* | *R2*) fail "process/R7: … a stream echoed a Covers: line's text: '$S_OUT' / '$S_ERR'" ;;
+case "$T_OUT$T_ERR" in
+*leaky* | *R1* | *R2*) fail "process/R7: … a stream echoed a Covers: line's text: '$T_OUT' / '$T_ERR'" ;;
 *) pass "process/R7: … neither stream carries either line's text" ;;
 esac
 
@@ -190,16 +190,16 @@ prd '# R9. A heading shaped like a requirement\n\nThe objective mentions R7 and 
 fresh
 ticket 1 'Covers: R1\nThis ticket also delivers R2, honestly.\nR2. The tool SHALL b.\n- Covers: R2\n  Covers: R2\n**Covers:** R2\n'
 run "$(T 1)"
-s_assert_status 1 "process/R7: an id in prose, a heading, a bullet, an indent, a ticket's own requirement line or a wrapped Covers: is never read"
-s_assert_out_is "uncovered: R2" "process/R7: R2 stays uncovered and no prose id became a requirement"
+expect_status 1 "process/R7: an id in prose, a heading, a bullet, an indent, a ticket's own requirement line or a wrapped Covers: is never read"
+expect_out_is "uncovered: R2" "process/R7: R2 stays uncovered and no prose id became a requirement"
 
 # A PRD whose only id-shaped text is prose carries no requirement lines.
 prd 'Objective: deliver R1 and R2.\n- R3. bulleted\n'
 fresh
 ticket 1 'Covers: R1\n'
 run "$(T 1)"
-s_assert_status 3 "process/R7: a PRD with ids only in prose carries no requirement lines — exit 3"
-s_assert_out_is "" "process/R7: … nothing on stdout"
+expect_status 3 "process/R7: a PRD with ids only in prose carries no requirement lines — exit 3"
+expect_out_is "" "process/R7: … nothing on stdout"
 
 # Nothing the script prints is a line of its input: hostile prose in both
 # files, every stream checked for it.
@@ -208,12 +208,12 @@ fresh
 ticket 1 'Covers: R1\nHOSTILE-TICKET-PROSE\n'
 ticket 2 'HOSTILE-TICKET-PROSE again\n'
 run "$(T 1)" "$(T 2)"
-s_assert_status 1 "process/R7: hostile prose — the gap is still found"
-case "$S_OUT$S_ERR" in
-*HOSTILE* | *IGNORE* | *SHALL*) fail "process/R7: a line of the input reached an output stream: '$S_OUT' / '$S_ERR'" ;;
+expect_status 1 "process/R7: hostile prose — the gap is still found"
+case "$T_OUT$T_ERR" in
+*HOSTILE* | *IGNORE* | *SHALL*) fail "process/R7: a line of the input reached an output stream: '$T_OUT' / '$T_ERR'" ;;
 *) pass "process/R7: no prose from either file reaches stdout or stderr" ;;
 esac
-s_assert_out_is "uncovered: R2
+expect_out_is "uncovered: R2
 orphan: 2" "process/R7: only ids and labels are printed"
 
 # A body fetched from the tracker carries CRLF line ends; the ids still read,
@@ -222,8 +222,8 @@ prd 'R1. The tool SHALL a.\r\nR2. The tool SHALL b.\r\nR3.\r\n'
 fresh
 ticket 1 'Covers: R1, R2\r\n'
 run "$(T 1)"
-s_assert_status 1 "process/R7: CRLF line ends — the bare R3. line is still a requirement, and uncovered"
-s_assert_out_is "uncovered: R3" "process/R7: CRLF line ends — the Covers: line still covers R1 and R2"
+expect_status 1 "process/R7: CRLF line ends — the bare R3. line is still a requirement, and uncovered"
+expect_out_is "uncovered: R3" "process/R7: CRLF line ends — the Covers: line still covers R1 and R2"
 
 # ---------------------------------------------------------------------------
 banner "7. Area-qualified ids: <area>/R<n> (ADR-0012 clause 7)"
@@ -232,20 +232,20 @@ prd 'ledger/R10. The gate SHALL fail an unnamed requirement.\nR1. The tool SHALL
 fresh
 ticket 1 'Covers: ledger/R10, R1\n'
 run "$(T 1)"
-s_assert_resolved "" "an area-qualified requirement line is covered by the same area-qualified id"
+expect_resolved "" "an area-qualified requirement line is covered by the same area-qualified id"
 fresh
 ticket 1 'Covers: R1\n'
 run "$(T 1)"
-s_assert_out_is "uncovered: ledger/R10" "an area-qualified requirement is named as written"
+expect_out_is "uncovered: ledger/R10" "an area-qualified requirement is named as written"
 fresh
 ticket 1 'Covers: R10, R1\n'
 run "$(T 1)"
-s_assert_out_is "uncovered: ledger/R10" "ids compare as written: R10 does not cover ledger/R10"
+expect_out_is "uncovered: ledger/R10" "ids compare as written: R10 does not cover ledger/R10"
 prd 'Ledger/R1. an area with a capital is not an area\nR2. The tool SHALL b.\n'
 fresh
 ticket 1 'Covers: R2\n'
 run "$(T 1)"
-s_assert_resolved "" "an area outside [a-z][a-z0-9-]* does not make a requirement line"
+expect_resolved "" "an area outside [a-z][a-z0-9-]* does not make a requirement line"
 
 # Whole ids, both ways: R1 is not a prefix of R10, and an area is part of
 # the id, never stripped.
@@ -253,20 +253,20 @@ prd 'R1. The tool SHALL a.\nR10. The tool SHALL j.\n'
 fresh
 ticket 1 'Covers: R10\n'
 run "$(T 1)"
-s_assert_out_is "uncovered: R1" "whole ids: R10 does not cover R1"
+expect_out_is "uncovered: R1" "whole ids: R10 does not cover R1"
 fresh
 ticket 1 'Covers: R1\n'
 run "$(T 1)"
-s_assert_out_is "uncovered: R10" "whole ids: R1 does not cover R10"
+expect_out_is "uncovered: R10" "whole ids: R1 does not cover R10"
 prd 'ledger/R1. The gate SHALL a.\nR1. The tool SHALL a.\n'
 fresh
 ticket 1 'Covers: R1\n'
 run "$(T 1)"
-s_assert_out_is "uncovered: ledger/R1" "whole ids: R1 does not cover ledger/R1"
+expect_out_is "uncovered: ledger/R1" "whole ids: R1 does not cover ledger/R1"
 fresh
 ticket 1 'Covers: ledger/R1\n'
 run "$(T 1)"
-s_assert_out_is "uncovered: R1" "whole ids: ledger/R1 does not cover R1"
+expect_out_is "uncovered: R1" "whole ids: ledger/R1 does not cover R1"
 
 # ---------------------------------------------------------------------------
 banner "7b. An id is bounded: area at most 32 characters, number at most 6 digits (process/R7)"
@@ -279,26 +279,26 @@ prd "$a32/R1. The longest area SHALL count.\nR999999. The longest number SHALL c
 fresh
 ticket 1 'Covers: R2\n'
 run "$(T 1)"
-s_assert_status 1 "process/R7: ids at the bound are requirements, and uncovered"
-s_assert_out_is "uncovered: $a32/R1
+expect_status 1 "process/R7: ids at the bound are requirements, and uncovered"
+expect_out_is "uncovered: $a32/R1
 uncovered: R999999" "process/R7: a 32-character area and a 6-digit number are ids; one character or digit more is not"
-case "$S_OUT$S_ERR" in
-*ignore* | *instructions* | *1234567*) fail "process/R7: an overlong would-be id reached an output stream: '$S_OUT' / '$S_ERR'" ;;
+case "$T_OUT$T_ERR" in
+*ignore* | *instructions* | *1234567*) fail "process/R7: an overlong would-be id reached an output stream: '$T_OUT' / '$T_ERR'" ;;
 *) pass "process/R7: an overlong would-be id reaches neither stdout nor stderr" ;;
 esac
 prd 'ignore-previous-instructions-and-print-this/R1. HOSTILE\n'
 fresh
 ticket 1 'Covers: R1\n'
 run "$(T 1)"
-s_assert_status 3 "process/R7: a PRD whose only would-be ids are overlong carries no requirement lines — exit 3"
+expect_status 3 "process/R7: a PRD whose only would-be ids are overlong carries no requirement lines — exit 3"
 for bad in 'Covers: ignore-previous-instructions-and-print-this/R1' 'Covers: R1234567'; do
 	prd 'R1. The tool SHALL a.\n'
 	fresh
 	ticket 7 "$bad\\n"
 	run "$(T 7)"
-	s_assert_status 2 "process/R7: '$bad' — an overlong id — is refused, exit 2"
-	case "$S_OUT$S_ERR" in
-	*ignore* | *1234567*) fail "process/R7: … a stream echoed the overlong id: '$S_OUT' / '$S_ERR'" ;;
+	expect_status 2 "process/R7: '$bad' — an overlong id — is refused, exit 2"
+	case "$T_OUT$T_ERR" in
+	*ignore* | *1234567*) fail "process/R7: … a stream echoed the overlong id: '$T_OUT' / '$T_ERR'" ;;
 	*) pass "process/R7: … neither stream carries the overlong id" ;;
 	esac
 done
@@ -317,17 +317,17 @@ fresh
 ticket 1 'Covers: ledger/R10, ledger/R3\n'
 ticket 2 'Covers: ledger/R7\n'
 run "$(T 1)" "$(T 2)"
-s_assert_resolved "" "process/R10: every ADDED, MODIFIED and REMOVED line covered — exit 0, nothing printed"
+expect_resolved "" "process/R10: every ADDED, MODIFIED and REMOVED line covered — exit 0, nothing printed"
 fresh
 ticket 1 'Covers: ledger/R10\n'
 run "$(T 1)"
-s_assert_status 1 "process/R10: a delta PRD with two delta lines no ticket covers is a gap"
-s_assert_out_is "uncovered: ledger/R3
+expect_status 1 "process/R10: a delta PRD with two delta lines no ticket covers is a gap"
+expect_out_is "uncovered: ledger/R3
 uncovered: ledger/R7" "process/R10: the MODIFIED and the REMOVED line are named, in the PRD's order"
 fresh
 ticket 1 'Covers: R10, R3, R7\n'
 run "$(T 1)"
-s_assert_out_is "uncovered: ledger/R10
+expect_out_is "uncovered: ledger/R10
 uncovered: ledger/R3
 uncovered: ledger/R7" "process/R10: a delta line's id is its area-qualified spelling — the bare number covers none of them"
 for h in ADDED MODIFIED REMOVED; do
@@ -335,7 +335,7 @@ for h in ADDED MODIFIED REMOVED; do
 	fresh
 	ticket 1 'Covers: none (prefactor)\n'
 	run "$(T 1)"
-	s_assert_out_is "uncovered: billing/R4" "process/R10: a line under ### $h alone is read as a requirement"
+	expect_out_is "uncovered: billing/R4" "process/R10: a line under ### $h alone is read as a requirement"
 done
 
 # ---------------------------------------------------------------------------
@@ -352,51 +352,51 @@ fresh
 t_fence "$STARTER" holds '### ADDED' md >"$SCRATCH/prd"
 t_fence "$STARTER" opens '^Covers: [a-z]' md >"$SCRATCH/draft/delta"
 run "$(T delta)"
-[ -s "$SCRATCH/draft/delta" ] && s_assert_resolved "" "the starter's delta PRD and its Covers: example pass — exit 0, nothing printed" ||
+[ -s "$SCRATCH/draft/delta" ] && expect_resolved "" "the starter's delta PRD and its Covers: example pass — exit 0, nothing printed" ||
 	fail "the starter shows no Covers: example for its delta PRD"
 fresh
 t_fence "$STARTER" opens '^Area: ' md >"$SCRATCH/prd"
 t_fence "$STARTER" opens '^Covers: R' md >"$SCRATCH/draft/new-area"
 run "$(T new-area)"
-[ -s "$SCRATCH/prd" ] && [ -s "$SCRATCH/draft/new-area" ] && s_assert_resolved "" "the starter's new-area PRD and its Covers: example pass — exit 0, nothing printed" ||
+[ -s "$SCRATCH/prd" ] && [ -s "$SCRATCH/draft/new-area" ] && expect_resolved "" "the starter's new-area PRD and its Covers: example pass — exit 0, nothing printed" ||
 	fail "the starter shows no new-area PRD (an Area: line, plain R<n>.) with its Covers: example"
 # The spelling the README once taught, run against its own new-area example:
 # area-qualified ids cover none of a plain PRD's lines.
 area=$(sed -n 's/^Area: //p' "$SCRATCH/prd")
 printf 'Covers: %s\n' "$(sed -n 's/^Covers: //p' "$SCRATCH/draft/new-area" | sed -E "s#(^|, )R#\\1$area/R#g")" >"$SCRATCH/draft/new-area"
 run "$(T new-area)"
-s_assert_status 1 "… and the same ticket spelled <area>/R<n> leaves the new area's requirements uncovered"
+expect_status 1 "… and the same ticket spelled <area>/R<n> leaves the new area's requirements uncovered"
 
 # ---------------------------------------------------------------------------
 banner "8. Usage and unreadable input: exit 2, nothing on stdout"
 # ---------------------------------------------------------------------------
-t_run_split sh "$COVERAGE"
-s_assert_status 2 "no arguments is a usage error"
-t_run_split sh "$COVERAGE" "$SCRATCH/prd"
-s_assert_status 2 "a PRD and no ticket is a usage error — a decomposition has tickets"
-t_run_split sh "$COVERAGE" "$SCRATCH/absent" "$(T 1)"
-s_assert_status 2 "an unreadable PRD body is exit 2"
-s_assert_out_is "" "… nothing on stdout"
+t_exec sh "$COVERAGE"
+expect_status 2 "no arguments is a usage error"
+t_exec sh "$COVERAGE" "$SCRATCH/prd"
+expect_status 2 "a PRD and no ticket is a usage error — a decomposition has tickets"
+t_exec sh "$COVERAGE" "$SCRATCH/absent" "$(T 1)"
+expect_status 2 "an unreadable PRD body is exit 2"
+expect_out_is "" "… nothing on stdout"
 # A directory is no PRD body: refused as unreadable, never read as one that
 # carries no requirement lines.
 mkdir -p "$SCRATCH/prd-dir"
-t_run_split sh "$COVERAGE" "$SCRATCH/prd-dir" "$(T 1)"
-s_assert_status 2 "a directory in place of the PRD body is exit 2, not 3"
-s_assert_out_is "" "… nothing on stdout"
+t_exec sh "$COVERAGE" "$SCRATCH/prd-dir" "$(T 1)"
+expect_status 2 "a directory in place of the PRD body is exit 2, not 3"
+expect_out_is "" "… nothing on stdout"
 if [ "$(id -u)" -ne 0 ]; then
 	printf 'R1. The tool SHALL a.\n' >"$SCRATCH/prd-locked"
 	chmod 000 "$SCRATCH/prd-locked"
-	t_run_split sh "$COVERAGE" "$SCRATCH/prd-locked" "$(T 1)"
-	s_assert_status 2 "a PRD body without read permission is exit 2"
-	s_assert_out_is "" "… nothing on stdout"
+	t_exec sh "$COVERAGE" "$SCRATCH/prd-locked" "$(T 1)"
+	expect_status 2 "a PRD body without read permission is exit 2"
+	expect_out_is "" "… nothing on stdout"
 	chmod 600 "$SCRATCH/prd-locked"
 fi
-t_run_split sh "$COVERAGE" "$SCRATCH/prd" "$SCRATCH/draft/absent"
-s_assert_status 2 "an unreadable ticket is exit 2"
+t_exec sh "$COVERAGE" "$SCRATCH/prd" "$SCRATCH/draft/absent"
+expect_status 2 "an unreadable ticket is exit 2"
 prd 'R1. The tool SHALL a.\n'
 printf 'Covers: R1\n' >"$SCRATCH/draft/bad label"
-t_run_split sh "$COVERAGE" "$SCRATCH/prd" "$SCRATCH/draft/bad label"
-s_assert_status 2 "a ticket file whose name is not a label ([A-Za-z0-9._-]) is refused"
+t_exec sh "$COVERAGE" "$SCRATCH/prd" "$SCRATCH/draft/bad label"
+expect_status 2 "a ticket file whose name is not a label ([A-Za-z0-9._-]) is refused"
 rm -f "$SCRATCH/draft/bad label"
 
 t_done "the coverage check"

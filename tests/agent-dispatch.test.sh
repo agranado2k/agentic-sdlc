@@ -54,9 +54,9 @@ EOF
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
-# dispatch <args> — the dispatcher, streams kept apart (t_run_split in
+# dispatch <args> — the dispatcher, streams kept apart (t_exec in
 # tests/lib.sh owns why).
-dispatch() { t_run_split sh "$DISPATCH" "$@"; }
+dispatch() { t_exec sh "$DISPATCH" "$@"; }
 
 # THE SUITE COUNTS ONLY ITS OWN SLEEPS (#336). Several legs prove the dispatcher
 # left no `sleep N` behind by counting them — and counted the HOST's: a sibling
@@ -265,17 +265,17 @@ wait "$af_writer" 2>/dev/null
 banner "The in-session case — the default, and not a failure"
 # ---------------------------------------------------------------------------
 dispatch planner --prompt 'anything'
-s_assert_status 3 "a tier naming no agent harness exits 3 — 'spawn this yourself'"
-s_assert_out_is 'model-for-planning' "…and hands the caller the model id, on stdout, alone"
-s_assert_err_has "names no agent harness"
+expect_status 3 "a tier naming no agent harness exits 3 — 'spawn this yourself'"
+expect_out_is 'model-for-planning' "…and hands the caller the model id, on stdout, alone"
+expect_err_has "names no agent harness"
 
 # ---------------------------------------------------------------------------
 banner "Dispatching — what the worker actually receives"
 # ---------------------------------------------------------------------------
 dispatch implementer --prompt 'Implement ticket #7.'
-s_assert_status 0 "a mapped agent harness dispatches"
-s_assert_out_has 'ARGV: --flag --model model-for-implementing' "the model lands where the flag template put it"
-s_assert_out_has 'Implement ticket #7.' "the prompt reaches the worker"
+expect_status 0 "a mapped agent harness dispatches"
+expect_out_has 'ARGV: --flag --model model-for-implementing' "the model lands where the flag template put it"
+expect_out_has 'Implement ticket #7.' "the prompt reaches the worker"
 
 # Prose carries quotes, dollars, newlines and code fences, and every one of them
 # would be interpreted on the way if the prompt were an argv element. The claim
@@ -291,8 +291,8 @@ echo "a fenced block"
 ```
 EOF
 dispatch implementer --prompt-file "$HAZARD"
-s_assert_status 0 "a prompt full of shell metacharacters dispatches"
-printf '%s\n' "$S_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p' | sed '1d;$d' >"$SCRATCH/received.md"
+expect_status 0 "a prompt full of shell metacharacters dispatches"
+printf '%s\n' "$T_OUT" | sed -n '/^STDIN-BEGIN$/,/^STDIN-END$/p' | sed '1d;$d' >"$SCRATCH/received.md"
 if diff -q "$HAZARD" "$SCRATCH/received.md" >/dev/null 2>&1; then
 	pass "the prompt reaches the worker byte-identical — nothing expanded, nothing eaten"
 else
@@ -301,7 +301,7 @@ else
 fi
 
 dispatch implementer content --prompt 'x' --dry-run
-s_assert_out_has 'model-for-prose' "the task domain selects its own model"
+expect_out_has 'model-for-prose' "the task domain selects its own model"
 
 # ---------------------------------------------------------------------------
 banner "An agent harness with no model omits the flag entirely"
@@ -319,9 +319,9 @@ EOF
 AGENTS_CONFIG="$CFG2"
 export AGENTS_CONFIG
 dispatch reviewer --prompt 'x'
-s_assert_status 0 "a tier naming an agent harness with no model still dispatches"
-s_assert_out_has 'ARGV: --flag' "…and the worker runs"
-s_assert_out_lacks '--model' "…with the model flag omitted entirely, not passed empty"
+expect_status 0 "a tier naming an agent harness with no model still dispatches"
+expect_out_has 'ARGV: --flag' "…and the worker runs"
+expect_out_lacks '--model' "…with the model flag omitted entirely, not passed empty"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
@@ -330,12 +330,12 @@ export AGENTS_CONFIG
 banner "--dry-run runs nothing and shows everything"
 # ---------------------------------------------------------------------------
 dispatch implementer --prompt 'Do not run me.' --dry-run
-s_assert_status 0 "a dry run succeeds"
-s_assert_out_has 'agent harness:  stub' "it names the agent harness"
-s_assert_out_has 'model:          model-for-implementing' "it names the model"
-s_assert_out_has '--model model-for-implementing' "it shows the expanded command"
-s_assert_out_has 'Do not run me.' "it shows the prompt"
-s_assert_out_lacks 'ARGV:' "and the worker never ran"
+expect_status 0 "a dry run succeeds"
+expect_out_has 'agent harness:  stub' "it names the agent harness"
+expect_out_has 'model:          model-for-implementing' "it names the model"
+expect_out_has '--model model-for-implementing' "it shows the expanded command"
+expect_out_has 'Do not run me.' "it shows the prompt"
+expect_out_lacks 'ARGV:' "and the worker never ran"
 
 # ---------------------------------------------------------------------------
 banner "Markers, and the header that documents them"
@@ -360,14 +360,14 @@ EOF
 
 dispatch implementer --prompt-file "$TPL" --set 'TICKET=#42' \
 	--set 'BODY=has "quotes", $(echo NOPE), a|pipe and a\backslash'
-s_assert_status 0 "a template with a header and markers dispatches"
-s_assert_out_lacks 'EDITOR NOTE' "the editor's header never reaches the worker"
-s_assert_out_has 'Implement #42.' "a marker is filled"
-s_assert_out_has 'Again: #42.' "…every occurrence of it, not just the first"
-s_assert_out_has '$(echo NOPE)' "a value carrying shell syntax is INSERTED, not executed"
-s_assert_out_has 'a|pipe' "…and cannot close the substitution expression"
-s_assert_out_has '%%NEVER_SET%%' "an unfilled marker is left alone rather than emptied"
-s_assert_err_has "unfilled marker"
+expect_status 0 "a template with a header and markers dispatches"
+expect_out_lacks 'EDITOR NOTE' "the editor's header never reaches the worker"
+expect_out_has 'Implement #42.' "a marker is filled"
+expect_out_has 'Again: #42.' "…every occurrence of it, not just the first"
+expect_out_has '$(echo NOPE)' "a value carrying shell syntax is INSERTED, not executed"
+expect_out_has 'a|pipe' "…and cannot close the substitution expression"
+expect_out_has '%%NEVER_SET%%' "an unfilled marker is left alone rather than emptied"
+expect_err_has "unfilled marker"
 
 if grep -q '%%TICKET%%' "$TPL"; then
 	pass "the template file itself is untouched — it is read many times"
@@ -376,10 +376,10 @@ else
 fi
 
 dispatch implementer --prompt 'no header here' --dry-run
-s_assert_out_has 'no header here' "a prompt with no header passes through whole"
+expect_out_has 'no header here' "a prompt with no header passes through whole"
 
 dispatch implementer --prompt 'x' --set 'NOT_A_PAIR'
-s_assert_status 2 "--set without NAME=VALUE is refused"
+expect_status 2 "--set without NAME=VALUE is refused"
 
 # --set-file NAME=path — for a value too large for argv. A --set value is one
 # argv element, so a big diff hits the exec ceiling (~128 KiB single arg on
@@ -390,25 +390,25 @@ BIG="$SCRATCH/big-value"
 awk 'BEGIN { for (i = 0; i < 20000; i++) print "line " i " with $(echo x) and %%B%% and | pipe" }' >"$BIG"
 printf 'Diff follows:\n%%%%DIFF%%%%\nend\n' >"$SCRATCH/df.md"
 dispatch implementer --prompt-file "$SCRATCH/df.md" --set-file "DIFF=$BIG" --set 'B=bee'
-s_assert_status 0 "a value of a megabyte is delivered from a file"
-s_assert_out_has "line 19999 with" "…whole, to the last line"
-s_assert_out_has 'line 0 with $(echo x) and %%B%% and | pipe' "…unexpanded, and a marker inside it is not re-scanned"
+expect_status 0 "a value of a megabyte is delivered from a file"
+expect_out_has "line 19999 with" "…whole, to the last line"
+expect_out_has 'line 0 with $(echo x) and %%B%% and | pipe' "…unexpanded, and a marker inside it is not re-scanned"
 
 # --set and --set-file mix, and order is preserved.
 printf 'A is %%%%A%%%%\nF is %%%%F%%%%\n' >"$SCRATCH/mix.md"
 printf 'from-a-file\n' >"$SCRATCH/fval"
 dispatch implementer --prompt-file "$SCRATCH/mix.md" --set 'A=inline' --set-file "F=$SCRATCH/fval"
-s_assert_out_has "A is inline" "--set fills its marker when composed with --set-file"
-s_assert_out_has "F is from-a-file" "…and --set-file fills its own from the file"
+expect_out_has "A is inline" "--set fills its marker when composed with --set-file"
+expect_out_has "F is from-a-file" "…and --set-file fills its own from the file"
 
 dispatch implementer --prompt 'x' --set-file 'F=/no/such/file/here'
-s_assert_status 2 "--set-file with a missing path is refused before anything runs"
+expect_status 2 "--set-file with a missing path is refused before anything runs"
 
 dispatch implementer --prompt 'x' --set-file 'NOPAIR'
-s_assert_status 2 "--set-file without NAME=path is refused"
+expect_status 2 "--set-file without NAME=path is refused"
 
 dispatch implementer --prompt 'x' --set-file "1bad=$BIG"
-s_assert_status 2 "--set-file NAME is shape-checked like --set"
+expect_status 2 "--set-file NAME is shape-checked like --set"
 
 # An unreadable file that exists is refused before dispatch, not substituted as
 # empty (which would send the worker a prompt with a hole in it and exit 0).
@@ -420,14 +420,14 @@ dispatch implementer --prompt 'x' --set-file "V=$UNREAD"
 if [ "$(id -u)" = 0 ]; then
 	skip "running as root — an unreadable file cannot be simulated"
 else
-	s_assert_status 2 "an unreadable --set-file path is refused before dispatch"
-	s_assert_err_has "not readable"
+	expect_status 2 "an unreadable --set-file path is refused before dispatch"
+	expect_err_has "not readable"
 fi
 chmod 644 "$UNREAD"
 
 dispatch implementer --prompt 'x' --set-file "V=$SCRATCH"
-s_assert_status 2 "a --set-file path that is a directory is refused"
-s_assert_err_has "directory"
+expect_status 2 "a --set-file path that is a directory is refused"
+expect_err_has "directory"
 
 # A --set-file value must not leak into a later --set of a different NAME, and
 # must not reach the worker's own environment for a nested dispatch to read.
@@ -438,16 +438,16 @@ printf 'A is %%%%A%%%%.\n' >"$SCRATCH/leak.md"
 PD_F_1="$SCRATCH/leak.src" PD_K_1=A
 export PD_F_1 PD_K_1
 dispatch implementer --prompt-file "$SCRATCH/leak.md" --set 'A=inline-value'
-s_assert_out_has "A is inline-value." "a stale PD_F in the environment does not turn a --set into a file read"
-s_assert_out_lacks "FROM-FILE" "…the leaked file is not read"
+expect_out_has "A is inline-value." "a stale PD_F in the environment does not turn a --set into a file read"
+expect_out_lacks "FROM-FILE" "…the leaked file is not read"
 unset PD_F_1 PD_K_1
 
 # The same NAME twice is refused, whichever forms it takes.
 dispatch implementer --prompt 'x' --set 'A=1' --set 'A=2'
-s_assert_status 2 "a NAME set twice by --set is refused"
-s_assert_err_has "set twice"
+expect_status 2 "a NAME set twice by --set is refused"
+expect_err_has "set twice"
 dispatch implementer --prompt 'x' --set 'A=1' --set-file "A=$SCRATCH/leak.src"
-s_assert_status 2 "a NAME set by both --set and --set-file is refused"
+expect_status 2 "a NAME set by both --set and --set-file is refused"
 
 # H-2: an unreadable path was accepted, substituted empty, exit 0 — the ticket
 # says it is refused. (Skipped as root, where the mode is ignored.)
@@ -455,11 +455,11 @@ if [ "$(id -u)" != 0 ]; then
 	printf 'secret\n' >"$SCRATCH/noperm"
 	chmod 000 "$SCRATCH/noperm"
 	dispatch implementer --prompt 'x' --set-file "V=$SCRATCH/noperm"
-	s_assert_status 2 "an unreadable --set-file path is refused, not substituted empty"
+	expect_status 2 "an unreadable --set-file path is refused, not substituted empty"
 	chmod 644 "$SCRATCH/noperm"
 fi
 dispatch implementer --prompt 'x' --set-file "V=$SCRATCH"
-s_assert_status 2 "a --set-file path that is a directory is refused"
+expect_status 2 "a --set-file path that is a directory is refused"
 
 # H-3: a --set-file leaves no path behind for a later plain --set to inherit,
 # and nothing of the sort reaches the worker's environment. A nested dispatch
@@ -493,16 +493,16 @@ EOF
 printf '#!/bin/sh\ncat\n' >"$SCRATCH/echo-stdin"; chmod +x "$SCRATCH/echo-stdin"
 printf 'x\n' >"$SCRATCH/anyprompt.md"
 AGENTS_CONFIG="$CFG_NEST" dispatch implementer --prompt-file "$SCRATCH/anyprompt.md" --set-file "OUTER=$SCRATCH/outer"
-s_assert_out_has "inner sees: inline-only" "a nested --set does not inherit the outer --set-file's path"
-s_assert_out_lacks "OUTER-FILE-CONTENTS" "…and the outer file's contents never reach the inner worker"
+expect_out_has "inner sees: inline-only" "a nested --set does not inherit the outer --set-file's path"
+expect_out_lacks "OUTER-FILE-CONTENTS" "…and the outer file's contents never reach the inner worker"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 
 # M-1: the same NAME twice is refused, not silently resolved by argument order.
 dispatch implementer --prompt 'x' --set 'A=one' --set 'A=two'
-s_assert_status 2 "the same marker NAME in two --set is refused"
+expect_status 2 "the same marker NAME in two --set is refused"
 dispatch implementer --prompt 'x' --set 'A=one' --set-file "A=$SCRATCH/outer"
-s_assert_status 2 "…and across --set and --set-file"
+expect_status 2 "…and across --set and --set-file"
 
 # A ticket body is untrusted content, and %%BODY%% is exactly where one goes.
 # The pairs used to be joined into one string and read back line by line, so a
@@ -512,37 +512,37 @@ printf 'BODY:\n%%%%BODY%%%%\nC was: %%%%C%%%%\n' >"$SCRATCH/multi.md"
 dispatch implementer --prompt-file "$SCRATCH/multi.md" --set 'C=legit' --set 'BODY=line one
 C=INJECTED
 line three'
-s_assert_out_has 'line three' "a multi-line value arrives whole, not truncated at the first newline"
-s_assert_out_has 'C=INJECTED' "…including a line inside it that looks like a pair"
-s_assert_out_has 'C was: legit' "…which does not hijack the marker of that name"
+expect_out_has 'line three' "a multi-line value arrives whole, not truncated at the first newline"
+expect_out_has 'C=INJECTED' "…including a line inside it that looks like a pair"
+expect_out_has 'C was: legit' "…which does not hijack the marker of that name"
 
 # A value is data, not a template. Re-scanning it made the result depend on the
 # order the pairs happened to arrive in.
 printf 'X: %%%%A%%%%\n' >"$SCRATCH/rescan.md"
 dispatch implementer --prompt-file "$SCRATCH/rescan.md" --set 'A=[%%B%%]' --set 'B=bee'
-s_assert_out_has 'X: [%%B%%]' "a marker inside a VALUE is not substituted"
+expect_out_has 'X: [%%B%%]' "a marker inside a VALUE is not substituted"
 dispatch implementer --prompt-file "$SCRATCH/rescan.md" --set 'B=bee' --set 'A=[%%B%%]'
-s_assert_out_has 'X: [%%B%%]' "…in either order — substitution is one pass, not one per pair"
+expect_out_has 'X: [%%B%%]' "…in either order — substitution is one pass, not one per pair"
 
 dispatch implementer --prompt 'x' --set 'a b=1'
-s_assert_status 2 "a NAME that could never be a marker is refused"
+expect_status 2 "a NAME that could never be a marker is refused"
 
 # The header strip's two edges.
 printf '<!--\nan example: a-->b\nMarkers: %%%%T%%%%\n-->\n\nReal line %%%%T%%%%.\n' >"$SCRATCH/edge.md"
 dispatch implementer --prompt-file "$SCRATCH/edge.md" --set T=filled
-s_assert_out_has 'Real line filled.' "a --> inside the header does not close it early"
-s_assert_out_lacks 'an example' "…and the whole header is still removed"
-s_assert_out_lacks 'Markers: filled' "…so the header's own marker documentation is never filled"
+expect_out_has 'Real line filled.' "a --> inside the header does not close it early"
+expect_out_lacks 'an example' "…and the whole header is still removed"
+expect_out_lacks 'Markers: filled' "…so the header's own marker documentation is never filled"
 
 printf '<!--\nnever closed\n' >"$SCRATCH/unterm.md"
 dispatch implementer --prompt-file "$SCRATCH/unterm.md" --dry-run
-s_assert_status 0 "an unterminated header does not abort"
-s_assert_out_has 'never closed' "…and the prompt is kept rather than stripped to nothing"
-s_assert_err_has "never closes it"
+expect_status 0 "an unterminated header does not abort"
+expect_out_has 'never closed' "…and the prompt is kept rather than stripped to nothing"
+expect_err_has "never closes it"
 
 printf '<!--\nx\n-->\n\n\n' >"$SCRATCH/blanks.md"
 dispatch implementer --prompt-file "$SCRATCH/blanks.md"
-s_assert_status 2 "a prompt that is only a header is refused, not sent empty"
+expect_status 2 "a prompt that is only a header is refused, not sent empty"
 
 # ---------------------------------------------------------------------------
 banner "The shipped worker prompts"
@@ -582,8 +582,8 @@ for wp in implement-worker review-worker; do
 	done
 	# shellcheck disable=SC2086
 	dispatch implementer --prompt-file "$f" $sets --dry-run
-	s_assert_status 0 "$wp.md dispatches with every marker filled"
-	case "$S_ERR" in
+	expect_status 0 "$wp.md dispatches with every marker filled"
+	case "$T_ERR" in
 	*"unfilled marker"*) fail "$wp.md left a marker unfilled after filling all of them" ;;
 	*) pass "$wp.md has no marker the caller cannot fill" ;;
 	esac
@@ -593,25 +593,25 @@ done
 banner "Misconfiguration reports itself, and points at the fix"
 # ---------------------------------------------------------------------------
 dispatch reviewer --prompt 'x'
-s_assert_status 2 "an agent harness named without a command template is refused"
-s_assert_err_has "AGENT_HARNESS_OTHER_CMD"
+expect_status 2 "an agent harness named without a command template is refused"
+expect_err_has "AGENT_HARNESS_OTHER_CMD"
 
 dispatch mechanical --prompt 'x'
-s_assert_status 2 "a model id carrying a shell metacharacter is REFUSED, not escaped"
-s_assert_err_has "will not interpolate"
+expect_status 2 "a model id carrying a shell metacharacter is REFUSED, not escaped"
+expect_err_has "will not interpolate"
 
 dispatch not-a-tier --prompt 'x'
-s_assert_status 2 "the closed tier vocabulary still closes"
+expect_status 2 "the closed tier vocabulary still closes"
 
 dispatch implementer --nonsense --prompt 'x'
-s_assert_status 2 "an unknown option is refused rather than read as a tier"
-s_assert_err_has "unknown option"
+expect_status 2 "an unknown option is refused rather than read as a tier"
+expect_err_has "unknown option"
 
 dispatch implementer
-s_assert_status 2 "no prompt at all is a usage error"
+expect_status 2 "no prompt at all is a usage error"
 
 dispatch implementer --prompt-file "$SCRATCH/does-not-exist.md"
-s_assert_status 2 "a missing prompt file is refused before anything runs"
+expect_status 2 "a missing prompt file is refused before anything runs"
 
 CFG3="$SCRATCH/ghost.config.sh"
 cat >"$CFG3" <<'EOF'
@@ -625,8 +625,8 @@ export AGENTS_CONFIG
 dispatch implementer --prompt 'x'
 # 69, not 2, since #245: an agent harness that is not installed here is the
 # other side being unreachable, not the caller asking for something wrong.
-s_assert_status 69 "an uninstalled agent harness is caught before it is invoked"
-s_assert_err_has "not on PATH"
+expect_status 69 "an uninstalled agent harness is caught before it is invoked"
+expect_err_has "not on PATH"
 
 # ---------------------------------------------------------------------------
 banner "The prompt path is data, and is treated as such"
@@ -642,29 +642,29 @@ HOSTILE="$SCRATCH/a;\$(touch $SCRATCH/PWNED)b"
 mkdir -p "$HOSTILE"
 printf 'the prompt survives\n' >"$HOSTILE/p.md"
 dispatch implementer --prompt-file "$HOSTILE/p.md"
-s_assert_status 0 "a prompt under a hostile directory name dispatches"
+expect_status 0 "a prompt under a hostile directory name dispatches"
 if [ -f "$SCRATCH/PWNED" ]; then
 	fail "the prompt path was EXECUTED — command substitution in a path reached the eval"
 	rm -f "$SCRATCH/PWNED"
 else
 	pass "the prompt path was not executed"
 fi
-s_assert_out_has 'the prompt survives' "…and the prompt still reached the worker"
+expect_out_has 'the prompt survives' "…and the prompt still reached the worker"
 
 SPACED="$SCRATCH/with space"
 mkdir -p "$SPACED"
 printf 'spaces are fine\n' >"$SPACED/p.md"
 dispatch implementer --prompt-file "$SPACED/p.md"
-s_assert_status 0 "a path containing a space dispatches"
-s_assert_out_has 'spaces are fine' "…and arrives whole, not split at the space"
+expect_status 0 "a path containing a space dispatches"
+expect_out_has 'spaces are fine' "…and arrives whole, not split at the space"
 
 # $TMPDIR is somebody else's data too, so staging alone is not the fix.
 mkdir -p "$SCRATCH/tmp;x"
-t_run_split env TMPDIR="$SCRATCH/tmp;x" sh "$DISPATCH" implementer --prompt 'hi'
-s_assert_status 2 "a TMPDIR this script cannot safely interpolate is refused, not escaped"
+t_exec env TMPDIR="$SCRATCH/tmp;x" sh "$DISPATCH" implementer --prompt 'hi'
+expect_status 2 "a TMPDIR this script cannot safely interpolate is refused, not escaped"
 
 dispatch implementer --prompt-file /dev/null
-s_assert_status 2 "an empty prompt file is refused — a worker given nothing invents something"
+expect_status 2 "an empty prompt file is refused — a worker given nothing invents something"
 
 # ---------------------------------------------------------------------------
 banner "A worker never inherits the dispatcher's stdin"
@@ -709,12 +709,12 @@ mkfifo "$FIFO" || {
 sleep 20 >"${FIFO:-/dev/null}" &
 holder=$!
 start=$(date +%s)
-t_run_split sh -c 'sh "$1" implementer --prompt hi <"$2"' _ "$DISPATCH" "$FIFO"
+t_exec sh -c 'sh "$1" implementer --prompt hi <"$2"' _ "$DISPATCH" "$FIFO"
 took=$(( $(date +%s) - start ))
 kill "$holder" 2>/dev/null
 wait "$holder" 2>/dev/null
-s_assert_status 0 "a worker whose template does not redirect stdin still dispatches"
-s_assert_out_has "STDIN-BYTES=0" "…and reads NOTHING from the dispatcher's open pipe"
+expect_status 0 "a worker whose template does not redirect stdin still dispatches"
+expect_out_has "STDIN-BYTES=0" "…and reads NOTHING from the dispatcher's open pipe"
 [ "$took" -lt 10 ] &&
 	pass "…and returns at once rather than waiting on the pipe (${took}s)" ||
 	fail "the worker waited on the dispatcher's stdin (${took}s) — it inherited the pipe"
@@ -730,8 +730,8 @@ AGENT_HARNESS_RD_CMD='$READER {model_flag} < {prompt_file}'
 AGENT_HARNESS_RD_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='rd:'
 EOF
-t_run_split sh "$DISPATCH" implementer --prompt "twelve bytes"
-s_assert_out_has "STDIN-BYTES=13" "a template that redirects from {prompt_file} still receives the prompt"
+t_exec sh "$DISPATCH" implementer --prompt "twelve bytes"
+expect_out_has "STDIN-BYTES=13" "a template that redirects from {prompt_file} still receives the prompt"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
@@ -773,13 +773,13 @@ export AGENTS_CONFIG
 
 start=$(date +%s)
 sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >"$OUTFILE" 2>"$SCRATCH/sleeper.err"
-S_STATUS=$?
+T_STATUS=$?
 took=$(( $(date +%s) - start ))
-S_OUT=$(cat "$OUTFILE"); S_ERR=$(cat "$SCRATCH/sleeper.err")
-s_assert_status 124 "a worker past --timeout is killed, with a status the caller can tell from the worker's own"
-s_assert_out_has "started" "…after whatever it had already written"
-s_assert_out_lacks "finished" "…and before it could finish"
-s_assert_err_has "timed out"
+T_OUT=$(cat "$OUTFILE"); T_ERR=$(cat "$SCRATCH/sleeper.err")
+expect_status 124 "a worker past --timeout is killed, with a status the caller can tell from the worker's own"
+expect_out_has "started" "…after whatever it had already written"
+expect_out_lacks "finished" "…and before it could finish"
+expect_err_has "timed out"
 [ "$took" -lt 10 ] &&
 	pass "…within the timeout, not the worker's own duration (${took}s)" ||
 	fail "the dispatch took ${took}s — the timeout did not fire"
@@ -805,11 +805,11 @@ echo "finished"
 EOF
 start=$(date +%s)
 sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >"$OUTFILE" 2>/dev/null
-S_STATUS=$?
+T_STATUS=$?
 took=$(( $(date +%s) - start ))
-S_OUT=$(cat "$OUTFILE")
-s_assert_status 124 "a worker that ignores TERM is still reported as timed out"
-s_assert_out_lacks "finished" "…and did not run to completion"
+T_OUT=$(cat "$OUTFILE")
+expect_status 124 "a worker that ignores TERM is still reported as timed out"
+expect_out_lacks "finished" "…and did not run to completion"
 [ "$took" -lt 10 ] &&
 	pass "…and the dispatch returned inside the timeout plus grace (${took}s)" ||
 	fail "the dispatch took ${took}s — KILL never followed TERM"
@@ -833,8 +833,8 @@ wait
 echo "finished"
 EOF
 sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >"$OUTFILE" 2>/dev/null
-S_STATUS=$?
-s_assert_status 124 "a worker whose child ignores TERM is reported as timed out"
+T_STATUS=$?
+expect_status 124 "a worker whose child ignores TERM is reported as timed out"
 sleep 1
 if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
 	fail "the reparented grandchild survived — the tree was walked after TERM, not before"
@@ -853,19 +853,19 @@ cat >/dev/null
 sleep 30
 EOF
 sh "$DISPATCH" implementer --prompt 'x' --timeout 2 >/dev/null 2>&1
-S_STATUS=$?
-s_assert_status 124 "a worker that traps TERM and exits 0 is still a timeout — the verdict is the watchdog's"
+T_STATUS=$?
+expect_status 124 "a worker that traps TERM and exits 0 is still a timeout — the verdict is the watchdog's"
 cat >"$SLEEPER" <<EOF
 #!/bin/sh
 cat >/dev/null
 kill -TERM \$\$
 EOF
 sh "$DISPATCH" implementer --prompt 'x' --timeout 30 >/dev/null 2>"$SCRATCH/self.err"
-S_STATUS=$?
-S_ERR=$(cat "$SCRATCH/self.err")
-[ "$S_STATUS" = 143 ] && pass "a worker that kills itself with TERM is reported as 143, not 124" ||
-	fail "a self-killed worker was reported as $S_STATUS"
-s_assert_err_lacks "timed out"
+T_STATUS=$?
+T_ERR=$(cat "$SCRATCH/self.err")
+[ "$T_STATUS" = 143 ] && pass "a worker that kills itself with TERM is reported as 143, not 124" ||
+	fail "a self-killed worker was reported as $T_STATUS"
+expect_err_lacks "timed out"
 
 # A FAST worker under a long --timeout must not cost the timeout: killing the
 # watchdog without its sleep left `sleep N` holding the caller's stdout, and
@@ -880,8 +880,8 @@ sleeps_before=$(own_sleep_pids 20)
 start=$(date +%s)
 dispatch implementer --prompt 'x' --timeout 20
 took=$(( $(date +%s) - start ))
-s_assert_status 5 "a worker that finishes inside --timeout passes its own status through"
-s_assert_out_has "quick" "…and its output"
+expect_status 5 "a worker that finishes inside --timeout passes its own status through"
+expect_out_has "quick" "…and its output"
 [ "$took" -lt 8 ] &&
 	pass "…and a capturing caller returns when the worker does, not when the timeout would (${took}s)" ||
 	fail "a fast worker cost ${took}s — the watchdog's sleep was left holding stdout"
@@ -893,12 +893,12 @@ leftover=$(new_sleeps 20 "$sleeps_before")
 	fail "$leftover 'sleep 20' still running — the watchdog was killed without its sleep"
 
 dispatch implementer --prompt 'x' --timeout 2 --dry-run
-s_assert_out_has "timeout:        2s" "--dry-run shows the timeout"
-s_assert_out_lacks "quick" "…and never started the worker"
+expect_out_has "timeout:        2s" "--dry-run shows the timeout"
+expect_out_lacks "quick" "…and never started the worker"
 dispatch implementer --prompt 'x' --timeout abc
-s_assert_status 2 "a timeout that is not a whole number of seconds is refused"
+expect_status 2 "a timeout that is not a whole number of seconds is refused"
 dispatch implementer --prompt 'x' --timeout 0
-s_assert_status 2 "--timeout 0 is refused — it is not a timeout"
+expect_status 2 "--timeout 0 is refused — it is not a timeout"
 
 # Signalling the DISPATCHER takes the worker with it. Backgrounded children of
 # a non-interactive shell start with SIGINT ignored, so without a trap a
@@ -1024,10 +1024,10 @@ AGENTS_CONFIG="$CFG_SELF"
 export AGENTS_CONFIG
 : >"$RAN"
 dispatch implementer --prompt 'x'
-s_assert_status 4 "a chain of self-dispatching workers ends in the depth refusal's own status"
-s_assert_err_has "AGENT_DISPATCH_MAX_DEPTH"
-s_assert_err_has "depth 4"
-s_assert_err_has "maximum is 3"
+expect_status 4 "a chain of self-dispatching workers ends in the depth refusal's own status"
+expect_err_has "AGENT_DISPATCH_MAX_DEPTH"
+expect_err_has "depth 4"
+expect_err_has "maximum is 3"
 ran=$(wc -l <"$RAN" | tr -d ' ')
 [ "$ran" = 3 ] &&
 	pass "exactly 3 workers ran — the kit default, planner → implementer → reviewer deep" ||
@@ -1044,8 +1044,8 @@ ran=$(wc -l <"$RAN" | tr -d ' ')
 printf "AGENT_DISPATCH_MAX_DEPTH='2'\n" >>"$CFG_SELF"
 : >"$RAN"
 dispatch implementer --prompt 'x'
-s_assert_status 4 "a policy maximum of 2 refuses the third dispatch"
-s_assert_err_has "maximum is 2"
+expect_status 4 "a policy maximum of 2 refuses the third dispatch"
+expect_err_has "maximum is 2"
 ran=$(wc -l <"$RAN" | tr -d ' ')
 [ "$ran" = 2 ] &&
 	pass "exactly 2 workers ran — the policy file's number, not the kit's" ||
@@ -1056,20 +1056,20 @@ ran=$(wc -l <"$RAN" | tr -d ' ')
 # without building the chain. The echoing stub says whether it ran.
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
-t_run_split env AGENT_DISPATCH_DEPTH=3 sh "$DISPATCH" implementer --prompt 'at the maximum'
-s_assert_status 0 "a dispatch AT the maximum depth runs"
-s_assert_out_has 'at the maximum' "…and the worker gets its prompt"
-t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt 'past it'
-s_assert_status 4 "a dispatch one past the maximum is refused"
-s_assert_out_lacks 'ARGV:' "…and the worker never ran"
-s_assert_err_has "refusing to nest"
+t_exec env AGENT_DISPATCH_DEPTH=3 sh "$DISPATCH" implementer --prompt 'at the maximum'
+expect_status 0 "a dispatch AT the maximum depth runs"
+expect_out_has 'at the maximum' "…and the worker gets its prompt"
+t_exec env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt 'past it'
+expect_status 4 "a dispatch one past the maximum is refused"
+expect_out_lacks 'ARGV:' "…and the worker never ran"
+expect_err_has "refusing to nest"
 # The reader of that stderr is usually the refused worker — a model with
 # tools — so the message tells it to stop and report, never how to lift the
 # ceiling; and the policy file is named by its variable, not by a path the
 # dispatcher may not have read (AGENTS_CONFIG resolves first).
-s_assert_err_has "stop and report"
-s_assert_err_lacks "scripts/agents.config.sh"
-s_assert_err_lacks "Raise"
+expect_err_has "stop and report"
+expect_err_lacks "scripts/agents.config.sh"
+expect_err_lacks "Raise"
 
 # The worker is spawned one deeper than its dispatch, through BOTH spawn
 # paths: the plain eval and the timed `sh -c`. The dispatcher's comment says
@@ -1090,67 +1090,67 @@ AGENT_HARNESS_SEEN_CMD='$DEPTH_STUB < {prompt_file}'
 AGENT_HARNESS_SEEN_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='seen:'
 EOF
-t_run_split env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x'
-s_assert_out_is 'worker at depth 3' "a dispatch at depth 2 spawns its worker at depth 3 — the plain path"
-t_run_split env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --timeout 5
-s_assert_status 0 "…and the timed path runs the same worker"
-s_assert_out_is 'worker at depth 3' "…which sees the same depth 3"
+t_exec env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x'
+expect_out_is 'worker at depth 3' "a dispatch at depth 2 spawns its worker at depth 3 — the plain path"
+t_exec env AGENTS_CONFIG="$CFG_DEPTH" AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --timeout 5
+expect_status 0 "…and the timed path runs the same worker"
+expect_out_is 'worker at depth 3' "…which sees the same depth 3"
 
 # Refused BEFORE the tier is resolved or the prompt is read: an in-session
 # tier (normally exit 3) and a missing prompt file (normally exit 2) both
 # report the depth first, because the invocation has nothing else to say.
-t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" planner --prompt 'x'
-s_assert_status 4 "an in-session tier past the maximum is refused, not handed back as exit 3"
-s_assert_out_lacks 'model-for-planning' "…and no model id is printed"
-t_run_split env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt-file "$SCRATCH/does-not-exist.md"
-s_assert_status 4 "the depth is refused before the prompt file is looked at"
+t_exec env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" planner --prompt 'x'
+expect_status 4 "an in-session tier past the maximum is refused, not handed back as exit 3"
+expect_out_lacks 'model-for-planning' "…and no model id is printed"
+t_exec env AGENT_DISPATCH_DEPTH=4 sh "$DISPATCH" implementer --prompt-file "$SCRATCH/does-not-exist.md"
+expect_status 4 "the depth is refused before the prompt file is looked at"
 
 # --dry-run shows the depth the dispatch would run at, against the maximum.
 dispatch implementer --prompt 'x' --dry-run
-s_assert_out_has 'depth:          1 of 3' "--dry-run shows a top-level dispatch at depth 1 of the default 3"
-t_run_split env AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'depth:          2 of 3' "…and the inherited depth when there is one"
+expect_out_has 'depth:          1 of 3' "--dry-run shows a top-level dispatch at depth 1 of the default 3"
+t_exec env AGENT_DISPATCH_DEPTH=2 sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_out_has 'depth:          2 of 3' "…and the inherited depth when there is one"
 dispatch
-s_assert_err_has "the depth, the budget and the prompt" # usage() lists what --dry-run prints, and the depth is one of them
-s_assert_out_lacks 'ARGV:' "…running nothing"
+expect_err_has "the depth, the budget and the prompt" # usage() lists what --dry-run prints, and the depth is one of them
+expect_out_lacks 'ARGV:' "…running nothing"
 # Under a policy maximum the second number is the policy's, not the default:
 # the two assertions above cannot tell them apart.
-t_run_split env AGENTS_CONFIG="$CFG_SELF" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'depth:          1 of 2' "…and the maximum shown is the policy file's when it sets one"
+t_exec env AGENTS_CONFIG="$CFG_SELF" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_out_has 'depth:          1 of 2' "…and the maximum shown is the policy file's when it sets one"
 
 # A depth or a maximum that is not a whole number from 1 is a usage error,
 # not a guess: 0 would refuse every dispatch, and a top-level one is depth 1.
 # Empty is not malformed — it reads as unset, depth 1 — and a value past the
 # shell's integer range is refused rather than compared: `[ -gt ]` errors on
 # it, and an error there would skip the refusal and run the worker.
-t_run_split env AGENT_DISPATCH_DEPTH=abc sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "a malformed AGENT_DISPATCH_DEPTH is refused as a usage error"
-s_assert_err_has "AGENT_DISPATCH_DEPTH"
-t_run_split env AGENT_DISPATCH_DEPTH=0 sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "AGENT_DISPATCH_DEPTH=0 is refused — a top-level dispatch is depth 1"
-t_run_split env AGENT_DISPATCH_DEPTH='' sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_status 0 "an EMPTY AGENT_DISPATCH_DEPTH is not malformed"
-s_assert_out_has 'depth:          1 of 3' "…it reads as unset: a top-level dispatch at depth 1"
-t_run_split env AGENT_DISPATCH_DEPTH=9999999999 sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "a depth past the shell's integer range is refused, not compared"
-s_assert_out_lacks 'ARGV:' "…and the worker never ran — an overflow does not fail open"
+t_exec env AGENT_DISPATCH_DEPTH=abc sh "$DISPATCH" implementer --prompt 'x'
+expect_status 2 "a malformed AGENT_DISPATCH_DEPTH is refused as a usage error"
+expect_err_has "AGENT_DISPATCH_DEPTH"
+t_exec env AGENT_DISPATCH_DEPTH=0 sh "$DISPATCH" implementer --prompt 'x'
+expect_status 2 "AGENT_DISPATCH_DEPTH=0 is refused — a top-level dispatch is depth 1"
+t_exec env AGENT_DISPATCH_DEPTH='' sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_status 0 "an EMPTY AGENT_DISPATCH_DEPTH is not malformed"
+expect_out_has 'depth:          1 of 3' "…it reads as unset: a top-level dispatch at depth 1"
+t_exec env AGENT_DISPATCH_DEPTH=9999999999 sh "$DISPATCH" implementer --prompt 'x'
+expect_status 2 "a depth past the shell's integer range is refused, not compared"
+expect_out_lacks 'ARGV:' "…and the worker never ran — an overflow does not fail open"
 CFG_DEPTH0="$SCRATCH/depth0.config.sh"
 { cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='0'\n"; } >"$CFG_DEPTH0"
-t_run_split env AGENTS_CONFIG="$CFG_DEPTH0" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "AGENT_DISPATCH_MAX_DEPTH=0 is refused — it would refuse every dispatch"
-s_assert_err_has "AGENT_DISPATCH_MAX_DEPTH"
+t_exec env AGENTS_CONFIG="$CFG_DEPTH0" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 2 "AGENT_DISPATCH_MAX_DEPTH=0 is refused — it would refuse every dispatch"
+expect_err_has "AGENT_DISPATCH_MAX_DEPTH"
 # A typo in the policy file must not silently lift the ceiling: without the
 # non-digit arm, `[ -gt ]` errors on 'abc', the refusal is skipped, and the
 # worker runs.
 CFG_DEPTHABC="$SCRATCH/depthabc.config.sh"
 { cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='abc'\n"; } >"$CFG_DEPTHABC"
-t_run_split env AGENTS_CONFIG="$CFG_DEPTHABC" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "a non-numeric AGENT_DISPATCH_MAX_DEPTH is refused as a usage error"
-s_assert_out_lacks 'ARGV:' "…and the worker never ran — a malformed maximum does not disable the ceiling"
+t_exec env AGENTS_CONFIG="$CFG_DEPTHABC" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 2 "a non-numeric AGENT_DISPATCH_MAX_DEPTH is refused as a usage error"
+expect_out_lacks 'ARGV:' "…and the worker never ran — a malformed maximum does not disable the ceiling"
 CFG_DEPTHBIG="$SCRATCH/depthbig.config.sh"
 { cat "$CFG"; printf "AGENT_DISPATCH_MAX_DEPTH='9999999999'\n"; } >"$CFG_DEPTHBIG"
-t_run_split env AGENTS_CONFIG="$CFG_DEPTHBIG" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "a maximum past the shell's integer range is refused, the same as a depth"
+t_exec env AGENTS_CONFIG="$CFG_DEPTHBIG" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 2 "a maximum past the shell's integer range is refused, the same as a depth"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
@@ -1251,13 +1251,13 @@ mkdir -p "$LINK_TARGET"
 touch -t "$OLD" "$LINK_TARGET"
 ln -s "$LINK_TARGET" "$SWEEP_TMP/agent-dispatch.link"
 
-t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_status 0 "a dry run with stale scratch beside it succeeds"
+t_exec env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_status 0 "a dry run with stale scratch beside it succeeds"
 [ -d "$LEFTOVER" ] && pass "…and removes nothing — a dry run runs nothing" || fail "a dry run swept the stale scratch"
 
-t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 0 "a dispatch with stale scratch beside it dispatches"
-s_assert_err_has "swept 1 stale dispatch scratch"
+t_exec env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 0 "a dispatch with stale scratch beside it dispatches"
+expect_err_has "swept 1 stale dispatch scratch"
 [ -d "$LEFTOVER" ] && fail "the stale dispatch scratch survived the sweep" || pass "the stale dispatch scratch is gone"
 [ -d "$SWEEP_TMP/agent-dispatch.fresh" ] && pass "a fresh dispatch scratch — a dispatch still running — is left alone" || fail "the sweep removed a fresh dispatch scratch"
 [ -d "$SWEEP_TMP/tmp.unrelated" ] && pass "a stale directory without the prefix is never touched" || fail "the sweep removed a directory that is not dispatch scratch"
@@ -1268,29 +1268,29 @@ s_assert_err_has "swept 1 stale dispatch scratch"
 remaining=$(ls -d "$SWEEP_TMP"/agent-dispatch.* 2>/dev/null | grep -Evc 'agent-dispatch\.(fresh|notadir|link)$')
 [ "$remaining" = 0 ] && pass "…and the dispatch's own scratch went with its trap" || fail "$remaining dispatch scratch director(ies) left by a dispatch that returned normally"
 
-t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_err_lacks "swept"
+t_exec env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
+expect_err_lacks "swept"
 
 # The sweep age is policy: AGENT_DISPATCH_SWEEP_DAYS beside the tier mapping.
 CFG_SWEEP="$SCRATCH/sweep.config.sh"
 { cat "$CFG"; echo "AGENT_DISPATCH_SWEEP_DAYS=100000"; } >"$CFG_SWEEP"
 touch -t "$OLD" "$SWEEP_TMP/agent-dispatch.fresh"
-t_run_split env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 0 "a dispatch under a long sweep age dispatches"
+t_exec env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 0 "a dispatch under a long sweep age dispatches"
 [ -d "$SWEEP_TMP/agent-dispatch.fresh" ] && pass "a scratch younger than the policy's sweep age is kept" || fail "the policy's sweep age was not read — the kit default swept it"
-s_assert_err_lacks "swept"
+expect_err_lacks "swept"
 
 # A --timeout that reaches the sweep age would let a later dispatch sweep a
 # worker still running under it; refused before anything runs.
-t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' --timeout 86400
-s_assert_status 2 "a --timeout at or past the sweep age is refused"
-s_assert_err_has "sweep age"
-s_assert_out_lacks 'ARGV:' "…before the worker runs"
+t_exec env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x' --timeout 86400
+expect_status 2 "a --timeout at or past the sweep age is refused"
+expect_err_has "sweep age"
+expect_out_lacks 'ARGV:' "…before the worker runs"
 
 for bad in 0 abc; do
 	{ cat "$CFG"; echo "AGENT_DISPATCH_SWEEP_DAYS=$bad"; } >"$CFG_SWEEP"
-	t_run_split env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
-	s_assert_status 2 "AGENT_DISPATCH_SWEEP_DAYS='$bad' is refused — a sweep age is a whole number of days, at least one"
+	t_exec env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
+	expect_status 2 "AGENT_DISPATCH_SWEEP_DAYS='$bad' is refused — a sweep age is a whole number of days, at least one"
 done
 
 # The variable is documented where the mapping is edited, and ships EMPTY —
@@ -1311,11 +1311,11 @@ if AGED=$(date -d '36 hours ago' +%Y%m%d%H%M 2>/dev/null) && [ -n "$AGED" ]; the
 	mkdir -p "$SWEEP_TMP/agent-dispatch.aged"
 	touch -t "$AGED" "$SWEEP_TMP/agent-dispatch.aged"
 	{ cat "$CFG"; echo "AGENT_DISPATCH_SWEEP_DAYS=2"; } >"$CFG_SWEEP"
-	t_run_split env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
+	t_exec env TMPDIR="$SWEEP_TMP" AGENTS_CONFIG="$CFG_SWEEP" sh "$DISPATCH" implementer --prompt 'x'
 	[ -d "$SWEEP_TMP/agent-dispatch.aged" ] && pass "a scratch 36 hours old is kept under a two-day sweep age" || fail "a two-day sweep age swept a scratch 36 hours old"
-	t_run_split env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
+	t_exec env TMPDIR="$SWEEP_TMP" sh "$DISPATCH" implementer --prompt 'x'
 	[ -d "$SWEEP_TMP/agent-dispatch.aged" ] && fail "the default one-day sweep age kept a scratch 36 hours old" || pass "…and swept under the default one-day sweep age"
-	s_assert_err_has "swept 1 stale dispatch scratch"
+	expect_err_has "swept 1 stale dispatch scratch"
 else
 	pass "date -d is not available — the 36-hour boundary leg was skipped, and says so"
 fi
@@ -1345,8 +1345,8 @@ EOF
 AGENTS_CONFIG="$CFG_EXIT"
 export AGENTS_CONFIG
 dispatch implementer --prompt 'x'
-s_assert_status 7 "the worker's own exit status passes through untouched"
-s_assert_out_has 'MARKER=set' "a template may set the environment the worker runs in"
+expect_status 7 "the worker's own exit status passes through untouched"
+expect_out_has 'MARKER=set' "a template may set the environment the worker runs in"
 
 # A mapped model with nowhere to put it is a config error, not a silent drop.
 CFG_NOFLAG="$SCRATCH/noflag.config.sh"
@@ -1358,8 +1358,8 @@ EOF
 AGENTS_CONFIG="$CFG_NOFLAG"
 export AGENTS_CONFIG
 dispatch implementer --prompt 'x'
-s_assert_status 2 "a mapped model with no MODEL_FLAG is refused rather than dropped"
-s_assert_err_has "MODEL_FLAG"
+expect_status 2 "a mapped model with no MODEL_FLAG is refused rather than dropped"
+expect_err_has "MODEL_FLAG"
 
 # ---------------------------------------------------------------------------
 banner "The budget — derived from the host, shown by --dry-run"
@@ -1377,26 +1377,26 @@ export AGENTS_CONFIG
 # 2091 MiB.
 t_fake_host "$SCRATCH/host" 10008 2141820
 # hostdry <args> — a dry run against the fake host.
-hostdry() { t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run "$@"; }
+hostdry() { t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run "$@"; }
 
 hostdry
-s_assert_status 0 "a dry run derives a budget"
-s_assert_out_has 'tasks 2502' "the task ceiling is 25% of the slice's 10008"
-s_assert_out_has '25% of 10008' "…and says the percentage and the base"
-s_assert_out_has 'user-1000.slice' "…and names the cgroup the base came from"
-s_assert_out_has 'memory 1045 MiB' "the memory ceiling is 50% of the 2091 MiB available"
-s_assert_out_has '50% of 2091 MiB' "…and says so"
-s_assert_out_has 'MemAvailable' "…naming the host fact"
-s_assert_out_has 'enforced:' "the dry run names whether the budget is enforced"
-s_assert_out_lacks 'NOT applied in this release' "…and no longer says enforcement is deferred (#208 applies it)"
-s_assert_out_lacks 'ARGV:' "and the worker never ran"
+expect_status 0 "a dry run derives a budget"
+expect_out_has 'tasks 2502' "the task ceiling is 25% of the slice's 10008"
+expect_out_has '25% of 10008' "…and says the percentage and the base"
+expect_out_has 'user-1000.slice' "…and names the cgroup the base came from"
+expect_out_has 'memory 1045 MiB' "the memory ceiling is 50% of the 2091 MiB available"
+expect_out_has '50% of 2091 MiB' "…and says so"
+expect_out_has 'MemAvailable' "…naming the host fact"
+expect_out_has 'enforced:' "the dry run names whether the budget is enforced"
+expect_out_lacks 'NOT applied in this release' "…and no longer says enforcement is deferred (#208 applies it)"
+expect_out_lacks 'ARGV:' "and the worker never ran"
 
 # The smallest ceiling on the path wins: a session scope tighter than its
 # slice is the ceiling this session actually runs under.
 echo 3000 >"$SLICE/session-1.scope/pids.max"
 hostdry
-s_assert_out_has 'tasks 750' "the smallest pids.max on the cgroup path is the base"
-s_assert_out_has 'session-1.scope' "…and the dry run names that cgroup, not the slice"
+expect_out_has 'tasks 750' "the smallest pids.max on the cgroup path is the base"
+expect_out_has 'session-1.scope' "…and the dry run names that cgroup, not the slice"
 echo max >"$SLICE/session-1.scope/pids.max"
 
 # A container with a private cgroup namespace: the dispatcher's own cgroup is
@@ -1404,8 +1404,8 @@ echo max >"$SLICE/session-1.scope/pids.max"
 printf '0::/\n' >"$HOST/proc/self/cgroup"
 echo 2048 >"$HOST/sys/fs/cgroup/pids.max"
 hostdry
-s_assert_out_has 'tasks 512' "a pids.max on the root cgroup is the base (25% of 2048)"
-s_assert_out_has 'pids.max of cgroup /' "…and the root cgroup is named /, not an empty string"
+expect_out_has 'tasks 512' "a pids.max on the root cgroup is the base (25% of 2048)"
+expect_out_has 'pids.max of cgroup /' "…and the root cgroup is named /, not an empty string"
 rm -f "$HOST/sys/fs/cgroup/pids.max"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 
@@ -1413,59 +1413,59 @@ printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgro
 # in silence (ADR-0006 clause 2).
 echo 400 >"$SLICE/pids.max"
 hostdry
-s_assert_out_has 'tasks 256' "25% of 400 is 100, below the floor — the floor stands"
-s_assert_out_has 'below the floor 256' "…and the dry run says why"
-s_assert_err_has "below the floor"
+expect_out_has 'tasks 256' "25% of 400 is 100, below the floor — the floor stands"
+expect_out_has 'below the floor 256' "…and the dry run says why"
+expect_err_has "below the floor"
 echo 100000 >"$SLICE/pids.max"
 hostdry
-s_assert_out_has 'tasks 4096' "25% of 100000 is 25000, above the ceiling — the ceiling stands"
-s_assert_out_has 'above the ceiling 4096' "…and the dry run says why"
-s_assert_err_lacks "above the ceiling"
+expect_out_has 'tasks 4096' "25% of 100000 is 25000, above the ceiling — the ceiling stands"
+expect_out_has 'above the ceiling 4096' "…and the dry run says why"
+expect_err_lacks "above the ceiling"
 echo 10008 >"$SLICE/pids.max"
 printf 'MemAvailable:    600000 kB\n' >"$HOST/proc/meminfo"
 hostdry
-s_assert_out_has 'memory 512 MiB' "50% of 585 MiB is 292, below the floor — the floor stands"
-s_assert_out_has 'below the floor 512' "…and the dry run says why"
+expect_out_has 'memory 512 MiB' "50% of 585 MiB is 292, below the floor — the floor stands"
+expect_out_has 'below the floor 512' "…and the dry run says why"
 printf 'MemAvailable:   40000000 kB\n' >"$HOST/proc/meminfo"
 hostdry
-s_assert_out_has 'memory 8192 MiB' "50% of 39062 MiB is above the ceiling — the ceiling stands"
+expect_out_has 'memory 8192 MiB' "50% of 39062 MiB is above the ceiling — the ceiling stands"
 printf 'MemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
 
 # The percentages and clamps are the policy file's.
 CFG_BUDGET="$SCRATCH/budget.config.sh"
 { cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=10\nAGENT_BUDGET_MEMORY_PERCENT=25\nAGENT_BUDGET_TASKS_FLOOR=8\nAGENT_BUDGET_MEMORY_FLOOR_MIB=100\nAGENT_BUDGET_MEMORY_CEILING_MIB=300\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
-s_assert_out_has 'tasks 1000' "a policy percentage replaces the default (10% of 10008)"
-s_assert_out_has 'memory 300 MiB' "a policy ceiling replaces the default (25% of 2091 is 522, held to 300)"
-s_assert_out_has 'floor 8' "a policy floor is the one shown"
+expect_out_has 'tasks 1000' "a policy percentage replaces the default (10% of 10008)"
+expect_out_has 'memory 300 MiB' "a policy ceiling replaces the default (25% of 2091 is 522, held to 300)"
+expect_out_has 'floor 8' "a policy floor is the one shown"
 { cat "$CFG"; printf "AGENT_BUDGET_TASKS_FLOOR='lots'\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
-s_assert_status 2 "a budget variable that is not a whole number is refused, not defaulted"
-s_assert_err_has "AGENT_BUDGET_TASKS_FLOOR"
+expect_status 2 "a budget variable that is not a whole number is refused, not defaulted"
+expect_err_has "AGENT_BUDGET_TASKS_FLOOR"
 # One validator for the flags and the policy file (ADR-0006 clause 3): 0 and a
 # leading zero are refused on both, a percentage is 1–99, a floor is at most
 # its ceiling.
 { cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=025\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
-s_assert_status 2 "a policy value with a leading zero is refused — arithmetic would read it as octal"
-s_assert_err_has "AGENT_BUDGET_TASKS_PERCENT"
+expect_status 2 "a policy value with a leading zero is refused — arithmetic would read it as octal"
+expect_err_has "AGENT_BUDGET_TASKS_PERCENT"
 { cat "$CFG"; printf "AGENT_BUDGET_MEMORY_PERCENT=0\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
-s_assert_status 2 "a policy value of 0 is refused, as the flag refuses 0"
-s_assert_err_has "AGENT_BUDGET_MEMORY_PERCENT"
+expect_status 2 "a policy value of 0 is refused, as the flag refuses 0"
+expect_err_has "AGENT_BUDGET_MEMORY_PERCENT"
 { cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=100\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
-s_assert_status 2 "a percentage of 100 or more is refused — the budget sits below the session's ceiling"
-s_assert_err_has "below 100"
+expect_status 2 "a percentage of 100 or more is refused — the budget sits below the session's ceiling"
+expect_err_has "below 100"
 { cat "$CFG"; printf "AGENT_BUDGET_TASKS_PERCENT=99\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
-s_assert_status 0 "…and 99 is the last one accepted"
+expect_status 0 "…and 99 is the last one accepted"
 { cat "$CFG"; printf "AGENT_BUDGET_TASKS_FLOOR=5000\n"; } >"$CFG_BUDGET"
 AGENTS_CONFIG="$CFG_BUDGET" hostdry
-s_assert_status 2 "a floor above its ceiling is refused"
-s_assert_err_has "AGENT_BUDGET_TASKS_CEILING"
+expect_status 2 "a floor above its ceiling is refused"
+expect_err_has "AGENT_BUDGET_TASKS_CEILING"
 hostdry --budget-tasks 010
-s_assert_status 2 "--budget-tasks with a leading zero is refused the same way"
+expect_status 2 "--budget-tasks with a leading zero is refused the same way"
 
 # No cgroup ceiling on the path: the per-user process limit is the base —
 # RLIMIT_NPROC, read from /proc/self/limits under the same fake root, so the
@@ -1475,81 +1475,81 @@ printf '0::/\n' >"$HOST/proc/self/cgroup"
 limits() { printf 'Limit                     Soft Limit           Hard Limit           Units     \nMax processes             %s                 %s                processes \n' "$1" "$1" >"$HOST/proc/self/limits"; }
 limits 8000
 hostdry
-s_assert_status 0 "a session with no cgroup pids.max still derives a budget"
-s_assert_out_has 'tasks 2000' "…25% of the per-user process limit, 8000"
-s_assert_out_has 'the per-user process limit' "…and the dry run names that source"
-s_assert_out_lacks 'pids.max' "…not a cgroup it never found"
+expect_status 0 "a session with no cgroup pids.max still derives a budget"
+expect_out_has 'tasks 2000' "…25% of the per-user process limit, 8000"
+expect_out_has 'the per-user process limit' "…and the dry run names that source"
+expect_out_lacks 'pids.max' "…not a cgroup it never found"
 # No host fact at all — the limit is unlimited, or cannot be read: nothing to
 # take a percentage of, so the policy CEILING stands in (ADR-0006 clause 2),
 # never the floor, which answers a host known to be small.
 limits unlimited
 hostdry
-s_assert_out_has 'tasks 4096' "an unlimited per-user limit leaves no base — the policy ceiling stands in"
-s_assert_out_has 'the policy ceiling' "…and the dry run says so"
-s_assert_out_has 'unlimited' "…naming the fact it found"
+expect_out_has 'tasks 4096' "an unlimited per-user limit leaves no base — the policy ceiling stands in"
+expect_out_has 'the policy ceiling' "…and the dry run says so"
+expect_out_has 'unlimited' "…naming the fact it found"
 rm -f "$HOST/proc/self/limits"
 hostdry
-s_assert_out_has 'tasks 4096' "an unreadable per-user limit is the same case"
-s_assert_out_has 'unreadable' "…and is named as such"
-s_assert_err_lacks "below the floor"
+expect_out_has 'tasks 4096' "an unreadable per-user limit is the same case"
+expect_out_has 'unreadable' "…and is named as such"
+expect_err_lacks "below the floor"
 printf '0::/user.slice/user-1000.slice/session-1.scope\n' >"$HOST/proc/self/cgroup"
 # The same rule on the memory side: a /proc/meminfo with no MemAvailable has
 # no fact to derive from, and the policy ceiling stands in there too.
 printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\n' >"$HOST/proc/meminfo"
 hostdry
-s_assert_out_has 'memory 8192 MiB' "no MemAvailable: the policy ceiling stands in, not the floor"
-s_assert_out_has 'no MemAvailable' "…and the dry run says what was missing"
-s_assert_err_lacks "below the floor"
+expect_out_has 'memory 8192 MiB' "no MemAvailable: the policy ceiling stands in, not the floor"
+expect_out_has 'no MemAvailable' "…and the dry run says what was missing"
+expect_err_lacks "below the floor"
 printf 'MemTotal:        3902724 kB\nMemFree:          200000 kB\nMemAvailable:    2141820 kB\n' >"$HOST/proc/meminfo"
 
 # Per-dispatch overrides, and the loud off switch (ADR-0006 clause 4).
 hostdry --budget-tasks 100 --budget-memory 300
-s_assert_out_has 'tasks 100' "--budget-tasks replaces the derived task ceiling"
-s_assert_out_has '--budget-tasks' "…and is named as its source"
-s_assert_out_has 'memory 300 MiB' "--budget-memory replaces the derived memory ceiling"
-s_assert_out_lacks '25% of' "…and nothing is derived for a value given explicitly"
-s_assert_err_has "below the floor"
+expect_out_has 'tasks 100' "--budget-tasks replaces the derived task ceiling"
+expect_out_has '--budget-tasks' "…and is named as its source"
+expect_out_has 'memory 300 MiB' "--budget-memory replaces the derived memory ceiling"
+expect_out_lacks '25% of' "…and nothing is derived for a value given explicitly"
+expect_err_has "below the floor"
 hostdry --budget-tasks 0
-s_assert_status 2 "--budget-tasks 0 is refused"
+expect_status 2 "--budget-tasks 0 is refused"
 hostdry --budget-memory abc
-s_assert_status 2 "--budget-memory that is not a whole number of MiB is refused"
+expect_status 2 "--budget-memory that is not a whole number of MiB is refused"
 hostdry --no-budget --budget-tasks 5
-s_assert_status 2 "--no-budget with an override is a contradiction, refused"
+expect_status 2 "--no-budget with an override is a contradiction, refused"
 hostdry --no-budget
-s_assert_status 0 "--no-budget dry-runs"
-s_assert_out_has 'DISABLED' "…and the budget line says the budget is off"
-s_assert_out_lacks 'tasks 2502' "…deriving nothing"
-s_assert_err_has "no budget"
+expect_status 0 "--no-budget dry-runs"
+expect_out_has 'DISABLED' "…and the budget line says the budget is off"
+expect_out_lacks 'tasks 2502' "…deriving nothing"
+expect_err_has "no budget"
 
 # Nesting: an inner dispatch runs inside the outer's budget and never opens a
 # fresh one (ADR-0006 clause 7). The outer's numbers reach it by environment.
-t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
 	sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_status 0 "a dispatch inside a budgeted worker dry-runs"
-s_assert_out_has 'inherited' "…and says it inherited the outer budget"
-s_assert_out_has 'tasks 777' "…the outer's task ceiling"
-s_assert_out_has 'memory 888 MiB' "…and the outer's memory ceiling"
-s_assert_out_lacks '25% of' "…deriving nothing of its own"
+expect_status 0 "a dispatch inside a budgeted worker dry-runs"
+expect_out_has 'inherited' "…and says it inherited the outer budget"
+expect_out_has 'tasks 777' "…the outer's task ceiling"
+expect_out_has 'memory 888 MiB' "…and the outer's memory ceiling"
+expect_out_lacks '25% of' "…deriving nothing of its own"
 # --no-budget on the inner dispatch does not win: it is already inside the
 # outer scope's cgroup, and no flag on it can leave.
-t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
 	sh "$DISPATCH" implementer --prompt 'x' --dry-run --no-budget
-s_assert_status 0 "--no-budget inside a budgeted worker dry-runs"
-s_assert_out_has 'inherited' "…and the inherited budget wins"
-s_assert_out_has 'cannot escape' "…the budget line saying that --no-budget cannot leave the outer cgroup"
-s_assert_out_lacks 'DISABLED' "…not the off switch"
-s_assert_err_has "cannot escape"
+expect_status 0 "--no-budget inside a budgeted worker dry-runs"
+expect_out_has 'inherited' "…and the inherited budget wins"
+expect_out_has 'cannot escape' "…the budget line saying that --no-budget cannot leave the outer cgroup"
+expect_out_lacks 'DISABLED' "…not the off switch"
+expect_err_has "cannot escape"
 # The inherited pair is held to the same validator as everything else, and
 # an outer dispatch exports both or neither: a lone task ceiling is refused,
 # not shown beside a '?'.
-t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS='rm -rf x' AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
+t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS='rm -rf x' AGENT_DISPATCH_BUDGET_MEMORY_MIB=888 \
 	sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_status 2 "an inherited task ceiling that is not a whole number is refused"
-s_assert_err_has "AGENT_DISPATCH_BUDGET_TASKS"
-t_run_split env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 \
+expect_status 2 "an inherited task ceiling that is not a whole number is refused"
+expect_err_has "AGENT_DISPATCH_BUDGET_TASKS"
+t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENT_DISPATCH_BUDGET_TASKS=777 \
 	sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_status 2 "an inherited task ceiling with no memory ceiling beside it is refused"
-s_assert_err_has "AGENT_DISPATCH_BUDGET_MEMORY_MIB"
+expect_status 2 "an inherited task ceiling with no memory ceiling beside it is refused"
+expect_err_has "AGENT_DISPATCH_BUDGET_MEMORY_MIB"
 
 # The rung is probed, not configured. A stub systemctl on PATH that answers
 # stands in for a user service manager; one that fails stands in for none.
@@ -1560,40 +1560,40 @@ s_assert_err_has "AGENT_DISPATCH_BUDGET_MEMORY_MIB"
 SDBIN="$SCRATCH/sd-yes"; mkdir -p "$SDBIN"
 printf '#!/bin/sh\nexit 0\n' >"$SDBIN/systemctl"; cp "$SDBIN/systemctl" "$SDBIN/systemd-run"; chmod +x "$SDBIN/systemctl" "$SDBIN/systemd-run"
 CONTROLLERS="$SLICE/session-1.scope/cgroup.controllers"
-t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'transient scope' "with a user service manager and both controllers the rung is a transient scope"
-s_assert_out_has 'systemd-run --user --scope' "…and names the mechanism"
-s_assert_out_has 'TasksMax and MemoryMax' "…carrying both ceilings"
-s_assert_out_has 'enforced: yes — the worker runs inside the scope; a task or memory ceiling hit exits 71' "…and the enforced line says both ceilings exit 71"
+t_exec env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_out_has 'transient scope' "with a user service manager and both controllers the rung is a transient scope"
+expect_out_has 'systemd-run --user --scope' "…and names the mechanism"
+expect_out_has 'TasksMax and MemoryMax' "…carrying both ceilings"
+expect_out_has 'enforced: yes — the worker runs inside the scope; a task or memory ceiling hit exits 71' "…and the enforced line says both ceilings exit 71"
 echo 'cpu pids' >"$CONTROLLERS"
-t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'transient scope' "with pids delegated and memory not, the scope is still the rung — the task bound is the incident's"
-s_assert_out_has 'memory controller is not delegated' "…and the dry run says the memory ceiling has no mechanism on this host"
-s_assert_out_lacks 'TasksMax and MemoryMax' "…so it does not claim MemoryMax"
-s_assert_out_has 'enforced: the task ceiling yes (71 on a hit); the memory ceiling is announced only' "…and the enforced line says only the task ceiling exits 71"
+t_exec env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_out_has 'transient scope' "with pids delegated and memory not, the scope is still the rung — the task bound is the incident's"
+expect_out_has 'memory controller is not delegated' "…and the dry run says the memory ceiling has no mechanism on this host"
+expect_out_lacks 'TasksMax and MemoryMax' "…so it does not claim MemoryMax"
+expect_out_has 'enforced: the task ceiling yes (71 on a hit); the memory ceiling is announced only' "…and the enforced line says only the task ceiling exits 71"
 echo 'cpu' >"$CONTROLLERS"
-t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'rlimits' "with pids not delegated a scope bounds nothing that matters — the rung is rlimits"
-s_assert_out_lacks 'transient scope' "…not a scope that would apply nothing"
-s_assert_out_has 'enforced: best-effort via rlimits' "…and the enforced line says best-effort"
+t_exec env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_out_has 'rlimits' "with pids not delegated a scope bounds nothing that matters — the rung is rlimits"
+expect_out_lacks 'transient scope' "…not a scope that would apply nothing"
+expect_out_has 'enforced: best-effort via rlimits' "…and the enforced line says best-effort"
 rm -f "$CONTROLLERS"
-t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'rlimits' "an unreadable cgroup.controllers is treated as nothing delegated"
+t_exec env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_out_has 'rlimits' "an unreadable cgroup.controllers is treated as nothing delegated"
 echo 'cpu memory pids' >"$CONTROLLERS"
 NOSD="$SCRATCH/sd-no"; t_no_user_manager "$NOSD"
-t_run_split env PATH="$NOSD:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has 'rlimits' "without one the rung is rlimits"
-s_assert_out_has 'weaker' "…and the dry run says that is the weaker promise"
-s_assert_out_lacks 'transient scope' "…not the scope it cannot open"
+t_exec env PATH="$NOSD:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_out_has 'rlimits' "without one the rung is rlimits"
+expect_out_has 'weaker' "…and the dry run says that is the weaker promise"
+expect_out_lacks 'transient scope' "…not the scope it cannot open"
 
 # The real host, no fake root: the same code reads a real /proc and /sys.
 dispatch implementer --prompt 'x' --dry-run
-s_assert_out_has 'budget:' "the real host yields a budget line"
-case "$S_OUT" in
+expect_out_has 'budget:' "the real host yields a budget line"
+case "$T_OUT" in
 *"tasks "[0-9]*) pass "…with a numeric task ceiling read from this host" ;;
-*) fail "no numeric task ceiling on the real host"; printf '%s\n' "$S_OUT" | sed 's/^/        > /' ;;
+*) fail "no numeric task ceiling on the real host"; printf '%s\n' "$T_OUT" | sed 's/^/        > /' ;;
 esac
-case "$S_OUT" in
+case "$T_OUT" in
 *"memory "[0-9]*" MiB"*) pass "…and a numeric memory ceiling" ;;
 *) fail "no numeric memory ceiling on the real host" ;;
 esac
@@ -1634,11 +1634,11 @@ EOF
 # is announced — so this uses within-floor overrides to keep stderr about the
 # run, not the floor, and asserts the worker ran unharmed.
 AGENTS_CONFIG="$CFG_CG" dispatch implementer --prompt 'x' --budget-tasks 300 --budget-memory 600
-s_assert_status 0 "a within-budget real dispatch runs the worker and exits 0"
-s_assert_out_has 'CG=' "…the worker ran"
-s_assert_err_lacks "hit its" "…and hit no ceiling"
-s_assert_out_has 'WRAPPER_ENV=[]' "…and the scope wrapper's paths and command never reach the worker's environment"
-s_assert_out_has 'BUDGET=300/600' "…and the budget it runs under is exported to it, both names, for a dispatch of its own to inherit"
+expect_status 0 "a within-budget real dispatch runs the worker and exits 0"
+expect_out_has 'CG=' "…the worker ran"
+expect_err_lacks "hit its" "…and hit no ceiling"
+expect_out_has 'WRAPPER_ENV=[]' "…and the scope wrapper's paths and command never reach the worker's environment"
+expect_out_has 'BUDGET=300/600' "…and the budget it runs under is exported to it, both names, for a dispatch of its own to inherit"
 
 # ---------------------------------------------------------------------------
 banner "The budget is ENFORCED — a runaway worker stops, the session survives"
@@ -1651,8 +1651,8 @@ banner "The budget is ENFORCED — a runaway worker stops, the session survives"
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
 SCOPE_OK=0
-t_run_split sh "$DISPATCH" implementer --prompt 'probe' --dry-run
-case "$S_OUT" in *"transient scope"*) SCOPE_OK=1 ;; esac
+t_exec sh "$DISPATCH" implementer --prompt 'probe' --dry-run
+case "$T_OUT" in *"transient scope"*) SCOPE_OK=1 ;; esac
 
 if [ "$SCOPE_OK" = 1 ]; then
 	# A stub that forks without bound (a bounded self-spawning sh loop whose peak
@@ -1688,11 +1688,11 @@ EOF
 	# later one.
 	TR_BUDGET="$SCRATCH/trace-budget"
 	rm -rf "$TR_BUDGET" && mkdir -p "$TR_BUDGET"
-	AGENTS_CONFIG="$CFG_FORK" t_run_split env TRACE_DIR="$TR_BUDGET" sh "$DISPATCH" \
+	AGENTS_CONFIG="$CFG_FORK" t_exec env TRACE_DIR="$TR_BUDGET" sh "$DISPATCH" \
 		implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 30
-	s_assert_status 71 "a task runaway stops at the budget and the dispatch exits 71"
-	s_assert_err_has "TASK ceiling"
-	if [ "$S_STATUS" = 71 ]; then
+	expect_status 71 "a task runaway stops at the budget and the dispatch exits 71"
+	expect_err_has "TASK ceiling"
+	if [ "$T_STATUS" = 71 ]; then
 		case $(cat "$TR_BUDGET"/events/*.jsonl 2>/dev/null | sed -n 2p) in
 		*'"kind":"spawn.end"'*'"outcome":"budget"'*)
 			pass "…and the spawn.end records the ceiling as the outcome budget, not a fail" ;;
@@ -1732,16 +1732,16 @@ AGENT_HARNESS_GR_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='gr:'
 EOF
 	AGENTS_CONFIG="$CFG_GREEDY" dispatch implementer --prompt 'eat all' --budget-tasks 256 --budget-memory 64 --timeout 30
-	s_assert_status 71 "a memory runaway stops at the budget and the dispatch exits 71"
-	s_assert_err_has "MEMORY ceiling"
-	s_assert_out_lacks "greedy allocated it all" "…the greedy process was OOM-killed before it finished"
+	expect_status 71 "a memory runaway stops at the budget and the dispatch exits 71"
+	expect_err_has "MEMORY ceiling"
+	expect_out_lacks "greedy allocated it all" "…the greedy process was OOM-killed before it finished"
 
 	# --timeout and the budget COMPOSE: a worker that is both greedy and slow
 	# exits with whichever fired first (ADR-0006 clause 6). Here the task budget
 	# fires well inside a long timeout, so the verdict is 71, not 124.
 	AGENTS_CONFIG="$CFG_FORK" dispatch implementer --prompt 'run away' --budget-tasks 64 --budget-memory 512 --timeout 40
-	s_assert_status 71 "budget and --timeout compose — the budget fired first, so 71"
-	s_assert_err_has "TASK ceiling"
+	expect_status 71 "budget and --timeout compose — the budget fired first, so 71"
+	expect_err_has "TASK ceiling"
 	# …and the EARLIER event wins even when the watchdog is what ends the run:
 	# a worker that hit the task ceiling and then stalled past --timeout is a
 	# ceiling hit (71) that also timed out, not a timeout (124) that hides it.
@@ -1771,9 +1771,9 @@ AGENT_HARNESS_SL_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='sl:'
 EOF
 	AGENTS_CONFIG="$CFG_STALL" dispatch implementer --prompt 'stall' --budget-tasks 64 --budget-memory 512 --timeout 5
-	s_assert_status 71 "a worker that hit its ceiling and then ran past --timeout exits 71 — the earlier event wins"
-	s_assert_err_has "TASK ceiling"
-	s_assert_err_has "timed out"
+	expect_status 71 "a worker that hit its ceiling and then ran past --timeout exits 71 — the earlier event wins"
+	expect_err_has "TASK ceiling"
+	expect_err_has "timed out"
 
 	# On timeout the WHOLE scope is killed, not only the tree the ppid walk can
 	# see: a child the worker double-forked is re-parented out of the subtree
@@ -1796,7 +1796,7 @@ AGENT_TIER_IMPLEMENTER='or:'
 EOF
 	sleeps_before=$(own_sleep_pids 6161)
 	AGENTS_CONFIG="$CFG_ORPHAN" dispatch implementer --prompt 'orphan' --budget-tasks 300 --budget-memory 600 --timeout 3
-	s_assert_status 124 "a worker that stalls inside its budget times out with 124"
+	expect_status 124 "a worker that stalls inside its budget times out with 124"
 	sleep 1
 	if [ "$(new_sleeps 6161 "$sleeps_before")" != 0 ]; then
 		fail "the double-forked child survived the timeout — the scope was not killed whole"
@@ -1820,15 +1820,15 @@ SDREFUSE="$SCRATCH/sd-refuse"; mkdir -p "$SDREFUSE"
 cp "$SDBIN/systemctl" "$SDREFUSE/systemctl"
 printf '#!/bin/sh\necho "Failed to start transient scope unit: refused by fixture" >&2\nexit 1\n' >"$SDREFUSE/systemd-run"
 chmod +x "$SDREFUSE/systemctl" "$SDREFUSE/systemd-run"
-t_run_split env PATH="$SDREFUSE:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" \
+t_exec env PATH="$SDREFUSE:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
-s_assert_status 0 "a scope refused at the pre-flight falls to rlimits and the worker runs"
-s_assert_err_has "refused by fixture"
-s_assert_err_has "rlimit"
-s_assert_out_has "NPROC=5000" "…under the rlimit rung's task ceiling"
-[ "$(printf '%s\n' "$S_OUT" | grep -c '^CG=')" = 1 ] &&
+expect_status 0 "a scope refused at the pre-flight falls to rlimits and the worker runs"
+expect_err_has "refused by fixture"
+expect_err_has "rlimit"
+expect_out_has "NPROC=5000" "…under the rlimit rung's task ceiling"
+[ "$(printf '%s\n' "$T_OUT" | grep -c '^CG=')" = 1 ] &&
 	pass "…and the worker ran exactly once" ||
-	fail "the worker ran $(printf '%s\n' "$S_OUT" | grep -c '^CG=') times"
+	fail "the worker ran $(printf '%s\n' "$T_OUT" | grep -c '^CG=') times"
 
 # After the real spawn, a missing started-marker is reported, never retried: a
 # systemd-run that passes the pre-flight and then runs nothing (SDBIN, which
@@ -1836,12 +1836,12 @@ s_assert_out_has "NPROC=5000" "…under the rlimit rung's task ceiling"
 # so and passes the run's status through rather than running the worker a
 # second time under a weaker rung. The marker is a file; a worker's tree or a
 # sweep can remove one, and a re-run is the one thing this must never do.
-t_run_split env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" \
+t_exec env PATH="$SDBIN:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
-s_assert_status 0 "a spawn whose marker never appears passes the run's own status through"
-s_assert_err_has "marker"
-s_assert_out_lacks "CG=" "…and the worker is NOT run again under a weaker rung"
-s_assert_err_lacks "rlimit rung instead"
+expect_status 0 "a spawn whose marker never appears passes the run's own status through"
+expect_err_has "marker"
+expect_out_lacks "CG=" "…and the worker is NOT run again under a weaker rung"
+expect_err_lacks "rlimit rung instead"
 
 # THE VERDICT IS READ FROM THE FILE THE WRAPPER LEAVES, never from the status
 # (ADR-0006 clause 6) — and a verdict that cannot be read is said, never passed
@@ -1860,40 +1860,40 @@ for _a; do _started=$_verdict; _verdict=$_cmd; _cmd=$_a; done
 exit "${FAKE_STATUS:-0}"
 EOF
 chmod +x "$SDFAKE/systemctl" "$SDFAKE/systemd-run"
-fake_dispatch() { t_run_split env PATH="$SDFAKE:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" "$@" sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 300 --budget-memory 600; }
+fake_dispatch() { t_exec env PATH="$SDFAKE:$PATH" AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_CG" "$@" sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 300 --budget-memory 600; }
 fake_dispatch FAKE_VERDICT='3 0 0'
-s_assert_status 71 "pids.events max > 0 in the verdict is a TASK ceiling hit: 71"
-s_assert_err_has "TASK ceiling"
+expect_status 71 "pids.events max > 0 in the verdict is a TASK ceiling hit: 71"
+expect_err_has "TASK ceiling"
 fake_dispatch FAKE_VERDICT='0 5 0'
-s_assert_status 71 "memory.events oom_kill > 0 in the verdict is a MEMORY ceiling hit: 71"
-s_assert_err_has "MEMORY ceiling"
+expect_status 71 "memory.events oom_kill > 0 in the verdict is a MEMORY ceiling hit: 71"
+expect_err_has "MEMORY ceiling"
 fake_dispatch FAKE_VERDICT='0 0 0' FAKE_STATUS=7
-s_assert_status 7 "counters at zero pass the worker's own status through"
-s_assert_err_lacks "hit its"
+expect_status 7 "counters at zero pass the worker's own status through"
+expect_err_lacks "hit its"
 # The scope-tasks rung carries no memory ceiling, so an oom_kill there is not
 # a verdict — the counter is not this rung's flag.
 echo 'cpu pids' >"$CONTROLLERS"
 fake_dispatch FAKE_VERDICT='0 5 0'
-s_assert_status 0 "on the scope-tasks rung an oom_kill count is not a ceiling hit — the status passes through"
-s_assert_err_lacks "MEMORY ceiling"
+expect_status 0 "on the scope-tasks rung an oom_kill count is not a ceiling hit — the status passes through"
+expect_err_lacks "MEMORY ceiling"
 fake_dispatch FAKE_VERDICT='3 0 0'
-s_assert_status 71 "…while a task ceiling hit on that rung is still 71"
+expect_status 71 "…while a task ceiling hit on that rung is still 71"
 echo 'cpu memory pids' >"$CONTROLLERS"
 # Marker present, verdict missing or malformed: the wrapper did not survive to
 # write it (a pressure kill by systemd-oomd takes the wrapper with the worker)
 # — said, and the run's own status passes through.
 fake_dispatch FAKE_STATUS=137
-s_assert_status 137 "a missing verdict passes the run's own status through"
-s_assert_err_has "verdict"
+expect_status 137 "a missing verdict passes the run's own status through"
+expect_err_has "verdict"
 fake_dispatch FAKE_VERDICT='garbage' FAKE_STATUS=137
-s_assert_status 137 "a malformed verdict passes the run's own status through"
-s_assert_err_has "verdict"
+expect_status 137 "a malformed verdict passes the run's own status through"
+expect_err_has "verdict"
 # The wrapper writes `-` for a counter it could not read — no cgroup v2 path
 # of its own, an events file it cannot open — and that is its own loud outcome,
 # not a zero.
 fake_dispatch FAKE_VERDICT='- - 0'
-s_assert_status 0 "counters the wrapper could not read pass the run's own status through"
-s_assert_err_has "could not be read"
+expect_status 0 "counters the wrapper could not read pass the run's own status through"
+expect_err_has "could not be read"
 
 # The OFF switch (ADR-0006 clause 4): --no-budget runs the worker unbounded,
 # in the session's own cgroup, and says so on stderr on a REAL dispatch (not
@@ -1901,12 +1901,12 @@ s_assert_err_has "could not be read"
 # bounded whatever the worker does.
 TEST_CG=$(sed -n 's/^0:://p' /proc/self/cgroup)
 AGENTS_CONFIG="$CFG_CG" dispatch implementer --prompt 'x' --no-budget --timeout 10
-s_assert_status 0 "--no-budget runs the worker"
-s_assert_err_has "no budget"
-s_assert_out_has 'BUDGET=/' "…and exports no budget — an inner dispatch derives its own"
-case "$S_OUT" in
+expect_status 0 "--no-budget runs the worker"
+expect_err_has "no budget"
+expect_out_has 'BUDGET=/' "…and exports no budget — an inner dispatch derives its own"
+case "$T_OUT" in
 *"CG=$TEST_CG"*) pass "--no-budget runs the worker in the session's own cgroup — no scope opened" ;;
-*) fail "--no-budget opened a cgroup of its own: $(printf '%s' "$S_OUT" | grep CG=)" ;;
+*) fail "--no-budget opened a cgroup of its own: $(printf '%s' "$T_OUT" | grep CG=)" ;;
 esac
 
 # NESTING (ADR-0006 clause 7): a dispatch that finds the budget in its
@@ -1917,17 +1917,17 @@ SDREC="$SCRATCH/sd-record"; mkdir -p "$SDREC"
 printf '#!/bin/sh\ntouch "%s"\nexit 0\n' "$SCRATCH/sd-was-called" >"$SDREC/systemd-run"
 chmod +x "$SDREC/systemd-run"
 rm -f "$SCRATCH/sd-was-called"
-t_run_split env PATH="$SDREC:$PATH" AGENTS_CONFIG="$CFG_CG" \
+t_exec env PATH="$SDREC:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	AGENT_DISPATCH_BUDGET_TASKS=500 AGENT_DISPATCH_BUDGET_MEMORY_MIB=500 \
 	sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 0 "an inherited dispatch runs the worker"
-s_assert_out_has 'BUDGET=500/500' "…and passes the inherited pair on unchanged"
+expect_status 0 "an inherited dispatch runs the worker"
+expect_out_has 'BUDGET=500/500' "…and passes the inherited pair on unchanged"
 [ -f "$SCRATCH/sd-was-called" ] &&
 	fail "an inherited dispatch opened a scope — systemd-run was called" ||
 	pass "an inherited dispatch opens no scope — systemd-run was never called"
-case "$S_OUT" in
+case "$T_OUT" in
 *"CG=$TEST_CG"*) pass "…and the inherited worker runs in the caller's own cgroup" ;;
-*) fail "the inherited worker did not run in the caller's cgroup: $(printf '%s' "$S_OUT" | grep CG=)" ;;
+*) fail "the inherited worker did not run in the caller's cgroup: $(printf '%s' "$T_OUT" | grep CG=)" ;;
 esac
 
 # The RLIMIT rung (ADR-0006 ladder rung 2): with no user service manager the
@@ -1937,18 +1937,18 @@ esac
 # stub that reports its own limits, a builtin that never forks, so a large safe
 # task value can be asserted without risking this uid's own fork ceiling. A
 # ceiling hit is not observable on this rung, so there is no 71 to assert.
-t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
+t_exec env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128
-s_assert_status 0 "the rlimit rung runs the worker"
-s_assert_out_has 'BUDGET=5000/128' "…exporting the budget it applied"
-s_assert_out_has "NPROC=5000" "…the task ceiling is applied as ulimit -u/-p in the worker's shell"
-s_assert_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB = 131072 KiB)"
+expect_status 0 "the rlimit rung runs the worker"
+expect_out_has 'BUDGET=5000/128' "…exporting the budget it applied"
+expect_out_has "NPROC=5000" "…the task ceiling is applied as ulimit -u/-p in the worker's shell"
+expect_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB = 131072 KiB)"
 OWN_NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)
-s_assert_out_has "DISPATCHER_NPROC=$OWN_NPROC" "…and the dispatcher's own shell keeps the limit it was given — the rung is the worker's, not the dispatcher's"
-t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
+expect_out_has "DISPATCHER_NPROC=$OWN_NPROC" "…and the dispatcher's own shell keeps the limit it was given — the rung is the worker's, not the dispatcher's"
+t_exec env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_out_has "rlimits" "…and a dry run with no user service manager names the rlimit rung"
-s_assert_out_has "best-effort via rlimits" "…and says the rung is best-effort"
+expect_out_has "rlimits" "…and a dry run with no user service manager names the rlimit rung"
+expect_out_has "best-effort via rlimits" "…and says the rung is best-effort"
 # The limits land in the WORKER's shell, on both spawn paths, and die with it
 # (#208 acceptance line 4: "the task case still holds"). A fork loop under a
 # task ceiling just above what this uid already runs is refused inside the
@@ -1984,14 +1984,14 @@ AGENT_TIER_IMPLEMENTER='rf:'
 EOF
 UID_TASKS=$(t_uid_tasks)
 RL_TMP="$SCRATCH/rl-tmp"; mkdir -p "$RL_TMP"
-t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_RLFORK" TMPDIR="$RL_TMP" \
+t_exec env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_RLFORK" TMPDIR="$RL_TMP" \
 	sh "$DISPATCH" implementer --prompt 'run away' --budget-tasks $((UID_TASKS + 40)) --budget-memory 512
-case "$S_STATUS/$S_ERR" in
-71/* | 124/* | *"x dispatch:"*) fail "a task runaway on the rlimit rung should pass the worker's own status through, got $S_STATUS"; _s_dump ;;
-*) pass "a task runaway on the rlimit rung passes the worker's own status through ($S_STATUS) — not 71" ;;
+case "$T_STATUS/$T_ERR" in
+71/* | 124/* | *"x dispatch:"*) fail "a task runaway on the rlimit rung should pass the worker's own status through, got $T_STATUS"; printf "%s\n" "$T_OUT" | sed "s/^/        > /"; printf "%s\n" "$T_ERR" | sed "s/^/        | /" ;;
+*) pass "a task runaway on the rlimit rung passes the worker's own status through ($T_STATUS) — not 71" ;;
 esac
-s_assert_err_has "fork"
-s_assert_out_has "rl-forker begins" "…the worker ran, its forks refused inside its own shell"
+expect_err_has "fork"
+expect_out_has "rl-forker begins" "…the worker ran, its forks refused inside its own shell"
 if sh -c 'exit 0'; then
 	pass "a command in the calling shell right after the runaway still forks"
 else
@@ -2002,12 +2002,12 @@ fi
 	fail "the dispatcher could not fork its cleanup — the limit landed in its own shell: $(ls "$RL_TMP")"
 # The timed path runs the string under sh, whatever shell runs the dispatcher;
 # the flag is chosen where the ulimit runs, so dash and bash both apply it.
-t_run_split env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
+t_exec env PATH="$NOSD:$PATH" AGENTS_CONFIG="$CFG_CG" \
 	sh "$DISPATCH" implementer --prompt 'x' --budget-tasks 5000 --budget-memory 128 --timeout 10
-s_assert_status 0 "the rlimit rung under --timeout runs the worker"
-s_assert_out_has "NPROC=5000" "…and applies the task ceiling under the shell that runs the string"
-s_assert_out_has "DATA=131072" "…and the memory ceiling"
-s_assert_out_has "DISPATCHER_NPROC=$OWN_NPROC" "…while the dispatcher's own limit is untouched"
+expect_status 0 "the rlimit rung under --timeout runs the worker"
+expect_out_has "NPROC=5000" "…and applies the task ceiling under the shell that runs the string"
+expect_out_has "DATA=131072" "…and the memory ceiling"
+expect_out_has "DISPATCHER_NPROC=$OWN_NPROC" "…while the dispatcher's own limit is untouched"
 
 AGENTS_CONFIG="$CFG"
 export AGENTS_CONFIG
@@ -2078,19 +2078,19 @@ AGENT_HARNESS_GHOST_MODEL_FLAG='--model {model}'
 AGENT_TIER_REVIEWER='ghost:model-for-reviewing'
 AGENT_TIER_PLANNER='model-for-planning'
 UNREACH_CFG
-t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" reviewer --prompt 'x'
-[ "$S_STATUS" = 69 ] &&
+t_exec env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" reviewer --prompt 'x'
+[ "$T_STATUS" = 69 ] &&
 	pass "a tier whose agent harness is not on PATH exits 69, not the usage error 2" ||
-	fail "an unreachable crossing exited $S_STATUS"
-s_assert_out_is "model-for-reviewing" "…and stdout carries the model, so the caller can spawn it itself"
+	fail "an unreachable crossing exited $T_STATUS"
+expect_out_is "model-for-reviewing" "…and stdout carries the model, so the caller can spawn it itself"
 # REACHABILITY IS JUDGED BEFORE THE BUDGET, and the order is a decision: a
 # crossing nobody can reach is not made reachable by a budget, so an operator
 # with a bad budget value should still hear that the vendor is missing. Moving
 # the check below the derivation passes every other case in this file.
-t_run_split env AGENTS_CONFIG="$UNREACH" AGENT_BUDGET_TASKS_PERCENT=500 sh "$DISPATCH" reviewer --prompt 'x'
-[ "$S_STATUS" = 69 ] &&
+t_exec env AGENTS_CONFIG="$UNREACH" AGENT_BUDGET_TASKS_PERCENT=500 sh "$DISPATCH" reviewer --prompt 'x'
+[ "$T_STATUS" = 69 ] &&
 	pass "an unreachable crossing is reported even when the budget policy is unusable" ||
-	fail "a bad budget value hid the unreachable crossing — exited $S_STATUS"
+	fail "a bad budget value hid the unreachable crossing — exited $T_STATUS"
 # A tier that maps only an agent harness has no model to print, and prints
 # NOTHING rather than a blank line — the same "empty means inherit" as exit 3.
 NOMODEL="$SCRATCH/nomodel.config.sh"
@@ -2100,10 +2100,10 @@ AGENT_HARNESS_GHOST_CMD='definitely-not-installed-anywhere {model_flag} < {promp
 AGENT_HARNESS_GHOST_MODEL_FLAG='--model {model}'
 AGENT_TIER_REVIEWER='ghost:'
 NOMODEL_CFG
-t_run_split env AGENTS_CONFIG="$NOMODEL" sh "$DISPATCH" reviewer --prompt 'x'
-[ "$S_STATUS" = 69 ] && [ -z "$S_OUT" ] &&
+t_exec env AGENTS_CONFIG="$NOMODEL" sh "$DISPATCH" reviewer --prompt 'x'
+[ "$T_STATUS" = 69 ] && [ -z "$T_OUT" ] &&
 	pass "a crossing that maps no model exits 69 and prints nothing, not a blank line" ||
-	fail "a no-model crossing gave status $S_STATUS, stdout '$S_OUT'"
+	fail "a no-model crossing gave status $T_STATUS, stdout '$T_OUT'"
 # The DOMAIN's model, when one is asked for — not the plain tier's.
 DOMCFG="$SCRATCH/unreach-domain.config.sh"
 cat >"$DOMCFG" <<'DOM_CFG'
@@ -2113,20 +2113,20 @@ AGENT_HARNESS_GHOST_MODEL_FLAG='--model {model}'
 AGENT_TIER_REVIEWER='ghost:model-for-reviewing'
 AGENT_TIER_REVIEWER_DEEP='ghost:model-for-deep-review'
 DOM_CFG
-t_run_split env AGENTS_CONFIG="$DOMCFG" sh "$DISPATCH" reviewer deep --prompt 'x'
-[ "$S_STATUS" = 69 ] && [ "$S_OUT" = model-for-deep-review ] &&
+t_exec env AGENTS_CONFIG="$DOMCFG" sh "$DISPATCH" reviewer deep --prompt 'x'
+[ "$T_STATUS" = 69 ] && [ "$T_OUT" = model-for-deep-review ] &&
 	pass "the model printed on 69 is the one the tier AND domain resolve to" ||
-	fail "a domain crossing gave status $S_STATUS, stdout '$S_OUT'"
+	fail "a domain crossing gave status $T_STATUS, stdout '$T_OUT'"
 # A tier that names NO agent harness is untouched: exit 3 is a working state,
 # not a failure, and 69 must not swallow it.
-t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" planner --prompt 'x'
-[ "$S_STATUS" = 3 ] && pass "a tier with no agent harness still exits 3 — nothing to be unreachable" ||
-	fail "a local tier exited $S_STATUS"
+t_exec env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" planner --prompt 'x'
+[ "$T_STATUS" = 3 ] && pass "a tier with no agent harness still exits 3 — nothing to be unreachable" ||
+	fail "a local tier exited $T_STATUS"
 # A dry run reports the same verdict without spawning, so an operator can ask
 # whether a crossing is reachable before committing a prompt to it.
-t_run_split env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" reviewer --prompt 'x' --dry-run
-[ "$S_STATUS" = 69 ] && pass "--dry-run reports the unreachable crossing too, with the same status" ||
-	fail "--dry-run on an unreachable crossing exited $S_STATUS"
+t_exec env AGENTS_CONFIG="$UNREACH" sh "$DISPATCH" reviewer --prompt 'x' --dry-run
+[ "$T_STATUS" = 69 ] && pass "--dry-run reports the unreachable crossing too, with the same status" ||
+	fail "--dry-run on an unreachable crossing exited $T_STATUS"
 
 # ---------------------------------------------------------------------------
 banner "Every spawn is recorded — the pair, the join, and the outcomes (#249)"
@@ -2190,10 +2190,10 @@ EOF
 # --- the pair, on a dispatch that worked ------------------------------------
 TR_OK="$SCRATCH/trace-ok"
 tr_new "$TR_OK"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" \
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" \
 	TRACE_SESSION=sess-of-the-session TRACE_RUN=run-of-the-skill \
 	sh "$DISPATCH" implementer content --prompt 'Trace this dispatch.'
-s_assert_status 0 "a traced dispatch still dispatches"
+expect_status 0 "a traced dispatch still dispatches"
 tr_assert_count "$TR_OK" 2 "one spawn and one spawn.end, and nothing else"
 tr_event_has "$TR_OK" 1 '"kind":"spawn"' "the first event is the spawn"
 tr_event_has "$TR_OK" 2 '"kind":"spawn.end"' "the second is the spawn.end that pairs with it"
@@ -2228,24 +2228,24 @@ esac
 # its parent, so the lines it emits inside another agent harness sit under the
 # same run id the pair names as its subject — which is what makes
 # `show run:<id>` the whole story of one spawn.
-WORKER_RUN=$(printf '%s\n' "$S_OUT" | sed -n 's/^worker TRACE_RUN=//p')
+WORKER_RUN=$(printf '%s\n' "$T_OUT" | sed -n 's/^worker TRACE_RUN=//p')
 case $WORKER_RUN in
-'' | unset) fail "the worker was not handed a run of its own: $S_OUT" ;;
+'' | unset) fail "the worker was not handed a run of its own: $T_OUT" ;;
 run-of-the-skill) fail "the worker was handed the DISPATCHING run, not a fresh one" ;;
 *) pass "the worker sees a fresh TRACE_RUN of its own ($WORKER_RUN)" ;;
 esac
-printf '%s\n' "$S_OUT" | grep -q '^worker TRACE_PARENT=run-of-the-skill$' &&
+printf '%s\n' "$T_OUT" | grep -q '^worker TRACE_PARENT=run-of-the-skill$' &&
 	pass "…and TRACE_PARENT naming the dispatching run" ||
-	fail "the worker's TRACE_PARENT is not the dispatching run: $S_OUT"
-printf '%s\n' "$S_OUT" | grep -q '^worker TRACE_SESSION=sess-of-the-session$' &&
+	fail "the worker's TRACE_PARENT is not the dispatching run: $T_OUT"
+printf '%s\n' "$T_OUT" | grep -q '^worker TRACE_SESSION=sess-of-the-session$' &&
 	pass "…and the session it was dispatched from" ||
-	fail "the worker lost the session: $S_OUT"
+	fail "the worker lost the session: $T_OUT"
 tr_event_has "$TR_OK" 1 "\"subject\":\"run:$WORKER_RUN\"" "the spawn's subject is the run the worker was given"
 tr_event_has "$TR_OK" 2 "\"subject\":\"run:$WORKER_RUN\"" "…and so is the spawn.end's"
-t_run_split env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
-[ "$(printf '%s\n' "$S_OUT" | grep -c .)" = 2 ] &&
+t_exec env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 2 ] &&
 	pass "show run:<the worker's run> prints the pair — the operator's one command" ||
-	fail "show found $(printf '%s\n' "$S_OUT" | grep -c .) lines for run:$WORKER_RUN"
+	fail "show found $(printf '%s\n' "$T_OUT" | grep -c .) lines for run:$WORKER_RUN"
 
 # THE WORKER'S RUN HAS THE SHAPE THE TRACE MINTS (#743). The trace's ids are a
 # UTC timestamp, a pid and eight hex characters, and every reader that checks a
@@ -2264,18 +2264,18 @@ printf '%s\n' "$WORKER_RUN" | grep -Eqx '[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}' 
 # as its parent. So the worker's is always set explicitly — to the empty string
 # when this dispatch belongs to no run, which the trace script reads as "no
 # parent" rather than as "ask the local run stack".
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" TRACE_PARENT=run-of-the-grandparent \
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" TRACE_PARENT=run-of-the-grandparent \
 	sh "$DISPATCH" implementer --prompt 'x'
-printf '%s\n' "$S_OUT" | grep -q '^worker TRACE_PARENT=$' &&
+printf '%s\n' "$T_OUT" | grep -q '^worker TRACE_PARENT=$' &&
 	pass "a dispatch with no run of its own hands the worker an empty parent, not its own" ||
-	fail "the worker inherited a parent from the dispatcher's own: $S_OUT"
+	fail "the worker inherited a parent from the dispatcher's own: $T_OUT"
 
 # --- the other outcomes -----------------------------------------------------
 TR_FAIL="$SCRATCH/trace-fail"
 tr_new "$TR_FAIL"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_FAIL" TR_WORKER_EXIT=7 \
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_FAIL" TR_WORKER_EXIT=7 \
 	sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 7 "a worker's own status still passes through untouched"
+expect_status 7 "a worker's own status still passes through untouched"
 tr_event_has "$TR_FAIL" 2 '"outcome":"fail"' "…and any status but the ones with a name of their own is fail"
 tr_event_has "$TR_FAIL" 2 '"exit":"7"' "…with the status itself recorded, so fail is never a dead end"
 
@@ -2286,9 +2286,9 @@ tr_event_has "$TR_FAIL" 2 '"exit":"7"' "…with the status itself recorded, so f
 # the same lesson this file records at its own watchdog).
 for _tr_st in 124 71 69; do
 	tr_new "$TR_FAIL"
-	t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_FAIL" TR_WORKER_EXIT="$_tr_st" \
+	t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_FAIL" TR_WORKER_EXIT="$_tr_st" \
 		sh "$DISPATCH" implementer --prompt 'x'
-	s_assert_status "$_tr_st" "a worker that exits $_tr_st on its own still passes it through"
+	expect_status "$_tr_st" "a worker that exits $_tr_st on its own still passes it through"
 	tr_event_has "$TR_FAIL" 2 '"outcome":"fail"' "…and is recorded as fail, not as the dispatcher's own verdict"
 	tr_event_has "$TR_FAIL" 2 "\"exit\":\"$_tr_st\"" "…with $_tr_st itself recorded"
 done
@@ -2311,9 +2311,9 @@ AGENT_HARNESS_TRS_CMD='$TR_SLEEPER {model_flag} < {prompt_file}'
 AGENT_HARNESS_TRS_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='trs:'
 EOF
-t_run_split env AGENTS_CONFIG="$CFG_TR_SLOW" TRACE_DIR="$TR_SLOW" \
+t_exec env AGENTS_CONFIG="$CFG_TR_SLOW" TRACE_DIR="$TR_SLOW" \
 	sh "$DISPATCH" implementer --prompt 'x' --timeout 2
-s_assert_status 124 "a worker killed past its timeout still exits 124"
+expect_status 124 "a worker killed past its timeout still exits 124"
 tr_event_has "$TR_SLOW" 2 '"outcome":"timeout"' "…and the timeout is an outcome of its own, not a fail"
 tr_event_has "$TR_SLOW" 2 '"exit":"124"' "…with 124 recorded"
 
@@ -2477,9 +2477,9 @@ fi
 # trace has to show rather than hide, so exit 69 has an outcome of its own.
 TR_69="$SCRATCH/trace-unreachable"
 tr_new "$TR_69"
-t_run_split env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_69" sh "$DISPATCH" reviewer --prompt 'x'
-s_assert_status 69 "an unreachable crossing still exits 69"
-s_assert_out_is "model-for-reviewing" "…and its stdout is still the model alone — no trace output on it"
+t_exec env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_69" sh "$DISPATCH" reviewer --prompt 'x'
+expect_status 69 "an unreachable crossing still exits 69"
+expect_out_is "model-for-reviewing" "…and its stdout is still the model alone — no trace output on it"
 tr_assert_count "$TR_69" 2 "a crossing nobody could make is still a pair, not a silence"
 tr_event_has "$TR_69" 2 '"outcome":"unreachable"' "…and its outcome is unreachable, distinct from fail"
 tr_event_has "$TR_69" 2 '"exit":"69"' "…with 69 recorded"
@@ -2490,18 +2490,18 @@ tr_event_has "$TR_69" 2 '"exit":"69"' "…with 69 recorded"
 # afterwards (ADR-0008, append-only; H-1, review of PR #290).
 TR_HALF="$SCRATCH/trace-half"
 tr_new "$TR_HALF"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_HALF" AGENT_DISPATCH_BUDGET_TASKS=64 \
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_HALF" AGENT_DISPATCH_BUDGET_TASKS=64 \
 	sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "half an inherited budget is still a usage error"
+expect_status 2 "half an inherited budget is still a usage error"
 tr_assert_count "$TR_HALF" 0 "…and a dispatch that dies deriving its budget leaves no half pair"
 
 # A DEPTH REFUSAL is a spawn that never happened, so it is one event with an
 # outcome and no pair: nothing was dispatched, so nothing can end.
 TR_DEEP="$SCRATCH/trace-depth"
 tr_new "$TR_DEEP"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DEEP" AGENT_DISPATCH_DEPTH=9 \
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DEEP" AGENT_DISPATCH_DEPTH=9 \
 	sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 4 "a dispatch past the maximum depth still refuses with 4"
+expect_status 4 "a dispatch past the maximum depth still refuses with 4"
 tr_assert_count "$TR_DEEP" 1 "a refusal is one event — there is no end to a spawn that never happened"
 tr_event_has "$TR_DEEP" 1 '"kind":"spawn"' "…and that event is the spawn"
 tr_event_has "$TR_DEEP" 1 '"outcome":"refused"' "…with outcome refused"
@@ -2510,14 +2510,14 @@ tr_event_has "$TR_DEEP" 1 '"depth":"9"' "…naming the depth it was asked to run
 # --- what is NOT recorded ---------------------------------------------------
 TR_DRY="$SCRATCH/trace-dry"
 tr_new "$TR_DRY"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" implementer --prompt 'x' --dry-run
-s_assert_status 0 "a dry run still succeeds"
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" implementer --prompt 'x' --dry-run
+expect_status 0 "a dry run still succeeds"
 tr_assert_count "$TR_DRY" 0 "a dry run emits NOTHING — it decided nothing to record"
-t_run_split env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_DRY" sh "$DISPATCH" reviewer --prompt 'x' --dry-run
-s_assert_status 69 "a dry run on an unreachable crossing still reports 69"
+t_exec env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_DRY" sh "$DISPATCH" reviewer --prompt 'x' --dry-run
+expect_status 69 "a dry run on an unreachable crossing still reports 69"
 tr_assert_count "$TR_DRY" 0 "…and still emits nothing"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" planner --prompt 'x'
-s_assert_status 3 "the in-session case still exits 3"
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" planner --prompt 'x'
+expect_status 3 "the in-session case still exits 3"
 tr_assert_count "$TR_DRY" 0 "…and emits nothing: no spawn was made, the caller makes it"
 
 # THE DISPATCHING RUN IS USUALLY ON THE RUN STACK, not in the environment: that
@@ -2528,11 +2528,11 @@ tr_assert_count "$TR_DRY" 0 "…and emits nothing: no spawn was made, the caller
 TR_STACK="$SCRATCH/trace-stacked"
 tr_new "$TR_STACK"
 TR_STACK_RUN=$(env TRACE_DIR="$TR_STACK" sh "$TRACE" begin implement subject=ticket:#249)
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_STACK" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 0 "a dispatch inside an open run still dispatches"
-printf '%s\n' "$S_OUT" | grep -q "^worker TRACE_PARENT=$TR_STACK_RUN\$" &&
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_STACK" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 0 "a dispatch inside an open run still dispatches"
+printf '%s\n' "$T_OUT" | grep -q "^worker TRACE_PARENT=$TR_STACK_RUN\$" &&
 	pass "the worker's parent is the run the stack holds, not an empty field" ||
-	fail "the worker was handed '$(printf '%s\n' "$S_OUT" | sed -n 's/^worker TRACE_PARENT=//p')' for a stack run of $TR_STACK_RUN"
+	fail "the worker was handed '$(printf '%s\n' "$T_OUT" | sed -n 's/^worker TRACE_PARENT=//p')' for a stack run of $TR_STACK_RUN"
 tr_event_has "$TR_STACK" 2 "\"run\":\"$TR_STACK_RUN\"" "…and the spawn belongs to that same run"
 env TRACE_DIR="$TR_STACK" sh "$TRACE" end "$TR_STACK_RUN" outcome=green >/dev/null
 
@@ -2541,13 +2541,13 @@ env TRACE_DIR="$TR_STACK" sh "$TRACE" end "$TR_STACK_RUN" outcome=green >/dev/nu
 # and a directory that cannot be written is a trace error. Both are LOUD, and
 # neither may reach the status the dispatch's caller acts on.
 TR_BROKEN="$SCRATCH/no-such-trace-policy.sh"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_CONFIG="$TR_BROKEN" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 0 "a trace policy file named and missing leaves the dispatch's own status alone"
-s_assert_out_has "worker TRACE_RUN=" "…and the worker still ran, with its output intact on stdout"
-s_assert_err_has "trace:"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR=/dev/null/not-a-directory sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 0 "a trace directory that cannot be written leaves the dispatch's own status alone"
-s_assert_out_has "worker TRACE_RUN=" "…and the worker still ran"
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_CONFIG="$TR_BROKEN" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 0 "a trace policy file named and missing leaves the dispatch's own status alone"
+expect_out_has "worker TRACE_RUN=" "…and the worker still ran, with its output intact on stdout"
+expect_err_has "trace:"
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR=/dev/null/not-a-directory sh "$DISPATCH" implementer --prompt 'x'
+expect_status 0 "a trace directory that cannot be written leaves the dispatch's own status alone"
+expect_out_has "worker TRACE_RUN=" "…and the worker still ran"
 
 # A CONSUMER MAY HOLD THE DISPATCHER WITHOUT THE TRACE SCRIPT. The shared layer
 # is copied file by file and an update is a recipe a human follows, so the
@@ -2556,10 +2556,10 @@ s_assert_out_has "worker TRACE_RUN=" "…and the worker still ran"
 LONELY="$SCRATCH/lonely"
 mkdir -p "$LONELY"
 cp "$KIT/scripts/agent-dispatch.sh" "$KIT/scripts/agents.lib.sh" "$LONELY/"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" sh "$LONELY/agent-dispatch.sh" implementer --prompt 'x'
-s_assert_status 0 "a dispatcher with no trace script beside it dispatches"
-s_assert_out_has "worker TRACE_RUN=" "…and the worker ran"
-s_assert_err_lacks "trace.sh"
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" sh "$LONELY/agent-dispatch.sh" implementer --prompt 'x'
+expect_status 0 "a dispatcher with no trace script beside it dispatches"
+expect_out_has "worker TRACE_RUN=" "…and the worker ran"
+expect_err_lacks "trace.sh"
 
 # --- the prompt, behind a switch of its own ---------------------------------
 # A worker prompt carries a ticket body, a diff, review findings — the largest
@@ -2568,7 +2568,7 @@ s_assert_err_lacks "trace.sh"
 # is a content-addressed blob, and keeping it is the operator's decision.
 TR_BLOB="$SCRATCH/trace-blob"
 tr_new "$TR_BLOB"
-t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'Keep me?'
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'Keep me?'
 tr_event_has "$TR_BLOB" 1 '"outcome":"dispatched"' "the spawn is written with the switch off"
 case $(tr_nth "$TR_BLOB" 1) in
 *'"blob"'*) fail "the prompt was stored with no switch asking for it" ;;
@@ -2578,8 +2578,8 @@ CFG_BLOB="$SCRATCH/traced-blob.config.sh"
 cp "$CFG_TR" "$CFG_BLOB"
 printf "AGENT_DISPATCH_TRACE_PROMPT='1'\n" >>"$CFG_BLOB"
 tr_new "$TR_BLOB"
-t_run_split env AGENTS_CONFIG="$CFG_BLOB" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'Keep me.'
-s_assert_status 0 "the switch changes nothing about the dispatch"
+t_exec env AGENTS_CONFIG="$CFG_BLOB" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'Keep me.'
+expect_status 0 "the switch changes nothing about the dispatch"
 BLOB_HASH=$(printf 'Keep me.\n' | git hash-object --stdin)
 tr_event_has "$TR_BLOB" 1 "\"blob\":\"$BLOB_HASH\"" "with the switch on, the prompt is a blob named by git's hash of it"
 if [ -f "$TR_BLOB/blobs/$(printf '%s' "$BLOB_HASH" | cut -c1-2)/$BLOB_HASH" ]; then
@@ -2589,14 +2589,14 @@ else
 fi
 printf "AGENT_DISPATCH_TRACE_PROMPT='maybe'\n" >"$SCRATCH/bad-switch.config.sh"
 cat "$CFG_TR" >>"$SCRATCH/bad-switch.config.sh"
-t_run_split env AGENTS_CONFIG="$SCRATCH/bad-switch.config.sh" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'x'
-s_assert_status 2 "a switch value nobody can read is a usage error, not a silent off"
-s_assert_err_has "AGENT_DISPATCH_TRACE_PROMPT"
+t_exec env AGENTS_CONFIG="$SCRATCH/bad-switch.config.sh" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" implementer --prompt 'x'
+expect_status 2 "a switch value nobody can read is a usage error, not a silent off"
+expect_err_has "AGENT_DISPATCH_TRACE_PROMPT"
 # …on EVERY path, not only on one that crosses: a policy typo is a typo whether
 # this dispatch would have dispatched or not, and every other policy value is
 # held to its shape before the tier is even resolved (L-3, review of PR #290).
-t_run_split env AGENTS_CONFIG="$SCRATCH/bad-switch.config.sh" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" planner --prompt 'x'
-s_assert_status 2 "…and refused on a tier that would not have crossed at all"
+t_exec env AGENTS_CONFIG="$SCRATCH/bad-switch.config.sh" TRACE_DIR="$TR_BLOB" sh "$DISPATCH" planner --prompt 'x'
+expect_status 2 "…and refused on a tier that would not have crossed at all"
 
 unset AGENTS_CONFIG
 t_done "agent dispatch"

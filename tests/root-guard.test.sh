@@ -80,28 +80,28 @@ payload() {
 		"$(json_str "${4:-$FIX}")" "$1" "$2" "$(json_str "$3")"
 }
 
-# guard_on <payload> — run the guard with the payload on stdin; S_OUT, S_ERR,
-# S_STATUS as t_run_split sets them.
+# guard_on <payload> — run the guard with the payload on stdin; T_OUT, T_ERR,
+# T_STATUS as t_exec sets them.
 guard_on() {
 	printf '%s' "$1" >"$SCRATCH/payload.json"
-	t_run_split sh "$GUARD" <"$SCRATCH/payload.json"
+	t_exec sh "$GUARD" <"$SCRATCH/payload.json"
 }
 
 # refused <label> — status 2 (the agent harness's blocking status), the rule
 # named on stderr, and nothing on stdout.
 refused() {
-	s_assert_status 2 "$1 is refused with the blocking status"
-	case $S_ERR in
+	expect_status 2 "$1 is refused with the blocking status"
+	case $T_ERR in
 	*'hard rule 1'*) pass "and stderr names hard rule 1" ;;
-	*) fail "$1: stderr does not name hard rule 1: $S_ERR" ;;
+	*) fail "$1: stderr does not name hard rule 1: $T_ERR" ;;
 	esac
-	s_assert_out_is "" "and stdout stays empty"
+	expect_out_is "" "and stdout stays empty"
 }
 
 # allowed <label> — status 0 and silence on stdout.
 allowed() {
-	s_assert_status 0 "$1 goes through"
-	s_assert_out_is "" "and stdout stays empty"
+	expect_status 0 "$1 goes through"
+	expect_out_is "" "and stdout stays empty"
 }
 
 # ---------------------------------------------------------------------------
@@ -119,18 +119,18 @@ banner "2. The agent harness layer: a write at the root is refused"
 # ---------------------------------------------------------------------------
 guard_on "$(payload Write file_path "$FIX/README.md")"
 refused "a Write to README.md at the root"
-case $S_ERR in
+case $T_ERR in
 *worktree*) pass "and the reason points at a worktree" ;;
-*) fail "the reason does not mention a worktree: $S_ERR" ;;
+*) fail "the reason does not mention a worktree: $T_ERR" ;;
 esac
 
 # The demo line: an Edit on AGENTS.md from the root is refused, and the
 # message says to open a worktree.
 guard_on "$(payload Edit file_path "$FIX/AGENTS.md")"
 refused "an Edit on AGENTS.md at the root"
-case $S_ERR in
+case $T_ERR in
 *'git worktree add'*) pass "and the message says how to open a worktree" ;;
-*) fail "the message does not say how to open a worktree: $S_ERR" ;;
+*) fail "the message does not say how to open a worktree: $T_ERR" ;;
 esac
 
 guard_on "$(payload MultiEdit file_path "$FIX/README.md")"
@@ -169,10 +169,10 @@ mkdir -p "$WT/adapters/claude-code/hooks"
 [ -f "$GUARD_SRC" ] && cp "$GUARD_SRC" "$WT/adapters/claude-code/hooks/root-guard.sh"
 cp "$KIT/adapters/claude-code/hooks/hook.lib.sh" "$WT/adapters/claude-code/hooks/hook.lib.sh"
 printf '%s' "$(payload Write file_path "$WT/README.md" "$WT")" >"$SCRATCH/payload.json"
-t_run_split sh "$WT/adapters/claude-code/hooks/root-guard.sh" <"$SCRATCH/payload.json"
+t_exec sh "$WT/adapters/claude-code/hooks/root-guard.sh" <"$SCRATCH/payload.json"
 allowed "the worktree's copy of the hook, writing in that worktree"
 printf '%s' "$(payload Write file_path "$FIX/README.md" "$WT")" >"$SCRATCH/payload.json"
-t_run_split sh "$WT/adapters/claude-code/hooks/root-guard.sh" <"$SCRATCH/payload.json"
+t_exec sh "$WT/adapters/claude-code/hooks/root-guard.sh" <"$SCRATCH/payload.json"
 refused "the worktree's copy of the hook, writing at the main root"
 
 # ---------------------------------------------------------------------------
@@ -412,12 +412,12 @@ as_agent() { (_m=$1 && shift && t_as_human && eval "$_m=1" && export "$_m" && "$
 
 # refused_commit <label> — non-zero, the rule named, its bypass never printed.
 refused_commit() {
-	[ "$S_STATUS" != 0 ] && pass "$1 is refused" || fail "$1 went through"
-	case $S_ERR in
+	[ "$T_STATUS" != 0 ] && pass "$1 is refused" || fail "$1 went through"
+	case $T_ERR in
 	*'hard rule 1'*) pass "and names hard rule 1" ;;
-	*) fail "$1: the refusal does not name hard rule 1: $S_ERR" ;;
+	*) fail "$1: the refusal does not name hard rule 1: $T_ERR" ;;
 	esac
-	case $S_ERR in
+	case $T_ERR in
 	*COMMIT_WITHOUT_WORKTREE*) fail "$1: the refusal prints its own bypass to the agent it refuses (M-2)" ;;
 	*) pass "and does not print its own bypass (M-2)" ;;
 	esac
@@ -433,42 +433,42 @@ stage_root() {
 }
 
 stage_root
-t_run_split as_agent CLAUDECODE git -C "$FIX" commit -q -m "docs: from the root"
+t_exec as_agent CLAUDECODE git -C "$FIX" commit -q -m "docs: from the root"
 refused_commit "an agent's commit (CLAUDECODE=1) on main from the main working copy"
-case $S_ERR in
+case $T_ERR in
 *'Keep work out of the root checkout'*) pass "and points at the manual's row" ;;
-*) fail "the refusal does not name the manual's row: $S_ERR" ;;
+*) fail "the refusal does not name the manual's row: $T_ERR" ;;
 esac
 
-t_run_split as_human git -C "$FIX" commit -q -m "docs: a human, from the root"
-s_assert_status 0 "the same commit with no agent marker goes through — a human on main is let through"
-case $S_ERR in
-*refused*) fail "a human's commit printed a refusal: $S_ERR" ;;
+t_exec as_human git -C "$FIX" commit -q -m "docs: a human, from the root"
+expect_status 0 "the same commit with no agent marker goes through — a human on main is let through"
+case $T_ERR in
+*refused*) fail "a human's commit printed a refusal: $T_ERR" ;;
 *) pass "and says nothing about a refusal" ;;
 esac
 
 for m in $T_AGENT_MARKERS; do
 	stage_root
-	t_run_split as_agent "$m" git -C "$FIX" commit -q -m "docs: from the root, $m"
-	[ "$S_STATUS" != 0 ] && pass "$m alone marks an agent, and the commit is refused" ||
+	t_exec as_agent "$m" git -C "$FIX" commit -q -m "docs: from the root, $m"
+	[ "$T_STATUS" != 0 ] && pass "$m alone marks an agent, and the commit is refused" ||
 		fail "$m=1 alone did not refuse a root commit"
 done
 
 stage_root
-t_run_split as_human env CLAUDECODE= git -C "$FIX" commit -q -m "docs: an empty marker"
-s_assert_status 0 "a marker set to the empty string is no marker"
+t_exec as_human env CLAUDECODE= git -C "$FIX" commit -q -m "docs: an empty marker"
+expect_status 0 "a marker set to the empty string is no marker"
 
 git -C "$FIX" checkout -q -b feat/on-root
 stage_root
-t_run_split as_agent CLAUDECODE git -C "$FIX" commit -q -m "docs: from the root, on a feature branch"
+t_exec as_agent CLAUDECODE git -C "$FIX" commit -q -m "docs: from the root, on a feature branch"
 refused_commit "an agent's commit from the main working copy on a feature branch"
 
 stage_root
-t_run_split as_agent CLAUDECODE env COMMIT_WITHOUT_WORKTREE=1 git -C "$FIX" commit -q -m "docs: the operator's own, bypassed"
-s_assert_status 0 "COMMIT_WITHOUT_WORKTREE=1 lets it through"
-case $S_ERR in
+t_exec as_agent CLAUDECODE env COMMIT_WITHOUT_WORKTREE=1 git -C "$FIX" commit -q -m "docs: the operator's own, bypassed"
+expect_status 0 "COMMIT_WITHOUT_WORKTREE=1 lets it through"
+case $T_ERR in
 *COMMIT_WITHOUT_WORKTREE=1*BYPASSED*) pass "and says so, loudly, on stderr" ;;
-*) fail "the bypass was silent: $S_ERR" ;;
+*) fail "the bypass was silent: $T_ERR" ;;
 esac
 assert_file_has "$PRECOMMIT_SRC" "COMMIT_WITHOUT_WORKTREE=1" "the bypass stays documented in the hook's source"
 
@@ -477,17 +477,17 @@ banner "7. The git layer: a linked worktree on a feature branch commits"
 # ---------------------------------------------------------------------------
 printf 'y\n' >>"$WT/README.md"
 git -C "$WT" add -A
-t_run_split as_agent CLAUDECODE git -C "$WT" commit -q -m "docs: from a worktree"
-s_assert_status 0 "an agent's commit from worktree/x on feat/x goes through"
+t_exec as_agent CLAUDECODE git -C "$WT" commit -q -m "docs: from a worktree"
+expect_status 0 "an agent's commit from worktree/x on feat/x goes through"
 
 # A linked worktree on the default branch is still the default branch.
 git -C "$FIX" worktree add -q "$FIX/worktree/m" main 2>/dev/null
 printf 'z\n' >>"$FIX/worktree/m/README.md"
 git -C "$FIX/worktree/m" add README.md
-t_run_split as_agent CLAUDECODE git -C "$FIX/worktree/m" commit -q -m "docs: on main, in a worktree"
+t_exec as_agent CLAUDECODE git -C "$FIX/worktree/m" commit -q -m "docs: on main, in a worktree"
 refused_commit "an agent's commit on main from a linked worktree"
-t_run_split as_human git -C "$FIX/worktree/m" commit -q -m "docs: on main, in a worktree, by a human"
-s_assert_status 0 "a human's commit on main from a linked worktree goes through"
+t_exec as_human git -C "$FIX/worktree/m" commit -q -m "docs: on main, in a worktree, by a human"
+expect_status 0 "a human's commit on main from a linked worktree goes through"
 
 # The default branch is the repository's, not a hard-coded name: where
 # origin/HEAD names one, that is the branch an agent may not commit on.
@@ -496,12 +496,12 @@ git -C "$FIX" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
 git -C "$FIX" worktree add -q "$FIX/worktree/t" -b trunk 2>/dev/null
 printf 't\n' >>"$FIX/worktree/t/README.md"
 git -C "$FIX/worktree/t" add README.md
-t_run_split as_agent CLAUDECODE git -C "$FIX/worktree/t" commit -q -m "docs: on trunk, the default"
+t_exec as_agent CLAUDECODE git -C "$FIX/worktree/t" commit -q -m "docs: on trunk, the default"
 refused_commit "an agent's commit on the default branch origin/HEAD names (trunk)"
 printf 'z2\n' >>"$FIX/worktree/m/README.md"
 git -C "$FIX/worktree/m" add README.md
-t_run_split as_agent CLAUDECODE git -C "$FIX/worktree/m" commit -q -m "docs: on main, which is not the default here"
-s_assert_status 0 "with trunk the default, a worktree on a branch named main is a branch like any other"
+t_exec as_agent CLAUDECODE git -C "$FIX/worktree/m" commit -q -m "docs: on main, which is not the default here"
+expect_status 0 "with trunk the default, a worktree on a branch named main is a branch like any other"
 git -C "$FIX" symbolic-ref --delete refs/remotes/origin/HEAD
 
 # The first commit of a fresh repository has no worktree to come from: nothing
@@ -515,8 +515,8 @@ mkdir -p "$FRESH/.githooks"
 [ -f "$PRECOMMIT_SRC" ] && cp "$PRECOMMIT_SRC" "$FRESH/.githooks/pre-commit"
 git -C "$FRESH" config core.hooksPath .githooks
 git -C "$FRESH" add -A
-t_run_split as_agent CLAUDECODE git -C "$FRESH" commit -q -m "chore: bootstrap"
-s_assert_status 0 "a repository's root commit goes through — there is nothing to cut a worktree from yet"
+t_exec as_agent CLAUDECODE git -C "$FRESH" commit -q -m "chore: bootstrap"
+expect_status 0 "a repository's root commit goes through — there is nothing to cut a worktree from yet"
 
 # ---------------------------------------------------------------------------
 banner "7b. The agent harness layer draws the git layer's line (#542)"
@@ -590,11 +590,11 @@ for d in "$FIX" "$WT" "$HW" "$FIX/worktree/m" "$FIX/worktree/t"; do
 	where=${d#"$FIX"}
 	where=${where#/}
 	[ -n "$where" ] || where="the main working copy"
-	if [ "$commit_rc" -eq 0 ] && [ "$S_STATUS" -eq 0 ] ||
-		{ [ "$commit_rc" -ne 0 ] && [ "$S_STATUS" -eq 2 ]; }; then
+	if [ "$commit_rc" -eq 0 ] && [ "$T_STATUS" -eq 0 ] ||
+		{ [ "$commit_rc" -ne 0 ] && [ "$T_STATUS" -eq 2 ]; }; then
 		pass "the guard and the commit hook agree on $where"
 	else
-		fail "the guard ($S_STATUS) and the commit hook ($commit_rc) disagree on $where"
+		fail "the guard ($T_STATUS) and the commit hook ($commit_rc) disagree on $where"
 	fi
 done
 
