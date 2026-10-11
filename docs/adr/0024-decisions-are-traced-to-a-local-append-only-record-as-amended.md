@@ -4,7 +4,7 @@
 - **Date**: 2026-10-10
 - **Deciders**: the implementer session for #692, under ADR-0021 and the operator's delegation of rulings (2026-10-10); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: supersedes ADR-0008 whole, consolidating it with its clause numbers kept; written under ADR-0021 clauses 1 to 4, and it reverses nothing; folds in ADR-0023 clause 1 (clause 5 here) and the readers ADR-0019 clause 1 and ADR-0023 clause 3 name (clause 7 here), both of which stay binding for their own decisions
-- **Superseded by**: — (amended 2026-10-10 for #723: clause 7 names the landing script's third read, `pr.open`, as ADR-0019 now records it)
+- **Superseded by**: — (amended 2026-10-10 for #723: clause 7 names the landing script's third read, `pr.open`, as ADR-0019 now records it; amended 2026-10-11 for #744: clause 5 names two readers of a run's identity — `stack <dir>` for a caller in another checkout, `current` for the caller's own — and `id` as the one owner of the run id's shape)
 
 ## Context and problem statement
 
@@ -298,8 +298,21 @@ Chosen: **option 1**.
      own ticket; what reopens that is a caller shown unable to carry the id
      from its `begin` to its `end` — then the bare form stays, deprecated,
      until the run can be named another way.
-   - **`stack <dir> [session=<id>]` is the one reader of a checkout's
-     stack**, for a caller that stands in another checkout. It prints the
+   - **A run's identity has two readers, and no caller reads a stack's
+     file.** `stack <dir>` for a caller in another checkout (environment
+     ignored), and `current` for the caller's own identity. **`current`**
+     prints the run and parent an emit from the same process would stamp,
+     `<run> [<parent>]` on one line, by an emit's own precedence: the
+     environment's `TRACE_RUN` and `TRACE_PARENT`, then this session's stack
+     in this checkout. It prints nothing, exit 0, when no run is open, when
+     `TRACE_RUN` is set empty, or when the trace is unconfigured; a stack
+     that exists and cannot be read is exit 2, never "no run open". It
+     writes nothing. **`id`** prints a fresh run id in the shape `begin`
+     mints and writes nothing; `id --check <id>` exits 0 for every id the
+     trace mints and 1 for anything else, so a caller holding a run id to
+     its shape asks the script rather than spelling the shape again.
+   - **`stack <dir> [session=<id>]` reads another checkout's stack**, for
+     a caller that stands in another checkout. It prints the
      top of the stack an emit made from `<dir>`'s checkout would read, then
      the run below it, one per line, nothing when no run is open; the
      session is `session=`, then `TRACE_SESSION` (empty is none), then that
@@ -474,7 +487,7 @@ each was folded:
 - Clause 5 — the session-keyed stack (#453); `stack <dir>` (#472); the
   `Trace-Run:` channel (#474); `end <run>` (#543); a bare `end` deprecated
   (#560); `Trace-Spawn:` (#583); the spawn guard (#627); `stack --all`
-  (ADR-0023, #680). The line cap and the blob store arrived with #248.
+  (ADR-0023, #680); `current` and `id` (#744). The line cap and the blob store arrived with #248.
 - Clause 6 — the dated price table and its kit-only refresh (#270).
 - Clause 7 — the readers are the operator and `/retro` (#309); the landing
   script as an operator-run reader (ADR-0019, #630, and its review-verdict
