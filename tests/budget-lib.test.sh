@@ -212,13 +212,17 @@ s_assert_err_has "!  dispatch: the transient scope cannot open"
 s_assert_out_has "NPROC=300" "…under the rlimit rung's task ceiling"
 [ "$(printf '%s\n' "$S_OUT" | grep -c '^NPROC=')" = 1 ] && pass "…exactly once" || fail "the command ran $(printf '%s\n' "$S_OUT" | grep -c '^NPROC=') times"
 
-# An inherited or disabled record opens nothing: systemd-run is never called.
-printf 'mode=inherited\ntasks=500\nmemory_mib=500\nrung=none\n' >"$SCRATCH/inherited"
-rm -f "$SCRATCH/sd-args"
-PATH="$SDYES:$PATH" lib budget_run "$SCRATCH/inherited" "$V" -- sh -c "$LIMITS"
-s_assert_status 7 "an inherited record runs the command bare"
-[ -f "$SCRATCH/sd-args" ] && fail "an inherited record opened a scope" || pass "…and opens no scope"
-s_assert_out_lacks "NPROC=500" "…and applies no rlimit of its own"
+# An inherited record and a disabled one each open nothing: systemd-run is
+# never called and no rlimit is set. The records name the scope rung on
+# purpose — it is the MODE that keeps the rung shut, not a rung of none.
+for _mode in inherited disabled; do
+	printf 'mode=%s\ntasks=500\nmemory_mib=500\nrung=scope\n' "$_mode" >"$SCRATCH/bare"
+	rm -f "$SCRATCH/sd-args"
+	PATH="$SDYES:$PATH" lib budget_run "$SCRATCH/bare" "$V" -- sh -c "$LIMITS"
+	s_assert_status 7 "a record in the $_mode mode runs the command bare"
+	[ -f "$SCRATCH/sd-args" ] && fail "a record in the $_mode mode opened a scope" || pass "…and opens no scope"
+	s_assert_out_lacks "NPROC=500" "…and applies no rlimit of its own"
+done
 
 # A record is a file, and budget_run reads it into an eval and an arithmetic
 # expansion: a field that is not what budget_derive prints is refused before
