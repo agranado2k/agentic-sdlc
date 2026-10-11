@@ -1246,9 +1246,10 @@ _scope_kill() {
 # OUTSIDE it unless the wrapper already wrote them. For the watchdog, before
 # it signals: once the scope empties its cgroup and the counters are gone,
 # and a ceiling hit before the watchdog fired is the earlier event.
-# budget_verdict records them while the scope lives; its answer is read later.
+# budget_verdict --timed-out records them while the scope lives, the status
+# beside them 124; its answer is read later.
 _scope_counters_now() {
-	budget_verdict "$BUDGET_VERDICT" >/dev/null 2>&1 || :
+	budget_verdict "$BUDGET_VERDICT" --timed-out >/dev/null 2>&1 || :
 }
 _down() {
 	# Take the worker's tree and the watchdog down. Idempotent; safe to call

@@ -23,11 +23,13 @@
 #       derived record opens the rung; an inherited or disabled one runs the
 #       command bare. A scope that refuses at its pre-flight falls to the
 #       rlimit rung, loudly, and the command runs once.
-#   budget_verdict <verdict-file>
+#   budget_verdict <verdict-file> [--timed-out]
 #       prints `tasks` or `memory` — the ceiling the run hit — or nothing.
 #       Returns 1 with the reason on stderr when the verdict cannot be read.
-#       Called while the run's scope still lives (a watchdog, before it
-#       signals), it records the scope's counters from outside first.
+#       --timed-out is a watchdog's call, made before it signals a run that
+#       outlived its time: while the run's scope still lives and its wrapper
+#       has written nothing, the scope's counters are recorded from outside
+#       first, with 124 — a timeout's status — as the run's.
 #   budget_inherited_bounds [<record-file>]
 #       prints the enclosing cgroup's limits — cgroup, tasks (<n> or max),
 #       memory_mib (<n> or max) — when that cgroup already bounds the caller:
@@ -51,7 +53,8 @@
 #
 # THE VERDICT FILE is `<pids.events max> <memory.events oom_kill> <status>`,
 # written from inside the scope after the command exits — `-` for a counter
-# that could not be read, never 0. Three files beside it carry the rest:
+# that could not be read, never 0 — or from outside it by --timed-out, the
+# status then 124. Three files beside it carry the rest:
 # <verdict-file>.started (written inside the scope before the command runs),
 # .rung (the rung the command ran under) and .unit (the scope's name).
 #
@@ -544,23 +547,28 @@ budget_run() (
 # ran), the verdict file missing or malformed (a pressure kill takes every
 # process in the cgroup, wrapper included), or a counter marked unreadable.
 budget_verdict() (
-	[ $# -eq 1 ] || _budget_die "budget_verdict takes <verdict-file>"
+	_bv_timed_out=0
+	case "$#:${2:-}" in
+	1:) ;;
+	2:--timed-out) _bv_timed_out=1 ;;
+	*) _budget_die "budget_verdict takes <verdict-file> [--timed-out]" ;;
+	esac
 	_bv=$1 _bv_rung=""
 	[ -f "$_bv.rung" ] && read -r _bv_rung <"$_bv.rung"
 	case "$_bv_rung" in
 	scope | scope-tasks) ;;
 	*) return 0 ;;
 	esac
-	# From outside the scope, while it lives: once it empties, its cgroup and
-	# the counters are gone, and a ceiling hit before a watchdog fired is the
-	# earlier event.
-	if [ ! -f "$_bv" ] && [ -f "$_bv.unit" ]; then
+	# From outside the scope, while it lives, for a watchdog about to signal:
+	# once the scope empties, its cgroup and the counters are gone, and a
+	# ceiling hit before the watchdog fired is the earlier event.
+	if [ "$_bv_timed_out" = 1 ] && [ ! -f "$_bv" ] && [ -f "$_bv.unit" ]; then
 		read -r _bv_unit <"$_bv.unit"
 		_bv_cg=$(systemctl --user show -p ControlGroup --value "$_bv_unit" 2>/dev/null)
 		if [ -n "$_bv_cg" ]; then
 			eval "$(_budget_counters_text)"
 			_cg_counters "$_bv_cg"
-			printf '%s %s %s\n' "$_pm" "$_ok" - >"$_bv"
+			printf '%s %s %s\n' "$_pm" "$_ok" 124 >"$_bv"
 		fi
 	fi
 	if [ ! -f "$_bv.started" ]; then

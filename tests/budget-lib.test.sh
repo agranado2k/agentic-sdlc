@@ -258,23 +258,39 @@ verdict none -absent
 s_assert_status 0 "with no rung there is nothing to read, and nothing is wrong"
 s_assert_out_is "" "…and nothing is printed"
 
-# From outside the scope, while it lives: a fake cgroup the stub manager
-# names as the unit's, with a task ceiling already hit.
+# From outside the scope, while it lives. The stub manager names the unit's
+# cgroup by a path that climbs out of /sys/fs/cgroup into this suite's
+# scratch, so the counters read are a fixture's: a task ceiling already hit.
+# Only a caller whose watchdog is about to signal asks for that read, with
+# --timed-out, and the verdict it leaves carries the status a timeout has.
 SDCG="$SCRATCH/sd-cg"
-mkdir -p "$SDCG"
-printf '#!/bin/sh\necho /fake-unit.scope\n' >"$SDCG/systemctl"
+mkdir -p "$SDCG" "$SCRATCH/cg"
+printf '#!/bin/sh\necho "/../../..%s"\n' "$SCRATCH/cg" >"$SDCG/systemctl"
 chmod +x "$SDCG/systemctl"
-rm -f "$V"
-echo budget-lib-test >"$V.unit"
-echo scope >"$V.rung"
-: >"$V.started"
-t_run_split env PATH="$SDCG:$PATH" sh -c '_budget_here="$1"; . "$1/budget.lib.sh"; budget_verdict "$2"' lib "$LIBDIR" "$V"
-if [ -d /sys/fs/cgroup/fake-unit.scope ]; then
-	skip "a real cgroup named fake-unit.scope exists here — the outside read is not judged"
+printf 'max 3\n' >"$SCRATCH/cg/pids.events"
+printf 'low 0\noom_kill 0\n' >"$SCRATCH/cg/memory.events"
+# outside [--timed-out] — budget_verdict on a run whose wrapper wrote nothing.
+outside() {
+	rm -f "$V"
+	echo budget-lib-test >"$V.unit"
+	echo scope >"$V.rung"
+	: >"$V.started"
+	t_run_split env PATH="$SDCG:$PATH" sh -c '_budget_here="$1"; . "$1/budget.lib.sh"; shift; budget_verdict "$@"' lib "$LIBDIR" "$V" "$@"
+}
+if [ -d /sys/fs/cgroup ]; then
+	outside --timed-out
+	s_assert_status 0 "--timed-out reads a live scope's counters from outside"
+	s_assert_out_is tasks "…and a ceiling already hit on them is the verdict"
+	[ "$(cat "$V" 2>/dev/null)" = "3 0 124" ] && pass "…recorded with the status a timeout has, 124" || fail "the verdict written from outside is '$(cat "$V" 2>/dev/null)', expected '3 0 124'"
+	outside
+	s_assert_status 1 "without --timed-out a missing verdict file is unreadable"
+	s_assert_err_has "verdict file is missing"
+	[ -f "$V" ] && fail "a verdict was written from outside without --timed-out" || pass "…and nothing is read from outside the scope"
 else
-	s_assert_status 1 "counters read from outside a live scope are recorded, unreadable ones as -"
-	[ -f "$V" ] && pass "…the verdict file is written before the scope can empty" || fail "no verdict was written from outside the scope"
+	skip "no /sys/fs/cgroup here — the outside read is not judged"
 fi
+PATH=$PATH_NOSD lib budget_verdict "$V" --sideways
+s_assert_status 2 "an argument budget_verdict does not know is refused"
 
 # ---------------------------------------------------------------------------
 banner "5. budget_inherited_bounds names a cgroup that already bounds the caller"
