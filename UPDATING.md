@@ -234,8 +234,10 @@ in eight hex characters, the shape the trace's own ids take, where it ended
 in the scratch directory's six-character suffix — which every reader that
 checks a run id refused, so a skill dispatch inside a dispatched worker
 dropped its `Trace-Run:` and `Trace-Spawn:` lines. Nothing to set. Part 2
-takes the rest: in 9a, `/review-pr` (its six lens files with it) raises a
-LOW only when it passes the band rule's test and resolves its lenses against
+takes the rest: in 9a, `/review-pr` (its six lens files with it —
+`lens-api-crud.md`, `lens-pattern.md`, `lens-reuse-dry.md`, `lens-security.md`,
+`lens-simplicity.md`, `lens-test-hygiene.md`) raises a LOW only when it
+passes the band rule's test and resolves its lenses against
 the author's model, `/implement` names that author on an `Author-Model:`
 line, and `/merge-train` records no landing of its own where a landing
 script lands the PR — take each whole; in 9c, `ai-review-prompt.md` carries
@@ -1247,10 +1249,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2931 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2933 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3085 insertions(+), 1 deletion(-)
+ 3 files changed, 3087 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
