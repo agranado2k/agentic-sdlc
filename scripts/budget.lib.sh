@@ -23,6 +23,8 @@
 #       derived record opens the rung; an inherited or disabled one runs the
 #       command bare. A scope that refuses at its pre-flight falls to the
 #       rlimit rung, loudly, and the command runs once.
+#       Returns 2, running nothing, for a record whose mode or rung it does
+#       not know, or a derived one whose ceilings are not whole numbers.
 #   budget_verdict <verdict-file> [--timed-out]
 #       prints `tasks` or `memory` — the ceiling the run hit — or nothing.
 #       Returns 1 with the reason on stderr when the verdict cannot be read.
@@ -491,9 +493,26 @@ budget_run() (
 	_brun_tasks=$(_budget_field "$_brun_record" tasks)
 	_brun_memory=$(_budget_field "$_brun_record" memory_mib)
 	_brun_rung=$(_budget_field "$_brun_record" rung)
+	# The record is a FILE, and what it holds goes into an eval (the scope's
+	# properties) and an arithmetic expansion (the rlimit rung's KiB): a field
+	# that is not what budget_derive prints is refused here, before either.
+	# A mode or a rung this file does not know is refused too — the fall
+	# through would be the bare run, and a record that cannot be read must
+	# never be the reason a command runs with no budget.
 	# Only a DERIVED budget opens a rung: an inherited one is already inside
 	# the outer scope's cgroup, and a disabled one runs bare on purpose.
-	[ "$_brun_mode" = derived ] || _brun_rung=none
+	case "$_brun_mode" in
+	derived)
+		_budget_whole_number "budget_run: the record's tasks" "$_brun_tasks"
+		_budget_whole_number "budget_run: the record's memory_mib" "$_brun_memory"
+		case "$_brun_rung" in
+		scope | scope-tasks | rlimit | none) ;;
+		*) _budget_die "budget_run: the record's rung is '$_brun_rung' — one of scope, scope-tasks, rlimit, none" ;;
+		esac
+		;;
+	inherited | disabled) _brun_rung=none ;;
+	*) _budget_die "budget_run: the record's mode is '$_brun_mode' — one of derived, inherited, disabled" ;;
+	esac
 	rm -f "$_brun_verdict" "$_brun_verdict.started" "$_brun_verdict.unit"
 	case "$_brun_rung" in
 	scope | scope-tasks)
@@ -533,7 +552,7 @@ budget_run() (
 			echo "!  $(_budget_who): ulimit -d refused the memory ceiling $_brun_memory MiB — the rlimit rung applies no memory bound" >&2
 		exec "$@"
 		;;
-	*)
+	none)
 		"$@"
 		;;
 	esac

@@ -220,6 +220,38 @@ s_assert_status 7 "an inherited record runs the command bare"
 [ -f "$SCRATCH/sd-args" ] && fail "an inherited record opened a scope" || pass "…and opens no scope"
 s_assert_out_lacks "NPROC=500" "…and applies no rlimit of its own"
 
+# A record is a file, and budget_run reads it into an eval and an arithmetic
+# expansion: a field that is not what budget_derive prints is refused before
+# anything runs — never spliced, and never run with no budget instead.
+# refused <label> <record line…> — the record, run on the scope rung's host.
+refused() {
+	_rf_label=$1
+	shift
+	printf '%s\n' "$@" >"$SCRATCH/odd-record"
+	rm -f "$SCRATCH/sd-args" "$SCRATCH/ran" "$SCRATCH/pwned"
+	t_run_split env PATH="$SDYES:$PATH" FAKE_VERDICT='0 0 0' \
+		sh -c '_budget_here="$1"; . "$1/budget.lib.sh"; shift; budget_run "$@"' lib "$LIBDIR" "$SCRATCH/odd-record" "$V" -- sh -c ': >"$1"' x "$SCRATCH/ran"
+	s_assert_status 2 "$_rf_label is refused, exit 2"
+	[ -f "$SCRATCH/ran" ] && fail "$_rf_label: the command ran all the same" || pass "…and the command does not run"
+}
+refused "a task ceiling that is not a whole number" mode=derived "tasks=300; : >$SCRATCH/pwned" memory_mib=600 rung=scope
+s_assert_err_has "tasks"
+[ -f "$SCRATCH/pwned" ] && fail "the record's task field was evaluated as shell" || pass "…nor is the field evaluated"
+[ -f "$SCRATCH/sd-args" ] && fail "a scope was opened for a record that was refused" || pass "…and no scope is opened"
+refused "a memory ceiling that is not a whole number" mode=derived tasks=300 memory_mib=lots rung=rlimit
+s_assert_err_has "memory_mib"
+refused "a derived record with no task ceiling" mode=derived memory_mib=600 rung=scope
+refused "a rung the library does not know" mode=derived tasks=300 memory_mib=600 rung=scopes
+s_assert_err_has "rung"
+refused "a derived record with no rung" mode=derived tasks=300 memory_mib=600
+refused "a mode the library does not know" mode=derive tasks=300 memory_mib=600 rung=scope
+s_assert_err_has "mode"
+# A derived record whose rung is none is budget_derive's own answer on a host
+# with neither rung, and runs bare.
+printf 'mode=derived\ntasks=300\nmemory_mib=600\nrung=none\n' >"$SCRATCH/odd-record"
+PATH=$PATH_NOSD lib budget_run "$SCRATCH/odd-record" "$V" -- sh -c 'exit 5'
+s_assert_status 5 "a derived record on the no-op rung still runs the command"
+
 # ---------------------------------------------------------------------------
 banner "4. budget_verdict reads the run's counters"
 # ---------------------------------------------------------------------------
