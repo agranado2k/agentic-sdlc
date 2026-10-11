@@ -283,6 +283,13 @@ BASE=$(field baseRefName)
 layer_version() {
 	printf '%s\n' "$1" | sed -n 's/^shared-layer: *\([0-9]\{1,6\}\.[0-9]\{1,6\}\.[0-9]\{1,6\}\) *$/\1/p' | head -1
 }
+# bumped <VERSION before> <VERSION after> — print the new version and exit 0
+# when the shared-layer line moved to a version; a line that moved to no
+# version, or did not move, is no bump. Step 2b's release is the same question.
+bumped() {
+	_bp_v=$(layer_version "$2")
+	[ -n "$_bp_v" ] && [ "$_bp_v" != "$(layer_version "$1")" ] && printf '%s\n' "$_bp_v"
+}
 # sl_value <VERSION text> — the shared-layer line's value as written, for a message.
 sl_value() { printf '%s\n' "$1" | sed -n 's/^shared-layer: *//p' | head -1 | tr -cd '[:print:]' | cut -c1-40; }
 _sl_unread="its diff could not be read to check the shared layer"
@@ -291,7 +298,8 @@ git -C "$ROOT" fetch -q origin "$BASE" "refs/pull/$PR/head" >/dev/null 2>&1 ||
 	refuse "fetching origin $BASE and the PR's head failed, so $_sl_unread"
 _sl_mb=$(git -C "$ROOT" merge-base "refs/remotes/origin/$BASE" "$HEAD_OID" 2>/dev/null) && [ -n "$_sl_mb" ] ||
 	refuse "its head $HEAD_OID has no merge base with origin/$BASE here, so $_sl_unread"
-_sl_moved=$(git -C "$ROOT" diff --name-only --no-renames "$_sl_mb" "$HEAD_OID" 2>/dev/null) ||
+# quotePath off: a listed path git would print quoted must still match.
+_sl_moved=$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.quotePath GIT_CONFIG_VALUE_0=false git -C "$ROOT" diff --name-only --no-renames "$_sl_mb" "$HEAD_OID" 2>/dev/null) ||
 	refuse "git could not diff $_sl_mb..$HEAD_OID, so $_sl_unread"
 _sl_before=$(git -C "$ROOT" show "$_sl_mb:VERSION" 2>/dev/null) && _sl_after=$(git -C "$ROOT" show "$HEAD_OID:VERSION" 2>/dev/null) ||
 	refuse "VERSION could not be read at its merge base and head, so $_sl_unread"
@@ -300,8 +308,7 @@ _sl_listed=$({ printf '%s\n' "$_sl_before" | manifest_section files; printf '%s\
 _sl_hit=$(printf '%s\n' "$_sl_moved" | while IFS= read -r _sl_p; do
 	[ -n "$_sl_p" ] && printf '%s\n' "$_sl_listed" | grep -qxF -- "$_sl_p" && printf '%s\n' "$_sl_p"
 done)
-_sl_v=$(layer_version "$_sl_after")
-if [ -n "$_sl_hit" ] && { [ -z "$_sl_v" ] || [ "$_sl_v" = "$(layer_version "$_sl_before")" ]; }; then
+if [ -n "$_sl_hit" ] && ! bumped "$_sl_before" "$_sl_after" >/dev/null; then
 	refuse "it moves the shared layer — $(printf '%s\n' "$_sl_hit" | tr '\n' ' ')— with no new version on VERSION's shared-layer line ($(sl_value "$_sl_before") at its merge base, $(sl_value "$_sl_after") at its head); a shared-layer change is a release (AGENTS.md hard rule 3): bump the minor in VERSION, record it in UPDATING.md, re-capture the pinned transcripts"
 fi
 
@@ -366,10 +373,9 @@ if [ -n "$SHA" ]; then
 	if git -C "$ROOT" fetch -q origin "$BASE" >/dev/null 2>&1 &&
 		_ver_after=$(git -C "$ROOT" show "$SHA:VERSION" 2>/dev/null) &&
 		_ver_before=$(git -C "$ROOT" show "$SHA^1:VERSION" 2>/dev/null); then
-		_v=$(layer_version "$_ver_after")
-		if [ -n "$_v" ] && [ "$_v" != "$(layer_version "$_ver_before")" ]; then
+		if _v=$(bumped "$_ver_before" "$_ver_after"); then
 			RELEASE=v$_v
-		elif [ -z "$_v" ] && printf '%s\n' "$_ver_after" | grep -q '^shared-layer:'; then
+		elif [ -z "$(layer_version "$_ver_after")" ] && printf '%s\n' "$_ver_after" | grep -q '^shared-layer:'; then
 			note "VERSION's shared-layer line at $SHA is not a version — nothing tagged"
 		fi
 	else

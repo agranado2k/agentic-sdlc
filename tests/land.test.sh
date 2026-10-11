@@ -134,10 +134,10 @@ esac
 pr_version() {
 	printf '# a note\nshared-layer: %s\n\nfiles:\n' "$1"
 	shift
-	for _e in ${STUB_MANIFEST-scripts/shared.sh UPDATING.md} "$@"; do printf '  %s  annotated\n' "$_e"; done
+	for _e in scripts/shared.sh UPDATING.md "$@"; do printf '  %s  annotated\n' "$_e"; done
 	printf 'skills:\n  grill-me\n'
 }
-_mb=${STUB_MB-ba5eba5eba5eba5eba5eba5eba5eba5eba5eba5e}
+_mb=ba5eba5eba5eba5eba5eba5eba5eba5eba5eba5e
 _ho=${STUB_HEAD_OID-1234567890123456789012345678901234567890}
 case $1 in
 fetch)
@@ -148,10 +148,10 @@ merge-base) [ "${STUB_MB_RC:-0}" = 0 ] || exit "$STUB_MB_RC"; printf '%s\n' "$_m
 diff) for _f in ${STUB_PR_FILES:-}; do printf '%s\n' "$_f"; done ;;
 show)
 	case $2 in
-	"$_mb:VERSION") pr_version "${STUB_PR_VER_BASE:-0.1.0}" ${STUB_MANIFEST_BASE_EXTRA:-} ;;
+	"$_mb:VERSION") pr_version 0.1.0 ${STUB_MANIFEST_BASE_EXTRA:-} ;;
 	"$_ho:VERSION")
 		[ "${STUB_PR_HEAD_SHOW_RC:-0}" = 0 ] || exit "$STUB_PR_HEAD_SHOW_RC"
-		pr_version "${STUB_PR_VER_HEAD:-${STUB_PR_VER_BASE:-0.1.0}}" ${STUB_MANIFEST_HEAD_EXTRA:-}
+		pr_version "${STUB_PR_VER_HEAD:-0.1.0}" ${STUB_MANIFEST_HEAD_EXTRA:-}
 		;;
 	*'^1:VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_BEFORE:-0.1.0}" ;;
 	*':VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_AFTER:-0.1.0}" ;;
@@ -1424,8 +1424,11 @@ not_landed 708 "a PR whose head could not be fetched"
 s_assert_err_has "could not be read" "stderr says the diff could not be read"
 land STUB_MB_RC=1 709
 not_landed 709 "a PR with no merge base"
+s_assert_err_has "no merge base" "stderr names the missing merge base"
+s_assert_err_has "could not be read" "and says the diff could not be read"
 land STUB_PR_HEAD_SHOW_RC=128 STUB_PR_FILES='docs/notes.md' 710
 not_landed 710 "a PR whose head VERSION could not be read"
+s_assert_err_has "VERSION could not be read" "stderr names the unread VERSION"
 
 t_run_split env TRACE_DIR= TRACE_CONFIG="$KIT/scripts/trace.config.sh" LAND_POLL_SECONDS=0 sh "$LAND" 711 </dev/null
 s_assert_status 0 "unconfigured, a PR moving nothing listed still lands"
