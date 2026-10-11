@@ -1196,7 +1196,8 @@ banner "16. A LOW is counted, never posted by an agent (#635)"
 # declined 52 of them as lows. The ruling: a lens still raises a LOW (about
 # four in ten triaged LOWs were applied), the report and the trace count it,
 # and no agent path posts it; /pr-iterate applies a mechanical one or declines
-# it citing the band, and never hands one to the operator.
+# it citing the band, and never hands one to the operator. Section 17 (#732)
+# narrows the raise itself to a LOW that passes the band's test.
 ITER_ABS="$ROOT/$ITER"
 # low_band_missing <review-pr file> <pr-iterate file> — each rule lost, one per line.
 low_band_missing() {
@@ -1245,5 +1246,52 @@ for b in \
 	bait635 "$_bn" "${_rest%%|*}" "${_rest#*|}" && pass "bait: without '$_bn' goes red" ||
 		fail "bait: without '$_bn' was not caught — or the bait planted nothing"
 done
+
+# ---------------------------------------------------------------------------
+banner "17. A lens raises a LOW only when it passes the band rule's own test (#732)"
+# ---------------------------------------------------------------------------
+# Retro 2026-10-10: of 150 LOWs triaged, 109 were declined, 104 citing §5's
+# band rule — the lenses raised, and the orchestrator triaged, LOWs the policy
+# already declines. So the band's test (a clear, mechanical fix inside the
+# diff) is applied where a finding is made: §5 states it once, and every
+# standards lens file, the dispatched worker's contract and its CI twin carry
+# that sentence word for word — read from the skill here, never retyped, so a
+# reword on either side is red. A candidate ticket asks the PR for nothing, so
+# the sentence itself exempts it.
+band_test=$(sentences <"$SKILL_ABS" | grep -F "the test of \`/review-pr\` §5's band rule" | head -n 1)
+[ -n "$band_test" ] && pass "§5 states the band rule's own test for a LOW: $band_test" ||
+	fail "§5 no longer states the band rule's test for a LOW — nothing to hold the lenses to (#732)"
+# band_test_missing <skill dir> <worker> <twin> — each prompt that does not
+# carry the band test as a whole sentence, one per line.
+band_test_missing() {
+	for _bt_f in "$1"/lens-*.md "$2" "$3"; do
+		[ -n "$band_test" ] && sentences <"$_bt_f" | grep -qxF -- "$band_test" || basename "$_bt_f"
+	done
+}
+miss=$(band_test_missing "$LENS_DIR" "$WORKER_ABS" "$ROOT/$TWIN" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "all six lens files, the worker contract and its CI twin carry the band test word for word" ||
+	fail "these prompts do not carry §5's band test word for word: $miss (#732)"
+# A bait per lens, and one each for the worker and its twin: a fresh copy with
+# that prompt's sentence dropped, or reworded, must be named.
+bt_bait() { # <file name> <sed script>
+	rm -rf "$SCRATCH/bt-bait" && mkdir -p "$SCRATCH/bt-bait" &&
+		cp "$LENS_DIR"/*.md "$WORKER_ABS" "$ROOT/$TWIN" "$SCRATCH/bt-bait/" &&
+		cp "$SCRATCH/bt-bait/$1" "$SCRATCH/bt-bait/$1.orig" && sed -i "$2" "$SCRATCH/bt-bait/$1" &&
+		! cmp -s "$SCRATCH/bt-bait/$1" "$SCRATCH/bt-bait/$1.orig" &&
+		band_test_missing "$SCRATCH/bt-bait" "$SCRATCH/bt-bait/review-worker.md" "$SCRATCH/bt-bait/ai-review-prompt.md" | grep -qxF -- "$1"
+}
+for _bt_l in "$LENS_DIR"/lens-*.md; do
+	_bt_n=$(basename "$_bt_l")
+	bt_bait "$_bt_n" "/band rule, a clear and mechanical fix/d" &&
+		pass "bait: $_bt_n without the band test is named" || fail "bait: $_bt_n without the band test was not caught — or the bait planted nothing"
+done
+for b in \
+	'lens-simplicity.md|s/a clear and mechanical fix inside this diff/a fix/' \
+	'review-worker.md|s/clear and mechanical fix/fix/' \
+	'ai-review-prompt.md|s/a clear and mechanical fix/a fix/'; do
+	bt_bait "${b%%|*}" "${b#*|}" && pass "bait: ${b%%|*} with the band test reworded is named" ||
+		fail "bait: ${b%%|*} with the band test reworded was not caught — or the bait planted nothing"
+done
+rm -rf "$SCRATCH/bt-bait"
 
 t_done "/review-pr output contract"

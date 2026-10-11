@@ -13,3 +13,5 @@ Actively look for ways to reduce code complexity and volume. For every piece of 
 - Flagging premature generalizations — code that handles hypothetical future cases instead of the current need.
 
 The goal is: less code to read, less code to maintain. Simpler code is easier to review, test, and debug.
+
+**Raise a LOW only when it passes the test of `/review-pr` §5's band rule, a clear and mechanical fix inside this diff;** drop every other LOW before it reaches the report, since triage declines it under that rule anyway, and only a candidate ticket, a LOW that asks this PR for nothing, is exempt.
