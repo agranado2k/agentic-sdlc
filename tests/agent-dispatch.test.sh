@@ -2543,7 +2543,7 @@ s_assert_out_has "worker TRACE_RUN=" "…and the worker still ran"
 # resolver and nothing else dispatches exactly as it always did.
 LONELY="$SCRATCH/lonely"
 mkdir -p "$LONELY"
-cp "$KIT/scripts/agent-dispatch.sh" "$KIT/scripts/agents.lib.sh" "$LONELY/"
+cp "$KIT/scripts/agent-dispatch.sh" "$KIT/scripts/agents.lib.sh" "$KIT/scripts/budget.lib.sh" "$LONELY/"
 t_run_split env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" sh "$LONELY/agent-dispatch.sh" implementer --prompt 'x'
 s_assert_status 0 "a dispatcher with no trace script beside it dispatches"
 s_assert_out_has "worker TRACE_RUN=" "…and the worker ran"
