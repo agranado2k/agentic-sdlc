@@ -87,6 +87,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
 | `scripts/agents.lib.sh` | The capability-tier resolver: `sh scripts/agents.lib.sh implementer` prints the model that tier maps to. Shared layer; holds the four tier names and no model. |
+| `scripts/budget.lib.sh` | The worker Budget: a task and a memory ceiling on a command's whole process tree, derived from the host and applied down the strongest rung it offers. Four sourced functions: the dispatcher calls `budget_derive`, `budget_run` and `budget_verdict`; `budget_inherited_bounds` ships ahead of its caller, the test harness (#748), and until then only its suite drives it. Shared layer. |
 | `scripts/agents.config.sh` | **Yours.** Tier → model id, for your provider. Ships empty on purpose — the kit names no model, because model ids rot faster than anything else it could carry. |
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
@@ -251,7 +252,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.71.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.72.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -812,6 +813,15 @@ skeleton (K0).
   commit. The demo suites are the builders' oracle in the large — the docs
   demo's pinned transcripts did not move when it adopted them.
 
+- `sh tests/budget-lib.test.sh` drives `scripts/budget.lib.sh` through its
+  four functions on a fake host, never a private one: the derived record and
+  its floor and ceiling, the overrides, the off switch and the inherited
+  pair, a policy refused with exit 2 while the calling shell runs on, the
+  rlimit and scope rungs under stubbed `systemd-run` with the command's own
+  status passed back, a pre-flight refusal falling to rlimits once, every
+  verdict a scope's counters can leave, and the enclosing cgroup that already
+  bounds its caller.
+
 - `sh tests/suite-budget.test.sh` proves every suite runs inside the worker
   budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite
   sources it: sourcing `scripts/agent-dispatch.sh` defines its derivation and
@@ -992,6 +1002,7 @@ sh tests/no-box-art.test.sh                            # craft §10: no characte
 sh tests/gate-path-roots.test.sh                       # the gate's two engines agree on their path roots
 sh tests/mutation-kit.test.sh                          # the kit's own mutation wrapper, through a stub
 sh tests/suite-budget.test.sh                          # every suite runs inside the worker budget
+sh tests/budget-lib.test.sh                            # the worker Budget, through its four functions
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

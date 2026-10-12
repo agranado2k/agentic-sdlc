@@ -150,7 +150,7 @@ t_exec sh "$DISPATCH" --tier-of /no-such-skill
 # touches the repo's policy files.
 STUBTREE="$SCRATCH/stubtree"
 mkdir -p "$STUBTREE/scripts"
-cp "$ROOT/scripts/agents.kit.sh" "$ROOT/scripts/agents.lib.sh" \
+cp "$ROOT/scripts/agents.kit.sh" "$ROOT/scripts/agents.lib.sh" "$ROOT/scripts/budget.lib.sh" \
 	"$ROOT/scripts/agent-dispatch.sh" "$ROOT/scripts/skill-dispatch.kit.sh" "$STUBTREE/scripts/"
 cp -R "$ROOT/.agents" "$STUBTREE/.agents"
 STUB="$SCRATCH/stub-agent-harness"
