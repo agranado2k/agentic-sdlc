@@ -824,9 +824,10 @@ skeleton (K0).
 
 - `sh tests/suite-budget.test.sh` proves every suite runs inside the worker
   budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite
-  sources it: sourcing `scripts/agent-dispatch.sh` defines its derivation and
-  runs nothing, a stub suite run through the test harness against a fake host
-  comes back inside a budget of that host's numbers, a fork loop and a
+  sources it, confining the suite through `scripts/budget.lib.sh`'s four
+  functions and naming none of its private ones: a stub suite run through the
+  test harness against a fake host comes back inside a budget of that host's
+  numbers, one whose kit root lacks the library is refused naming the file, a fork loop and a
   greedy allocation come back as failures naming the ceiling with exit 71
   while the calling shell still forks, the rlimit rung refuses forks inside
   the suite's own shell, the off switch runs a stub bare and says so, the
