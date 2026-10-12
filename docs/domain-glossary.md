@@ -382,7 +382,8 @@ Grouped by the seam each term belongs to. Entry shape:
   ended, keyed by run id, whoever opened it: a run on a stack, or a
   **detached run** minted for a dispatched worker or a cascade. A run handed to
   a subagent on a `Trace-Run:` line is the spawner's own, already there. An entry names the run's parent, session, checkout and
-  start; one whose process is gone reads as **stale**, never as closed. The
+  start; a stack run on no run stack, or a detached run whose process is
+  gone, reads as **stale**, never as closed. The
   event log stays the durable record; the registry answers only "what is
   running now". Ref: PRD #742.
   - _Avoid_: "run list", "run table" (one name per concept); "current run"

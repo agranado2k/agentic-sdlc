@@ -27,8 +27,8 @@ see a run that was never pushed.
 - **The event log stays the durable record**; whatever answers "what is open
   now" is a view, never a second source of truth.
 - **The trace is the only minter of a run id.**
-- **Stale is reported, never guessed away**: a process check is evidence,
-  not a verdict.
+- **Stale is reported, never guessed away**: a stack or process check is
+  evidence, not a verdict.
 - **Unconfigured is a working state.**
 
 ## Considered options
@@ -75,12 +75,17 @@ Chosen: **option 1.**
    the shape of included — is exit 1 and nothing printed. An entry or a
    registry that cannot be read is exit 2. Unconfigured, `runs` prints
    nothing and exits 0. Neither writes.
-4. **State.** An entry reads `live` while its process runs on this host,
-   `stale` once that process is gone from this host, and `unknown` for an
-   entry from another host or with no process id. The process is the one
-   that called the script — for a dispatcher's `run=$(… begin --detached …)`,
-   the dispatcher. **Only `end` removes an entry**; a stale one stays until
-   its run is ended.
+4. **State.** A **stack** run's state comes from its run stack: `live`
+   while its id is on its session's stack, `stale` once it is on none, and
+   `unknown` when a stack that exists cannot be read — never judged by pid,
+   because an agent harness runs each command in a fresh shell, gone the
+   moment `begin` returns while the run is still open. A **detached** run's
+   state comes from its process: `live` while it runs on this host, `stale`
+   once it is gone from this host, and `unknown` for an entry from another
+   host or with no process id. The process is the one that called the
+   script — for a dispatcher's `run=$(… begin --detached …)`, the
+   dispatcher. **Only `end` removes an entry**; a stale one stays until its
+   run is ended.
 5. **Clause 7 stands.** `runs` is a reader for the operator and for
    operator-run tools; no chain skill calls it.
 
@@ -94,12 +99,14 @@ Chosen: **option 1.**
   ships in a release (0.72.0).
 - **Bad / trade-off**: a run left open by a crashed process keeps its entry
   until somebody ends it; nothing sweeps.
-- **Honest limitation**: a caller whose shell is itself short-lived — an
-  agent harness's one-command shell — registers a process that is gone when
-  the command returns, so a session's stack run reads `stale` while it is
-  open. Stale is evidence for a reader to weigh, not a verdict; what reopens
-  this is a reader shown to need a live answer for such a run, and then the
-  caller names its long-lived process.
+- **Honest limitation**: a detached run begun from a short-lived shell —
+  an agent harness's one-command shell — registers a process that is gone
+  when the command returns, so it reads `stale` while it is open; the
+  dispatcher and the cascade begin theirs from the process that holds the
+  worker. Stale is evidence for a reader to weigh, not a verdict.
+- **Honest limitation**: a stack run left on its stack by a session that
+  died without `end` reads `live` until it is ended; the stack, not a
+  process, is what says a session's run is open.
 - **Honest limitation**: a process this user may not signal reads as gone;
   the trace directory's writers are this user.
 
