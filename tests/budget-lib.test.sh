@@ -203,6 +203,42 @@ esac
 lib budget_verdict "$V"
 s_assert_out_is "" "counters at zero are no ceiling hit"
 
+# The scope-tasks rung carries the task bound alone: a memory property there
+# would be accepted by a manager that cannot apply it.
+printf 'mode=derived\ntasks=300\nmemory_mib=600\nrung=scope-tasks\n' >"$SCRATCH/tasks-only"
+rm -f "$SCRATCH/sd-args"
+t_run_split env PATH="$SDYES:$PATH" FAKE_VERDICT='0 0 0' \
+	sh -c '_budget_here="$1"; . "$1/budget.lib.sh"; shift; budget_run "$@"' lib "$LIBDIR" "$SCRATCH/tasks-only" "$V" -- sh -c 'exit 4'
+s_assert_status 4 "on the scope-tasks rung budget_run returns the command's status"
+case "$(cat "$SCRATCH/sd-args")" in
+*"-p TasksMax=300 -p OOMPolicy=continue --quiet true"*) pass "…its scope carries the task ceiling" ;;
+*) fail "no scope with the task ceiling alone: $(cat "$SCRATCH/sd-args")" ;;
+esac
+case "$(cat "$SCRATCH/sd-args")" in
+*Memory*) fail "the scope-tasks rung passed a memory property: $(cat "$SCRATCH/sd-args")" ;;
+*) pass "…and no memory property" ;;
+esac
+
+# A call budget_run cannot read is refused, exit 2, and runs nothing.
+# miscalled <label> <budget_run argument…>
+miscalled() {
+	_mc_label=$1
+	shift
+	rm -f "$SCRATCH/ran"
+	PATH=$PATH_NOSD lib budget_run "$@"
+	s_assert_status 2 "$_mc_label is refused, exit 2"
+	[ -f "$SCRATCH/ran" ] && fail "$_mc_label: the command ran all the same" || pass "…and nothing runs"
+}
+miscalled "a record file that is not there" "$SCRATCH/no-such-record" "$V" -- sh -c ': >"$1"' x "$SCRATCH/ran"
+s_assert_err_has "no record at"
+miscalled "a command with no -- before it" "$REC" "$V" sh -c ': >"$1"' x "$SCRATCH/ran"
+s_assert_err_has "expected -- before the command"
+miscalled "a call with no command after --" "$REC" "$V" --
+s_assert_err_has "no command after --"
+miscalled "--unit with no name" "$REC" "$V" --unit
+s_assert_err_has "--unit needs a name"
+miscalled "a call with no verdict file" "$REC"
+
 # A pre-flight refusal falls to rlimits, out loud, and the command runs once.
 t_run_split env PATH="$SDREFUSE:$PATH" BUDGET_WHO=dispatch \
 	sh -c '_budget_here="$1"; . "$1/budget.lib.sh"; shift; budget_run "$@"' lib "$LIBDIR" "$REC" "$V" -- sh -c "$LIMITS"
