@@ -2999,7 +2999,7 @@ expect_exit 0 "and prints a run id the check accepts" -- sh "$TRACE" id --check 
 t_exec env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" runs
 expect_resolved "" "unconfigured, runs prints nothing and exits 0"
 t_exec env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" end "$RR_OUTER"
-expect_status 0 "and end of a detached run is the silent no-op every unconfigured call is"
+expect_status 0 "and end of an open run is the silent no-op every unconfigured call is"
 # The surface names the new verbs.
 t_exec sh "$TRACE"
 expect_err_has 'trace.sh runs [<id>]' "the usage names runs [<id>]"
