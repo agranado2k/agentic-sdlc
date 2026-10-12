@@ -380,14 +380,23 @@ Grouped by the seam each term belongs to. Entry shape:
     many runs.
 - **Open-run registry** — the live view of every run that has begun and not
   ended, keyed by run id, whoever opened it: a run on a stack, or a
-  **detached run** minted for a dispatched worker or a cascade. A run handed to
-  a subagent on a `Trace-Run:` line is the spawner's own, already there. An entry names the run's parent, session, checkout and
-  start; a stack run on no run stack, or a detached run whose process is
-  gone, reads as **stale**, never as closed. The
-  event log stays the durable record; the registry answers only "what is
-  running now". Ref: PRD #742.
+  **detached run** minted for a dispatched worker or a cascade. A run handed
+  to a subagent on a `Trace-Run:` line is the spawner's own, already there.
+  An entry names the run's parent, session, checkout and start, and reads
+  `live`, **stale** or `unknown`. The event log stays the durable record;
+  the registry answers only "what is running now". Ref: PRD #742.
   - _Avoid_: "run list", "run table" (one name per concept); "current run"
     for an entry — the current run is the one identity an emit would stamp.
+- **Detached run** — a run `begin --detached` mints and registers on no run
+  stack, for a dispatched worker or a cascade: its owner holds the id and
+  closes it with `end <run>` from any checkout. Its registry state is judged
+  by the process that asked for it. Ref: ADR-0026.
+  - _Avoid_: "background run" — nothing about it runs in the background.
+- **Stale** — the registry state of an open run nothing vouches for any
+  more: a stack run that is on no run stack, or a detached run whose process
+  is gone from this host. A report, never a verdict and never closed — only
+  `end` removes an entry. Ref: ADR-0026 clause 4.
+  - _Avoid_: "dead" for an entry — the run may still be open.
 - **Blob** — a payload too large or too shaped for one event line — a prompt,
   a tool result, spike evidence — stored once under the trace directory by
   content hash and referenced from the event: `--blob <file>` (or `-` for

@@ -3017,8 +3017,10 @@ grep -F '| [0024]' "$KIT/docs/adr/INDEX.md" | grep -qF '(#745)' && grep -qF '| [
 	pass "and the index records the amendment (#745) and the new record" || fail "INDEX.md lacks ADR-0024's #745 amendment or ADR-0026's row"
 grep -qF '**Open-run registry**' "$KIT/docs/domain-glossary.md" && pass "the glossary names the open-run registry" ||
 	fail "the glossary has no Open-run registry entry"
-for _rr_term in '**detached run**' '**stale**'; do
-	grep -qF -- "$_rr_term" "$KIT/docs/domain-glossary.md" && pass "and $_rr_term" || fail "the glossary does not name $_rr_term"
+# An entry of its own, not a bold word inside another entry's prose.
+for _rr_term in 'Detached run' 'Stale'; do
+	grep -q -- "^- \*\*$_rr_term\*\* — " "$KIT/docs/domain-glossary.md" && pass "and an entry for $_rr_term" ||
+		fail "the glossary has no entry of its own for $_rr_term"
 done
 
 t_done "trace script"
