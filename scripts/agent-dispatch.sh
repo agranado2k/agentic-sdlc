@@ -133,60 +133,7 @@
 # That is a property of the prompt and of the flags in your template, not
 # something this script can enforce — which is exactly why it is written here.
 
-# SOURCED OR EXECUTED. tests/lib.sh sources this file for the budget alone —
-# every suite runs inside the budget a worker gets (the kit's ADR-0006, #209), derived
-# by THIS code so a suite and a worker cannot disagree about a number. The
-# budget itself lives in scripts/budget.lib.sh (#747), and the test harness
-# moves onto it directly in #748, when this layer goes. Until then, sourced,
-# the file runs everything up to the "dispatch proper" line below and
-# returns. What the sourcing shell receives, all of it:
-#   - the three it came for: _budget_derive (sets BUDGET_RECORD, the
-#     library's record, and renders it into BUDGET_MODE, BUDGET_TASKS,
-#     BUDGET_TASKS_FROM, BUDGET_MEMORY, BUDGET_MEMORY_FROM, BUDGET_RUNG,
-#     NPROC_FLAG and the four BUDGET_*_FLOOR / BUDGET_*_CEILING),
-#     _budget_scope_props (sets SCOPE_PROPS) and _budget_counters_text
-#     (prints the counters reader as text);
-#   - everything scripts/budget.lib.sh defines, sourced above them — its
-#     four functions and its private readers, _budget_session_tasks among
-#     them — and _budget_record_get;
-#   - the policy readers _read_policy, _read_policy_numbers and _whole_number;
-#   - usage, and die — which EXITS the shell that called it, so a caller
-#     that wants to survive a policy value it cannot budget sources this
-#     file in a subshell, as tests/lib.sh does;
-#   - the variables _dispatch_sourced, _here, LIB, _budget_here, BUDGET_WHO,
-#     _host, the library's BUDGET_DEFAULT_* values, and BUDGET_TASKS_FLAG,
-#     BUDGET_MEMORY_FLAG and NO_BUDGET at their empty and 0 defaults.
-# Not `set -u`: that is the dispatch's own, switched on below the seam, so a
-# sourcing shell keeps its options. A sourcing caller sets
-# _dispatch_here=<this directory> BEFORE sourcing, on its own line — the
-# same seam, and the same reason, as scripts/agents.lib.sh's _agents_here:
-# when sourced, $0 is the caller's, and the library beside this file cannot
-# be found from it. The detection is agents.lib.sh's too, ZSH_EVAL_CONTEXT
-# first: zsh sets $0 to the sourced file's own path, so the $0 test alone
-# would run a dispatch out of a `source`.
-_dispatch_sourced=0
-case "${ZSH_EVAL_CONTEXT:-}" in
-*:file | *:file:*) _dispatch_sourced=1 ;;
-esac
-if [ "$_dispatch_sourced" = 0 ]; then
-	case "$0" in
-	*/agent-dispatch.sh | agent-dispatch.sh) ;;
-	*) _dispatch_sourced=1 ;;
-	esac
-fi
-if [ "$_dispatch_sourced" = 1 ]; then
-	_here=${_dispatch_here:-}
-	# `return`, so a shell that sourced this by hand stays open with the
-	# status; executed under another name there is no function to return
-	# from, and the fallback exit is the same 2 — dash returns at top level
-	# as if it had exited, bash refuses the return and takes the exit.
-	[ -n "$_here" ] || {
-		echo "x dispatch: sourced without _dispatch_here, or executed under a name other than agent-dispatch.sh — a sourcing caller sets _dispatch_here to this script's directory first; a copy runs under its own name" >&2
-		return 2 2>/dev/null || exit 2
-	}
-else
-	_here=$(dirname "$0")
-fi
+_here=$(dirname "$0")
 LIB="$_here/agents.lib.sh"
 [ -f "$LIB" ] || {
 	echo "x dispatch: cannot find agents.lib.sh in $_here" >&2
@@ -295,14 +242,7 @@ _read_policy_numbers() {
 #
 # AGENT_DISPATCH_HOST_ROOT is TEST-ONLY, read by the library: it is prefixed
 # to the host paths the derivation reads so a suite can hand it a fake host.
-#
-# UNTIL tests/lib.sh STOPS SOURCING THIS FILE (#748), what it came for stays
-# here: _budget_derive (the record rendered into BUDGET_MODE, BUDGET_TASKS,
-# BUDGET_TASKS_FROM, BUDGET_MEMORY, BUDGET_MEMORY_FROM, BUDGET_RUNG,
-# NPROC_FLAG and the four BUDGET_*_FLOOR / _CEILING), _budget_scope_props
-# (SCOPE_PROPS) and _host; the library's own definitions reach it through
-# the sourcing above.
-_host=${AGENT_DISPATCH_HOST_ROOT:-}
+
 # The per-dispatch flags the derivation reads; the argument parse below sets them.
 BUDGET_TASKS_FLAG="" BUDGET_MEMORY_FLAG="" NO_BUDGET=0
 
@@ -332,17 +272,6 @@ _budget_derive() {
 	BUDGET_MEMORY_CEILING=$(_budget_record_get memory_ceiling_mib)
 	NPROC_FLAG=$(_budget_record_get nproc_flag)
 }
-
-# _budget_scope_props <rung> — sets SCOPE_PROPS, for tests/lib.sh until #748.
-_budget_scope_props() {
-	SCOPE_PROPS=$(_budget_props "$1" "$BUDGET_TASKS" "$BUDGET_MEMORY")
-}
-
-# --- the dispatch proper starts here ----------------------------------------
-# A sourcing caller has what it came for: the derivation, the rung, the scope
-# properties and the counters reader, one definition. Nothing above this line
-# parses an argument, sweeps scratch, resolves a tier or reads a prompt.
-[ "$_dispatch_sourced" = 0 ] || return 0
 
 set -u
 

@@ -292,12 +292,13 @@ Grouped by the seam each term belongs to. Entry shape:
   percentage of the host — the task ceiling the operator's own session runs
   under, and the memory available right now — clamped to a policy floor and
   ceiling. Percentages and clamps are policy-file variables in
-  `scripts/agents.config.sh`; derivation, the enforcement ladder and the exit
-  status (71) are `scripts/agent-dispatch.sh`'s, and `--dry-run` shows the
-  budget before a token is spent. A nested dispatch inherits the outer's and
-  never opens a fresh one. Every suite runs inside one too, applied by the
-  shared test harness through the dispatcher's own derivation; `AGENT_SUITE_BUDGET=off`
-  is the off switch. Ref: ADR-0006, and its #209 amendment.
+  `scripts/agents.config.sh`; derivation, the enforcement ladder and the
+  verdict are the Budget library's (`scripts/budget.lib.sh`), the exit status
+  (71) the dispatcher's, and `--dry-run` shows the budget before a token is
+  spent. A nested dispatch inherits the outer's and never opens a fresh one.
+  Every suite runs inside one too, applied by the shared test harness through
+  the same library and the same ladder; `AGENT_SUITE_BUDGET=off` is the off
+  switch. Ref: ADR-0006, and its #209 amendment.
 - **Session cap** — how many tickets of a frontier may run as sessions at
   once, stated by `/to-tickets` at its hand-off: the host's
   concurrent-subagent limit divided by the seven lenses one `/review-pr`
