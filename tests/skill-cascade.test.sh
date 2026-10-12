@@ -32,7 +32,7 @@ t_init
 # --- the stub kit tree ------------------------------------------------------
 STUBTREE="$SCRATCH/stubtree"
 mkdir -p "$STUBTREE/scripts"
-cp "$ROOT/scripts/agents.kit.sh" "$ROOT/scripts/agents.lib.sh" \
+cp "$ROOT/scripts/agents.kit.sh" "$ROOT/scripts/agents.lib.sh" "$ROOT/scripts/budget.lib.sh" \
 	"$ROOT/scripts/agent-dispatch.sh" "$ROOT/scripts/skill-dispatch.kit.sh" \
 	"$ROOT/scripts/trace.sh" "$ROOT/scripts/stamp.sh" "$ROOT/scripts/vocab.sh" \
 	"$ROOT/scripts/vocab.config.sh" "$STUBTREE/scripts/"

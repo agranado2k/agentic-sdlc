@@ -1609,7 +1609,7 @@ cat >/dev/null
 echo "CG=$(sed -n 's/^0:://p' /proc/self/cgroup)"
 echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)"
 echo "DATA=$(ulimit -d 2>/dev/null)"
-echo "WRAPPER_ENV=[${SCOPE_STARTED:-}${SCOPE_VERDICT:-}${AGENT_DISPATCH_SCOPE_CMD:-}]"
+echo "WRAPPER_ENV=[${_brun_record:-}${_brun_verdict:-}${_brun_unit:-}${_brun_props:-}${_brun_cmd:-}${_brun_wrap:-}]"
 echo "BUDGET=${AGENT_DISPATCH_BUDGET_TASKS:-}/${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-}"
 p=$PPID
 while [ "$p" -gt 1 ]; do
@@ -1908,6 +1908,21 @@ case "$T_OUT" in
 *"CG=$TEST_CG"*) pass "--no-budget runs the worker in the session's own cgroup — no scope opened" ;;
 *) fail "--no-budget opened a cgroup of its own: $(printf '%s' "$T_OUT" | grep CG=)" ;;
 esac
+
+# With no budget and no timeout the command template is eval'd in the
+# dispatcher's OWN shell, as it was before the Budget moved into its library
+# (#747): the template reads a variable the dispatcher holds and never
+# exported. A worker run through the library, or a `sh -c`, would not see it.
+CFG_PEEK="$SCRATCH/peek.config.sh"
+cat >"$CFG_PEEK" <<'EOF'
+AGENT_HARNESSES='peek'
+AGENT_HARNESS_PEEK_CMD='echo "TIER-SEEN=${TIER:-unset}" {model_flag} < {prompt_file}'
+AGENT_HARNESS_PEEK_MODEL_FLAG=''
+AGENT_TIER_IMPLEMENTER='peek:'
+EOF
+AGENTS_CONFIG="$CFG_PEEK" dispatch implementer --prompt 'x' --no-budget
+expect_status 0 "--no-budget with no timeout runs the worker"
+expect_out_has 'TIER-SEEN=implementer' "…in the dispatcher's own shell — its unexported variables reach the template"
 
 # NESTING (ADR-0006 clause 7): a dispatch that finds the budget in its
 # environment inherits it and OPENS NO SCOPE. A fake systemd-run on PATH records
@@ -2555,7 +2570,7 @@ expect_out_has "worker TRACE_RUN=" "…and the worker still ran"
 # resolver and nothing else dispatches exactly as it always did.
 LONELY="$SCRATCH/lonely"
 mkdir -p "$LONELY"
-cp "$KIT/scripts/agent-dispatch.sh" "$KIT/scripts/agents.lib.sh" "$LONELY/"
+cp "$KIT/scripts/agent-dispatch.sh" "$KIT/scripts/agents.lib.sh" "$KIT/scripts/budget.lib.sh" "$LONELY/"
 t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" sh "$LONELY/agent-dispatch.sh" implementer --prompt 'x'
 expect_status 0 "a dispatcher with no trace script beside it dispatches"
 expect_out_has "worker TRACE_RUN=" "…and the worker ran"

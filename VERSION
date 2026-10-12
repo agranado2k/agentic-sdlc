@@ -2741,7 +2741,40 @@
 # beside the minor; tests/agent-dispatch.test.sh and tests/skill-phase.test.sh
 # hold the worker run's shape and the nested lines.
 
-shared-layer: 0.70.1
+# 0.71.0 — the worker Budget lives in its own library (ticket #747, PRD
+# #742). ONE file JOINS the shared layer: scripts/budget.lib.sh, the kit's
+# ADR-0006 mechanism moved out of the dispatcher behind four sourced
+# functions that never exit their caller and set no variable it reads —
+# budget_derive prints the Budget as a key=value record, budget_run runs a
+# command under the record's rung and returns its status, budget_verdict
+# prints the ceiling a run hit (tasks, memory, or nothing), and
+# budget_inherited_bounds names an enclosing cgroup that already bounds the
+# caller. NO file leaves. ONE shared file changes content besides it:
+# scripts/agent-dispatch.sh sources the library from beside itself (exit 2,
+# naming it, when it is missing) and renders the record into the lines it
+# always printed — every dry-run budget line, every stderr note and the
+# exits 71 and 124 are byte-identical, and the kit's ADR-0006 inputs are
+# unchanged (the AGENT_BUDGET_* policy in your agents config, the outer
+# dispatch's AGENT_DISPATCH_BUDGET_* pair, the host's /proc and /sys). ONE
+# outcome is new, a fix that rides with the move: a scope that outlives the
+# wrapper inside it has its counters read from outside, so a ceiling hit
+# there exits 71 where the run's own status passed through with "the verdict
+# cannot be read". And budget_run refuses, returning 2, a record whose mode
+# or rung it does not know or whose derived ceilings are not whole numbers —
+# never reached by the dispatcher, whose record is budget_derive's own.
+# budget_inherited_bounds ships ahead of its caller, the test harness. Its
+# sourced layer stays until the test harness moves onto the library. And
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Nothing: no skill, template, workflow or policy file moves. A consumer
+# takes the library with the layer in Part 1; a copy of the dispatcher that
+# arrives without it beside it refuses to run.
+# Kit-only, never shipped: tests/budget-lib.test.sh (on bootstrap's KIT_ONLY
+# list) and its CI job, the four functions driven on a fake host; the three
+# suite fixtures that copy the dispatcher now copy the library beside it;
+# README names the library and the suite.
+
+shared-layer: 0.71.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -2763,6 +2796,7 @@ files:
   scripts/guards.lib.sh
   scripts/agents.lib.sh
   scripts/agent-dispatch.sh
+  scripts/budget.lib.sh
   scripts/manifest.lib.sh
   scripts/vocab.sh
   scripts/stamp.sh
