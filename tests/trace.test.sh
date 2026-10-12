@@ -2886,6 +2886,64 @@ printf '%s\n' "$T_OUT" | grep -q "^$RR_LIVE " && pass "and reading it did not re
 t_exec rr_run end "$RR_LIVE"
 expect_status 0 "end closes a stale run"
 expect_exit 1 "and that removes it" -- rr_run runs "$RR_LIVE"
+# ADR-0026 clause 4: an entry with no process id this host can ask about
+# reads `unknown` — another host's, or a pid that is missing or not digits.
+# Hand-written entries, so no process of this suite's stands behind them.
+# rr_entry <run> <pid> <host> — lands an entry the way trace_register shapes one.
+rr_entry() {
+	printf 'run=%s\nparent=\nsession=rr-h\ncheckout=%s\nopened=detached\npid=%s\nhost=%s\nstarted=2000-01-01T00:00:00Z\n' \
+		"$1" "$RR_TOP" "$2" "$3" >"$RR/runs/$1"
+}
+RR_FAR=20000103T000000Z-1-cccccccc
+RR_NOPID=20000104T000000Z-1-dddddddd
+RR_BADPID=20000105T000000Z-1-eeeeeeee
+rr_entry "$RR_FAR" "$$" rr-other-host
+rr_entry "$RR_NOPID" '' "$RR_HOST"
+rr_entry "$RR_BADPID" x "$RR_HOST"
+t_exec rr_run runs "$RR_FAR"
+expect_out_has "state=unknown" "an entry from another host reads unknown, even with a pid alive here"
+t_exec rr_run runs "$RR_NOPID"
+expect_out_has "state=unknown" "an entry with no pid reads unknown"
+t_exec rr_run runs "$RR_BADPID"
+expect_out_has "state=unknown" "an entry whose pid is not digits reads unknown"
+t_exec rr_run runs
+expect_out_has "$RR_FAR detached unknown " "and runs says unknown on its line"
+# ADR-0026 clause 3: runs lists the oldest run first — landed newest first here.
+RR_OLD=20000101T000000Z-1-aaaaaaaa
+RR_NEW=20000102T000000Z-1-bbbbbbbb
+rr_entry "$RR_NEW" '' "$RR_HOST"
+rr_entry "$RR_OLD" '' "$RR_HOST"
+# rr_first_two — the run ids of the first two lines runs prints.
+rr_first_two() { rr_run runs | cut -d' ' -f1 | sed -n '1,2p'; }
+t_exec rr_first_two
+expect_out_is "$RR_OLD
+$RR_NEW" "runs prints the oldest run first"
+for _rr_r in "$RR_FAR" "$RR_NOPID" "$RR_BADPID" "$RR_OLD" "$RR_NEW"; do rm -f "$RR/runs/$_rr_r"; done
+# ADR-0026 clause 3: an entry, or the registry, that exists and cannot be read
+# refuses with exit 2 — never read as absent.
+rr_entry "$RR_OLD" '' "$RR_HOST"
+chmod 000 "$RR/runs/$RR_OLD"
+if [ -r "$RR/runs/$RR_OLD" ]; then
+	echo "  skip  the unreadable-entry refusals: this user reads a mode-000 file"
+else
+	t_exec rr_run runs "$RR_OLD"
+	expect_status 2 "runs <id> refuses an entry it cannot read: exit 2"
+	expect_err_has "cannot be read" "naming the entry it could not read"
+	t_exec rr_run runs
+	expect_status 2 "and runs refuses the listing with it: exit 2"
+	expect_err_has "cannot be read" "naming it there too"
+fi
+chmod 644 "$RR/runs/$RR_OLD"
+rm -f "$RR/runs/$RR_OLD"
+chmod 000 "$RR/runs"
+if [ -r "$RR/runs" ]; then
+	echo "  skip  the unlistable-registry refusal: this user lists a mode-000 directory"
+else
+	t_exec rr_run runs
+	expect_status 2 "a registry that cannot be listed refuses: exit 2"
+	expect_err_has "cannot be listed" "naming the registry"
+fi
+chmod 755 "$RR/runs"
 # R9: unconfigured, begin --detached still prints a well-formed id and writes nothing.
 t_repo
 RR_OFF_REPO=$REPO
