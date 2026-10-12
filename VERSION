@@ -2785,7 +2785,8 @@
 # <run>` closing a detached run from any checkout or session; `runs` prints
 # one line per entry and `runs <id>` one entry's fields, exit 1 and nothing
 # for an id with no entry; a stack run on no run stack, or a detached run
-# whose process is gone from this host, reads `stale` and stays. Every call valid at 0.71.0 behaves as it did. And
+# whose process is gone from this host, reads `stale` and stays. Every call
+# valid at 0.71.0 behaves as it did. And
 # UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # Skills (9a): none. Wiring (9b): none. Templates (9c): none.

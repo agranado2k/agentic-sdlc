@@ -234,8 +234,8 @@ begun and not ended, under the trace directory's `runs/` — which `begin`
 adds to and `end` removes from. `begin --detached <skill>` mints a run,
 registers it and touches no run stack, and `end <run>` closes it from any
 checkout; `runs` lists the open runs and `runs <id>` prints one, a stack
-run on no run stack or a detached run whose process is gone reading `stale`. Every call valid at 0.71.0 behaves as
-it did. A trace directory you keep out of version control keeps `runs/` out
+run on no run stack or a detached run whose process is gone reading
+`stale`. Every call valid at 0.71.0 behaves as it did. A trace directory you keep out of version control keeps `runs/` out
 with it. Nothing for Part 2.
 
 **Arriving from 0.70.1 or older, the worker Budget lives in its own library.**
