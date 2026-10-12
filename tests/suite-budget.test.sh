@@ -213,6 +213,17 @@ stub sh "$NODISP/tests/green.sh"
 expect_status 0 "a suite whose kit root carries no dispatcher still runs through the test harness"
 expect_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…inside the budget the library derived, the marker unchanged"
 [ "$(starts)" = 2 ] && pass "…and its file ran exactly twice" || fail "the dispatcher-less stub ran $(starts) time(s) — expected 2"
+# And the library is the one file it cannot run without: a stub root whose
+# scripts/ lacks scripts/budget.lib.sh is refused out loud, naming the file,
+# exit 2 — the dispatcher's own answer — never a shell's bare `.` error.
+NOLIB="$SCRATCH/kit-nolib"
+mkdir -p "$NOLIB/tests" "$NOLIB/scripts"
+for f in "$KIT"/scripts/*; do [ "${f##*/}" = budget.lib.sh ] || ln -s "$f" "$NOLIB/scripts/${f##*/}"; done
+cp "$GREEN" "$NOLIB/tests/green.sh"
+stub sh "$NOLIB/tests/green.sh"
+expect_status 2 "a suite whose kit root carries no Budget library is refused, exit 2"
+expect_err_has "tests/lib.sh: cannot find budget.lib.sh in $NOLIB/scripts"
+expect_out_lacks "budget:" "…and the suite body never ran"
 # A suite's own status passes through the test harness untouched.
 stub STUB_EXIT=5 sh "$GREEN"
 expect_status 5 "a suite's own exit status passes through"

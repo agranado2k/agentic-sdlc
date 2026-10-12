@@ -203,6 +203,10 @@ off)
 	else
 		(
 			_budget_here="$T_ROOT/scripts"
+			[ -f "$_budget_here/budget.lib.sh" ] || {
+				_sb_note "x  tests/lib.sh: cannot find budget.lib.sh in $_budget_here — the suite cannot run inside the budget without it. Restore scripts/budget.lib.sh, or run with AGENT_SUITE_BUDGET=off."
+				exit 2
+			}
 			# shellcheck source=../scripts/budget.lib.sh
 			. "$T_ROOT/scripts/budget.lib.sh"
 			BUDGET_WHO=tests/lib.sh
