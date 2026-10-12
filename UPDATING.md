@@ -227,16 +227,25 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
-**Arriving from 0.70.x or older, every open run is registered by id.**
+**Arriving from 0.70.1 or older, every open run is registered by id.**
 No file joins or leaves at 0.71.0. One shared file changes content besides
 this recipe: `scripts/trace.sh` keeps an open-run registry — one file per run
 begun and not ended, under the trace directory's `runs/` — which `begin`
 adds to and `end` removes from. `begin --detached <skill>` mints a run,
 registers it and touches no run stack, and `end <run>` closes it from any
 checkout; `runs` lists the open runs and `runs <id>` prints one, an entry
-whose process is gone reading `stale`. Every call valid at 0.70.0 behaves as
+whose process is gone reading `stale`. Every call valid at 0.70.1 behaves as
 it did. A trace directory you keep out of version control keeps `runs/` out
 with it. Nothing for Part 2.
+
+**Arriving from 0.70.0 or older, a dispatched worker's run id has the trace's shape.**
+No file joins or leaves at 0.70.1, a patch. One shared file changes behaviour
+besides this recipe: `scripts/agent-dispatch.sh` mints a worker's run ending
+in eight hex characters, the shape the trace's own ids take, where it ended
+in the scratch directory's six-character suffix — which every reader that
+checks a run id refused, so a skill dispatch inside a dispatched worker
+dropped its `Trace-Run:` and `Trace-Spawn:` lines. Nothing to set, and
+nothing for Part 2: no skill, wiring or template moves.
 
 **Arriving from 0.69.0 or older, the trace answers "which run am I in?".**
 No file joins or leaves at 0.70.0. One shared file changes content besides

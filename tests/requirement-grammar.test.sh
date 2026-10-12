@@ -425,9 +425,9 @@ git -C "$PROJ" checkout -q -- AGENTS.md
 printf 'R1. one\n' >"$SCRATCH/cov.prd"
 printf 'Covers: R1\n' >"$SCRATCH/1"
 rm -f "$PROJ/$MODULE"
-t_run_split sh "$PROJ/scripts/coverage.sh" "$SCRATCH/cov.prd" "$SCRATCH/1"
-[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] && printf '%s' "$S_ERR" | grep -q 'requirement\.lib\.sh' &&
+t_exec sh "$PROJ/scripts/coverage.sh" "$SCRATCH/cov.prd" "$SCRATCH/1"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && printf '%s' "$T_ERR" | grep -q 'requirement\.lib\.sh' &&
 	pass "the coverage check without its grammar refuses (exit 2), says why, prints nothing" ||
-	fail "the coverage check without its grammar: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	fail "the coverage check without its grammar: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 
 t_done "requirement grammar"

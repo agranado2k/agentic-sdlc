@@ -71,10 +71,11 @@ pushes straight past both gates.
    to a document nothing asserts on is the one exemption, and it is narrow.
 3. **The shared layer is not yours to edit casually.** `VERSION` names the files
    copied verbatim into consumer projects. Changing one is a release action, not
-   an edit: bump the minor in `VERSION`, record what moved and how a consumer
-   takes it in `UPDATING.md`, and re-capture the pinned transcripts that
-   `tests/docs-demo.sh` quotes. If a ticket seems to require a shared-layer edit
-   and did not budget for that, stop and say so instead. The release is not
+   an edit: bump the minor in `VERSION` (a fix that adds nothing, the patch),
+   record what moved and how a consumer takes it in `UPDATING.md`, and
+   re-capture the pinned transcripts that `tests/docs-demo.sh` quotes. If a
+   ticket seems to require a shared-layer edit and did not budget for that,
+   stop and say so instead. The release is not
    landed until the bump's merge commit carries its `v<version>` tag — an
    untagged bump is a release no consumer can reach, and `self-host.test.sh` F3
    stays red on main until the tag exists. Release notes are written from the
