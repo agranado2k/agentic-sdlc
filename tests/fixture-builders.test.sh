@@ -189,35 +189,39 @@ probe=$(AGENT_SUITE_BUDGET=off sh -u -c '. "$0"; note "probe skip" >/dev/null; p
 	fail "a note under set -u did not complete with SKIPPED=1 — the lib leaves the counter unbound: '$probe'"
 
 # ---------------------------------------------------------------------------
-banner "The split-stream helpers can go red"
+banner "The two retired assertion families stay gone (#752)"
 # ---------------------------------------------------------------------------
-# Three suites lean on t_run_split and the s_assert_* family for every claim
-# they make. The suites only ever drive them green, so a helper that always
-# passed would pass every suite. Each is held to printing FAIL on a mismatch —
-# in a subshell, so the failures counted here are this section's own.
-t_run_split sh -c 'echo out; echo err >&2; exit 3'
-[ "$S_OUT" = "out" ] && [ "$S_ERR" = "err" ] && [ "$S_STATUS" = 3 ] &&
-	pass "t_run_split keeps stdout, stderr and status apart" ||
-	fail "t_run_split mixed its streams: out='$S_OUT' err='$S_ERR' status=$S_STATUS"
+# A merged family (t_run, LAST_*, assert_status, assert_out_*) and a split one
+# (t_run_split, S_*, s_assert_*) are deleted from the test harness; this scan
+# fails while any of their names is defined or called under tests/. Names are
+# spelled from fragments so this file does not trip its own scan, and comment
+# lines are skipped. The boundaries are bracket classes: POSIX ERE has no \b.
 red() { (failures=0; "$@" >/dev/null 2>&1; [ "$failures" = 1 ]); }
-red s_assert_resolved "not-out" x   && pass "s_assert_resolved fails on a wrong answer"      || fail "s_assert_resolved passed a wrong answer"
-red s_assert_out_is "not-out" x     && pass "s_assert_out_is fails on a wrong answer"        || fail "s_assert_out_is passed a wrong answer"
-red s_assert_status 0 x             && pass "s_assert_status fails on a wrong status"        || fail "s_assert_status passed a wrong status"
-red s_assert_out_has "absent" x     && pass "s_assert_out_has fails on a missing needle"     || fail "s_assert_out_has passed a missing needle"
-red s_assert_out_lacks "out" x      && pass "s_assert_out_lacks fails on a present needle"   || fail "s_assert_out_lacks passed a present needle"
-red s_assert_err_has "absent"       && pass "s_assert_err_has fails on a missing needle"     || fail "s_assert_err_has passed a missing needle"
-red s_assert_err_lacks "err"        && pass "s_assert_err_lacks fails on a present needle"   || fail "s_assert_err_lacks passed a present needle"
-
-# ---------------------------------------------------------------------------
-banner "The merged-family assertions can go red"
-# ---------------------------------------------------------------------------
-# assert_status and assert_out_* carry most suites' claims and, until the
-# migration to the expect_* family lands, nothing drove them red: an
-# assertion that always passed would pass every suite that leans on it.
-red assert_status 0 x -- sh -c 'exit 3' && pass "assert_status fails on a wrong status" || fail "assert_status passed a wrong status"
-t_run sh -c 'echo out; echo err >&2'
-red assert_out_has "absent"  && pass "assert_out_has fails on a missing needle"  || fail "assert_out_has passed a missing needle"
-red assert_out_lacks "err"   && pass "assert_out_lacks fails on a present needle" || fail "assert_out_lacks passed a present needle"
+_retired_pattern() {
+	_r="t_""run" _l="LAST""_" _s="S""_" _a="assert_" _w='[A-Za-z0-9_]'
+	printf '(^|[^A-Za-z0-9_])(%s|%s_split|%sOUT|%sSTATUS|%sOUT|%sERR|%sSTATUS|%sstatus|%sout_%s*|s_%s%s*)($|[^A-Za-z0-9_])' \
+		"$_r" "$_r" "$_l" "$_l" "$_s" "$_s" "$_s" "$_a" "$_a" "$_w" "$_a" "$_w"
+}
+# retired_names <tests-dir> — file:line for every non-comment line using one.
+retired_names() {
+	grep -rnE "$(_retired_pattern)" "$1" 2>/dev/null | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' | cut -d: -f1,2
+}
+_bait="$SCRATCH/752-retired"
+mkdir -p "$_bait"
+{
+	printf '%s_%s_%s sh -c true\n' t run split
+	printf '%s_%s() { :; }\n' assert out_has
+	printf 'echo "$%s_%s"\n' S OUT
+	printf '%s_%ss=1; expect_status 0 x; my_%s_%s=1\n' t run t run
+} >"$_bait/bait.test.sh"
+printf '# %s_%s mentioned in a comment only\n' t run >"$_bait/note.sh"
+_hit=$(retired_names "$_bait" | tr '\n' ' ')
+[ "$_hit" = "$_bait/bait.test.sh:1 $_bait/bait.test.sh:2 $_bait/bait.test.sh:3 " ] &&
+	pass "a planted call, definition and register are caught; a longer name and a comment are not" ||
+	fail "the scan missed the bait or flagged a non-use: '$_hit'"
+_hit=$(retired_names "$KIT/tests")
+[ -z "$_hit" ] && pass "no line under tests/ defines or calls a retired assertion name" ||
+	fail "retired names still used: $(echo $_hit)"
 
 # ---------------------------------------------------------------------------
 banner "The expect_* family: t_exec keeps three registers, every expect_* goes red and green"
@@ -302,14 +306,14 @@ shadowed_assertions() {
 			printf '%s\n' "$_assertion_names" | grep -qx -- "$_name" && printf '%s:%s\n' "${_file#"$1"/}" "$_name"
 		done
 }
-printf '%s\n' "$_assertion_names" | grep -qx expect_said && printf '%s\n' "$_assertion_names" | grep -qx assert_status &&
+printf '%s\n' "$_assertion_names" | grep -qx expect_said && printf '%s\n' "$_assertion_names" | grep -qx assert_file_has &&
 	pass "the scan reads both families' names out of tests/lib.sh" || fail "the scan read no assertion names: '$_assertion_names'"
 _bait="$SCRATCH/749-shadow"
 mkdir -p "$_bait/nested"
-printf '%s_%s() { :; }\n' assert out_lacks >"$_bait/nested/bait.test.sh"
+printf '%s_%s() { :; }\n' assert file_has >"$_bait/nested/bait.test.sh"
 printf '%s_%s() { :; }\n' expect said >"$_bait/lib.sh"
 _shadow=$(shadowed_assertions "$_bait")
-[ "$_shadow" = "nested/bait.test.sh:assert_out_lacks" ] &&
+[ "$_shadow" = "nested/bait.test.sh:assert_file_has" ] &&
 	pass "a planted redefinition is caught, lib.sh's own definitions are not" || fail "the scan missed the bait or flagged lib.sh: '$_shadow'"
 _shadow=$(shadowed_assertions "$KIT/tests")
 [ -z "$_shadow" ] && pass "no file under tests/ but the test harness defines an assertion" ||

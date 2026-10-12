@@ -18,8 +18,6 @@ failures=0
 # note() counts into SKIPPED; bound here so a suite under set -u that never
 # initialised it does not die at its first skip (#709, #716).
 SKIPPED=0
-LAST_OUT=""
-LAST_STATUS=0
 
 # Collation is the developer's, and the suites are full of `sort`s whose output
 # is compared against strings written in one order. Under en_US.UTF-8 a
@@ -303,102 +301,9 @@ off)
 	;;
 esac
 
-# --- the split-stream runner -------------------------------------------------
-# The resolver's and the dispatcher's whole contract is "the answer on stdout,
-# diagnostics on stderr", and a runner that merged the two could not tell a
-# warning from a model id. Three suites each carried their own copy of this
-# and its assertions, and the copies had drifted; agent-dispatch's
-# `assert_out_lacks` even shadowed the LAST_OUT one above under the same name
-# with different semantics. One copy, prefixed so it shadows nothing.
-#
-# t_run_split <cmd...> — run it with stdout and stderr kept apart.
-# Sets S_OUT, S_ERR and S_STATUS. Needs SCRATCH (t_init).
-t_run_split() {
-	_rs_err=$(mktemp "$SCRATCH/err.XXXXXX") || exit 2
-	S_OUT=$("$@" 2>"$_rs_err")
-	S_STATUS=$?
-	S_ERR=$(cat "$_rs_err")
-	rm -f "$_rs_err"
-}
-
-_s_dump() {
-	printf '%s\n' "$S_OUT" | sed 's/^/        > /'
-	printf '%s\n' "$S_ERR" | sed 's/^/        | /'
-}
-
-# s_assert_resolved <expected stdout> <label> — status 0 AND exactly that answer.
-s_assert_resolved() {
-	if [ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$1" ]; then
-		pass "$2"
-	else
-		fail "$2 — expected '$1', got status $S_STATUS, stdout '$S_OUT'"
-		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
-	fi
-}
-
-# s_assert_out_is <expected> <label> — exactly that stdout, whatever the status.
-s_assert_out_is() {
-	[ "$S_OUT" = "$1" ] && pass "$2" || fail "$2 — expected exactly '$1', got '$S_OUT'"
-}
-
-# s_assert_status <n> <label>
-s_assert_status() {
-	if [ "$S_STATUS" = "$1" ]; then
-		pass "$2"
-	else
-		fail "$2 — expected status $1, got $S_STATUS"
-		_s_dump
-	fi
-}
-
-# s_assert_out_has <needle> <label>
-s_assert_out_has() {
-	case "$S_OUT" in
-	*"$1"*) pass "$2" ;;
-	*)
-		fail "$2 — stdout lacks '$1'"
-		printf '%s\n' "$S_OUT" | sed 's/^/        > /'
-		;;
-	esac
-}
-
-# s_assert_out_lacks <needle> <label>
-s_assert_out_lacks() {
-	case "$S_OUT" in
-	*"$1"*)
-		fail "$2 — stdout should NOT contain '$1'"
-		printf '%s\n' "$S_OUT" | sed 's/^/        > /'
-		;;
-	*) pass "$2" ;;
-	esac
-}
-
-# s_assert_err_has <needle> / s_assert_err_lacks <needle> — the label is the
-# needle; diagnostics are what these assert on.
-s_assert_err_has() {
-	case "$S_ERR" in
-	*"$1"*) pass "stderr mentions '$1'" ;;
-	*)
-		fail "stderr does not mention '$1'"
-		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
-		;;
-	esac
-}
-s_assert_err_lacks() {
-	case "$S_ERR" in
-	*"$1"*)
-		fail "stderr should NOT mention '$1'"
-		printf '%s\n' "$S_ERR" | sed 's/^/        | /'
-		;;
-	*) pass "stderr does not mention '$1'" ;;
-	esac
-}
-
 # --- the expect_* family -----------------------------------------------------
-# The one assertion family every suite is migrating to (#749, #750, #751). It
-# sits beside the merged family (t_run / LAST_OUT / assert_status /
-# assert_out_*) and the split family (t_run_split / S_* / s_assert_*) under
-# names that collide with neither, so both can move across one suite at a time.
+# The one assertion family for a command's streams and status;
+# tests/fixture-builders.test.sh holds that the two it replaced stay deleted.
 #
 # t_exec <cmd...> — run it with stdout, stderr and the exit status kept apart,
 # in T_OUT, T_ERR and T_STATUS. Always returns 0. Needs SCRATCH (t_init).
@@ -709,14 +614,6 @@ t_commit() {
 
 t_short() { git -C "$1" rev-parse --short "${2:-HEAD}"; }
 
-# t_run <command...> — runs it, capturing combined output in LAST_OUT and the
-# exit status in LAST_STATUS. Never fails the script itself.
-t_run() {
-	LAST_OUT=$("$@" 2>&1)
-	LAST_STATUS=$?
-	return 0
-}
-
 # t_cpu_ms <command...> — the CPU milliseconds the command's children spent,
 # user plus system as the shell's `times` reports them, or "unmeasured". The
 # command runs in a subshell with both streams discarded. CPU time, never the
@@ -730,43 +627,9 @@ t_cpu_ms() {
 	printf "%d", t * 1000; seen = 1 } END { if (!seen) printf "unmeasured" }'
 }
 
-# assert_status <expected> <label> -- <command...>
-assert_status() {
-	_expected=$1
-	_label=$2
-	shift 3
-	t_run "$@"
-	if [ "$LAST_STATUS" = "$_expected" ]; then
-		pass "$_label (exit $LAST_STATUS)"
-	else
-		fail "$_label — expected exit $_expected, got $LAST_STATUS"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
-	fi
-}
-
 # assert_file <path> / assert_no_file <path> — the path exists, or is gone.
 assert_file() { [ -e "$1" ] && pass "$1 exists" || fail "$1 is missing"; }
 assert_no_file() { [ -e "$1" ] && fail "$1 still exists" || pass "$1 is gone"; }
-
-assert_out_has() {
-	case "$LAST_OUT" in
-	*"$1"*) pass "output mentions '$1'" ;;
-	*)
-		fail "output does not mention '$1'"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
-		;;
-	esac
-}
-
-assert_out_lacks() {
-	case "$LAST_OUT" in
-	*"$1"*)
-		fail "output should NOT mention '$1'"
-		printf '%s\n' "$LAST_OUT" | sed 's/^/        | /'
-		;;
-	*) pass "output does not mention '$1'" ;;
-	esac
-}
 
 # assert_file_has <file> <literal> [<why>]
 # assert_file_lacks <file> <literal> [<why>]
