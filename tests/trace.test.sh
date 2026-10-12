@@ -2622,72 +2622,72 @@ cu_run() {
 		exec sh scripts/trace.sh "$@"
 	)
 }
-cu_ask() { t_run_split cu_run "$@"; }
+cu_ask() { t_exec cu_run "$@"; }
 cu_ask TRACE_SESSION=cu-a current
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "current with no run open: exit 0, nothing on stdout" ||
-	fail "current, no run open: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "current with no run open: exit 0, nothing on stdout" ||
+	fail "current, no run open: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 CU_OUTER=$(cu_run TRACE_SESSION=cu-a begin implement 2>/dev/null)
 cu_ask TRACE_SESSION=cu-a current
-[ "$S_STATUS" = 0 ] && [ -n "$CU_OUTER" ] && [ "$S_OUT" = "$CU_OUTER" ] && [ -z "$S_ERR" ] &&
+[ "$T_STATUS" = 0 ] && [ -n "$CU_OUTER" ] && [ "$T_OUT" = "$CU_OUTER" ] && [ -z "$T_ERR" ] &&
 	pass "one run open: current prints that run, alone on its line, silent on stderr" ||
-	fail "current, one run: exit $S_STATUS, stdout '$S_OUT', want '$CU_OUTER'; stderr '$S_ERR'"
+	fail "current, one run: exit $T_STATUS, stdout '$T_OUT', want '$CU_OUTER'; stderr '$T_ERR'"
 CU_INNER=$(cu_run TRACE_SESSION=cu-a begin review-pr 2>/dev/null)
 cu_ask TRACE_SESSION=cu-a current
-[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$CU_INNER $CU_OUTER" ] &&
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$CU_INNER $CU_OUTER" ] &&
 	pass "a nested run: current prints '<run> <parent>' on one line" ||
-	fail "current, nested: stdout '$S_OUT', want '$CU_INNER $CU_OUTER'"
+	fail "current, nested: stdout '$T_OUT', want '$CU_INNER $CU_OUTER'"
 # The line current prints is the one an emit stamps: same run, same parent.
 cu_run TRACE_SESSION=cu-a emit kind=note outcome=probe-744 2>/dev/null
 _cu_line=$(grep '"probe-744"' "$CU/events/$TODAY.jsonl" | tail -1)
 case $_cu_line in *"\"run\":\"$CU_INNER\",\"parent\":\"$CU_OUTER\""*) pass "and an emit from the same session stamps exactly that run and parent" ;;
 *) fail "the emit stamped another identity than current printed: $_cu_line" ;; esac
 cu_ask TRACE_SESSION=cu-b current
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
 	pass "a second session in the same checkout sees none of the first one's runs" ||
-	fail "current, another session: stdout '$S_OUT'"
+	fail "current, another session: stdout '$T_OUT'"
 CU_B=$(cu_run TRACE_SESSION=cu-b begin retro 2>/dev/null)
 cu_ask TRACE_SESSION=cu-b current
-[ "$S_OUT" = "$CU_B" ] && pass "and its own begin is all it sees — no parent from the other session" ||
-	fail "current, session cu-b: stdout '$S_OUT', want '$CU_B'"
+[ "$T_OUT" = "$CU_B" ] && pass "and its own begin is all it sees — no parent from the other session" ||
+	fail "current, session cu-b: stdout '$T_OUT', want '$CU_B'"
 cu_ask TRACE_SESSION=cu-a current
-[ "$S_OUT" = "$CU_INNER $CU_OUTER" ] && pass "while the first session still sees only its own" ||
-	fail "current, session cu-a after cu-b began: stdout '$S_OUT'"
+[ "$T_OUT" = "$CU_INNER $CU_OUTER" ] && pass "while the first session still sees only its own" ||
+	fail "current, session cu-a after cu-b began: stdout '$T_OUT'"
 # The environment over the stack: a dispatched worker is told its run.
 CU_ENV=$(cu_run id)
 cu_ask TRACE_SESSION=cu-a TRACE_RUN="$CU_ENV" current
-[ "$S_STATUS" = 0 ] && [ "$S_OUT" = "$CU_ENV" ] &&
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$CU_ENV" ] &&
 	pass "TRACE_RUN in the environment wins over the stack, and the stack lends it no parent" ||
-	fail "current with TRACE_RUN: stdout '$S_OUT', want '$CU_ENV'"
+	fail "current with TRACE_RUN: stdout '$T_OUT', want '$CU_ENV'"
 cu_ask TRACE_SESSION=cu-a TRACE_RUN="$CU_ENV" TRACE_PARENT="$CU_B" current
-[ "$S_OUT" = "$CU_ENV $CU_B" ] && pass "TRACE_RUN and TRACE_PARENT together print as the run and its parent" ||
-	fail "current with TRACE_RUN and TRACE_PARENT: stdout '$S_OUT'"
+[ "$T_OUT" = "$CU_ENV $CU_B" ] && pass "TRACE_RUN and TRACE_PARENT together print as the run and its parent" ||
+	fail "current with TRACE_RUN and TRACE_PARENT: stdout '$T_OUT'"
 cu_ask TRACE_SESSION=cu-a TRACE_PARENT="$CU_B" current
-[ "$S_OUT" = "$CU_INNER $CU_B" ] && pass "TRACE_PARENT alone takes the parent and leaves the run to the stack" ||
-	fail "current with TRACE_PARENT alone: stdout '$S_OUT', want '$CU_INNER $CU_B'"
+[ "$T_OUT" = "$CU_INNER $CU_B" ] && pass "TRACE_PARENT alone takes the parent and leaves the run to the stack" ||
+	fail "current with TRACE_PARENT alone: stdout '$T_OUT', want '$CU_INNER $CU_B'"
 cu_ask TRACE_SESSION=cu-a TRACE_RUN= current
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] &&
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
 	pass "TRACE_RUN set empty is a caller saying it has no run: nothing, exit 0, never the stack's" ||
-	fail "current with TRACE_RUN empty: exit $S_STATUS, stdout '$S_OUT'"
+	fail "current with TRACE_RUN empty: exit $T_STATUS, stdout '$T_OUT'"
 cu_ask TRACE_SESSION=cu-a TRACE_RUN= TRACE_PARENT="$CU_B" current
-[ -z "$S_OUT" ] && pass "and a parent with no run prints nothing either" || fail "current with an empty run and a parent: stdout '$S_OUT'"
-t_run_split env -u TRACE_RUN TRACE_CONFIG="$OFF" TRACE_SESSION=cu-a sh "$CU_REPO/scripts/trace.sh" current
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "unconfigured, current prints nothing and exits 0" ||
-	fail "unconfigured current: exit $S_STATUS, stdout '$S_OUT'"
-t_run_split env TRACE_CONFIG="$OFF" TRACE_RUN="$CU_ENV" sh "$CU_REPO/scripts/trace.sh" current
-[ "$S_STATUS" = 0 ] && [ -z "$S_OUT" ] && pass "…even with TRACE_RUN in the environment: no trace, no identity" ||
-	fail "unconfigured current with TRACE_RUN: exit $S_STATUS, stdout '$S_OUT'"
+[ -z "$T_OUT" ] && pass "and a parent with no run prints nothing either" || fail "current with an empty run and a parent: stdout '$T_OUT'"
+t_exec env -u TRACE_RUN TRACE_CONFIG="$OFF" TRACE_SESSION=cu-a sh "$CU_REPO/scripts/trace.sh" current
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "unconfigured, current prints nothing and exits 0" ||
+	fail "unconfigured current: exit $T_STATUS, stdout '$T_OUT'"
+t_exec env TRACE_CONFIG="$OFF" TRACE_RUN="$CU_ENV" sh "$CU_REPO/scripts/trace.sh" current
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "…even with TRACE_RUN in the environment: no trace, no identity" ||
+	fail "unconfigured current with TRACE_RUN: exit $T_STATUS, stdout '$T_OUT'"
 _cu_n=$(wc -l <"$CU/events/$TODAY.jsonl" | tr -d ' ')
 cu_run TRACE_SESSION=cu-a current >/dev/null 2>&1
 [ "$(wc -l <"$CU/events/$TODAY.jsonl" | tr -d ' ')" = "$_cu_n" ] && pass "current writes no event" || fail "current appended to the event file"
-assert_status 2 "current takes no argument" -- env TRACE_CONFIG="$CUON" sh "$TRACE" current extra
+expect_exit 2 "current takes no argument" -- env TRACE_CONFIG="$CUON" sh "$TRACE" current extra
 CU_KEY=$(printf '%s' "$(git -C "$CU_REPO" rev-parse --show-toplevel)" | git hash-object --stdin)
 if [ "$(id -u)" != 0 ]; then
 	chmod 000 "$CU/current/$CU_KEY.cu-a.runs"
 	cu_ask TRACE_SESSION=cu-a current
 	chmod 600 "$CU/current/$CU_KEY.cu-a.runs"
-	[ "$S_STATUS" = 2 ] && [ -z "$S_OUT" ] &&
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
 		pass "a stack that exists and cannot be read refuses, exit 2 — never read as 'no run open'" ||
-		fail "current over an unreadable stack: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+		fail "current over an unreadable stack: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 else
 	echo "  skip  running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
 fi
@@ -2695,28 +2695,28 @@ fi
 _cu_n=$(wc -l <"$CU/events/$TODAY.jsonl" | tr -d ' ')
 _cu_stacks=$(ls "$CU/current" | sort)
 cu_ask TRACE_SESSION=cu-a id
-[ "$S_STATUS" = 0 ] && printf '%s\n' "$S_OUT" | grep -Eqx '[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}' && [ -z "$S_ERR" ] &&
+[ "$T_STATUS" = 0 ] && printf '%s\n' "$T_OUT" | grep -Eqx '[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}' && [ -z "$T_ERR" ] &&
 	pass "id prints one run id in the shape begin mints, silent on stderr" ||
-	fail "id: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
+	fail "id: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 [ "$(wc -l <"$CU/events/$TODAY.jsonl" | tr -d ' ')" = "$_cu_n" ] && [ "$(ls "$CU/current" | sort)" = "$_cu_stacks" ] &&
 	[ "$(cu_run TRACE_SESSION=cu-a current)" = "$CU_INNER $CU_OUTER" ] &&
 	pass "and writes nothing: no event, no stack touched, the open run unchanged" ||
 	fail "id wrote an event or touched a stack"
 [ "$(cu_run id)" != "$(cu_run id)" ] && pass "two ids are two ids" || fail "id printed the same id twice"
-t_run_split env TRACE_CONFIG="$OFF" sh "$TRACE" id
-[ "$S_STATUS" = 0 ] && [ -n "$S_OUT" ] && [ -z "$S_ERR" ] && pass "unconfigured, id still mints one — writing nothing, it needs no trace" ||
-	fail "unconfigured id: exit $S_STATUS, stdout '$S_OUT', stderr '$S_ERR'"
-assert_status 2 "id with an unknown argument is a usage error" -- sh "$TRACE" id --bogus
-assert_status 2 "id --check with no id is a usage error" -- sh "$TRACE" id --check
-assert_status 2 "id --check with two ids is a usage error" -- sh "$TRACE" id --check "$CU_ENV" "$CU_ENV"
+t_exec env TRACE_CONFIG="$OFF" sh "$TRACE" id
+[ "$T_STATUS" = 0 ] && [ -n "$T_OUT" ] && [ -z "$T_ERR" ] && pass "unconfigured, id still mints one — writing nothing, it needs no trace" ||
+	fail "unconfigured id: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
+expect_exit 2 "id with an unknown argument is a usage error" -- sh "$TRACE" id --bogus
+expect_exit 2 "id --check with no id is a usage error" -- sh "$TRACE" id --check
+expect_exit 2 "id --check with two ids is a usage error" -- sh "$TRACE" id --check "$CU_ENV" "$CU_ENV"
 for _cu_ok in "$CU_ENV" "$CU_OUTER" "$CU_B" 20261011T164034Z-1-00000000; do
-	assert_status 0 "id --check accepts $_cu_ok" -- sh "$TRACE" id --check "$_cu_ok"
+	expect_exit 0 "id --check accepts $_cu_ok" -- sh "$TRACE" id --check "$_cu_ok"
 done
 _cu_ts=20261011T164034Z
 while IFS='|' read -r _cu_bad _cu_why; do
-	t_run_split sh "$TRACE" id --check "$_cu_bad"
-	[ "$S_STATUS" = 1 ] && [ -z "$S_OUT" ] && pass "id --check refuses $_cu_why, exit 1" ||
-		fail "id --check on $_cu_why ('$_cu_bad'): exit $S_STATUS, stdout '$S_OUT'"
+	t_exec sh "$TRACE" id --check "$_cu_bad"
+	[ "$T_STATUS" = 1 ] && [ -z "$T_OUT" ] && pass "id --check refuses $_cu_why, exit 1" ||
+		fail "id --check on $_cu_why ('$_cu_bad'): exit $T_STATUS, stdout '$T_OUT'"
 done <<EOF
 $_cu_ts-361045-2b4b435|a seven-digit suffix
 $_cu_ts-361045-2b4b43500|a nine-digit suffix
@@ -2732,13 +2732,13 @@ $_cu_ts-36a045-2b4b4350|a pid that is not digits
 ${_cu_ts%Z}-361045-2b4b4350|no Z
 |an empty id
 EOF
-t_run_split sh "$TRACE" id --check "$CU_ENV
+t_exec sh "$TRACE" id --check "$CU_ENV
 $CU_ENV"
-[ "$S_STATUS" = 1 ] && pass "id --check refuses two ids on two lines, exit 1 — the id is the whole value" ||
-	fail "id --check on a two-line value: exit $S_STATUS"
-t_run_split sh "$TRACE"
-case $S_ERR in *'trace.sh current'*) pass "the usage names current" ;; *) fail "the usage does not name 'trace.sh current': $S_ERR" ;; esac
-case $S_ERR in *'trace.sh id [--check <id>]'*) pass "and id [--check <id>]" ;; *) fail "the usage does not name 'trace.sh id [--check <id>]': $S_ERR" ;; esac
+[ "$T_STATUS" = 1 ] && pass "id --check refuses two ids on two lines, exit 1 — the id is the whole value" ||
+	fail "id --check on a two-line value: exit $T_STATUS"
+t_exec sh "$TRACE"
+case $T_ERR in *'trace.sh current'*) pass "the usage names current" ;; *) fail "the usage does not name 'trace.sh current': $T_ERR" ;; esac
+case $T_ERR in *'trace.sh id [--check <id>]'*) pass "and id [--check <id>]" ;; *) fail "the usage does not name 'trace.sh id [--check <id>]': $T_ERR" ;; esac
 sed -n '2,24p' "$TRACE" | grep -qF 'sh scripts/trace.sh current' && sed -n '2,24p' "$TRACE" | grep -qF 'sh scripts/trace.sh id [--check <id>]' &&
 	pass "and so does the script's header" || fail "the header's command list does not name current and id [--check <id>]"
 grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF '`current`' && grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF '`id [--check <id>]`' &&
