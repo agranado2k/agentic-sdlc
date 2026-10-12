@@ -91,7 +91,7 @@ Chosen: **option 1.**
 - **Good**: one minter — the dispatcher and the cascade can move onto
   `begin --detached` (#746) and drop their recipes.
 - **Bad / trade-off**: `scripts/trace.sh` is shared layer, so the registry
-  ships in a release (0.71.0).
+  ships in a release (0.72.0).
 - **Bad / trade-off**: a run left open by a crashed process keeps its entry
   until somebody ends it; nothing sweeps.
 - **Honest limitation**: a caller whose shell is itself short-lived — an
