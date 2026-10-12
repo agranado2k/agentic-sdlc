@@ -133,8 +133,9 @@
 # run of a dispatched worker or a cascade, whose owner holds the id and ends it
 # with `end <run>` from wherever it stands; `end` removes the entry of the run
 # it closes. `runs` prints one line per entry, `runs <id>` one entry's fields.
-# An entry whose process is gone from this host reads `stale` and stays:
-# only `end` removes one. The registry answers "what is running now"; the
+# A stack run reads `stale` once it is on no run stack, a detached one once
+# its process is gone from this host; a stale entry stays: only `end` removes
+# one. The registry answers "what is running now"; the
 # event log stays the durable record.
 #
 # A BLOB IS A PAYLOAD THAT DOES NOT FIT ON A LINE — a prompt, a tool result,
@@ -1130,11 +1131,11 @@ trace_emit() {
 #
 # THE PROCESS is the one that called this script ($PPID): for a dispatcher's
 # `run=$(sh scripts/trace.sh begin --detached …)` that is the dispatcher, alive
-# for as long as its worker is. A caller whose shell is itself short-lived —
-# an agent harness's one-command shell — registers a process that is gone the
-# moment the command returns, so its entry reads `stale` while its run is
-# still open; stale is a report, never a verdict, which is why nothing but
-# `end` removes an entry (the kit's ADR-0026 records the limit).
+# for as long as its worker is. Only a DETACHED run's state is judged by it: a
+# stack run's comes from its run stack (trace_reg_state), since an agent
+# harness's one-command shell is gone the moment `begin` returns. Stale is a
+# report, never a verdict, which is why nothing but `end` removes an entry
+# (the kit's ADR-0026).
 
 # trace_register <run> <parent> <opened> — lands <run>'s entry. Needs
 # TRACE_ROOT_DIR, and trace_key and trace_identity already asked.
@@ -1166,12 +1167,34 @@ trace_unregister() {
 # trace_reg_field <entry file> <field> — the field's value, or nothing.
 trace_reg_field() { sed -n "s/^$2=//p" "$1" 2>/dev/null | sed -n '1p'; }
 
-# trace_reg_state <entry file> — `live` while the entry's process runs on this
-# host, `stale` once it is gone from this host, `unknown` for an entry from
-# another host or with no process id: no answer is better than a guess. A
-# process this user may not signal answers as gone; the registry is the
-# trace directory's, whose writers are this user.
+# trace_reg_state <entry file> — a STACK run's state is its stack's: `live`
+# while its id is on a run stack, `stale` once it is on none, `unknown` when a
+# stack that exists cannot be read — never judged by pid, because an agent
+# harness's one-command shell, the process a begin names, is gone the moment
+# the command returns while the run is still open. A run id is minted unique,
+# so the stack that holds it is its session's. A DETACHED run's state is its
+# process's: `live` while it runs on this host, `stale` once it is gone from
+# this host, `unknown` for an entry from another host or with no process id:
+# no answer is better than a guess. A process this user may not signal answers
+# as gone; the registry is the trace directory's, whose writers are this user.
 trace_reg_state() {
+	if [ "$(trace_reg_field "$1" opened)" = stack ]; then
+		_rs_run=${1##*/}
+		_rs_state=stale
+		_rs_set=$-
+		set +f
+		for _rs_stk in "$TRACE_ROOT_DIR"/current/*.runs; do
+			[ -f "$_rs_stk" ] || continue
+			if [ ! -r "$_rs_stk" ]; then
+				_rs_state=unknown
+				continue
+			fi
+			grep -qxF -- "$_rs_run" "$_rs_stk" 2>/dev/null && { _rs_state=live; break; }
+		done
+		case $_rs_set in *f*) set -f ;; esac
+		echo "$_rs_state"
+		return 0
+	fi
 	_rs_pid=$(trace_reg_field "$1" pid)
 	case $_rs_pid in '' | *[!0-9]*) echo unknown; return 0 ;; esac
 	[ "$(trace_reg_field "$1" host)" = "$(uname -n 2>/dev/null)" ] || { echo unknown; return 0; }

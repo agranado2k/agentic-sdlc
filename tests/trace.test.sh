@@ -2890,9 +2890,10 @@ expect_exit 1 "and that removes it" -- rr_run runs "$RR_LIVE"
 # reads `unknown` — another host's, or a pid that is missing or not digits.
 # Hand-written entries, so no process of this suite's stands behind them.
 # rr_entry <run> <pid> <host> — lands an entry the way trace_register shapes one.
+# A fourth argument names how it was opened; detached when left out.
 rr_entry() {
-	printf 'run=%s\nparent=\nsession=rr-h\ncheckout=%s\nopened=detached\npid=%s\nhost=%s\nstarted=2000-01-01T00:00:00Z\n' \
-		"$1" "$RR_TOP" "$2" "$3" >"$RR/runs/$1"
+	printf 'run=%s\nparent=\nsession=rr-h\ncheckout=%s\nopened=%s\npid=%s\nhost=%s\nstarted=2000-01-01T00:00:00Z\n' \
+		"$1" "$RR_TOP" "${4:-detached}" "$2" "$3" >"$RR/runs/$1"
 }
 RR_FAR=20000103T000000Z-1-cccccccc
 RR_NOPID=20000104T000000Z-1-dddddddd
@@ -2944,6 +2945,45 @@ else
 	expect_err_has "cannot be listed" "naming the registry"
 fi
 chmod 755 "$RR/runs"
+# ADR-0026 clause 4: a STACK run's state is its stack's, never a pid's. An
+# agent harness runs each command in a fresh shell, so the process a begin
+# names is gone when the command returns; the run is live while it is on its
+# session's stack. The begin below runs in a shell that has exited before
+# runs is asked, from another.
+RR_STK=$(rr_run TRACE_SESSION=rr-s begin implement 2>/dev/null)
+t_exec rr_run TRACE_SESSION=rr-t runs "$RR_STK"
+expect_out_has "opened=stack" "a stack run begun from a shell that has since exited"
+expect_out_has "state=live" "reads live from another shell while it is on its stack"
+t_exec rr_run runs
+expect_out_has "$RR_STK stack live " "and runs says live on its line"
+t_exec cat "$RR/current/$RR_KEY.rr-s.runs"
+expect_out_is "$RR_STK" "its session's stack holds the run"
+chmod 000 "$RR/current/$RR_KEY.rr-s.runs"
+if [ -r "$RR/current/$RR_KEY.rr-s.runs" ]; then
+	echo "  skip  the unreadable-stack state: this user reads a mode-000 file"
+else
+	t_exec rr_run runs "$RR_STK"
+	expect_out_has "state=unknown" "a stack run whose stack cannot be read reads unknown, never stale"
+fi
+chmod 644 "$RR/current/$RR_KEY.rr-s.runs"
+t_exec rr_run TRACE_SESSION=rr-s end "$RR_STK" outcome=ok
+expect_status 0 "end closes the stack run"
+expect_exit 1 "and removes its entry" -- rr_run runs "$RR_STK"
+# A stack entry whose run is on no stack reads stale, whatever its pid says.
+RR_OFFSTK=20000106T000000Z-1-ffffffff
+rr_entry "$RR_OFFSTK" "$$" "$RR_HOST" stack
+t_exec rr_run runs "$RR_OFFSTK"
+expect_out_has "state=stale" "a stack entry on no stack reads stale, even with a pid alive here"
+rm -f "$RR/runs/$RR_OFFSTK"
+# The pid judgement stays for a detached run: one whose process is dead reads stale.
+t_exec sh -c 'echo $$'
+RR_DEADPID=$T_OUT
+RR_DEAD=20000107T000000Z-1-abababab
+rr_entry "$RR_DEAD" "$RR_DEADPID" "$RR_HOST"
+t_exec rr_run runs "$RR_DEAD"
+expect_out_has "opened=detached" "a detached entry"
+expect_out_has "state=stale" "whose process has exited reads stale"
+rm -f "$RR/runs/$RR_DEAD"
 # R9: unconfigured, begin --detached still prints a well-formed id and writes nothing.
 t_repo
 RR_OFF_REPO=$REPO
