@@ -1609,7 +1609,7 @@ cat >/dev/null
 echo "CG=$(sed -n 's/^0:://p' /proc/self/cgroup)"
 echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)"
 echo "DATA=$(ulimit -d 2>/dev/null)"
-echo "WRAPPER_ENV=[${SCOPE_STARTED:-}${SCOPE_VERDICT:-}${AGENT_DISPATCH_SCOPE_CMD:-}]"
+echo "WRAPPER_ENV=[${_brun_record:-}${_brun_verdict:-}${_brun_unit:-}${_brun_props:-}${_brun_cmd:-}${_brun_wrap:-}]"
 echo "BUDGET=${AGENT_DISPATCH_BUDGET_TASKS:-}/${AGENT_DISPATCH_BUDGET_MEMORY_MIB:-}"
 p=$PPID
 while [ "$p" -gt 1 ]; do
