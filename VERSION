@@ -2740,6 +2740,7 @@
 # Kit-only, never shipped: the root manual's hard rule 3 names the patch
 # beside the minor; tests/agent-dispatch.test.sh and tests/skill-phase.test.sh
 # hold the worker run's shape and the nested lines.
+
 # 0.71.0 — the worker Budget lives in its own library (ticket #747, PRD
 # #742). ONE file JOINS the shared layer: scripts/budget.lib.sh, the kit's
 # ADR-0006 mechanism moved out of the dispatcher behind four sourced
@@ -2772,6 +2773,7 @@
 # list) and its CI job, the four functions driven on a fake host; the three
 # suite fixtures that copy the dispatcher now copy the library beside it;
 # README names the library and the suite.
+
 # 0.72.0 — every open run is registered by id (ticket #745, PRD #742).
 # NO file joins and NO file leaves the shared layer. TWO shared files change
 # content. scripts/trace.sh keeps an open-run registry, one file per run begun
