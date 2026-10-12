@@ -97,15 +97,16 @@ done
 # ---------------------------------------------------------------------------
 banner "B. First adopt run — safe set installs, five verdicts, exit 3, nothing of theirs moves"
 # ---------------------------------------------------------------------------
-assert_status 3 "adopt on a colliding tree exits 3 (partial: collisions pending)" -- \
+expect_exit 3 "adopt on a colliding tree exits 3 (partial: collisions pending)" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 
-ADOPT1_OUT="$LAST_OUT"
-assert_out_has "COLLISION shared scripts/check.sh relocate"
-assert_out_has "COLLISION manual AGENTS.md distill"
-assert_out_has "COLLISION skill .claude/skills/tdd rename-or-decline"
-assert_out_has "COLLISION workflow .github/workflows/docs-gate.yml chain"
-assert_out_has "COLLISION hook .githooks/pre-push chain"
+# Both streams: "nothing else COLLISION-shaped" is a claim about the whole run.
+ADOPT1_OUT=$(printf '%s\n%s\n' "$T_OUT" "$T_ERR")
+expect_said "COLLISION shared scripts/check.sh relocate"
+expect_said "COLLISION manual AGENTS.md distill"
+expect_said "COLLISION skill .claude/skills/tdd rename-or-decline"
+expect_said "COLLISION workflow .github/workflows/docs-gate.yml chain"
+expect_said "COLLISION hook .githooks/pre-push chain"
 
 # The line format is a machine contract: class and verb from closed sets, one
 # space, no prose. Five collisions, five conforming lines, nothing else
@@ -122,8 +123,8 @@ fi
 
 # Memory is kept, never a collision: a verdict must be resolvable, and "your
 # diary exists" never stops being true.
-assert_out_has "kept docs/diary.md"
-assert_out_lacks "COLLISION memory"
+expect_said "kept docs/diary.md"
+expect_unsaid "COLLISION memory"
 
 # The safe set landed.
 for f in VERSION scripts/guards.lib.sh constitution/shared-invariants.md \
@@ -168,9 +169,9 @@ done
 # ---------------------------------------------------------------------------
 banner "C. Idempotency — a second run changes nothing and reports the same pending set"
 # ---------------------------------------------------------------------------
-assert_status 3 "re-run still exits 3 with the collisions unresolved" -- \
+expect_exit 3 "re-run still exits 3 with the collisions unresolved" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-rerun_total=$(printf '%s\n' "$LAST_OUT" | grep -c '^COLLISION' || true)
+rerun_total=$(printf '%s\n%s\n' "$T_OUT" "$T_ERR" | grep -c '^COLLISION' || true)
 [ "$rerun_total" = 5 ] && pass "the same five collisions, no duplicates" ||
 	fail "re-run reported $rerun_total collisions, expected the same 5"
 cmp -s "$SCRATCH/theirs/docs/diary.md" "$TARGET/docs/diary.md" &&
@@ -190,9 +191,9 @@ banner "D. Resolutions applied (as the agent would, each human-approved) — the
 	mv .github/workflows/docs-gate.yml .github/workflows/legacy-gate.yml # chain
 	mv .githooks/pre-push .githooks/pre-push.local             # chain
 )
-assert_status 0 "after every resolution, adopt completes clean (exit 0)" -- \
+expect_exit 0 "after every resolution, adopt completes clean (exit 0)" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_lacks "COLLISION"
+expect_unsaid "COLLISION"
 
 assert_file_has "$TARGET/AGENTS.md" "$PROJECT_NAME" "the manual is stamped, at last"
 for shim in CLAUDE.md GEMINI.md; do
@@ -210,7 +211,7 @@ cmp -s "$SCRATCH/theirs/docs/diary.md" "$TARGET/docs/diary.md" &&
 assert_file_has "$TARGET/docs/legacy-agent-rules.md" "releases happen on Fridays" \
 	"their rules are still reachable where the resolution put them"
 
-assert_status 0 "the adopted repo's own gate is green" -- \
+expect_exit 0 "the adopted repo's own gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
 # The derived sweep over the finished adoption (#562): no `*.kit.*` name, no
 # file carrying the kit-own sentinel, no kit ADR or living spec.
@@ -225,14 +226,14 @@ banner "E. A collision-free repo adopts in ONE run — and dogfood's yes works t
 # ---------------------------------------------------------------------------
 mk_kitcopy
 mk_target
-assert_status 0 "a clean tree adopts fully, first run" -- \
+expect_exit 0 "a clean tree adopts fully, first run" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --with-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_lacks "COLLISION"
+expect_unsaid "COLLISION"
 # The trace question runs in this arm too (#654). Their repo has no ignore
 # file covering .trace/, so a yes is NOT written — a trace in a tracked tree is
 # one `git add -A` from being pushed — and the closing note says why it is off.
 assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "a yes with .trace/ unignored writes nothing"
-assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
+expect_said "The trace is OFF — .gitignore does not cover .trace/ yet"
 assert_file_has "$TARGET/AGENTS.md" "$PROJECT_NAME" "stamped in one pass"
 cmp -s "$SCRATCH/theirs/README.md" "$TARGET/README.md" &&
 	pass "their README is kept even on the clean path — an adopted repo keeps its front page" ||
@@ -250,7 +251,7 @@ cmp -s "$SCRATCH/theirs/README.md" "$TARGET/README.md" &&
 assert_file_has "$TARGET/scripts/docs-conformance/config.mjs" "docs/dogfood-reports/" \
 	"the exemption ships with the skill"
 assert_file_lacks "$TARGET/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" "markers consumed on the accept path too"
-assert_status 0 "the clean adoption's gate is green" -- \
+expect_exit 0 "the clean adoption's gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
 t_assert_no_kit_residue "$KITCOPY" "$TARGET" "a one-run adoption"
 
@@ -258,10 +259,10 @@ t_assert_no_kit_residue "$KITCOPY" "$TARGET" "a one-run adoption"
 mk_kitcopy
 mk_target
 printf '.trace/\n' >"$TARGET/.gitignore"
-assert_status 0 "a repo that ignores .trace/ adopts with --with-trace" -- \
+expect_exit 0 "a repo that ignores .trace/ adopts with --with-trace" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
 assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR='.trace'" "the adopt arm writes the trace directory on a yes"
-assert_out_has "The trace is ON"
+expect_said "The trace is ON"
 
 # …but only their own .gitignore counts: an ignore in .git/info/exclude (or a
 # global excludes file) holds on this machine alone, so the next clone would
@@ -269,10 +270,10 @@ assert_out_has "The trace is ON"
 mk_kitcopy
 mk_target
 printf '.trace/\n' >>"$TARGET/.git/info/exclude"
-assert_status 0 "a repo that ignores .trace/ only locally adopts with --with-trace" -- \
+expect_exit 0 "a repo that ignores .trace/ only locally adopts with --with-trace" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
 assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "an ignore outside the project's .gitignore writes nothing"
-assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
+expect_said "The trace is OFF — .gitignore does not cover .trace/ yet"
 
 # …and a .gitignore that lists .trace/ and then un-ignores it does not cover
 # it: git's verdict is the last matching line, never the first that mentions
@@ -280,29 +281,29 @@ assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
 mk_kitcopy
 mk_target
 printf '.trace/\n!.trace/\n' >"$TARGET/.gitignore"
-assert_status 0 "a repo that un-ignores .trace/ adopts with --with-trace" -- \
+expect_exit 0 "a repo that un-ignores .trace/ adopts with --with-trace" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --with-trace '$PROJECT_NAME' '$PROJECT_DESC'"
 assert_file_has "$TARGET/scripts/trace.config.sh" "TRACE_DIR=''" "a negated .trace/ line writes nothing"
-assert_out_has "The trace is OFF — .gitignore does not cover .trace/ yet"
+expect_said "The trace is OFF — .gitignore does not cover .trace/ yet"
 
 # The adopt arm's no: answered, and said as answered.
 mk_kitcopy
 mk_target
-assert_status 0 "the adopt arm takes --no-trace" -- \
+expect_exit 0 "the adopt arm takes --no-trace" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood --no-trace '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "The trace is OFF — you answered no"
+expect_said "The trace is OFF — you answered no"
 
 # ---------------------------------------------------------------------------
 banner "F. The contract refuses bad ground — and the format probe is not vacuous"
 # ---------------------------------------------------------------------------
 mk_kitcopy
 mk_target
-assert_status 1 "adopt without a project name dies with usage, not a half-adoption" -- \
+expect_exit 1 "adopt without a project name dies with usage, not a half-adoption" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood"
 [ -e "$TARGET/VERSION" ] && fail "a refused run still installed files" ||
 	pass "a refused run installs nothing"
 
-assert_status 1 "adopt from inside the kit clone itself is refused" -- \
+expect_exit 1 "adopt from inside the kit clone itself is refused" -- \
 	sh -c "cd '$KITCOPY' && git init -q -b main && sh bootstrap.sh --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 
 # The format probe above must be able to fail: a COLLISION line with prose
@@ -332,9 +333,9 @@ OUTSIDE=$(mktemp -d "$SCRATCH/outside.XXXXXX")
 mkdir -p "$TARGET/scripts"
 ln -s "$OUTSIDE/stolen.sh" "$TARGET/scripts/check.sh"
 git -C "$TARGET" add -A 2>/dev/null || true
-assert_status 3 "a dangling symlink at a shared path is a collision, not an install" -- \
+expect_exit 3 "a dangling symlink at a shared path is a collision, not an install" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "COLLISION shared scripts/check.sh relocate"
+expect_said "COLLISION shared scripts/check.sh relocate"
 [ -e "$OUTSIDE/stolen.sh" ] &&
 	fail "adopt wrote THROUGH their symlink to a path outside the repo" ||
 	pass "nothing landed outside the target — the link was never followed"
@@ -350,7 +351,7 @@ echo their tool
 "
 chmod 644 "$TARGET/scripts/theirs.sh"
 git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their tool"
-assert_status 0 "a clean tree with their own script adopts fully" -- \
+expect_exit 0 "a clean tree with their own script adopts fully" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 case "$(ls -l "$TARGET/scripts/theirs.sh")" in
 -rw-r--r--*) pass "their 644 script kept its mode through the clean exit" ;;
@@ -374,10 +375,10 @@ echo their commit hook
 "
 git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their commit hook"
 cp "$TARGET/.githooks/pre-commit" "$SCRATCH/their-pre-commit"
-t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-[ "$LAST_STATUS" = 3 ] && pass "their own pre-commit parks the adoption (exit 3)" ||
-	fail "expected exit 3 on their pre-commit, got $LAST_STATUS"
-assert_out_has "COLLISION hook .githooks/pre-commit chain"
+t_exec sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ "$T_STATUS" = 3 ] && pass "their own pre-commit parks the adoption (exit 3)" ||
+	fail "expected exit 3 on their pre-commit, got $T_STATUS"
+expect_said "COLLISION hook .githooks/pre-commit chain"
 cmp -s "$SCRATCH/their-pre-commit" "$TARGET/.githooks/pre-commit" &&
 	pass "theirs, byte-identical: .githooks/pre-commit" ||
 	fail "adopt touched their .githooks/pre-commit before any approval"
@@ -394,11 +395,11 @@ t_write "$TARGET" ".githooks/pre-push" "#!/bin/sh
 echo their hook
 "
 git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their hook"
-t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-[ "$LAST_STATUS" = 3 ] && pass "first run parks on the hook collision" || fail "expected exit 3, got $LAST_STATUS"
-t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --with-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "kept scripts/docs-conformance/config.mjs"
-case "$LAST_OUT" in
+t_exec sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ "$T_STATUS" = 3 ] && pass "first run parks on the hook collision" || fail "expected exit 3, got $T_STATUS"
+t_exec sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --with-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+expect_said "kept scripts/docs-conformance/config.mjs"
+case "$T_ERR" in
 *"docs/dogfood-reports/"*) pass "the flag flip names the exemption the kept config now lacks" ;;
 *) fail "the dogfood flag flipped against a kept config and nothing said so — a latent gate warning ships silently" ;;
 esac
@@ -426,9 +427,9 @@ for a_link in .claude/skills .agents/skills .claude .agents \
 	a_dir=$(dirname "$a_link")
 	[ "$a_dir" = "." ] || mkdir -p "$TARGET/$a_dir"
 	ln -s "$OUTSIDE" "$TARGET/$a_link"
-	assert_status 1 "a symlinked $a_link is a refusal, not a write-through" -- \
+	expect_exit 1 "a symlinked $a_link is a refusal, not a write-through" -- \
 		sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-	assert_out_has "is a symlink"
+	expect_said "is a symlink"
 	[ -z "$(ls -A "$OUTSIDE" 2>/dev/null)" ] &&
 		pass "nothing landed outside the target through the linked $a_link" ||
 		fail "adopt wrote through the symlinked $a_link into foreign ground"
@@ -447,9 +448,9 @@ for a_file in .claude .agents; do
 	mk_kitcopy
 	mk_target
 	printf 'not a directory\n' >"$TARGET/$a_file"
-	assert_status 1 "a regular file at $a_file is refused up front" -- \
+	expect_exit 1 "a regular file at $a_file is refused up front" -- \
 		sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-	assert_out_has "is a file, not a directory"
+	expect_said "is a file, not a directory"
 	[ -f "$TARGET/$a_file" ] &&
 		pass "the file at $a_file is untouched by the refusal" ||
 		fail "adopt replaced or removed the regular file at $a_file"
@@ -461,9 +462,9 @@ done
 mk_kitcopy
 mk_target
 ln -s ../nowhere-at-all "$TARGET/docs"
-assert_status 1 "a dangling parent link is refused too" -- \
+expect_exit 1 "a dangling parent link is refused too" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "does not resolve inside this repository"
+expect_said "does not resolve inside this repository"
 [ -e "$TARGET/../nowhere-at-all" ] &&
 	fail "adopt created the dangling link's destination outside the repo" ||
 	pass "the dangling link's destination was never created"
@@ -476,7 +477,7 @@ mk_target
 mkdir -p "$TARGET/documentation"
 rm -rf "$TARGET/docs"
 ln -s documentation "$TARGET/docs"
-assert_status 0 "a parent linked INSIDE the repo is adopted, not refused" -- \
+expect_exit 0 "a parent linked INSIDE the repo is adopted, not refused" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 [ -f "$TARGET/documentation/diary.md" ] &&
 	pass "the files landed inside the repo, through the link" ||
@@ -489,7 +490,7 @@ mk_kitcopy
 mk_target
 mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude"
 ln -s ../.agents/skills "$TARGET/.claude/skills"
-assert_status 0 "a directory-level skills bridge adopts clean" -- \
+expect_exit 0 "a directory-level skills bridge adopts clean" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 [ -f "$TARGET/.agents/skills/tdd/SKILL.md" ] &&
 	pass "skills installed at the canonical home under a directory-level bridge" ||
@@ -497,7 +498,7 @@ assert_status 0 "a directory-level skills bridge adopts clean" -- \
 [ -L "$TARGET/.agents/skills/tdd" ] &&
 	fail "a self-referential per-skill link was laid inside the shared home" ||
 	pass "no self-referential per-skill link was laid — the alias IS the bridge"
-assert_status 0 "the directory-bridged tree's gate is green" -- \
+expect_exit 0 "the directory-bridged tree's gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
 
 # A bridge that is CORRECT but spelled differently — an absolute path to the
@@ -511,11 +512,10 @@ mk_target
 mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude/skills"
 cp -R "$KITCOPY/.agents/skills/tdd" "$TARGET/.agents/skills/tdd"
 ln -s "$TARGET/.agents/skills/tdd" "$TARGET/.claude/skills/tdd"
-assert_status 0 "an absolutely-spelled bridge to the same target adopts clean" -- \
+expect_exit 0 "an absolutely-spelled bridge to the same target adopts clean" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-printf '%s\n' "$LAST_OUT" | grep -q 'COLLISION skill .claude/skills/tdd' &&
-	fail "an equivalent bridge was reported as a collision — the check is comparing spelling, not destination" ||
-	pass "an equivalent bridge is recognised as ours, whatever its spelling"
+# A collision here means the check compared spelling, not destination.
+expect_unsaid 'COLLISION skill .claude/skills/tdd' "an equivalent bridge is recognised as ours, whatever its spelling"
 
 # …including one laid BEFORE its canonical skill exists, which is the state
 # the relative spelling is already forgiven in: the leaf dangles, the parent
@@ -524,7 +524,7 @@ mk_kitcopy
 mk_target
 mkdir -p "$TARGET/.agents/skills" "$TARGET/.claude/skills"
 ln -s "$TARGET/.agents/skills/prototype" "$TARGET/.claude/skills/prototype"
-assert_status 0 "an absolutely-spelled bridge laid ahead of its skill adopts clean" -- \
+expect_exit 0 "an absolutely-spelled bridge laid ahead of its skill adopts clean" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 [ -f "$TARGET/.agents/skills/prototype/SKILL.md" ] &&
 	pass "the canonical skill was installed under the pre-laid bridge" ||
@@ -541,9 +541,9 @@ mk_target
 mkdir -p "$TARGET/.claude/skills" "$TARGET/their-skills/tdd"
 printf '# theirs\n' >"$TARGET/their-skills/tdd/SKILL.md"
 ln -s ../../their-skills/tdd "$TARGET/.claude/skills/tdd"
-assert_status 3 "a resolvable link to a DIFFERENT home is still a collision" -- \
+expect_exit 3 "a resolvable link to a DIFFERENT home is still a collision" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "COLLISION skill .claude/skills/tdd"
+expect_said "COLLISION skill .claude/skills/tdd"
 
 # Right home, wrong leaf — /tdd pointing at the prototype skill. The
 # destination check passes; only the leaf name catches it.
@@ -551,9 +551,9 @@ mk_kitcopy
 mk_target
 mkdir -p "$TARGET/.claude/skills" "$TARGET/.agents/skills"
 ln -s ../../.agents/skills/prototype "$TARGET/.claude/skills/tdd"
-assert_status 3 "a link into the canonical home under the WRONG name is a collision" -- \
+expect_exit 3 "a link into the canonical home under the WRONG name is a collision" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "COLLISION skill .claude/skills/tdd"
+expect_said "COLLISION skill .claude/skills/tdd"
 
 # M-1: a pre-existing symlink at a bridge slot that is NOT our bridge (foreign
 # target, or dangling) is a non-identical occupant — a COLLISION, never a
@@ -562,9 +562,9 @@ mk_kitcopy
 mk_target
 mkdir -p "$TARGET/.claude/skills"
 ln -s /nonexistent/evil "$TARGET/.claude/skills/tdd"
-assert_status 3 "a foreign symlink at a bridge slot is a collision" -- \
+expect_exit 3 "a foreign symlink at a bridge slot is a collision" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "COLLISION skill .claude/skills/tdd rename-or-decline"
+expect_said "COLLISION skill .claude/skills/tdd rename-or-decline"
 [ -e "$TARGET/.agents/skills/tdd" ] &&
 	fail "canonical /tdd was installed despite the unresolved bridge collision" ||
 	pass "canonical /tdd held back until the bridge collision is resolved"
@@ -577,7 +577,7 @@ mk_target
 mkdir -p "$TARGET/.agents/skills"
 cp -R "$KITCOPY/.agents/skills/tdd" "$TARGET/.agents/skills/tdd"
 git -C "$TARGET" add -A 2>/dev/null || true
-assert_status 0 "an identical canonical skill without its bridge adopts clean" -- \
+expect_exit 0 "an identical canonical skill without its bridge adopts clean" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 [ -L "$TARGET/.claude/skills/tdd" ] && [ -f "$TARGET/.claude/skills/tdd/SKILL.md" ] &&
 	pass "the missing bridge was repaired on the clean path" ||
@@ -589,9 +589,9 @@ mk_kitcopy
 mk_target
 mkdir -p "$TARGET/.agents/skills"
 ln -s /nonexistent/licence "$TARGET/.agents/skills/LICENSE-mattpocock-skills.md"
-assert_status 3 "a dangling canonical licence is a collision, not a clean exit" -- \
+expect_exit 3 "a dangling canonical licence is a collision, not a clean exit" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-assert_out_has "COLLISION skill .agents/skills/LICENSE-mattpocock-skills.md"
+expect_said "COLLISION skill .agents/skills/LICENSE-mattpocock-skills.md"
 
 # L-2: the licence file gets the same bridge the skills do.
 [ -L "$TARGET/.claude/skills/LICENSE-mattpocock-skills.md" ] &&
@@ -661,31 +661,31 @@ arm_env() {
 	(cd "$TARGET" && sh "$SCRATCH/arm.run")
 }
 
-t_run arm_env "$SCRATCH/arm.branch" "$SCRATCH/arm.adopt"
-[ "$LAST_STATUS" = 3 ] && pass "the doc's own branch + adopt fences reach exit 3 on a colliding tree" ||
-	fail "the doc's fences exited $LAST_STATUS, expected 3"
-assert_out_has "COLLISION manual AGENTS.md distill"
+t_exec arm_env "$SCRATCH/arm.branch" "$SCRATCH/arm.adopt"
+[ "$T_STATUS" = 3 ] && pass "the doc's own branch + adopt fences reach exit 3 on a colliding tree" ||
+	fail "the doc's fences exited $T_STATUS, expected 3"
+expect_said "COLLISION manual AGENTS.md distill"
 [ "$(git -C "$TARGET" branch --show-current)" = "chore/adopt-kit" ] &&
 	pass "adoption runs on the dedicated branch the doc creates" ||
 	fail "the branch fence did not land on the adoption branch"
 
-t_run arm_env "$SCRATCH/arm.commit"
-[ "$LAST_STATUS" = 0 ] && pass "the doc's commit fence records the safe set" ||
-	fail "the commit fence failed: $LAST_OUT"
+t_exec arm_env "$SCRATCH/arm.commit"
+[ "$T_STATUS" = 0 ] && pass "the doc's commit fence records the safe set" ||
+	fail "the commit fence failed: $T_OUT"
 
 (cd "$TARGET" && mv AGENTS.md docs-legacy-rules.md && mv .githooks/pre-push .githooks/pre-push.local)
-t_run arm_env "$SCRATCH/arm.adopt"
-[ "$LAST_STATUS" = 0 ] && pass "the same adopt fence flips to 0 once the doors are resolved" ||
-	fail "the re-run fence exited $LAST_STATUS, expected 0"
-t_run arm_env "$SCRATCH/arm.finish"
-[ "$LAST_STATUS" = 0 ] && pass "the doc's finishing-run commit fence records the clean exit's output" ||
-	fail "the finishing commit fence failed: $LAST_OUT"
+t_exec arm_env "$SCRATCH/arm.adopt"
+[ "$T_STATUS" = 0 ] && pass "the same adopt fence flips to 0 once the doors are resolved" ||
+	fail "the re-run fence exited $T_STATUS, expected 0"
+t_exec arm_env "$SCRATCH/arm.finish"
+[ "$T_STATUS" = 0 ] && pass "the doc's finishing-run commit fence records the clean exit's output" ||
+	fail "the finishing commit fence failed: $T_OUT"
 git -C "$TARGET" diff --quiet && git -C "$TARGET" diff --cached --quiet &&
 	pass "nothing uncommitted after the finishing commit — the branch is one reviewable unit" ||
 	fail "the finishing run's output sits uncommitted after E3"
-t_run arm_env "$SCRATCH/arm.gate"
-[ "$LAST_STATUS" = 0 ] && pass "the doc-driven adoption ends at a green gate (E4's own fence)" ||
-	fail "E4's gate fence exited $LAST_STATUS"
+t_exec arm_env "$SCRATCH/arm.gate"
+[ "$T_STATUS" = 0 ] && pass "the doc-driven adoption ends at a green gate (E4's own fence)" ||
+	fail "E4's gate fence exited $T_STATUS"
 [ "$(git -C "$TARGET" remote | wc -l | tr -d ' ')" = "0" ] &&
 	pass "no remote was added and nothing was pushed — propose-only held" ||
 	fail "the doc-driven flow touched a remote"
@@ -703,11 +703,11 @@ mk_target
 t_write "$TARGET" ".claude/skills/prototype/SKILL.md" "their own spike skill
 "
 git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "feat: their skill"
-t_run sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-[ "$LAST_STATUS" = 3 ] && pass "their same-name skill parks the run" || fail "expected exit 3, got $LAST_STATUS"
-assert_out_has "COLLISION skill .claude/skills/prototype rename-or-decline"
+t_exec sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+[ "$T_STATUS" = 3 ] && pass "their same-name skill parks the run" || fail "expected exit 3, got $T_STATUS"
+expect_said "COLLISION skill .claude/skills/prototype rename-or-decline"
 (cd "$TARGET" && mv .claude/skills/prototype .claude/skills/their-prototype-hold)
-assert_status 0 "renamed for the duration, the run finishes clean" -- \
+expect_exit 0 "renamed for the duration, the run finishes clean" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 (
 	cd "$TARGET" || exit 2
@@ -715,7 +715,7 @@ assert_status 0 "renamed for the duration, the run finishes clean" -- \
 	mv .claude/skills/their-prototype-hold .claude/skills/prototype
 	grep -v '/prototype' AGENTS.md >AGENTS.md.decline && mv AGENTS.md.decline AGENTS.md
 )
-assert_status 0 "after the swap-back, the gate is green — their skill stands in at the name" -- \
+expect_exit 0 "after the swap-back, the gate is green — their skill stands in at the name" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
 
 t_done "adopt demo"

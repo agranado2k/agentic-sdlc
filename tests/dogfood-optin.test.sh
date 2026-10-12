@@ -119,7 +119,7 @@ assert_file_has "bootstrap.sh" "--no-dogfood" "the non-interactive no"
 banner "3. bootstrap --with-dogfood — the skill lands and the manual names it"
 # ---------------------------------------------------------------------------
 mk_project with
-assert_status 0 "bootstrap --with-dogfood runs" -- \
+expect_exit 0 "bootstrap --with-dogfood runs" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --with-dogfood 'Demo With' 'A project that has a surface.' </dev/null"
 
 assert_exists "$PROJ/$SKILL" "the skill survived bootstrap"
@@ -137,14 +137,14 @@ assert_file_lacks "$PROJ/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" \
 	"the policy file's stamp-time markers are consumed, not shipped"
 assert_file_lacks "$PROJ/scripts/docs-conformance/config.mjs" "DOGFOOD:END" \
 	"the policy file's stamp-time markers are consumed, not shipped"
-assert_status 0 "the docs gate is green with the skill included" -- \
+expect_exit 0 "the docs gate is green with the skill included" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
 # ---------------------------------------------------------------------------
 banner "4. bootstrap --no-dogfood — nothing dangles, and the validator proves it"
 # ---------------------------------------------------------------------------
 mk_project without
-assert_status 0 "bootstrap --no-dogfood runs" -- \
+expect_exit 0 "bootstrap --no-dogfood runs" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood 'Demo Without' 'A project with no surface yet.' </dev/null"
 
 assert_absent "$PROJ/.claude/skills/dogfood" "the skill directory is removed, like any kit-only file"
@@ -168,7 +168,7 @@ if grep -qF -- 'Adopting `/dogfood` later' "$PROJ/UPDATING.md" 2>/dev/null; then
 else
 	fail "UPDATING.md does not explain how to adopt /dogfood after declining it"
 fi
-assert_status 0 "the docs gate is green with the skill skipped" -- \
+expect_exit 0 "the docs gate is green with the skill skipped" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
 # RED — the claim above is "no DANGLING reference", and a grep alone cannot
@@ -177,10 +177,10 @@ assert_status 0 "the docs gate is green with the skill skipped" -- \
 # never failed is a claim).
 if [ "$HAVE_NODE" = 1 ]; then
 	printf '\nRun `/dogfood` before handing the branch over.\n' >>"$PROJ/AGENTS.md"
-	assert_status 1 "check.sh rejects a planted /dogfood row in the skipped tree" -- \
+	expect_exit 1 "check.sh rejects a planted /dogfood row in the skipped tree" -- \
 		sh -c "cd '$PROJ' && sh scripts/check.sh"
-	assert_out_has "skill-missing"
-	assert_out_has "/dogfood"
+	expect_said "skill-missing"
+	expect_said "/dogfood"
 else
 	printf '  skip  planted-reference detection (no node — command resolution needs the harness)\n'
 fi
@@ -191,17 +191,17 @@ banner "5. No flag and no terminal — the default is skip"
 # A non-interactive bootstrap cannot ask, and the safe answer is the one that
 # leaves a project without a runnable surface holding no command it cannot run.
 mk_project default
-assert_status 0 "bootstrap with no dogfood flag and no tty runs" -- \
+expect_exit 0 "bootstrap with no dogfood flag and no tty runs" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh 'Demo Default' 'No terminal to ask on.' </dev/null"
 assert_absent "$PROJ/.claude/skills/dogfood" "non-TTY default is skip"
-assert_status 0 "the docs gate is green after the defaulted run" -- \
+expect_exit 0 "the docs gate is green after the defaulted run" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
 # ---------------------------------------------------------------------------
 banner "6. A typo'd flag is refused, not silently treated as a project name"
 # ---------------------------------------------------------------------------
 mk_project typo
-assert_status 1 "an unknown option exits rather than stamping a manual named '--with-dogfod'" -- \
+expect_exit 1 "an unknown option exits rather than stamping a manual named '--with-dogfod'" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --with-dogfod 'Demo Typo' </dev/null"
 assert_absent "$PROJ/AGENTS.md" "nothing was stamped"
 
@@ -217,10 +217,10 @@ for marked in "constitution/AGENTS.md.template" "scripts/docs-conformance/config
 	mk_project "lone-$(basename "$marked")"
 	awk '/DOGFOOD:END/ && !dropped { dropped = 1; next } { print }' "$PROJ/$marked" >"$PROJ/$marked.tmp" &&
 		mv "$PROJ/$marked.tmp" "$PROJ/$marked"
-	assert_status 1 "bootstrap refuses a lone DOGFOOD marker in $marked" -- \
+	expect_exit 1 "bootstrap refuses a lone DOGFOOD marker in $marked" -- \
 		sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood 'Demo Lone' 'One marker short.' </dev/null"
-	assert_out_has "$marked"
-	assert_out_has "broken DOGFOOD marker pair"
+	expect_said "$marked"
+	expect_said "broken DOGFOOD marker pair"
 	assert_absent "$PROJ/AGENTS.md" "nothing was stamped before the refusal ($marked)"
 	assert_exists "$PROJ/.agents/skills/dogfood/SKILL.md" "nothing was removed before the refusal ($marked)"
 done
@@ -229,18 +229,18 @@ done
 mk_project swapped
 awk '/DOGFOOD:BEGIN/ { sub(/BEGIN/, "END"); print; next } /DOGFOOD:END/ { sub(/END/, "BEGIN"); print; next } { print }' \
 	"$PROJ/scripts/docs-conformance/config.mjs" >"$PROJ/cfg.tmp" && mv "$PROJ/cfg.tmp" "$PROJ/scripts/docs-conformance/config.mjs"
-assert_status 1 "bootstrap refuses an END before its BEGIN" -- \
+expect_exit 1 "bootstrap refuses an END before its BEGIN" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood 'Demo Swapped' 'Out of order.' </dev/null"
-assert_out_has "scripts/docs-conformance/config.mjs"
-assert_out_has "with no BEGIN before it"
+expect_said "scripts/docs-conformance/config.mjs"
+expect_said "with no BEGIN before it"
 assert_absent "$PROJ/AGENTS.md" "nothing was stamped before the refusal (swapped pair)"
 assert_exists "$PROJ/constitution/AGENTS.md.template" "the template was not consumed (swapped pair)"
 # A project NAME carrying a marker token would write a marker into the
 # stamped manual, past the preflight; it is refused where '{{' is.
 mk_project marked-name
-assert_status 1 "a project name carrying a marker token is refused" -- \
+expect_exit 1 "a project name carrying a marker token is refused" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh --no-dogfood '<!-- DOGFOOD:END -->' 'A name with a marker in it.' </dev/null"
-assert_out_has "must not contain a DOGFOOD marker"
+expect_said "must not contain a DOGFOOD marker"
 assert_absent "$PROJ/AGENTS.md" "nothing was stamped before the refusal (marked name)"
 assert_exists "$PROJ/constitution/AGENTS.md.template" "the template was not consumed (marked name)"
 

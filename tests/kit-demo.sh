@@ -132,14 +132,14 @@ banner "1. RED — the gate fails on a tree with no manual of its own"
 for kit_own in AGENTS.md CLAUDE.md GEMINI.md; do
 	mv "$kit_own" "$SCRATCH/$kit_own.kit"
 done
-assert_status 1 "check.sh rejects a tree with no root manual" -- sh scripts/check.sh
-assert_out_has "root-manual-missing"
+expect_exit 1 "check.sh rejects a tree with no root manual" -- sh scripts/check.sh
+expect_said "root-manual-missing"
 for kit_own in AGENTS.md CLAUDE.md GEMINI.md; do
 	mv "$SCRATCH/$kit_own.kit" "$kit_own"
 done
 # And back to where "Use this template" leaves you: the kit's own layer present,
 # and bootstrap yet to run.
-assert_status 0 "the kit's own manual layer passes the kit's own gate" -- sh scripts/check.sh
+expect_exit 0 "the kit's own manual layer passes the kit's own gate" -- sh scripts/check.sh
 
 # ---------------------------------------------------------------------------
 banner "2. GREEN — bootstrap, then the gate"
@@ -155,8 +155,8 @@ banner "2. GREEN — bootstrap, then the gate"
 # `sh tests/dogfood-optin.test.sh` runs bootstrap three ways and holds each
 # result to the same gate. The flag is also what keeps this script
 # non-interactive — without it, bootstrap would ask a question on a terminal.
-assert_status 0 "bootstrap.sh runs" -- sh bootstrap.sh --with-dogfood "$PROJECT_NAME" "A throwaway project proving the kit walks."
-printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
+expect_exit 0 "bootstrap.sh runs" -- sh bootstrap.sh --with-dogfood "$PROJECT_NAME" "A throwaway project proving the kit walks."
+printf '%s\n' "$T_OUT" | sed 's/^/      > /'
 
 assert_file "AGENTS.md"
 assert_no_file "constitution/AGENTS.md.template"
@@ -180,13 +180,13 @@ assert_no_file "scripts/docs-conformance/local-vocabulary.mjs.template"
 # must carry the labeled anchor a consumer fills — a tool plus its on-demand
 # command, or an explicit "none" with the reason. A blank an agent can
 # honestly fill with silence is how a real consumer shipped without one.
-printf '%s\n' "$LAST_OUT" | grep -qi 'mutation decision' &&
+printf '%s\n' "$T_OUT" | grep -qi 'mutation decision' &&
 	pass "bootstrap's Next: output names the mutation decision" ||
 	fail "bootstrap's Next: output never names the mutation decision (issue #85)"
 # The design brief (PRD #107, ticket #113): the same list names the other
 # day-one decision, so the shape of the system is chosen out loud before the
 # first feature diff chooses it by accident.
-printf '%s\n' "$LAST_OUT" | grep -qi 'design brief' &&
+printf '%s\n' "$T_OUT" | grep -qi 'design brief' &&
 	pass "bootstrap's Next: output names the design brief" ||
 	fail "bootstrap's Next: output never names the design brief (ticket #113)"
 grep -q '^\*\*Mutation decision\*\*:' constitution/local-engineering.md.template &&
@@ -235,14 +235,14 @@ grep -q "$PROJECT_NAME" scripts/docs-conformance/local-vocabulary.mjs &&
 
 # Deliberately NOT `git add`-ed first: a just-bootstrapped project has committed
 # nothing, and the gate must see the new AGENTS.md anyway.
-assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
+expect_exit 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
 # Read from VERSION, never pinned by hand: a literal here is one more copy to
 # re-type at every release, and this suite has caught itself on exactly that.
-assert_out_has "shared-layer $(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")"
+expect_said "shared-layer $(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")"
 if [ "$HAVE_NODE" = 1 ]; then
-	assert_out_has "engine: docs harness"
+	expect_said "engine: docs harness"
 else
-	assert_out_has "engine: fallback"
+	expect_said "engine: fallback"
 fi
 
 save_good
@@ -276,18 +276,18 @@ done
 # rule, and the POSIX fallback says in its own NOTICE that it does not check it.
 if [ "$HAVE_NODE" = 1 ]; then
 	printf '\n## Extra rule\n\nAlways squash before merging.\n' >>CLAUDE.md
-	assert_status 1 "check.sh rejects a shim that has grown content" -- sh scripts/check.sh
-	assert_out_has "shim-invalid"
-	assert_out_has "CLAUDE.md"
+	expect_exit 1 "check.sh rejects a shim that has grown content" -- sh scripts/check.sh
+	expect_said "shim-invalid"
+	expect_said "CLAUDE.md"
 	restore_good
-	assert_status 0 "check.sh is green again once the shim is pure" -- sh scripts/check.sh
+	expect_exit 0 "check.sh is green again once the shim is pure" -- sh scripts/check.sh
 
 	# And a deleted shim, which is the other half of the same claim: that tool
 	# now loads no manual at all.
 	mv GEMINI.md "$SCRATCH/GEMINI.md.moved"
-	assert_status 1 "check.sh rejects a missing shim" -- sh scripts/check.sh
-	assert_out_has "shim-invalid"
-	assert_out_has "GEMINI.md"
+	expect_exit 1 "check.sh rejects a missing shim" -- sh scripts/check.sh
+	expect_said "shim-invalid"
+	expect_said "GEMINI.md"
 	mv "$SCRATCH/GEMINI.md.moved" GEMINI.md
 else
 	skip "shim integrity (no node — the fallback's NOTICE says it cannot see this)"
@@ -297,17 +297,17 @@ fi
 # without node: a project whose shims point at nothing is broken whichever
 # engine is available.
 mv AGENTS.md "$SCRATCH/AGENTS.md.moved"
-assert_status 1 "check.sh rejects a deleted AGENTS.md" -- sh scripts/check.sh
-assert_out_has "root-manual-missing"
+expect_exit 1 "check.sh rejects a deleted AGENTS.md" -- sh scripts/check.sh
+expect_said "root-manual-missing"
 mv "$SCRATCH/AGENTS.md.moved" AGENTS.md
-assert_status 0 "check.sh is green again once the manual is back" -- sh scripts/check.sh
+expect_exit 0 "check.sh is green again once the manual is back" -- sh scripts/check.sh
 
 # ---------------------------------------------------------------------------
 banner "3. Idempotency — bootstrap refuses a second run"
 # ---------------------------------------------------------------------------
 cp "$KIT/bootstrap.sh" bootstrap.sh
-assert_status 1 "second bootstrap is refused" -- sh bootstrap.sh "Other Name"
-assert_out_has "already exists"
+expect_exit 1 "second bootstrap is refused" -- sh bootstrap.sh "Other Name"
+expect_said "already exists"
 rm -f bootstrap.sh
 
 # ---------------------------------------------------------------------------
@@ -325,9 +325,9 @@ if [ "$HAVE_NODE" = 1 ]; then
 	# on the developer's node version, and on whether stdout was a terminal —
 	# the same trap as tag.sort in docs-demo, one tool over. Pinned to TAP so
 	# the line means the same thing everywhere.
-	assert_status 0 "harness fixture tests pass" -- \
+	expect_exit 0 "harness fixture tests pass" -- \
 		node --test --test-reporter=tap scripts/docs-conformance/test/claude-md-refs.test.mjs
-	assert_out_has "# fail 0"
+	expect_said "# fail 0"
 else
 	skip "harness fixture tests (no node)"
 fi
@@ -441,12 +441,12 @@ if [ "$HAVE_NODE" = 1 ]; then
 	# and the fallback correctly made that stop failing.)
 	mv .agents/skills/tdd "$SCRATCH/tdd.skill"
 	mv .claude/skills/tdd "$SCRATCH/tdd.bridge"
-	assert_status 1 "check.sh rejects the manual's now-dead /tdd row" -- sh scripts/check.sh
-	assert_out_has "skill-missing"
-	assert_out_has "/tdd"
+	expect_exit 1 "check.sh rejects the manual's now-dead /tdd row" -- sh scripts/check.sh
+	expect_said "skill-missing"
+	expect_said "/tdd"
 	mv "$SCRATCH/tdd.skill" .agents/skills/tdd
 	mv "$SCRATCH/tdd.bridge" .claude/skills/tdd
-	assert_status 0 "check.sh is green again once the skill is back" -- sh scripts/check.sh
+	expect_exit 0 "check.sh is green again once the skill is back" -- sh scripts/check.sh
 else
 	skip "deleted-skill detection (no node)"
 fi
@@ -456,20 +456,20 @@ banner "5. GREEN — a real push through the real pre-push hook"
 # ---------------------------------------------------------------------------
 git add -A
 git commit -q -m "chore: bootstrap from agentic-sdlc"
-assert_status 0 "git push succeeds (hook ran the gate and it passed)" -- git push -q origin main
-assert_status 0 "the pre-push hook is executable" -- test -x .githooks/pre-push
+expect_exit 0 "git push succeeds (hook ran the gate and it passed)" -- git push -q origin main
+expect_exit 0 "the pre-push hook is executable" -- test -x .githooks/pre-push
 
 # ---------------------------------------------------------------------------
 banner "6. RED — an unstamped placeholder fails the gate and blocks the push"
 # ---------------------------------------------------------------------------
 printf '\nOwner: %s\n' "$(mark PROJECT_OWNER)" >>AGENTS.md
-assert_status 1 "check.sh rejects the surviving placeholder" -- sh scripts/check.sh
-assert_out_has "placeholder-unstamped"
+expect_exit 1 "check.sh rejects the surviving placeholder" -- sh scripts/check.sh
+expect_said "placeholder-unstamped"
 
 git add -A
 git commit -q -m "docs: add an owner line (with an unstamped placeholder)"
-assert_status 1 "git push is BLOCKED by the hook" -- git push origin main
-assert_out_has "pre-push: docs gate failed"
+expect_exit 1 "git push is BLOCKED by the hook" -- git push origin main
+expect_said "pre-push: docs gate failed"
 
 restore_good
 git add -A
@@ -479,11 +479,11 @@ git commit -q -m "revert: drop the unstamped owner line"
 banner "7. RED — a deleted shared-layer file fails the gate"
 # ---------------------------------------------------------------------------
 rm -f constitution/shared-invariants.md
-assert_status 1 "check.sh rejects the missing shared-layer file" -- sh scripts/check.sh
-assert_out_has "shared-layer-missing"
+expect_exit 1 "check.sh rejects the missing shared-layer file" -- sh scripts/check.sh
+expect_said "shared-layer-missing"
 # The root manual points at it, so the reference check catches the same deletion
 # from the other side — whichever engine is running.
-assert_out_has "path-missing"
+expect_said "path-missing"
 restore_good
 
 # ---------------------------------------------------------------------------
@@ -493,11 +493,11 @@ banner "8. RED — a planted STALE PATH fails the real validator"
 # goes through claude-md-refs: whole-code-span matching, configured path roots,
 # and a violation that names the validator and the rule.
 printf '\nThe onboarding guide is `docs/ghost-guide.md`.\n' >>AGENTS.md
-assert_status 1 "check.sh rejects the stale path reference" -- sh scripts/check.sh
-assert_out_has "ghost-guide"
+expect_exit 1 "check.sh rejects the stale path reference" -- sh scripts/check.sh
+expect_said "ghost-guide"
 if [ "$HAVE_NODE" = 1 ]; then
-	assert_out_has "claude-md-refs"
-	assert_out_has "path-missing"
+	expect_said "claude-md-refs"
+	expect_said "path-missing"
 fi
 restore_good
 
@@ -508,9 +508,9 @@ banner "9. RED — a planted STALE SLASH COMMAND fails the real validator"
 # skill-directory resolution. This is the coverage the harness buys.
 if [ "$HAVE_NODE" = 1 ]; then
 	printf '\nWhen finished, run `/ghost-command` to wrap up.\n' >>AGENTS.md
-	assert_status 1 "check.sh rejects the dead slash command" -- sh scripts/check.sh
-	assert_out_has "skill-missing"
-	assert_out_has "ghost-command"
+	expect_exit 1 "check.sh rejects the dead slash command" -- sh scripts/check.sh
+	expect_said "skill-missing"
+	expect_said "ghost-command"
 	restore_good
 else
 	skip "stale slash command (no node)"
@@ -523,9 +523,9 @@ banner "10. RED — the project's own name leaks into the shared article"
 # local-vocabulary.mjs with this project's name, so the guard is armed on day 1.
 if [ "$HAVE_NODE" = 1 ]; then
 	printf '\nThis rule exists because %s needed it.\n' "$PROJECT_NAME" >>constitution/shared-invariants.md
-	assert_status 1 "check.sh rejects the portability leak" -- sh scripts/check.sh
-	assert_out_has "portability-leak"
-	assert_out_has "product-name"
+	expect_exit 1 "check.sh rejects the portability leak" -- sh scripts/check.sh
+	expect_said "portability-leak"
+	expect_said "product-name"
 	restore_good
 else
 	skip "portability leak (no node)"
@@ -538,11 +538,11 @@ banner "11. RED then GREEN — an unreachable article, and the documented fix"
 # unnoticed. The fix is the one the hint names — add the pointer.
 if [ "$HAVE_NODE" = 1 ]; then
 	printf '# Local notes\n\nSomething binding.\n' >constitution/local-notes.md
-	assert_status 1 "check.sh rejects the unreachable article" -- sh scripts/check.sh
-	assert_out_has "article-unreferenced"
+	expect_exit 1 "check.sh rejects the unreachable article" -- sh scripts/check.sh
+	expect_said "article-unreferenced"
 
 	printf '\nLocal notes live in `constitution/local-notes.md`.\n' >>AGENTS.md
-	assert_status 0 "check.sh passes once the root points at it" -- sh scripts/check.sh
+	expect_exit 0 "check.sh passes once the root points at it" -- sh scripts/check.sh
 	restore_good
 else
 	skip "unreachable article (no node)"
@@ -554,18 +554,18 @@ banner "12. The POSIX fallback — green without node, and honest about it"
 # A project that has not chosen a toolchain still inherits a working gate. What
 # it must NOT inherit is a false sense of coverage, so the fallback says what it
 # cannot see — and this step proves that claim in both directions.
-assert_status 0 "fallback passes on the clean tree" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "reduced coverage"
-assert_out_has "engine: fallback"
+expect_exit 0 "fallback passes on the clean tree" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "reduced coverage"
+expect_said "engine: fallback"
 
 printf '\nThe onboarding guide is `docs/ghost-guide.md`.\n' >>AGENTS.md
-assert_status 1 "fallback still catches a stale repo path" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "ghost-guide"
+expect_exit 1 "fallback still catches a stale repo path" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "ghost-guide"
 restore_good
 
 printf '\nThis rule exists because %s needed it.\n' "$PROJECT_NAME" >>constitution/shared-invariants.md
-assert_status 0 "fallback does NOT catch the portability leak" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_lacks "portability-leak"
+expect_exit 0 "fallback does NOT catch the portability leak" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_unsaid "portability-leak"
 restore_good
 
 # ---------------------------------------------------------------------------
@@ -585,24 +585,24 @@ done
 specs_now=$(ls docs/specs)
 [ "$specs_now" = "README.md" ] && pass "the starter is the README alone — no living spec of the kit's (process/R14)" ||
 	fail "docs/specs holds more than the starter README: $specs_now"
-assert_status 0 "the starter alone passes the forced fallback's twin (#533)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "the starter alone passes the forced fallback's twin (#533)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 printf '# Signup\n\nR1. WHEN a visitor signs up, the system SHALL send one confirmation.\n' >docs/specs/signup.md
-assert_status 1 "check.sh rejects a living requirement no test names" -- sh scripts/check.sh
-assert_out_has "living-spec-untested"
-assert_out_has "docs/specs/signup.md"
-assert_out_has "signup/R1"
-assert_status 1 "so does the fallback, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "signup/R1 is named by no test"
+expect_exit 1 "check.sh rejects a living requirement no test names" -- sh scripts/check.sh
+expect_said "living-spec-untested"
+expect_said "docs/specs/signup.md"
+expect_said "signup/R1"
+expect_exit 1 "so does the fallback, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "signup/R1 is named by no test"
 mkdir -p tests
 printf '#!/bin/sh\n# signup/R1: one confirmation per signup\n' >tests/signup.test.sh
-assert_status 0 "check.sh passes once a test names it" -- sh scripts/check.sh
-assert_status 0 "and so does the fallback" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "check.sh passes once a test names it" -- sh scripts/check.sh
+expect_exit 0 "and so does the fallback" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 # A REMOVED delta leaves a tombstone in place of the line (process/R11): it
 # keeps the id from reuse and is no requirement line, so neither engine asks a
 # test to name it.
 printf '~~R2.~~ Removed by #12: folded into signup/R1.\n' >>docs/specs/signup.md
-assert_status 0 "a tombstone needs no test — check.sh (#533)" -- sh scripts/check.sh
-assert_status 0 "a tombstone needs no test — the fallback's twin (#533)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "a tombstone needs no test — check.sh (#533)" -- sh scripts/check.sh
+expect_exit 0 "a tombstone needs no test — the fallback's twin (#533)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 rm -f docs/specs/signup.md tests/signup.test.sh
 rmdir tests 2>/dev/null || :
 
@@ -620,8 +620,8 @@ else
 	fail "bypass did not work — exit $status"
 	printf '%s\n' "$out" | sed 's/^/        | /'
 fi
-LAST_OUT=$out
-assert_out_has "BYPASSED"
+T_OUT=$out T_ERR=
+expect_said "BYPASSED"
 
 # ---------------------------------------------------------------------------
 banner "14. The README names every suite a contributor is asked to run"

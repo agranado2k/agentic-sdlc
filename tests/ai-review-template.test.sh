@@ -343,12 +343,12 @@ rm -rf "$PROJ/.git"
 	git add -A
 ) || exit 2
 
-assert_status 0 "bootstrap.sh runs in the consumer" -- \
+expect_exit 0 "bootstrap.sh runs in the consumer" -- \
 	sh -c "cd '$PROJ' && sh bootstrap.sh 'Consumer Project' 'Proves the review template installs inert.'"
 # Bootstrap's next-steps text is the only place a human is told the file is
 # there and switched off. Without the mention, the file is a directory nobody
 # introduced (the same reasoning K5 applies to adapters/).
-assert_out_has "ai-review.example.yml"
+expect_said "ai-review.example.yml"
 
 [ -f "$PROJ/.github/workflows/ai-review.example.yml" ] &&
 	pass ".github/workflows/ai-review.example.yml was installed" ||
@@ -396,7 +396,7 @@ fi
 	pass "templates/workflows was removed after the install"
 
 # The gate must be green on the tree that now carries the template.
-assert_status 0 "the docs gate passes on the bootstrapped consumer" -- \
+expect_exit 0 "the docs gate passes on the bootstrapped consumer" -- \
 	sh -c "cd '$PROJ' && sh scripts/check.sh"
 
 t_done "AI review workflow template"

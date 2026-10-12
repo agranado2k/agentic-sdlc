@@ -56,8 +56,8 @@ pass "fresh repo at \$SCRATCH/demo-project with a bare origin"
 # ---------------------------------------------------------------------------
 banner "1. Bootstrap installs the workflows and takes the templates away"
 # ---------------------------------------------------------------------------
-assert_status 0 "bootstrap.sh runs" -- sh bootstrap.sh "Guards Demo" "A throwaway project proving the guards guard."
-printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
+expect_exit 0 "bootstrap.sh runs" -- sh bootstrap.sh "Guards Demo" "A throwaway project proving the guards guard."
+printf '%s\n' "$T_OUT" | sed 's/^/      > /'
 
 assert_file ".github/workflows/docs-gate.yml"
 assert_file ".github/workflows/tdd-pairing.yml"
@@ -72,7 +72,7 @@ assert_file "scripts/tdd-pairing-guard.sh"
 assert_no_file "tests/tdd-pairing-guard.test.sh"
 assert_no_file "tests"
 
-assert_status 0 "the docs gate passes on the bootstrapped project" -- sh scripts/check.sh
+expect_exit 0 "the docs gate passes on the bootstrapped project" -- sh scripts/check.sh
 
 # ---------------------------------------------------------------------------
 banner "2. GREEN — the first push establishes the branch on the remote"
@@ -82,7 +82,7 @@ banner "2. GREEN — the first push establishes the branch on the remote"
 # speaking from the second push, which is what the next step shows.
 git add -A
 git commit -q -m "chore: bootstrap from agentic-sdlc"
-assert_status 0 "git push succeeds through the real hook" -- git push origin main
+expect_exit 0 "git push succeeds through the real hook" -- git push origin main
 
 # ---------------------------------------------------------------------------
 banner "3. UNCONFIGURED — the guard warns and passes, it does not block"
@@ -93,9 +93,9 @@ mkdir -p src
 printf 'export const first = (xs) => xs[0];\n' >src/first.js
 git add -A
 git commit -q -m "feat(first): the first item, with no test at all"
-assert_status 0 "an unpaired source push passes while the guard is unconfigured" -- git push origin main
-assert_out_has "INACTIVE"
-assert_out_has "GUARD_SOURCE_RE"
+expect_exit 0 "an unpaired source push passes while the guard is unconfigured" -- git push origin main
+expect_said "INACTIVE"
+expect_said "GUARD_SOURCE_RE"
 
 # ---------------------------------------------------------------------------
 banner "4. The consumer configures its source globs"
@@ -107,8 +107,8 @@ GUARD_SOURCE_RE='^src/.*\.(ts|js)$'
 EOF
 git add -A
 git commit -q -m "chore(guards): declare which trees count as source"
-assert_status 0 "the configuring commit itself pushes fine" -- git push origin main
-assert_out_lacks "INACTIVE"
+expect_exit 0 "the configuring commit itself pushes fine" -- git push origin main
+expect_unsaid "INACTIVE"
 pass "the guard stopped warning the moment it was configured"
 
 # ---------------------------------------------------------------------------
@@ -117,10 +117,10 @@ banner "5. RED — a source-only push is BLOCKED"
 printf 'export const total = (xs) => xs.length;\n' >src/total.js
 git add -A
 git commit -q -m "feat(total): count the items"
-assert_status 1 "git push is BLOCKED by the pre-push pairing guard" -- git push origin main
-assert_out_has "pre-push: source changes with no test changes"
-assert_out_has "src/total.js"
-assert_out_has "PUSH_WITHOUT_TESTS=1"
+expect_exit 1 "git push is BLOCKED by the pre-push pairing guard" -- git push origin main
+expect_said "pre-push: source changes with no test changes"
+expect_said "src/total.js"
+expect_said "PUSH_WITHOUT_TESTS=1"
 BLOCKED_SHA=$(git rev-parse HEAD)
 
 # The remote is unchanged — "blocked" has to mean nothing landed.
@@ -137,8 +137,8 @@ banner "6. GREEN — the same change, paired with a test"
 printf 'import { total } from "./total.js";\n// asserts total([]) === 0\n' >src/total.test.js
 git add -A
 git commit -q -m "test(total): cover the empty case"
-assert_status 0 "git push passes once a test change rides along" -- git push origin main
-assert_out_lacks "source changes with no test changes"
+expect_exit 0 "git push passes once a test change rides along" -- git push origin main
+expect_unsaid "source changes with no test changes"
 
 remote_head=$(git ls-remote "$REMOTE" refs/heads/main | awk '{print $1}')
 if [ "$remote_head" = "$(git rev-parse HEAD)" ]; then
@@ -153,9 +153,9 @@ banner "7. The bypass is real, and loud"
 printf 'export const half = (n) => n / 2;\n' >src/half.js
 git add -A
 git commit -q -m "feat(half): halve a number"
-assert_status 1 "the unpaired change is blocked first" -- git push origin main
-assert_status 0 "PUSH_WITHOUT_TESTS=1 lets it through" -- sh -c "cd '$PROJ' && PUSH_WITHOUT_TESTS=1 git push origin main"
-assert_out_has "BYPASSED"
+expect_exit 1 "the unpaired change is blocked first" -- git push origin main
+expect_exit 0 "PUSH_WITHOUT_TESTS=1 lets it through" -- sh -c "cd '$PROJ' && PUSH_WITHOUT_TESTS=1 git push origin main"
+expect_said "BYPASSED"
 
 # ---------------------------------------------------------------------------
 banner "8. The two hatches are NARROW — neither one opens the other"
@@ -165,26 +165,26 @@ banner "8. The two hatches are NARROW — neither one opens the other"
 printf 'export const third = (n) => n / 3;\n' >src/third.js
 git add -A
 git commit -q -m "feat(third): a third of a number"
-assert_status 1 "PUSH_WITHOUT_DOCS=1 still leaves the pairing guard on" -- sh -c "cd '$PROJ' && PUSH_WITHOUT_DOCS=1 git push origin main"
-assert_out_has "docs gate BYPASSED"
-assert_out_has "source changes with no test changes"
+expect_exit 1 "PUSH_WITHOUT_DOCS=1 still leaves the pairing guard on" -- sh -c "cd '$PROJ' && PUSH_WITHOUT_DOCS=1 git push origin main"
+expect_said "docs gate BYPASSED"
+expect_said "source changes with no test changes"
 
 # ---------------------------------------------------------------------------
 banner "9. A local bypass only DEFERS — the CI twin re-judges the same range"
 # ---------------------------------------------------------------------------
 base=$(git rev-parse HEAD~1)
-assert_status 1 "the CI guard fails the range the local hatch let through" -- sh -c "
+expect_exit 1 "the CI guard fails the range the local hatch let through" -- sh -c "
 	cd '$PROJ' && BASE_SHA='$base' HEAD_SHA='$(git rev-parse HEAD)' sh scripts/tdd-pairing-guard-ci.sh
 "
-assert_out_has "x ci:"
-assert_out_has "tdd-exempt"
+expect_said "x ci:"
+expect_said "tdd-exempt"
 
 printf '{"pull_request":{"labels":[{"name":"tdd-exempt"}]}}' >"$SCRATCH/event.json"
-assert_status 0 "and goes green only with the label, on the record" -- sh -c "
+expect_exit 0 "and goes green only with the label, on the record" -- sh -c "
 	cd '$PROJ' && BASE_SHA='$base' HEAD_SHA='$(git rev-parse HEAD)' \
 		GITHUB_EVENT_PATH='$SCRATCH/event.json' sh scripts/tdd-pairing-guard-ci.sh
 "
-assert_out_has "::notice"
+expect_said "::notice"
 
 # ---------------------------------------------------------------------------
 banner "10. behavior-delta inventories the branch"
@@ -194,12 +194,12 @@ printf 'export const total = (xs) => xs.length + 0;\n' >src/total.js
 printf '\n# a local rule\n' >>AGENTS.md
 git add -A
 git commit -q -m "refactor(total): tidy the reducer"
-assert_status 0 "behavior-delta runs against the branch" -- sh -c "cd '$PROJ' && sh scripts/behavior-delta.sh main"
-printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
+expect_exit 0 "behavior-delta runs against the branch" -- sh -c "cd '$PROJ' && sh scripts/behavior-delta.sh main"
+printf '%s\n' "$T_OUT" | sed 's/^/      > /'
 # AGENTS.md is a shipped default surface: a standing instruction edited inside a
 # commit that claims structure-only work is exactly what the check is for.
-assert_out_has "Commit separation"
-assert_out_has "AGENTS.md"
+expect_said "Commit separation"
+expect_said "AGENTS.md"
 
 # ---------------------------------------------------------------------------
 banner "11. Capability tiers — the same config-as-data deal, end to end"
@@ -251,8 +251,8 @@ else
 	fail "mixed-tier resolution produced '$mixed'"
 fi
 
-assert_status 2 "an invented tier is refused, not silently defaulted" -- sh -c "cd '$PROJ' && sh scripts/agents.lib.sh implementor"
-assert_out_has "unknown capability tier"
+expect_exit 2 "an invented tier is refused, not silently defaulted" -- sh -c "cd '$PROJ' && sh scripts/agents.lib.sh implementor"
+expect_said "unknown capability tier"
 
 # The second axis, on the same real consumer: the project decides that prose at
 # the implementer tier is worth a different model, and says so in ITS config.
@@ -276,9 +276,9 @@ quiet=$(sh scripts/agents.lib.sh implementer code 2>&1 >/dev/null)
 	fail "an unmapped domain warned: $quiet"
 
 # An open vocabulary is not an unchecked one: the token lands in a variable name.
-assert_status 2 "a malformed domain is refused before it reaches the eval" -- sh -c "cd '$PROJ' && sh scripts/agents.lib.sh implementer 'CODE;echo pwned'"
-assert_out_has "malformed task domain"
+expect_exit 2 "a malformed domain is refused before it reaches the eval" -- sh -c "cd '$PROJ' && sh scripts/agents.lib.sh implementer 'CODE;echo pwned'"
+expect_said "malformed task domain"
 
-assert_status 0 "the docs gate is still green with the tiers configured" -- sh -c "cd '$PROJ' && sh scripts/check.sh"
+expect_exit 0 "the docs gate is still green with the tiers configured" -- sh -c "cd '$PROJ' && sh scripts/check.sh"
 
 t_done "guards demo"

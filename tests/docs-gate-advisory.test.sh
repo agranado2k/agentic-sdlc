@@ -63,13 +63,13 @@ for anchor in 'Paradigm' 'Architectural style' 'Context map'; do
 done
 
 banner "1. The harness reports the advisory and exits 0 — the channel itself works"
-assert_status 0 "the harness exits 0 on a warning-only tree" -- node scripts/docs-conformance/index.mjs .
-assert_out_has "design-brief-missing"
+expect_exit 0 "the harness exits 0 on a warning-only tree" -- node scripts/docs-conformance/index.mjs .
+expect_said "design-brief-missing"
 
 banner "2. The SAME finding is visible through scripts/check.sh — the entry point the hook runs"
-assert_status 0 "the gate exits 0 — an advisory never fails a push" -- sh scripts/check.sh
-assert_out_has "design-brief-missing"
-assert_out_has "OK  docs gate"
+expect_exit 0 "the gate exits 0 — an advisory never fails a push" -- sh scripts/check.sh
+expect_said "design-brief-missing"
+expect_said "OK  docs gate"
 
 banner "2b. A fresh project's off trace and unmapped reviewer tier are audible through the gate (#655)"
 # Bootstrapped unattended with no trace answer, the project carries the shipped
@@ -79,33 +79,33 @@ banner "2b. A fresh project's off trace and unmapped reviewer tier are audible t
 grep -q "^TRACE_DIR=''" scripts/trace.config.sh && grep -qx '.trace/' .gitignore &&
 	pass "the fixture is the shape: an empty TRACE_DIR beside an ignored .trace/" ||
 	fail "the fixture degraded — no empty TRACE_DIR beside an ignored .trace/"
-assert_status 0 "the gate exits 0 — neither setting fails a push" -- sh scripts/check.sh
-assert_out_has "trace-off"
-assert_out_has "reviewer-unmapped"
+expect_exit 0 "the gate exits 0 — neither setting fails a push" -- sh scripts/check.sh
+expect_said "trace-off"
+expect_said "reviewer-unmapped"
 
 banner "3. A tree with nothing to advise prints no advisory block — the relay is not noise"
 printf '\n**Paradigm**: functional — pure domain, classes only at the adapters.\n' >>constitution/local-engineering.md
 sed -i.bak "s/^TRACE_DIR=''/TRACE_DIR='.trace'/" scripts/trace.config.sh && rm scripts/trace.config.sh.bak
 sed -i.bak "s/^AGENT_TIER_REVIEWER=''/AGENT_TIER_REVIEWER='a-second-model'/" scripts/agents.config.sh && rm scripts/agents.config.sh.bak
-assert_status 0 "the gate is green once one anchor is filled" -- sh scripts/check.sh
-assert_out_lacks "design-brief-missing"
-assert_out_lacks "trace-off"
-assert_out_lacks "reviewer-unmapped"
-assert_out_lacks "advisories"
+expect_exit 0 "the gate is green once one anchor is filled" -- sh scripts/check.sh
+expect_unsaid "design-brief-missing"
+expect_unsaid "trace-off"
+expect_unsaid "reviewer-unmapped"
+expect_unsaid "advisories"
 # The probe that tells "relay advisories" from "relay everything": on a clean
 # tree the harness still prints its own OK line, and an unconditional relay
 # would echo it here.
-assert_out_lacks "docs conformance"
+expect_unsaid "docs conformance"
 
 banner "4. The reduced POSIX form says it cannot run this scan"
 DOCS_CHECK_NO_NODE=1
 export DOCS_CHECK_NO_NODE
-assert_status 0 "the fallback gate exits 0" -- sh scripts/check.sh
-assert_out_has "design-brief advisory"
-assert_out_has "housekeeping-due advisory"
-assert_out_has "banned-words advisory"
-assert_out_has "trace-off advisory"
-assert_out_has "reviewer-unmapped advisory"
+expect_exit 0 "the fallback gate exits 0" -- sh scripts/check.sh
+expect_said "design-brief advisory"
+expect_said "housekeeping-due advisory"
+expect_said "banned-words advisory"
+expect_said "trace-off advisory"
+expect_said "reviewer-unmapped advisory"
 unset DOCS_CHECK_NO_NODE
 
 t_done "docs gate advisory visibility"
