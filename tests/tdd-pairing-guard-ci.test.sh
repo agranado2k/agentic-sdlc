@@ -82,22 +82,22 @@ pr_repo() {
 banner "A gate that cannot run must not report green"
 # ---------------------------------------------------------------------------
 pr_repo "docs/x.md"
-assert_status 2 "no BASE_SHA/HEAD_SHA in the environment is a usage error" -- run_ci "$repo"
-assert_out_has "BASE_SHA"
+expect_exit 2 "no BASE_SHA/HEAD_SHA in the environment is a usage error" -- run_ci "$repo"
+expect_said "BASE_SHA"
 
-assert_status 2 "an unresolvable merge base exits 2, it does not guess" -- run_ci "$repo" \
+expect_exit 2 "an unresolvable merge base exits 2, it does not guess" -- run_ci "$repo" \
 	BASE_SHA=0000000000000000000000000000000000000000 HEAD_SHA="$HEAD"
 
 # ---------------------------------------------------------------------------
 banner "The rule, over the pull request's range"
 # ---------------------------------------------------------------------------
 pr_repo "src/report.ts"
-assert_status 1 "fails the PR whose source changes carry no test changes" -- run_ci "$repo" \
+expect_exit 1 "fails the PR whose source changes carry no test changes" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD"
-assert_out_has "src/report.ts"
-assert_out_has "source changes with no test changes"
-assert_out_has "x ci:"
-assert_out_has "tdd-exempt"
+expect_said "src/report.ts"
+expect_said "source changes with no test changes"
+expect_said "x ci:"
+expect_said "tdd-exempt"
 
 t_write "$repo" "src/report.test.ts" "// test
 "
@@ -106,7 +106,7 @@ t_write "$repo" "src/report.test.ts" "// test
 "
 HEAD=$(t_commit "$repo" "test: pair it")
 git -C "$repo" checkout -q main
-assert_status 0 "passes the PR whose source changes are paired with a test change" -- run_ci "$repo" \
+expect_exit 0 "passes the PR whose source changes are paired with a test change" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD"
 
 # The merge base, not BASE_SHA itself. `main` advances after the fork with an
@@ -133,27 +133,27 @@ t_write "$repo" "src/other.ts" "// v2, edited on main with no test
 BASE=$(t_commit "$repo" "feat: main moves on without a test")
 t_guards_config "$repo" "$CONFIG_STD"
 
-assert_status 0 "judges the MERGE-BASE range — an unpaired commit on main is not the PR's fault" -- run_ci "$repo" \
+expect_exit 0 "judges the MERGE-BASE range — an unpaired commit on main is not the PR's fault" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD"
-assert_out_lacks "other.ts"
+expect_unsaid "other.ts"
 
 # ---------------------------------------------------------------------------
 banner "The tdd-exempt label — an override on the record"
 # ---------------------------------------------------------------------------
 pr_repo "src/report.ts"
 payload=$(event_payload "$repo" "event.json" "ready-for-agent" "tdd-exempt")
-assert_status 0 "an exempt PR goes green with a visible notice" -- run_ci "$repo" \
+expect_exit 0 "an exempt PR goes green with a visible notice" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GITHUB_EVENT_PATH="$payload"
-assert_out_has "::notice"
-assert_out_has "tdd-exempt"
-assert_out_has "was NOT enforced"
+expect_said "::notice"
+expect_said "tdd-exempt"
+expect_said "was NOT enforced"
 
 payload=$(event_payload "$repo" "other.json" "ready-for-agent" "tdd-exempt-ish")
-assert_status 1 "a PR carrying only other labels is not exempt" -- run_ci "$repo" \
+expect_exit 1 "a PR carrying only other labels is not exempt" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GITHUB_EVENT_PATH="$payload"
 
 payload=$(event_payload "$repo" "none.json")
-assert_status 1 "a PR with no labels at all is not exempt" -- run_ci "$repo" \
+expect_exit 1 "a PR with no labels at all is not exempt" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GITHUB_EVENT_PATH="$payload"
 
 # ---------------------------------------------------------------------------
@@ -162,15 +162,15 @@ banner "The hatch fails CLOSED"
 # Every way of not being able to read the payload must mean "not exempt". A
 # parser that errors into the green branch is a gate anyone can switch off by
 # corrupting a file.
-assert_status 1 "an absent payload file is not exempt" -- run_ci "$repo" \
+expect_exit 1 "an absent payload file is not exempt" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GITHUB_EVENT_PATH="$repo/no-such-event.json"
 
 printf '{ not json' >"$repo/malformed.json"
-assert_status 1 "a malformed payload is not exempt" -- run_ci "$repo" \
+expect_exit 1 "a malformed payload is not exempt" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GITHUB_EVENT_PATH="$repo/malformed.json"
 
 printf '{"pull_request":{"labels":"tdd-exempt"}}' >"$repo/wrong-shape.json"
-assert_status 1 "a payload of the wrong shape is not exempt" -- run_ci "$repo" \
+expect_exit 1 "a payload of the wrong shape is not exempt" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GITHUB_EVENT_PATH="$repo/wrong-shape.json"
 
 # The one node dependency in the kit's core lives in this hatch. Without a JSON
@@ -185,7 +185,7 @@ if PATH="$SCRATCH/minbin" command -v node >/dev/null 2>&1; then
 	fail "fixture is wrong: node is still reachable on the minimal PATH"
 else
 	payload=$(event_payload "$repo" "exempt.json" "tdd-exempt")
-	assert_status 1 "no JSON parser on PATH means not exempt, not exempt-by-default" -- sh -c "
+	expect_exit 1 "no JSON parser on PATH means not exempt, not exempt-by-default" -- sh -c "
 		cd '$repo' && PATH='$SCRATCH/minbin' BASE_SHA='$BASE' HEAD_SHA='$HEAD' \
 			GUARDS_CONFIG='$repo/scripts/guards.config.sh' \
 			GITHUB_EVENT_PATH='$payload' sh '$GUARD_CI'
@@ -197,7 +197,7 @@ banner "Exemption short-circuits before the range is judged"
 # ---------------------------------------------------------------------------
 pr_repo "docs/diary.md"
 payload=$(event_payload "$repo" "event.json" "tdd-exempt")
-assert_status 0 "an exempt PR stays green even when the range was fine anyway" -- run_ci "$repo" \
+expect_exit 0 "an exempt PR stays green even when the range was fine anyway" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GITHUB_EVENT_PATH="$payload"
 
 # ---------------------------------------------------------------------------
@@ -205,8 +205,8 @@ banner "The unconfigured default reaches CI too"
 # ---------------------------------------------------------------------------
 pr_repo "src/report.ts"
 t_guards_config "$repo" "GUARD_SOURCE_RE=''"
-assert_status 0 "an unconfigured guard does not fail anybody's CI either" -- run_ci "$repo" \
+expect_exit 0 "an unconfigured guard does not fail anybody's CI either" -- run_ci "$repo" \
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD"
-assert_out_has "INACTIVE"
+expect_said "INACTIVE"
 
 t_done "tdd-pairing-guard-ci.sh"

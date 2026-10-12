@@ -32,7 +32,7 @@ slice() {
 	_sl_repo=$1
 	_sl_out=$2
 	shift 2
-	t_run env "$@" sh -c 'cd "$1" && sh "$2" main "$3"' _ "$_sl_repo" "$SLICER" "$_sl_out"
+	t_exec env "$@" sh -c 'cd "$1" && sh "$2" main "$3"' _ "$_sl_repo" "$SLICER" "$_sl_out"
 }
 
 # files_in <diff file> — the b/ paths a diff file carries, one per line, sorted.
@@ -85,14 +85,14 @@ t_write "$REPO" bootstrapxsh 'x
 t_commit "$REPO" "feat: scripts" >/dev/null
 OUT="$SCRATCH/out1"
 slice "$REPO" "$OUT"
-[ "$LAST_STATUS" = 0 ] && pass "exit 0" || fail "exit $LAST_STATUS: $LAST_OUT"
+[ "$T_STATUS" = 0 ] && pass "exit 0" || fail "exit $T_STATUS: $T_OUT"
 assert_slice "$OUT" security ".githooks/pre-push scripts/tool.sh"
 assert_slice "$OUT" api-crud ".githooks/pre-push scripts/tool.sh"
 assert_slice "$OUT" test-hygiene ""
 assert_slice "$OUT" pattern ".githooks/pre-push bootstrapxsh scripts/tool.sh"
 assert_slice "$OUT" behavior ".githooks/pre-push bootstrapxsh scripts/tool.sh"
-assert_out_has "test-hygiene 0 $OUT/test-hygiene.diff"
-assert_out_has "security 2 $OUT/security.diff"
+expect_said "test-hygiene 0 $OUT/test-hygiene.diff"
+expect_said "security 2 $OUT/security.diff"
 for l in $LENSES behavior; do
 	[ -f "$OUT/$l.diff" ] && pass "$l.diff written" || fail "$l.diff not written"
 done
@@ -174,11 +174,11 @@ banner "no policy: every lens gets the whole diff, and the slicer says so"
 printf '' >"$SCRATCH/empty.sh"
 OUT="$SCRATCH/out5"
 slice "$REPO" "$OUT" LENS_SLICE_CONFIG="$SCRATCH/empty.sh"
-[ "$LAST_STATUS" = 0 ] && pass "exit 0" || fail "exit $LAST_STATUS"
+[ "$T_STATUS" = 0 ] && pass "exit 0" || fail "exit $T_STATUS"
 for l in $LENSES; do
 	assert_slice "$OUT" "$l" "docs/guide.md scripts/tool.sh tests/fixtures/run.jsonl tests/tool.test.sh"
 done
-assert_out_has "no rules"
+expect_said "no rules"
 
 banner "refusals: exit 2, nothing sliced"
 cat >"$SCRATCH/typo.sh" <<'EOF'
@@ -186,23 +186,23 @@ LENS_SLICE_RULES='securty ^scripts/'
 EOF
 OUT="$SCRATCH/out6"
 slice "$REPO" "$OUT" LENS_SLICE_CONFIG="$SCRATCH/typo.sh"
-[ "$LAST_STATUS" = 2 ] && pass "an unknown lens is refused (exit 2)" || fail "unknown lens: exit $LAST_STATUS"
-assert_out_has "securty"
+[ "$T_STATUS" = 2 ] && pass "an unknown lens is refused (exit 2)" || fail "unknown lens: exit $T_STATUS"
+expect_said "securty"
 assert_no_file "$OUT/security.diff"
 printf '%s\n' "LENS_SLICE_RULES='security ^scripts/ x extra'" >"$SCRATCH/long.sh"
 slice "$REPO" "$SCRATCH/out6b" LENS_SLICE_CONFIG="$SCRATCH/long.sh"
-[ "$LAST_STATUS" = 2 ] && pass "a record of four fields is refused (exit 2)" || fail "four-field record: exit $LAST_STATUS"
+[ "$T_STATUS" = 2 ] && pass "a record of four fields is refused (exit 2)" || fail "four-field record: exit $T_STATUS"
 assert_no_file "$SCRATCH/out6b/security.diff"
 cp "$SCRATCH/policy.sh" "$REPO/bare-policy.sh"
 slice "$REPO" "$SCRATCH/out6c" LENS_SLICE_CONFIG=bare-policy.sh
-[ "$LAST_STATUS" = 0 ] && pass "a bare policy name is read from the cwd, not PATH" || fail "bare policy name: exit $LAST_STATUS: $LAST_OUT"
+[ "$T_STATUS" = 0 ] && pass "a bare policy name is read from the cwd, not PATH" || fail "bare policy name: exit $T_STATUS: $T_OUT"
 assert_slice "$SCRATCH/out6c" security "docs/guide.md"
 slice "$REPO" "$SCRATCH/out7" LENS_SLICE_CONFIG="$SCRATCH/no-such.sh"
-[ "$LAST_STATUS" = 2 ] && pass "a named policy that is absent is refused (exit 2)" || fail "absent named policy: exit $LAST_STATUS"
-t_run sh -c 'cd "$1" && sh "$2" main' _ "$REPO" "$SLICER"
-[ "$LAST_STATUS" = 2 ] && pass "a missing out dir is a caller error (exit 2)" || fail "missing out dir: exit $LAST_STATUS"
-t_run sh -c 'cd "$1" && sh "$2" no-such-ref "$3"' _ "$REPO" "$SLICER" "$SCRATCH/out9"
-[ "$LAST_STATUS" = 2 ] && pass "an unresolvable base is a caller error (exit 2)" || fail "bad base: exit $LAST_STATUS"
+[ "$T_STATUS" = 2 ] && pass "a named policy that is absent is refused (exit 2)" || fail "absent named policy: exit $T_STATUS"
+t_exec sh -c 'cd "$1" && sh "$2" main' _ "$REPO" "$SLICER"
+[ "$T_STATUS" = 2 ] && pass "a missing out dir is a caller error (exit 2)" || fail "missing out dir: exit $T_STATUS"
+t_exec sh -c 'cd "$1" && sh "$2" no-such-ref "$3"' _ "$REPO" "$SLICER" "$SCRATCH/out9"
+[ "$T_STATUS" = 2 ] && pass "an unresolvable base is a caller error (exit 2)" || fail "bad base: exit $T_STATUS"
 
 banner "/review-pr hands each lens its slice (spend/R10), the behavior axis the whole diff (spend/R11)"
 for l in $LENSES; do

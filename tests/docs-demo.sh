@@ -36,7 +36,7 @@ KIT=$(cd "$(dirname "$0")/.." && pwd)
 # asserting a version the kit no longer claimed.
 KITV=$(sed -n 's/^shared-layer: *//p' "$KIT/VERSION")
 # The shared helper library. This suite overrides several helpers below with
-# variants of its own, but `assert_out_has` and `strip_nested_worktrees` come
+# variants of its own, but `expect_said` and `strip_nested_worktrees` come
 # from here — the sourcing was missing, so both were silently
 # command-not-found: one C2 assertion never asserted and the nested-worktree
 # stripping never stripped, while the suite stayed green. Exactly the vacuity
@@ -184,9 +184,9 @@ cd "$PROJ" || exit 2
 pass "fresh repo at \$SCRATCH/demo-project"
 
 banner "A1. Bootstrap"
-assert_status 0 "bootstrap.sh runs" -- \
+expect_exit 0 "bootstrap.sh runs" -- \
 	sh bootstrap.sh "Aurora Ledger" "A double-entry ledger for small cooperatives."
-printf '%s\n' "$LAST_OUT" | sed 's/^/      > /'
+printf '%s\n' "$T_OUT" | sed 's/^/      > /'
 
 banner "A2. The documentation set is in place"
 assert_file "README.md"
@@ -239,11 +239,11 @@ assert_same "$KIT/templates/docs/PULL_REQUEST_TEMPLATE.md" ".github/PULL_REQUEST
 banner "A5. The gate is green on the whole set"
 # Not `git add`-ed first, deliberately: a just-bootstrapped project has committed
 # nothing, and the gate must still see (and scan) every new doc.
-assert_status 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
-assert_status 0 "shared layer reported" -- sh scripts/check.sh
-case "$LAST_OUT" in
+expect_exit 0 "check.sh passes on the bootstrapped project" -- sh scripts/check.sh
+expect_exit 0 "shared layer reported" -- sh scripts/check.sh
+case "$T_OUT" in
 *"shared-layer $KITV"*) pass "gate reports shared-layer $KITV" ;;
-*) fail "gate did not report shared-layer $KITV: $LAST_OUT" ;;
+*) fail "gate did not report shared-layer $KITV: $T_OUT" ;;
 esac
 
 banner "A5b. The living-spec check holds without node — process/R12 and process/R13"
@@ -254,81 +254,81 @@ banner "A5b. The living-spec check holds without node — process/R12 and proces
 # only the starter README that holds no requirement (#533).
 [ "$(ls docs/specs)" = "README.md" ] && pass "docs/specs/ holds the starter README alone (#533)" ||
 	fail "docs/specs/ is not the starter README alone: $(ls docs/specs 2>&1)"
-assert_status 0 "docs/specs/ with no living spec passes without node (process/R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "living specs"
+expect_exit 0 "docs/specs/ with no living spec passes without node (process/R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "living specs"
 printf '# Ledger\n\nR1. The ledger SHALL balance.\n\n```md\nR7. A quoted example, not a requirement.\n```\n\nR2. WHEN a posting is reversed, the ledger SHALL keep both entries.\n' >docs/specs/ledger.md
-assert_status 1 "a living requirement no test names fails without node (process/R12)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "living-spec-untested"
-assert_out_has "docs/specs/ledger.md"
-assert_out_has "ledger/R1 is named by no test"
-assert_out_has "ledger/R2 is named by no test"
-assert_out_lacks "ledger/R7"
+expect_exit 1 "a living requirement no test names fails without node (process/R12)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "living-spec-untested"
+expect_said "docs/specs/ledger.md"
+expect_said "ledger/R1 is named by no test"
+expect_said "ledger/R2 is named by no test"
+expect_unsaid "ledger/R7"
 mkdir -p tests
 printf '#!/bin/sh\n# ledger/R1, and ledger/R20 — a longer id, not the second\n' >tests/ledger.sh
 printf '# ledger/R2, in a file no test glob matches\n' >docs/ledger-notes.md
-assert_status 1 "only a whole name, in a file the test globs match, counts" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_lacks "ledger/R1 is named by no test"
-assert_out_has "ledger/R2 is named by no test"
+expect_exit 1 "only a whole name, in a file the test globs match, counts" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_unsaid "ledger/R1 is named by no test"
+expect_said "ledger/R2 is named by no test"
 printf '# ledger/R2\n' >>tests/ledger.sh
-assert_status 0 "green once a test names every requirement" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "green once a test names every requirement" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 # The rest of the grammar, the same shapes the harness's fixture tests drive
 # through the node engine (#537 review, M-1), so the two engines are held to
 # one grammar: only a line that OPENS with `R<n>.` and a blank (or its end) is
 # a requirement, and CRLF line endings still read one.
 printf 'Prose citing R4. in passing.\n  R5. indented is prose.\nRx. not an id.\nR6.no space is not one either\n' >docs/specs/prose.md
-assert_status 0 "prose, an indented R5., Rx. and R6.no-space are no requirement without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_lacks "prose/R"
+expect_exit 0 "prose, an indented R5., Rx. and R6.no-space are no requirement without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_unsaid "prose/R"
 printf '# Journal\r\n\r\nR1. One.\r\nR3.\r\n' >docs/specs/journal.md
-assert_status 1 "CRLF line endings still read the requirement without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "journal/R1 is named by no test"
-assert_out_has "journal/R3 is named by no test"
+expect_exit 1 "CRLF line endings still read the requirement without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "journal/R1 is named by no test"
+expect_said "journal/R3 is named by no test"
 # The trailing boundary (#537 review, L-1): an id followed by a letter, a
 # digit, `_`, or `.` and a digit is another token; a sentence's full stop and
 # a hyphen are not.
 printf '# journal/R1abc journal/R1_retry journal/R1.5 journal/R3x\n' >tests/journal.sh
-assert_status 1 "journal/R1abc, R1_retry and R1.5 do not cite journal/R1 without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "journal/R1 is named by no test"
-assert_out_has "journal/R3 is named by no test"
+expect_exit 1 "journal/R1abc, R1_retry and R1.5 do not cite journal/R1 without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "journal/R1 is named by no test"
+expect_said "journal/R3 is named by no test"
 printf '# holds journal/R1.\n# journal/R3-and-more\n' >>tests/journal.sh
-assert_status 0 "a full stop or a hyphen after the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "a full stop or a hyphen after the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 # The leading boundary (#544): an id preceded by a letter, a digit, `_`, `-`
 # or `/` is the tail of a longer token; a parenthesis, a blank and the start
 # of a line are not.
 printf '# Xjournal/R1 sub-journal/R1 9journal/R1 _journal/R1\n# -journal/R3 specs/journal/R3\n' >tests/journal.sh
-assert_status 1 "Xjournal/R1, sub-journal/R1, -journal/R3 and specs/journal/R3 cite nothing without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "journal/R1 is named by no test"
-assert_out_has "journal/R3 is named by no test"
+expect_exit 1 "Xjournal/R1, sub-journal/R1, -journal/R3 and specs/journal/R3 cite nothing without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "journal/R1 is named by no test"
+expect_said "journal/R3 is named by no test"
 printf '# (journal/R1)\njournal/R3\n' >>tests/journal.sh
-assert_status 0 "a parenthesis or the start of a line before the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "a parenthesis or the start of a line before the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 printf '#  journal/R1 journal/R3\n' >tests/journal.sh
-assert_status 0 "a blank before the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "a blank before the id still cites it without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 # The positive half (#550 review, M-2): a hyphenated area is one token and
 # cites itself, never the area its tail spells.
 printf 'R1. The sub-journal SHALL roll up.\n' >docs/specs/sub-journal.md
 printf '# sub-journal/R1 journal/R3\n' >tests/journal.sh
-assert_status 1 "sub-journal/R1 cites its own area, never journal/R1, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "journal/R1 is named by no test"
-assert_out_lacks "sub-journal/R1 is named by no test"
+expect_exit 1 "sub-journal/R1 cites its own area, never journal/R1, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "journal/R1 is named by no test"
+expect_unsaid "sub-journal/R1 is named by no test"
 rm -f docs/specs/sub-journal.md
 # The documented cost (#550 review, M-1): two ids joined by `-` or `/` cite
 # the first alone — the second's match swallows the joint and is dropped.
 printf '# journal/R1-journal/R3\n' >tests/journal.sh
-assert_status 1 "journal/R1-journal/R3 cites journal/R1 alone without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "journal/R3 is named by no test"
-assert_out_lacks "journal/R1 is named by no test"
+expect_exit 1 "journal/R1-journal/R3 cites journal/R1 alone without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "journal/R3 is named by no test"
+expect_unsaid "journal/R1 is named by no test"
 rm -f docs/specs/prose.md docs/specs/journal.md tests/journal.sh
 # The globs are the docs gate's policy, read by the twin from config.mjs.
 cp scripts/docs-conformance/config.mjs "$SCRATCH/config.mjs.good"
 sed 's|^    "tests/\*",$|    "checks/*",|' "$SCRATCH/config.mjs.good" >scripts/docs-conformance/config.mjs
-assert_status 1 "a policy that drops tests/* moves what counts as a test" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "ledger/R1 is named by no test"
+expect_exit 1 "a policy that drops tests/* moves what counts as a test" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "ledger/R1 is named by no test"
 cp "$SCRATCH/config.mjs.good" scripts/docs-conformance/config.mjs
 printf 'R1. An area that cannot be cited.\n' >docs/specs/Ledger_Book.md
-assert_status 1 "a spec file whose name is no area fails without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "living-spec-area-invalid"
-assert_out_has "docs/specs/Ledger_Book.md"
+expect_exit 1 "a spec file whose name is no area fails without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "living-spec-area-invalid"
+expect_said "docs/specs/Ledger_Book.md"
 rm -rf docs/specs docs/ledger-notes.md tests/ledger.sh && rmdir tests
-assert_status 0 "no docs/specs/ at all passes without node (process/R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "no docs/specs/ at all passes without node (process/R13)" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 
 banner "A5c. The harness's own fixtures cite nothing of the project's — #561"
 # Found by a real upgrade: the shipped fixture test spelled the very ids a
@@ -340,14 +340,14 @@ mkdir -p docs/specs
 printf '# Billing\n\nR1. One.\nR2. Two.\nR3. Three.\n' >docs/specs/billing.md
 printf '# Process\n\nR1. One.\nR10. Ten.\n' >docs/specs/process.md
 printf '# Subprocess\n\nR1. One.\n' >docs/specs/subprocess.md
-assert_status 1 "a project's billing, process and subprocess specs with no test fail without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 1 "a project's billing, process and subprocess specs with no test fail without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 for want in billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1; do
-	assert_out_has "$want is named by no test"
+	expect_said "$want is named by no test"
 done
 if command -v node >/dev/null 2>&1; then
-	assert_status 1 "the same specs with no test fail the docs harness" -- node scripts/docs-conformance/index.mjs .
+	expect_exit 1 "the same specs with no test fail the docs harness" -- node scripts/docs-conformance/index.mjs .
 	for want in billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1; do
-		assert_out_has "$want is named by no test"
+		expect_said "$want is named by no test"
 	done
 else
 	skip "node absent — the docs harness leg of A5c did not run"
@@ -355,45 +355,45 @@ fi
 # The engine's half: even a fixture test the project adds under the harness's
 # tree, spelling every id, cites nothing — in both engines.
 printf '// billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >scripts/docs-conformance/test/mine.test.mjs
-assert_status 1 "a name under scripts/docs-conformance/ cites nothing without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
-assert_out_has "billing/R1 is named by no test"
-assert_out_has "subprocess/R1 is named by no test"
+expect_exit 1 "a name under scripts/docs-conformance/ cites nothing without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_said "billing/R1 is named by no test"
+expect_said "subprocess/R1 is named by no test"
 if command -v node >/dev/null 2>&1; then
-	assert_status 1 "a name under scripts/docs-conformance/ cites nothing in the docs harness" -- node scripts/docs-conformance/index.mjs .
-	assert_out_has "billing/R1 is named by no test"
-	assert_out_has "subprocess/R1 is named by no test"
+	expect_exit 1 "a name under scripts/docs-conformance/ cites nothing in the docs harness" -- node scripts/docs-conformance/index.mjs .
+	expect_said "billing/R1 is named by no test"
+	expect_said "subprocess/R1 is named by no test"
 fi
 rm -f scripts/docs-conformance/test/mine.test.mjs
 # …and the exclusion is that tree exactly (#578 review, M-3): a directory
 # whose name merely begins the same way is the project's, and cites.
 mkdir -p scripts/docs-conformance-extra/test
 printf '// billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >scripts/docs-conformance-extra/test/mine.test.mjs
-assert_status 0 "scripts/docs-conformance-extra/ is the project's, and cites, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "scripts/docs-conformance-extra/ is the project's, and cites, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 rm -rf scripts/docs-conformance-extra
 mkdir -p tests
 printf '#!/bin/sh\n# billing/R1 billing/R2 billing/R3 process/R1 process/R10 subprocess/R1\n' >tests/specs.sh
-assert_status 0 "green once the project's own test names every id, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
+expect_exit 0 "green once the project's own test names every id, without node" -- env DOCS_CHECK_NO_NODE=1 sh scripts/check.sh
 if command -v node >/dev/null 2>&1; then
-	assert_status 0 "green once the project's own test names every id, in the docs harness" -- node scripts/docs-conformance/index.mjs .
+	expect_exit 0 "green once the project's own test names every id, in the docs harness" -- node scripts/docs-conformance/index.mjs .
 fi
 rm -rf docs/specs tests/specs.sh && rmdir tests
 
 banner "A6. The gate is NOT vacuous over the new docs"
 # If an unstamped mark could survive in docs/, "personalized" would be unchecked.
 printf '\n- **Owner** — %s\n' "$(t_mark PROJECT_OWNER)" >>docs/domain-glossary.md
-assert_status 1 "check.sh rejects an unstamped mark in docs/" -- sh scripts/check.sh
-case "$LAST_OUT" in
+expect_exit 1 "check.sh rejects an unstamped mark in docs/" -- sh scripts/check.sh
+case "$T_ERR" in
 *"domain-glossary"*) pass "the violation names the glossary" ;;
 *) fail "the violation does not name the glossary" ;;
 esac
 sed '/PROJECT_OWNER/d' docs/domain-glossary.md >"$SCRATCH/glossary.clean"
 cp "$SCRATCH/glossary.clean" docs/domain-glossary.md
-assert_status 0 "check.sh is green again once the mark is removed" -- sh scripts/check.sh
+expect_exit 0 "check.sh is green again once the mark is removed" -- sh scripts/check.sh
 
 # And the manual's new references have to resolve.
 rm -f docs/diary.md
-assert_status 1 "check.sh rejects a deleted docs/diary.md (AGENTS.md points at it)" -- sh scripts/check.sh
-case "$LAST_OUT" in
+expect_exit 1 "check.sh rejects a deleted docs/diary.md (AGENTS.md points at it)" -- sh scripts/check.sh
+case "$T_ERR" in
 *"path-missing"*) pass "reported as path-missing" ;;
 *) fail "not reported as path-missing" ;;
 esac
@@ -486,7 +486,7 @@ t_consumer_from "$OLDKIT" "$CONSUMER" "Older Consumer" "older@example.invalid" "
 # does for every small fixture, rather than bypassed with a warning that would
 # land in the transcript. tests/root-guard.test.sh holds the refusal.
 git config core.hooksPath .git/no-such-hooks
-assert_status 0 "the 0.1.0 consumer's gate is green before the update" -- sh scripts/check.sh
+expect_exit 0 "the 0.1.0 consumer's gate is green before the update" -- sh scripts/check.sh
 
 # The local edit that should never have been made to a verbatim file.
 printf '\nNOTE (local): §4 is waived for the QA phase in this repo.\n' \
@@ -869,7 +869,7 @@ banner "C1. A consumer bootstrapped at 0.3.0, WITHOUT the optional skill"
 C3="$SCRATCH/consumer-0.3.0"
 t_consumer_from "$OLD3" "$C3" "Tier Consumer" "tier@example.invalid" --no-dogfood "Tier Consumer" "A project that bootstrapped at shared-layer 0.3.0."
 git config core.hooksPath .git/no-such-hooks # as above: the recipe, not the hooks (#392)
-assert_status 0 "the 0.3.0 consumer's gate is green before the update" -- sh scripts/check.sh
+expect_exit 0 "the 0.3.0 consumer's gate is green before the update" -- sh scripts/check.sh
 assert_no_file ".claude/skills/dogfood"
 
 # One local edit to a SKILL — legitimate here, unlike B's edit to a shared file.
@@ -887,7 +887,7 @@ pass "consumer carries one local edit to a skill (legitimate — skills are thei
 assert_file ".github/workflows/tdd-pairing.yml"
 rm -f .github/workflows/tdd-pairing.yml
 git commit -qam "ci: fold the pairing gate into our own workflow"
-assert_status 0 "the gate is green with a workflow deliberately removed" -- sh scripts/check.sh
+expect_exit 0 "the gate is green with a workflow deliberately removed" -- sh scripts/check.sh
 
 banner "C2. Part 1 ALONE leaves an inert half-update"
 
@@ -910,8 +910,8 @@ assert_has "VERSION" "shared-layer: $KITV"
 # Part 1 landed a constitution ARTICLE, and the manual that should point at it
 # is the consumer's own — Part 2 territory. So the gate goes red here, by
 # design: article-unreferenced is what forces the two halves to land together.
-assert_status 1 "the gate is RED after Part 1 alone — the article landed, its manual pointer is Part 2" -- sh scripts/check.sh
-assert_out_has "article-unreferenced"
+expect_exit 1 "the gate is RED after Part 1 alone — the article landed, its manual pointer is Part 2" -- sh scripts/check.sh
+expect_said "article-unreferenced"
 
 # …and beyond the red, nothing the release is FOR has arrived. This is the gap
 # F8 closes.
@@ -926,7 +926,7 @@ fi
 # The resolver is here, and it is inert: no config anywhere, so every tier is
 # unmapped. It still exits 0 — an unmapped tier is a working state — which is
 # exactly why nothing about this half-update is loud.
-assert_status 0 "the resolver runs but resolves nothing" -- sh scripts/agents.lib.sh implementer
+expect_exit 0 "the resolver runs but resolves nothing" -- sh scripts/agents.lib.sh implementer
 if [ -n "$(sh scripts/agents.lib.sh implementer 2>/dev/null)" ]; then
 	fail "the resolver printed a model with no config present"
 else
@@ -1861,14 +1861,14 @@ banner "C5. The gate is what makes the hand edits non-optional"
 # 9a warns about. If the gate did not catch it, "add the row by hand" would be
 # advice nothing enforces.
 printf '| Do a thing | `/not-a-real-skill` — nope |\n' >>AGENTS.md
-assert_status 1 "the gate rejects a row with no skill behind it" -- sh scripts/check.sh
-case "$LAST_OUT" in
+expect_exit 1 "the gate rejects a row with no skill behind it" -- sh scripts/check.sh
+case "$T_ERR" in
 *"skill-missing"*) pass "reported as skill-missing" ;;
-*) fail "not reported as skill-missing: $LAST_OUT" ;;
+*) fail "not reported as skill-missing: $T_ERR" ;;
 esac
 sed '/not-a-real-skill/d' AGENTS.md >"$SCRATCH/manual.clean"
 cp "$SCRATCH/manual.clean" AGENTS.md
-assert_status 0 "green again once the row is removed" -- sh scripts/check.sh
+expect_exit 0 "green again once the row is removed" -- sh scripts/check.sh
 
 banner "C6. Adopting the optional /dogfood skill after bootstrap"
 # Bootstrap asked once and deleted itself. Adoption is three things, and the
@@ -1879,9 +1879,9 @@ kit1 show "v$KITV:constitution/local-product.md.template" \
 	>constitution/local-product.md.template
 assert_file ".claude/skills/dogfood/SKILL.md"
 assert_file ".agents/skills/dogfood/SKILL.md"
-assert_status 0 "the gate is green with the skill present but unannounced" -- sh scripts/check.sh
+expect_exit 0 "the gate is green with the skill present but unannounced" -- sh scripts/check.sh
 printf '| Use the product before a user does | `/dogfood` — declared personas, real surface |\n' >>AGENTS.md
-assert_status 0 "the gate is green once the manual's row is added by hand" -- sh scripts/check.sh
+expect_exit 0 "the gate is green once the manual's row is added by hand" -- sh scripts/check.sh
 assert_has "AGENTS.md" "/dogfood"
 
 banner "C6b. The article the skill needs — and the ORDER the gate enforces"
@@ -1894,28 +1894,28 @@ sed 's/{{[A-Za-z0-9_]*}}/a filled-in value/g' constitution/local-product.md.temp
 rm -f constitution/local-product.md.template
 printf -- '- `constitution/local-product.md.template` — what `/dogfood` needs: personas and surfaces.\n' \
 	>>AGENTS.md
-assert_status 1 "the manual pointing at the .template it no longer has fails the gate" -- sh scripts/check.sh
-case "$LAST_OUT" in
+expect_exit 1 "the manual pointing at the .template it no longer has fails the gate" -- sh scripts/check.sh
+case "$T_ERR" in
 *path-missing* | *article-unreferenced*) pass "reported as a dangling article reference" ;;
-*) fail "the wrong order was not reported: $LAST_OUT" ;;
+*) fail "the wrong order was not reported: $T_ERR" ;;
 esac
 # The documented order: fill it in and drop the suffix FIRST, then point the
 # manual at the `.md` that now exists.
 sed 's|constitution/local-product\.md\.template|constitution/local-product.md|' AGENTS.md \
 	>"$SCRATCH/manual.product" && cp "$SCRATCH/manual.product" AGENTS.md
-assert_status 0 "green once the pointer names the .md the rename produced" -- sh scripts/check.sh
+expect_exit 0 "green once the pointer names the .md the rename produced" -- sh scripts/check.sh
 
 banner "C7. Declining it later — the reverse, proved by the gate"
 rm -rf .agents/skills/dogfood .claude/skills/dogfood
-assert_status 1 "removing the skill but not the row fails the gate" -- sh scripts/check.sh
-case "$LAST_OUT" in
+expect_exit 1 "removing the skill but not the row fails the gate" -- sh scripts/check.sh
+case "$T_ERR" in
 *"skill-missing"*) pass "the dangling reference is reported as skill-missing" ;;
-*) fail "a dangling /dogfood reference was not caught: $LAST_OUT" ;;
+*) fail "a dangling /dogfood reference was not caught: $T_ERR" ;;
 esac
 sed '/dogfood/d' AGENTS.md >"$SCRATCH/manual.nodog"
 cp "$SCRATCH/manual.nodog" AGENTS.md
 rm -f constitution/local-product.md constitution/local-product.md.template
-assert_status 0 "green once the row goes too — no dangling reference remains" -- sh scripts/check.sh
+expect_exit 0 "green once the row goes too — no dangling reference remains" -- sh scripts/check.sh
 
 banner "C8. The 0.14.0 migration — the document's own fence, executed"
 # The skills' home moved to `.agents/skills/` at 0.14.0, and this consumer is
@@ -1962,7 +1962,7 @@ if [ -s "$SCRATCH/migrate.sh" ]; then
 	else
 		pass "nothing real is left at the old address — only the bridge"
 	fi
-	assert_status 0 "the migrated consumer's gate is green" -- sh scripts/check.sh
+	expect_exit 0 "the migrated consumer's gate is green" -- sh scripts/check.sh
 
 	# …and running it TWICE is a no-op, because a consumer who is interrupted
 	# mid-recipe re-runs the block rather than reasoning about what it did.
@@ -1972,7 +1972,7 @@ if [ -s "$SCRATCH/migrate.sh" ]; then
 		fail "a second run of the migration block failed"
 		sed 's/^/        | /' "$SCRATCH/migrate2.out"
 	fi
-	assert_status 0 "the gate is still green after the second run" -- sh scripts/check.sh
+	expect_exit 0 "the gate is still green after the second run" -- sh scripts/check.sh
 
 	# The sidecar loop has its own bridge, and nothing above asserts it: the
 	# shape check walks directories only, so a licence or reference file

@@ -54,7 +54,7 @@ wt_land() {
 
 # wt_run [args…] — run the script with the fixture repo as cwd.
 wt_run() {
-	t_run env WC_REPO="$REPO" WC_SCRIPT="$SCRIPT" \
+	t_exec env WC_REPO="$REPO" WC_SCRIPT="$SCRIPT" \
 		sh -c 'cd "$WC_REPO" && sh "$WC_SCRIPT" "$@"' -- "$@"
 }
 
@@ -73,8 +73,8 @@ wt_land messy                                          # landed…
 printf 'scratch\n' >"$REPO/worktree/messy/scratch.txt" # …but has uncommitted work
 
 wt_run
-[ "$LAST_STATUS" = 0 ] && pass "the script exits 0 (exit 0)" ||
-	fail "the script exited $LAST_STATUS"
+[ "$T_STATUS" = 0 ] && pass "the script exits 0 (exit 0)" ||
+	fail "the script exited $T_STATUS"
 
 wt_has_worktree landed && fail "the merged worktree was not removed" ||
 	pass "the merged, clean worktree is gone"
@@ -83,16 +83,16 @@ wt_has_branch landed && fail "the merged branch survived" ||
 
 wt_has_worktree wip && pass "the unmerged worktree is kept" ||
 	fail "an unmerged worktree was removed — that is data loss"
-assert_out_has "not merged into"
+expect_said "not merged into"
 # A branch with commits of its own is never fresh, however the fresh test reads
 # the reflog: its tip has moved since the branch was created.
-assert_out_lacks "(feat/wip) — fresh"
+expect_unsaid "(feat/wip) — fresh"
 
 # `messy` IS merged — it is kept only because of the untracked file in it, which
 # is the case worth pinning: "merged" alone must never be sufficient.
 wt_has_worktree messy && pass "a merged worktree with uncommitted work is kept" ||
 	fail "a worktree with uncommitted changes was removed — that is data loss"
-assert_out_has "uncommitted changes"
+expect_said "uncommitted changes"
 
 # The remote branch goes too, for the case a forge did not delete it on merge.
 git -C "$REPO" ls-remote --exit-code --heads origin "feat/landed" >/dev/null 2>&1 &&
@@ -153,17 +153,17 @@ for mode in --dry-run real; do
 	else
 		PATH="$STUB_BIN:$PATH" wt_run --dry-run
 	fi
-	[ "$LAST_STATUS" = 0 ] && pass "$mode: the script exits 0 (exit 0)" ||
-		fail "$mode: the script exited $LAST_STATUS"
-	assert_out_has "worktree/fresh (feat/fresh) — fresh"
-	assert_out_has "worktree/stale (feat/stale) — fresh"
-	assert_out_has "no commits of its own"
-	assert_out_lacks "Removing merged worktree $REPO/worktree/fresh"
-	assert_out_lacks "Removing merged worktree $REPO/worktree/stale"
-	assert_out_has "Removing merged worktree $REPO/worktree/landed"
-	assert_out_has "Removing merged worktree $REPO/worktree/squashed"
-	assert_out_has "removed (2):"
-	assert_out_has "kept (2):"
+	[ "$T_STATUS" = 0 ] && pass "$mode: the script exits 0 (exit 0)" ||
+		fail "$mode: the script exited $T_STATUS"
+	expect_said "worktree/fresh (feat/fresh) — fresh"
+	expect_said "worktree/stale (feat/stale) — fresh"
+	expect_said "no commits of its own"
+	expect_unsaid "Removing merged worktree $REPO/worktree/fresh"
+	expect_unsaid "Removing merged worktree $REPO/worktree/stale"
+	expect_said "Removing merged worktree $REPO/worktree/landed"
+	expect_said "Removing merged worktree $REPO/worktree/squashed"
+	expect_said "removed (2):"
+	expect_said "kept (2):"
 	wt_has_worktree fresh && wt_has_branch fresh &&
 		pass "$mode: the fresh worktree and its branch are kept" ||
 		fail "$mode: a fresh worktree was pruned — that is a starting session's worktree lost"
@@ -224,12 +224,12 @@ for mode in --dry-run real; do
 	else
 		TRACE_CONFIG="$WC_POLICY" TRACE_SESSION=the-cleanup wt_run --dry-run
 	fi
-	[ "$LAST_STATUS" = 0 ] && pass "$mode: the script exits 0 (exit 0)" ||
-		fail "$mode: the script exited $LAST_STATUS"
-	assert_out_has "worktree/held (feat/held) — live: open run $HELD_RUN"
-	assert_out_lacks "Removing merged worktree $REPO/worktree/held"
-	assert_out_has "Removing merged worktree $REPO/worktree/done"
-	assert_out_has "Removing merged worktree $REPO/worktree/closed"
+	[ "$T_STATUS" = 0 ] && pass "$mode: the script exits 0 (exit 0)" ||
+		fail "$mode: the script exited $T_STATUS"
+	expect_said "worktree/held (feat/held) — live: open run $HELD_RUN"
+	expect_unsaid "Removing merged worktree $REPO/worktree/held"
+	expect_said "Removing merged worktree $REPO/worktree/done"
+	expect_said "Removing merged worktree $REPO/worktree/closed"
 	wt_has_worktree held && wt_has_branch held &&
 		pass "$mode: the held worktree and its branch are kept" ||
 		fail "$mode: a worktree with an open run was pruned — a live session's worktree lost"
@@ -241,7 +241,7 @@ wt_has_worktree closed && fail "the merged worktree whose run was closed survive
 # The session ends its run; the next cleanup prunes the worktree.
 wc_trace "$REPO/worktree/held" live-session end "$HELD_RUN" outcome=ok
 TRACE_CONFIG="$WC_POLICY" TRACE_SESSION=the-cleanup wt_run
-assert_out_has "Removing merged worktree $REPO/worktree/held"
+expect_said "Removing merged worktree $REPO/worktree/held"
 wt_has_worktree held && fail "the held worktree survived after its run closed" ||
 	pass "once its run is closed, the held worktree is pruned"
 
@@ -255,13 +255,13 @@ cp "$ROOT/scripts/worktree-cleanup.kit.sh" "$ROOT/scripts/worktree-cleanup.sh" "
 printf "TRACE_DIR='%s'\n" "$WC_TRACE" >"$REPO/scripts/trace.kit.config.sh"
 KIT_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
 [ -n "$KIT_RUN" ] && pass "a session opens a run in the held worktree" || fail "the begin printed nothing"
-t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.kit.sh --dry-run'
-assert_out_has "worktree/held (feat/held) — live: open run $KIT_RUN"
-t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.sh --dry-run'
-assert_out_has "[dry-run] git worktree remove $REPO/worktree/held"
+t_exec env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.kit.sh --dry-run'
+expect_said "worktree/held (feat/held) — live: open run $KIT_RUN"
+t_exec env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO" && sh scripts/worktree-cleanup.sh --dry-run'
+expect_said "[dry-run] git worktree remove $REPO/worktree/held"
 # Run from a linked worktree, the wrapper still reads the policy beside it.
-t_run env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO/worktree/done" && sh "$WC_REPO/scripts/worktree-cleanup.kit.sh" --dry-run'
-assert_out_has "worktree/held (feat/held) — live: open run $KIT_RUN"
+t_exec env WC_REPO="$REPO" TRACE_SESSION=the-cleanup sh -c 'cd "$WC_REPO/worktree/done" && sh "$WC_REPO/scripts/worktree-cleanup.kit.sh" --dry-run'
+expect_said "worktree/held (feat/held) — live: open run $KIT_RUN"
 
 # Tracing off is no evidence either way: the open run is not seen, and the
 # merged, clean worktree is pruned exactly as before #680.
@@ -272,8 +272,8 @@ OFF_RUN=$(wc_trace "$REPO/worktree/held" live-session begin implement)
 WC_OFF="$SCRATCH/wc-trace-680.off.sh"
 printf "TRACE_DIR=''\n" >"$WC_OFF"
 TRACE_CONFIG="$WC_OFF" TRACE_SESSION=the-cleanup wt_run
-assert_out_has "Removing merged worktree $REPO/worktree/held"
-assert_out_lacks "live:"
+expect_said "Removing merged worktree $REPO/worktree/held"
+expect_unsaid "live:"
 
 # A trace that cannot answer keeps the worktree, naming the refusal: a partial
 # "nothing open" must never read as leave to prune.
@@ -284,7 +284,7 @@ if [ "$(id -u)" != 0 ]; then
 	chmod 000 "$HELD_STACK"
 	TRACE_CONFIG="$WC_POLICY" TRACE_SESSION=the-cleanup wt_run
 	chmod 600 "$HELD_STACK"
-	assert_out_has "worktree/held (feat/held) — live: the trace could not answer for its run stack"
+	expect_said "worktree/held (feat/held) — live: the trace could not answer for its run stack"
 	wt_has_worktree held && pass "a worktree whose stack cannot be read is kept" ||
 		fail "a worktree whose run stack could not be read was pruned"
 else
@@ -311,7 +311,7 @@ if [ -d /proc/self ]; then
 	wt_run
 	kill "$BUSY_PID" 2>/dev/null
 	wait "$BUSY_PID" 2>/dev/null
-	assert_out_has "worktree/busy (feat/busy) — live: process $BUSY_PID works in it"
+	expect_said "worktree/busy (feat/busy) — live: process $BUSY_PID works in it"
 	wt_has_worktree busy && pass "a merged worktree a process works in is kept" ||
 		fail "a merged worktree with a process inside it was pruned"
 	wt_run
@@ -329,8 +329,8 @@ wt_branch landed
 wt_land landed
 
 wt_run --dry-run
-assert_out_has "[dry-run]"
-assert_out_has "nothing was changed"
+expect_said "[dry-run]"
+expect_said "nothing was changed"
 wt_has_worktree landed && pass "the worktree is still there after --dry-run" ||
 	fail "--dry-run removed a worktree"
 wt_has_branch landed && pass "the branch is still there after --dry-run" ||
@@ -350,8 +350,8 @@ wt_land landed
 WORKTREE_CLEANUP_POST_SYNC='echo POST_SYNC_MARKER'
 export WORKTREE_CLEANUP_POST_SYNC
 wt_run
-assert_out_has "Fast-forwarding main"
-assert_out_has "POST_SYNC_MARKER"
+expect_said "Fast-forwarding main"
+expect_said "POST_SYNC_MARKER"
 [ "$(git -C "$REPO" rev-parse HEAD)" != "$before" ] &&
 	pass "the root checkout moved to the landed commit" ||
 	fail "the root checkout did not fast-forward"
@@ -360,8 +360,8 @@ assert_out_has "POST_SYNC_MARKER"
 # A post-sync command that runs on every invocation is how a reinstall ends up
 # in someone's hot loop.
 wt_run
-assert_out_has "already up to date"
-assert_out_lacks "POST_SYNC_MARKER"
+expect_said "already up to date"
+expect_unsaid "POST_SYNC_MARKER"
 unset WORKTREE_CLEANUP_POST_SYNC
 
 # Without the hook set, the script says what it is NOT doing rather than
@@ -370,7 +370,7 @@ wt_fixture
 wt_branch landed2
 wt_land landed2
 wt_run
-assert_out_has "reinstall dependencies if your project needs it"
+expect_said "reinstall dependencies if your project needs it"
 
 # ---------------------------------------------------------------------------
 banner "Uncommitted work in the root checkout stops the fast-forward"
@@ -381,7 +381,7 @@ wt_land landed
 printf 'edited\n' >>"$REPO/.gitignore" # a TRACKED file, modified
 
 wt_run
-assert_out_has "uncommitted changes — skipping fast-forward"
+expect_said "uncommitted changes — skipping fast-forward"
 [ "$(git -C "$REPO" rev-parse HEAD)" = "$(git -C "$REPO" rev-parse main)" ] &&
 	pass "HEAD is untouched while the root is dirty" ||
 	fail "the script fast-forwarded over uncommitted work"
@@ -401,7 +401,7 @@ wt_branch landed
 wt_land landed
 
 wt_run
-assert_out_has "Fast-forwarding main"
+expect_said "Fast-forwarding main"
 
 # ---------------------------------------------------------------------------
 banner "Scope: only worktrees under worktree/ are candidates"
@@ -412,7 +412,7 @@ git -C "$REPO" push -q origin "feat/elsewhere:main"
 git -C "$REPO" fetch -q origin
 
 wt_run
-assert_out_has "outside worktree/, skipped"
+expect_said "outside worktree/, skipped"
 git -C "$REPO" worktree list | grep -q "elsewhere" &&
 	pass "a merged worktree outside worktree/ is left alone" ||
 	fail "the script removed a worktree outside its scope"
@@ -430,7 +430,7 @@ git -C "$REPO" push -q origin "feat/landed:release" # landed on release, NOT mai
 git -C "$REPO" fetch -q origin
 
 wt_run # default base: origin/main — not merged there
-assert_out_has "not merged into origin/main"
+expect_said "not merged into origin/main"
 wt_has_worktree landed && pass "kept when measured against the default base" ||
 	fail "removed a branch that never landed on the default base"
 
@@ -449,9 +449,9 @@ wt_branch landed
 wt_land landed
 
 wt_run --dryrun # a plausible typo for --dry-run
-[ "$LAST_STATUS" = 2 ] && pass "a bad argument exits 2 (exit 2)" ||
-	fail "a bad argument exited $LAST_STATUS — a typo'd --dry-run must not delete anything"
-assert_out_has "unknown argument"
+[ "$T_STATUS" = 2 ] && pass "a bad argument exits 2 (exit 2)" ||
+	fail "a bad argument exited $T_STATUS — a typo'd --dry-run must not delete anything"
+expect_said "unknown argument"
 wt_has_worktree landed && pass "nothing was removed on the bad invocation" ||
 	fail "the script acted despite the bad argument"
 
