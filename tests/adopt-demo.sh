@@ -100,7 +100,8 @@ banner "B. First adopt run — safe set installs, five verdicts, exit 3, nothing
 expect_exit 3 "adopt on a colliding tree exits 3 (partial: collisions pending)" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 
-ADOPT1_OUT="$T_OUT"
+# Both streams: "nothing else COLLISION-shaped" is a claim about the whole run.
+ADOPT1_OUT=$(printf '%s\n%s\n' "$T_OUT" "$T_ERR")
 expect_said "COLLISION shared scripts/check.sh relocate"
 expect_said "COLLISION manual AGENTS.md distill"
 expect_said "COLLISION skill .claude/skills/tdd rename-or-decline"
@@ -170,7 +171,7 @@ banner "C. Idempotency — a second run changes nothing and reports the same pen
 # ---------------------------------------------------------------------------
 expect_exit 3 "re-run still exits 3 with the collisions unresolved" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-rerun_total=$(printf '%s\n' "$T_OUT" | grep -c '^COLLISION' || true)
+rerun_total=$(printf '%s\n%s\n' "$T_OUT" "$T_ERR" | grep -c '^COLLISION' || true)
 [ "$rerun_total" = 5 ] && pass "the same five collisions, no duplicates" ||
 	fail "re-run reported $rerun_total collisions, expected the same 5"
 cmp -s "$SCRATCH/theirs/docs/diary.md" "$TARGET/docs/diary.md" &&
@@ -513,9 +514,8 @@ cp -R "$KITCOPY/.agents/skills/tdd" "$TARGET/.agents/skills/tdd"
 ln -s "$TARGET/.agents/skills/tdd" "$TARGET/.claude/skills/tdd"
 expect_exit 0 "an absolutely-spelled bridge to the same target adopts clean" -- \
 	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
-printf '%s\n' "$T_OUT" | grep -q 'COLLISION skill .claude/skills/tdd' &&
-	fail "an equivalent bridge was reported as a collision — the check is comparing spelling, not destination" ||
-	pass "an equivalent bridge is recognised as ours, whatever its spelling"
+# A collision here means the check compared spelling, not destination.
+expect_unsaid 'COLLISION skill .claude/skills/tdd' "an equivalent bridge is recognised as ours, whatever its spelling"
 
 # …including one laid BEFORE its canonical skill exists, which is the state
 # the relative spelling is already forgiven in: the leaf dangles, the parent

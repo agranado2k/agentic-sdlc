@@ -339,7 +339,7 @@ if command -v node >/dev/null 2>&1; then
 		--source "$FIX/litellm-moved.json" --cross "$FIX/openrouter-moved.json"
 	expect_status 2 "a table with no line for a mapped model is exit 2, never 'same'"
 	expect_out_has "TRACE_PRICE_CODEX_GPT_6_ASTRA" "and names the variable the table is missing"
-	expect_out_lacks "same: every entry" "and never reports the whole table as matching"
+	expect_unsaid "same: every entry" "and never reports the whole table as matching"
 	t_exec env TRACE_CONFIG="$GAP" sh "$REFRESH" --write \
 		--source "$FIX/litellm-moved.json" --cross "$FIX/openrouter-moved.json"
 	expect_status 2 "the write refuses the same way"

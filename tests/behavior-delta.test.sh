@@ -48,8 +48,9 @@ run_delta() {
 branch() { git -C "$1" checkout -q -b "$2"; }
 
 # The lines of the commit-separation section, or empty when it was not printed.
+# separation_block [<text>] — read from that text, stdout when none is given.
 separation_block() {
-	printf '%s\n' "$T_OUT" | awk '
+	printf '%s\n' "${1-$T_OUT}" | awk '
 		/^## Commit separation/ { inside = 1; next }
 		inside && /^## /        { inside = 0 }
 		inside                  { print }
@@ -68,11 +69,12 @@ assert_separation_has() {
 }
 
 assert_separation_lacks() {
-	_block=$(separation_block)
+	# An absence is a claim about the whole run: the section on either stream.
+	_block=$(separation_block; separation_block "$T_ERR")
 	case "$_block" in
 	*"$1"*)
 		fail "commit-separation section should NOT name '$1'"
-		printf '%s\n' "$T_OUT" | sed 's/^/        | /'
+		printf '%s\n%s\n' "$T_OUT" "$T_ERR" | sed 's/^/        | /'
 		;;
 	*) pass "commit-separation section does not name '$1'" ;;
 	esac
