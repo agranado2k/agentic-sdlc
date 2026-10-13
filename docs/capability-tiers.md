@@ -84,14 +84,20 @@ a session on the Sonnet family, named by the word or by a pinned id, is refused
 the `sonnet` reviewer. This holds only through `scripts/agents.kit.sh`; the
 shared resolver compares exactly.
 
-**Reviews run on the Sonnet family only** (ADR-0020's amendment, #724). Neither
-kit policy names a reviewer fallback. So a Sonnet session, or any session whose
-Sonnet is unreachable, is answered nothing, with a warning. Here, nothing
-printed for the reviewer does not mean "inherit the session". The session spawns
-no review, and its report quotes the warning and says the review is still owed.
-A session off the Sonnet family, usually the Opus or Fable one above it, spawns
-the review on `sonnet`. With Sonnet unreachable the review waits; it never runs
-on Opus or Fable.
+**Reviews run on the Sonnet family, and a diff the Sonnet family wrote is
+reviewed by the Opus family** (ADR-0027, #763, amending ADR-0020's amendment of
+#724). The Claude Code policy's reviewer fallback is `opus`, and the kit
+wrapper's fence (`AGENT_KIT_REVIEWER_FALLBACK_SERVES='own-family'`) serves it
+only to an author on the Sonnet family. So name the diff's **author** in
+`AGENT_SESSION_MODEL`, not the session: a cascade rung's model when a rung
+wrote it. A Sonnet author gets `opus`. An Opus, Fable or unnamed author gets
+`sonnet`. Any author whose reviewer is unreachable, with nothing left it may
+have, gets nothing and a warning. Here, nothing printed for the reviewer does
+not mean "inherit the session". The session spawns no review, its report
+quotes the warning and says the review is still owed, and the review waits for
+its reviewer. It never moves to another family. A cascade-built PR therefore
+lands with its Opus review, not with `--no-review`. The Codex policy keeps an
+empty fallback: no Codex session is on the Sonnet family.
 
 ## The policy behind the mapping
 
@@ -112,7 +118,8 @@ that is most of the kit's product — `implementer` work by tier, not code by
 medium. `self-implemented` on the reviewer tier names a situation, not a
 medium: a diff the session wrote itself, chosen at spawn time. It is unmapped
 since ADR-0020, so it gives the plain reviewer's answer, and the session's own
-family is refused through `AGENT_SESSION_MODEL`.
+family is refused through `AGENT_SESSION_MODEL` — then answered by the
+fallback, for a Sonnet session (ADR-0027).
 `code` is unmapped: the plain tier is its answer. `/to-tickets` stamps an
 optional `Domain:` line when the medium would change the model, and `/implement`
 passes it as the second argument; a situation domain is never stamped on a
