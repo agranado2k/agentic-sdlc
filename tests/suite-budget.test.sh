@@ -50,6 +50,7 @@ t_init
 # ---------------------------------------------------------------------------
 banner "1. The test harness reaches the Budget through the library's interface"
 # ---------------------------------------------------------------------------
+# runtime/R20.
 # tests/lib.sh confines a suite through scripts/budget.lib.sh — budget_derive,
 # budget_run, budget_verdict and budget_inherited_bounds — the same four the
 # dispatcher calls, so a suite and a worker cannot disagree about a number
@@ -85,7 +86,7 @@ echo "caller status $?"' probe "$KIT/scripts"
 expect_out_has "caller status 2" "a policy value that is not a whole number is refused with status 2 — and the caller goes on"
 expect_err_has "AGENT_BUDGET_TASKS_PERCENT"
 
-# R21: no file outside the library names a function private to it. The
+# runtime/R21: no file outside the library names a function private to it. The
 # private names are read from the library itself — every function it defines
 # whose name starts with an underscore, the counters reader it ships as text
 # among them — so a private helper added or renamed there is held here with
@@ -190,6 +191,7 @@ starts() { [ -f "$COUNT" ] && wc -l <"$COUNT" | tr -d ' ' || echo 0; }
 echo 400 >"$SLICE/pids.max"
 stub sh "$GREEN"
 expect_status 0 "a green suite run through the test harness passes"
+# runtime/R19: the suite budget marker reads as it did before the extraction.
 expect_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…and runs inside the budget derived from the (fake) host, with the marker naming it"
 expect_out_has "forks: yes" "…and can fork inside it"
 expect_out_has "agents config: <unset>" "…with the environment it was started with — the kit's policy file stayed with the derivation"

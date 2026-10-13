@@ -1364,6 +1364,8 @@ expect_err_has "MODEL_FLAG"
 # ---------------------------------------------------------------------------
 banner "The budget — derived from the host, shown by --dry-run"
 # ---------------------------------------------------------------------------
+# runtime/R19: the budget lines below are pinned as they read before the
+# Budget moved into its library (#747), and stay byte for byte.
 # ADR-0006: a task ceiling and a memory ceiling for the worker's whole tree,
 # each a percentage of a HOST fact clamped to a policy floor and ceiling.
 # The host facts are read from files under a root the dispatcher takes from
@@ -1642,6 +1644,8 @@ expect_out_has 'BUDGET=300/600' "…and the budget it runs under is exported to 
 
 # ---------------------------------------------------------------------------
 banner "The budget is ENFORCED — a runaway worker stops, the session survives"
+# runtime/R19: exits 71 and 124 below are pinned as they read before the
+# Budget moved into its library (#747).
 # ---------------------------------------------------------------------------
 # ADR-0006 #208: the derived budget is now APPLIED down the ladder. These legs
 # drive real runaways with SMALL budgets (--budget-tasks / --budget-memory, far
@@ -2280,7 +2284,7 @@ t_exec env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
 	pass "show run:<the worker's run> prints the pair inside the run's start and end — the operator's one command" ||
 	fail "show found $(printf '%s\n' "$T_OUT" | grep -c .) lines for run:$WORKER_RUN"
 
-# THE WORKER'S RUN HAS THE SHAPE THE TRACE MINTS (#743). The trace's ids are a
+# runtime/R1: # THE WORKER'S RUN HAS THE SHAPE THE TRACE MINTS (#743). The trace's ids are a
 # UTC timestamp, a pid and eight hex characters, and every reader that checks a
 # run id — the skill dispatcher's Trace-Run line among them — checks that
 # shape. A worker run minted with the scratch directory's six-character mktemp

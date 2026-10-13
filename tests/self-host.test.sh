@@ -36,7 +36,7 @@ PROJECT_DESC="A throwaway project proving the kit strips its own files."
 # The kit's own files — the ones bootstrap has to take out of a consumer's way.
 # Kept here rather than derived from bootstrap.sh so the two lists can disagree
 # and something notices.
-KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md docs/specs/spend.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
+KIT_OWN="AGENTS.md CLAUDE.md GEMINI.md docs/diary.md docs/domain-glossary.md docs/adr/INDEX.md docs/specs/process.md docs/specs/runtime.md docs/specs/spend.md .github/PULL_REQUEST_TEMPLATE.md docs/capability-tiers.md"
 
 # t_kit_copy <dest> — "Use this template": the files git would hand over, no
 # .git, no nested worktree and no ignored directory (t_kit_tree, #690), in a
