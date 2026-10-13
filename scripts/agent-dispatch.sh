@@ -108,7 +108,9 @@
 # dispatched, so nothing can end. A dry run and the in-session exit 3 emit
 # nothing at all, because neither decided anything to record.
 #
-# The pair's SUBJECT is a run id minted here FOR THE WORKER and handed to it in
+# The pair's SUBJECT is a run the trace opens FOR THE WORKER — `begin
+# --detached`, closed by `end <run>` at every way out past the spawn, so it is
+# in the trace's `runs` for as long as the worker works — handed to it in
 # TRACE_RUN, with this dispatch's own run in TRACE_PARENT, so a worker inside
 # another agent harness emits into a run that joins this trail without knowing
 # anything about run stacks. `show run:<id>` prints THE PAIR — it matches the
@@ -501,8 +503,9 @@ TRACE_SH="$_here/trace.sh"
 _own_run=${TRACE_RUN:-} _own_run_set=${TRACE_RUN+set}
 _own_parent=${TRACE_PARENT:-} _own_parent_set=${TRACE_PARENT+set}
 
-# _trace <emit argument …> — one event, or nothing at all.
-_trace() {
+# _trace_sh <trace.sh argument …> — the trace script under this dispatcher's
+# own identity, its stdout passed on; nothing on a dry run or with no script.
+_trace_sh() {
 	[ "$DRY_RUN" = 0 ] || return 0
 	[ -f "$TRACE_SH" ] || return 0
 	(
@@ -523,9 +526,12 @@ _trace() {
 		# decision points — not to a mechanism that runs on every spawn, whose
 		# stderr is read as the dispatch's own report. Hooks silence it for the
 		# same reason.
-		TRACE_QUIET=1 sh "$TRACE_SH" emit "$@" >/dev/null
+		TRACE_QUIET=1 sh "$TRACE_SH" "$@"
 	) || :
 }
+
+# _trace <emit argument …> — one event, or nothing at all.
+_trace() { _trace_sh emit "$@" >/dev/null; }
 
 # --- the depth ---------------------------------------------------------------
 # Before the tier is resolved and before the prompt is read: a dispatch that
@@ -702,6 +708,7 @@ _on_signal() {
 	case $1 in 130) _SIGNAL=INT ;; 143) _SIGNAL=TERM ;; 129) _SIGNAL=HUP ;; esac
 	[ "$_WORKER_STARTED" = 1 ] || RUN_RUNG=""
 	[ "$_SPAWNED" = 1 ] && _dispatch_exit "$1"
+	_worker_run_end "$1"
 	exit "$1"
 }
 trap cleanup EXIT
@@ -941,16 +948,46 @@ while :; do
 	esac
 done
 # --- the record of the crossing ---------------------------------------------
-# A RUN FOR THE WORKER, minted here. The trace script hands out an id only
-# through `begin`, which also PUSHES this working tree's run stack — and a
-# dispatch is not a skill invocation: the stack's owner is a skill's main
-# thread, and two concurrent dispatches pushing it would lose a run. So the id
-# is made from the two things this process already holds that no other dispatch
-# shares — its scratch directory and its pid — behind a UTC timestamp, in the
-# shape the trace script's own ids take: timestamp, pid, eight hex characters.
-# The scratch's mktemp suffix is not hex and is six long, and every reader that
-# checks a run id rejects it (#743) — so the path's CRC is printed as the hex.
-WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-$(printf '%08x' "$(printf '%s' "$SCRATCH" | cksum | cut -d' ' -f1)")"
+# A RUN FOR THE WORKER, opened by the trace: `begin --detached` mints it in the
+# trace's own shape, registers it in the open-run registry with this
+# dispatching run as its parent, and pushes no run stack — a dispatch is not a
+# skill invocation, and two concurrent dispatches pushing one stack would lose
+# a run. This dispatcher holds the id and closes it with `end <run>`
+# (_worker_run_end) at every way out once it is open. It is opened by
+# _trace_spawn, the moment before the spawn is written: a dispatch that ends
+# earlier — a dry run, the in-session exit, a budget it cannot derive — begins
+# no run it would have to close. With no trace script there is no run, and the
+# worker is told so with an empty TRACE_RUN.
+WORKER_RUN=''
+_WORKER_RUN_OPEN=0
+
+# _worker_run_begin — open the worker's run; WORKER_RUN is its id. Unconfigured,
+# the trace still prints an id and records nothing. The trace script runs as
+# THIS process's own child, never under _trace_sh's subshell or a pipe: the
+# registry takes the process that called it as the run's, and it is this
+# dispatcher that lives exactly as long as the worker does. Nothing is exported
+# yet when it runs (TRACE_RUN is handed to the worker further down), so the
+# identity it reads, and the parent it records, are this dispatch's own.
+_worker_run_begin() {
+	[ "$DRY_RUN" = 0 ] && [ -f "$TRACE_SH" ] || return 0
+	if WORKER_RUN=$(TRACE_QUIET=1 sh "$TRACE_SH" begin --detached agent-dispatch) && [ -n "$WORKER_RUN" ]; then
+		_WORKER_RUN_OPEN=1
+	else
+		# A trace that refused the begin (its stderr says why) opened nothing to
+		# close; the pair still needs a subject, and the trace still mints one.
+		WORKER_RUN=$(sh "$TRACE_SH" id 2>/dev/null) || WORKER_RUN=''
+	fi
+	return 0
+}
+
+# _worker_run_end <status> — close the worker's run, once: ok on 0, stopped on
+# anything else, the status in the reason.
+_worker_run_end() {
+	[ "$_WORKER_RUN_OPEN" = 1 ] || return 0
+	_WORKER_RUN_OPEN=0
+	if [ "$1" = 0 ]; then _wr_outcome=ok; else _wr_outcome=stopped; fi
+	_trace_sh end "$WORKER_RUN" outcome="$_wr_outcome" reason="the dispatch exited $1" >/dev/null
+}
 
 # _trace_spawn — the spawn, ONE definition, called at each site that is about
 # to cross (or to fail at crossing). `dispatched` is this dispatcher's own
@@ -969,6 +1006,7 @@ WORKER_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-$(printf '%08x' "$(printf '%s' "$SCRAT
 # before the budget, emits its own pair at its own site (H-1, review of PR
 # #290).
 _trace_spawn() {
+	_worker_run_begin
 	set -- kind=spawn subject="run:$WORKER_RUN" tier="$TIER" domain="$DOMAIN" \
 		harness="$HARNESS" model="$MODEL" outcome=dispatched \
 		data.depth="$DEPTH" data.prompt_bytes="$(wc -c <"$PROMPT_FILE" | tr -d ' ')"
@@ -1015,6 +1053,7 @@ _dispatch_exit() {
 	# The pair is closed. A signal from here on — during the EXIT trap's
 	# cleanup, say — ends the dispatch without writing a second end.
 	_SPAWNED=0
+	_worker_run_end "$_de_status"
 	exit "$_de_status"
 }
 
@@ -1161,17 +1200,11 @@ export AGENT_DISPATCH_DEPTH
 # WHICH RUN IS THE PARENT. The environment is the first answer, as it is for
 # every field the trace script resolves. When it is silent the dispatching run
 # is on that script's per-working-tree run stack — which is what `begin` wrote,
-# and what this file's own emits resolve through — and the script offers no
-# reader for it: `begin` would mint a second run and push the stack, which a
-# dispatch must never do. So it is asked for the one way available without a
-# shared-layer change: a dry-run emit prints the line it WOULD append, with the
-# run it resolved, and writes nothing. That is a read of a documented stdout
-# contract, and a `current` subcommand would be the better answer — it belongs
-# to the release that carries the trace script (H-3, review of PR #290).
+# and what this file's own emits resolve through — and the trace's `current`
+# reads it: the run an emit from here would stamp, first on its line (#746).
 _dispatch_run=$_own_run
-if [ -z "$_own_run_set" ] && [ -f "$TRACE_SH" ]; then
-	_dispatch_run=$(TRACE_QUIET=1 sh "$TRACE_SH" emit kind=note --dry-run 2>/dev/null |
-		sed -n 's/.*"run":"\([^"]*\)".*/\1/p')
+if [ -z "$_own_run_set" ]; then
+	_dispatch_run=$(_trace_sh current 2>/dev/null | sed -n '1{s/ .*//;p;}')
 fi
 TRACE_RUN=$WORKER_RUN
 TRACE_PARENT=$_dispatch_run

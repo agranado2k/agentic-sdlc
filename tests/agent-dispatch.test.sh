@@ -1693,11 +1693,11 @@ EOF
 	expect_status 71 "a task runaway stops at the budget and the dispatch exits 71"
 	expect_err_has "TASK ceiling"
 	if [ "$T_STATUS" = 71 ]; then
-		case $(cat "$TR_BUDGET"/events/*.jsonl 2>/dev/null | sed -n 2p) in
+		case $(cat "$TR_BUDGET"/events/*.jsonl 2>/dev/null | grep '"kind":"spawn' | sed -n 2p) in
 		*'"kind":"spawn.end"'*'"outcome":"budget"'*)
 			pass "…and the spawn.end records the ceiling as the outcome budget, not a fail" ;;
 		*)
-			fail "the spawn.end for a ceiling hit reads: $(cat "$TR_BUDGET"/events/*.jsonl 2>/dev/null | sed -n 2p)" ;;
+			fail "the spawn.end for a ceiling hit reads: $(cat "$TR_BUDGET"/events/*.jsonl 2>/dev/null | grep '"kind":"spawn' | sed -n 2p)" ;;
 		esac
 	fi
 	# The whole point: the operator's own shell is unharmed.
@@ -2160,8 +2160,12 @@ banner "Every spawn is recorded — the pair, the join, and the outcomes (#249)"
 TRACE="$KIT/scripts/trace.sh"
 tr_new() { rm -rf "$1" && mkdir -p "$1"; }
 tr_all() { cat "$1"/events/*.jsonl 2>/dev/null || :; }
-tr_count() { tr_all "$1" | grep -c . || :; }
-tr_nth() { tr_all "$1" | sed -n "$2p"; }
+# The spawn pair is what most legs number; the worker's own run — the
+# run.start its `begin --detached` writes and the run.end its `end <run>`
+# closes it with (#746) — is counted apart, by tr_assert_runs.
+tr_pair() { tr_all "$1" | grep '"kind":"spawn' || :; }
+tr_count() { tr_pair "$1" | grep -c . || :; }
+tr_nth() { tr_pair "$1" | sed -n "$2p"; }
 # tr_event_has <dir> <n> <needle> <label>
 tr_event_has() {
 	case $(tr_nth "$1" "$2") in
@@ -2172,7 +2176,17 @@ tr_event_has() {
 		;;
 	esac
 }
-# tr_assert_count <dir> <n> <label>
+# tr_assert_runs <dir> <n> <label> — how many run.start and run.end events.
+tr_assert_runs() {
+	_tr_n=$(tr_all "$1" | grep -c '"kind":"run\.' || :)
+	if [ "$_tr_n" = "$2" ]; then
+		pass "$3"
+	else
+		fail "$3 — $_tr_n run events, not $2"
+		tr_all "$1" | sed 's/^/        > /'
+	fi
+}
+# tr_assert_count <dir> <n> <label> — how many spawn and spawn.end events.
 tr_assert_count() {
 	if [ "$(tr_count "$1")" = "$2" ]; then
 		pass "$3"
@@ -2189,6 +2203,7 @@ cat >/dev/null
 echo "worker TRACE_RUN=${TRACE_RUN-unset}"
 echo "worker TRACE_PARENT=${TRACE_PARENT-unset}"
 echo "worker TRACE_SESSION=${TRACE_SESSION-unset}"
+[ -z "${TR_WORKER_RUNS:-}" ] || TRACE_QUIET=1 sh "$TR_WORKER_RUNS" runs | sed 's/^/worker runs: /'
 exit "${TR_WORKER_EXIT:-0}"
 EOF
 chmod +x "$TR_STUB"
@@ -2209,7 +2224,10 @@ t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_OK" \
 	TRACE_SESSION=sess-of-the-session TRACE_RUN=run-of-the-skill \
 	sh "$DISPATCH" implementer content --prompt 'Trace this dispatch.'
 expect_status 0 "a traced dispatch still dispatches"
-tr_assert_count "$TR_OK" 2 "one spawn and one spawn.end, and nothing else"
+tr_assert_count "$TR_OK" 2 "one spawn and one spawn.end"
+tr_assert_runs "$TR_OK" 2 "…and the worker's run, begun and ended around them"
+[ "$(tr_all "$TR_OK" | grep -c .)" = 4 ] && pass "…and nothing else" ||
+	fail "a traced dispatch wrote $(tr_all "$TR_OK" | grep -c .) events, not 4"
 tr_event_has "$TR_OK" 1 '"kind":"spawn"' "the first event is the spawn"
 tr_event_has "$TR_OK" 2 '"kind":"spawn.end"' "the second is the spawn.end that pairs with it"
 tr_event_has "$TR_OK" 1 '"tier":"implementer"' "the spawn records the tier it was asked for"
@@ -2258,8 +2276,8 @@ printf '%s\n' "$T_OUT" | grep -q '^worker TRACE_SESSION=sess-of-the-session$' &&
 tr_event_has "$TR_OK" 1 "\"subject\":\"run:$WORKER_RUN\"" "the spawn's subject is the run the worker was given"
 tr_event_has "$TR_OK" 2 "\"subject\":\"run:$WORKER_RUN\"" "…and so is the spawn.end's"
 t_exec env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
-[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 2 ] &&
-	pass "show run:<the worker's run> prints the pair — the operator's one command" ||
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 4 ] &&
+	pass "show run:<the worker's run> prints the pair inside the run's start and end — the operator's one command" ||
 	fail "show found $(printf '%s\n' "$T_OUT" | grep -c .) lines for run:$WORKER_RUN"
 
 # THE WORKER'S RUN HAS THE SHAPE THE TRACE MINTS (#743). The trace's ids are a
@@ -2268,9 +2286,40 @@ t_exec env TRACE_DIR="$TR_OK" sh "$TRACE" show "run:$WORKER_RUN"
 # shape. A worker run minted with the scratch directory's six-character mktemp
 # suffix in the last place failed it, so a skill dispatch inside the worker
 # dropped its Trace-Run and Trace-Spawn lines in silence.
-printf '%s\n' "$WORKER_RUN" | grep -Eqx '[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}' &&
-	pass "the worker's run takes the trace's id shape — timestamp, pid, eight hex" ||
-	fail "the worker's run is not in the trace's id shape: $WORKER_RUN"
+# The worker's run is now the trace's own — `begin --detached` mints it — so
+# the shape is the trace's to judge: `id --check`, never a copy of it here.
+expect_exit 0 "the worker's run takes the trace's id shape" -- sh "$TRACE" id --check "$WORKER_RUN"
+
+# THE WORKER'S RUN IS A RUN OF THE TRACE'S (#746): opened with `begin
+# --detached`, its parent the dispatching run, closed with `end <run>` at the
+# dispatcher's way out — so it is in `runs` while the worker works, and gone
+# after.
+_tr_start=$(tr_all "$TR_OK" | grep '"kind":"run.start"')
+case $_tr_start in
+*"\"run\":\"$WORKER_RUN\",\"parent\":\"run-of-the-skill\""*) pass "the worker's run.start names its run and the dispatching run as parent" ;;
+*) fail "the worker's run.start reads: $_tr_start" ;;
+esac
+case $(tr_all "$TR_OK" | sed -n '$p') in
+*'"kind":"run.end"'*"\"run\":\"$WORKER_RUN\""*'"outcome":"ok"'*) pass "…and its run.end is the last event, outcome ok" ;;
+*) fail "the last event is not the worker's run.end: $(tr_all "$TR_OK" | sed -n '$p')" ;;
+esac
+TR_LIVE="$SCRATCH/trace-live"
+tr_new "$TR_LIVE"
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_LIVE" TRACE_RUN=run-of-the-skill \
+	TR_WORKER_RUNS="$TRACE" sh "$DISPATCH" implementer --prompt 'x'
+_tr_live_run=$(printf '%s\n' "$T_OUT" | sed -n 's/^worker TRACE_RUN=//p')
+expect_out_has "worker runs: $_tr_live_run detached live" "while the worker works, runs lists its run, detached and live"
+t_exec env TRACE_DIR="$TR_LIVE" sh "$TRACE" runs
+expect_resolved "" "…and once the dispatch is over, runs lists nothing"
+TR_LIVE_FAIL="$SCRATCH/trace-live-fail"
+tr_new "$TR_LIVE_FAIL"
+t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_LIVE_FAIL" TR_WORKER_EXIT=7 sh "$DISPATCH" implementer --prompt 'x'
+case $(tr_all "$TR_LIVE_FAIL" | sed -n '$p') in
+*'"kind":"run.end"'*'"outcome":"stopped"'*) pass "a worker that failed ends its run stopped" ;;
+*) fail "a failed worker's last event: $(tr_all "$TR_LIVE_FAIL" | sed -n '$p')" ;;
+esac
+t_exec env TRACE_DIR="$TR_LIVE_FAIL" sh "$TRACE" runs
+expect_resolved "" "…and leaves no run open behind it"
 # tests/skill-phase.test.sh 4d holds what the shape is for: a skill dispatch
 # inside a worker keeps both lines.
 
@@ -2374,6 +2423,7 @@ if [ "$GAP_PLANTED" = 1 ]; then
 			pass "a traced dispatcher sent TERM in the gap is ended by it: exit 143" ||
 			fail "a traced dispatcher sent TERM in the gap exited $bt_status, not 143"
 		tr_assert_count "$TR_GAP" 2 "…its spawn and one end, no more"
+		tr_assert_runs "$TR_GAP" 2 "…and the worker's run is closed by the same way out"
 		tr_event_has "$TR_GAP" 2 '"kind":"spawn.end"' "…the second being the spawn.end that closes the pair"
 		tr_event_has "$TR_GAP" 2 '"exit":"143"' "…and the end records the signal's 143, not a later failure's status"
 		# No worker ever started, so no rung ran one; the signal that ended the
@@ -2421,6 +2471,7 @@ if bait_term -e "$TR_STARTED" env AGENTS_CONFIG="$CFG_TR_BRIEF" TRACE_DIR="$TR_U
 		pass "an untimed dispatcher sent TERM mid-run exits 143 once its worker is done, not the worker's 5" ||
 		fail "an untimed dispatcher sent TERM mid-run exited $bt_status"
 	tr_assert_count "$TR_UNTIMED" 2 "…and its spawn is a pair"
+	tr_assert_runs "$TR_UNTIMED" 2 "…and the worker's run is closed"
 	tr_event_has "$TR_UNTIMED" 2 '"exit":"143"' "…closed with the signal's own status"
 else
 	fail "the untimed worker never said it started in 30s — nothing to TERM"
@@ -2446,7 +2497,10 @@ if bait_copy "$PRE_DIR" "$PRE_MARK" 'index(prev, "--blob \"$PROMPT_FILE\"") && $
 			[ "$bt_status" = 143 ] &&
 				pass "a TERM before the spawn is written exits 143$_pre_label" ||
 				fail "a TERM before the spawn is written exited $bt_status$_pre_label"
-			tr_assert_count "$TR_PRE" 0 "…and leaves no event, so nothing unpaired$_pre_label"
+			tr_assert_count "$TR_PRE" 0 "…and leaves no spawn event, so nothing unpaired$_pre_label"
+			# The worker's run is begun just before the spawn is written; a
+			# signal between the two still ends it (#746), never leaves it open.
+			tr_assert_runs "$TR_PRE" 2 "…and the worker's run it had begun is ended, not left open$_pre_label"
 		else
 			fail "the pre-spawn bait never wrote its marker in 30s — nothing to TERM$_pre_label"
 		fi
@@ -2476,6 +2530,7 @@ if bait_copy "$POST_DIR" "$POST_MARK" '$0 == "trap cleanup EXIT" { print "trap \
 				pass "a TERM after the pair closed still ends the dispatch 143$_post_label" ||
 				fail "a TERM after the pair closed exited $bt_status, not 143 — did the handler run?$_post_label"
 			tr_assert_count "$TR_POST" 2 "a TERM after the pair closed writes no second end$_post_label"
+			tr_assert_runs "$TR_POST" 2 "…and no second run.end either$_post_label"
 			tr_event_has "$TR_POST" 2 '"exit":"5"' "…and the one end is still the worker's own$_post_label"
 		else
 			fail "the post-end bait never wrote its marker in 30s — nothing to TERM$_post_label"
@@ -2496,6 +2551,7 @@ t_exec env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_69" sh "$DISPATCH" reviewer -
 expect_status 69 "an unreachable crossing still exits 69"
 expect_out_is "model-for-reviewing" "…and its stdout is still the model alone — no trace output on it"
 tr_assert_count "$TR_69" 2 "a crossing nobody could make is still a pair, not a silence"
+tr_assert_runs "$TR_69" 2 "…under a worker run begun and ended like any other"
 tr_event_has "$TR_69" 2 '"outcome":"unreachable"' "…and its outcome is unreachable, distinct from fail"
 tr_event_has "$TR_69" 2 '"exit":"69"' "…with 69 recorded"
 
@@ -2509,6 +2565,7 @@ t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_HALF" AGENT_DISPATCH_BUDGET_TA
 	sh "$DISPATCH" implementer --prompt 'x'
 expect_status 2 "half an inherited budget is still a usage error"
 tr_assert_count "$TR_HALF" 0 "…and a dispatch that dies deriving its budget leaves no half pair"
+tr_assert_runs "$TR_HALF" 0 "…and begins no run for a worker it never spawns"
 
 # A DEPTH REFUSAL is a spawn that never happened, so it is one event with an
 # outcome and no pair: nothing was dispatched, so nothing can end.
@@ -2518,6 +2575,7 @@ t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DEEP" AGENT_DISPATCH_DEPTH=9 \
 	sh "$DISPATCH" implementer --prompt 'x'
 expect_status 4 "a dispatch past the maximum depth still refuses with 4"
 tr_assert_count "$TR_DEEP" 1 "a refusal is one event — there is no end to a spawn that never happened"
+tr_assert_runs "$TR_DEEP" 0 "…and no run is begun for it"
 tr_event_has "$TR_DEEP" 1 '"kind":"spawn"' "…and that event is the spawn"
 tr_event_has "$TR_DEEP" 1 '"outcome":"refused"' "…with outcome refused"
 tr_event_has "$TR_DEEP" 1 '"depth":"9"' "…naming the depth it was asked to run at"
@@ -2528,12 +2586,16 @@ tr_new "$TR_DRY"
 t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" implementer --prompt 'x' --dry-run
 expect_status 0 "a dry run still succeeds"
 tr_assert_count "$TR_DRY" 0 "a dry run emits NOTHING — it decided nothing to record"
+tr_assert_runs "$TR_DRY" 0 "…and begins no run"
 t_exec env AGENTS_CONFIG="$UNREACH" TRACE_DIR="$TR_DRY" sh "$DISPATCH" reviewer --prompt 'x' --dry-run
 expect_status 69 "a dry run on an unreachable crossing still reports 69"
 tr_assert_count "$TR_DRY" 0 "…and still emits nothing"
 t_exec env AGENTS_CONFIG="$CFG_TR" TRACE_DIR="$TR_DRY" sh "$DISPATCH" planner --prompt 'x'
 expect_status 3 "the in-session case still exits 3"
 tr_assert_count "$TR_DRY" 0 "…and emits nothing: no spawn was made, the caller makes it"
+tr_assert_runs "$TR_DRY" 0 "…and begins no run either"
+[ ! -d "$TR_DRY/runs" ] || [ -z "$(ls "$TR_DRY/runs")" ] && pass "…so the dry runs and the in-session case registered nothing" ||
+	fail "a dry run or the in-session case left an open run: $(ls "$TR_DRY/runs")"
 
 # THE DISPATCHING RUN IS USUALLY ON THE RUN STACK, not in the environment: that
 # is what `trace.sh begin` writes, and no skill exports TRACE_RUN before
