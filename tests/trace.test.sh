@@ -3023,4 +3023,30 @@ for _rr_term in 'Detached run' 'Stale'; do
 		fail "the glossary has no entry of its own for $_rr_term"
 done
 
+banner "37. Callers reach run identity only through the trace (ticket #746)"
+# ---------------------------------------------------------------------------
+# The trace owns a run id's shape (`id`, `id --check`), the run a caller is in
+# (`current`), and a run a caller holds for something it spawned (`begin
+# --detached`, closed by `end <run>`). A copy of any of them elsewhere drifts
+# from it in silence — the dispatcher's worker id did (#743). So no file but
+# the trace and this, its own suite, may spell the run id's pattern, mint one
+# from the clock, or scrape an event's JSON for the run it carries. The dated
+# records that quote history are exempt: VERSION, UPDATING.md, the diary and
+# the decision records.
+# cs_hits <ERE> — the tracked files that match it, the exempt ones left out.
+cs_hits() {
+	git -C "$KIT" grep -lE -- "$1" -- . ':!scripts/trace.sh' ':!tests/trace.test.sh' \
+		':!VERSION' ':!UPDATING.md' ':!docs/diary.md' ':!docs/adr/' 2>/dev/null
+}
+while IFS='@' read -r _cs_ere _cs_what; do
+	_cs_hit=$(cs_hits "$_cs_ere" | tr '\n' ' ')
+	[ -z "$_cs_hit" ] && pass "no file but the trace $_cs_what" ||
+		fail "only the trace $_cs_what, and so do: $_cs_hit"
+done <<'EOF746'
+\{8\}T\[0-9\]\{6\}Z-@spells the run id's expression
+\]T\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]Z-@spells the run id's glob
+%Y%m%dT%H%M%SZ@mints a run id from the clock
+"(run|parent)":"\\\(@scrapes an event's JSON for its run
+EOF746
+
 t_done "trace script"
