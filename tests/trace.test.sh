@@ -3033,8 +3033,9 @@ banner "37. Callers reach run identity only through the trace (ticket #746)"
 # from the clock, or scrape an event's JSON for the run it carries. The dated
 # records that quote history are exempt: VERSION, UPDATING.md, the diary and
 # the decision records.
-# CS_SCANS — one `<ERE>@<what it catches>` per line, read by cs_scan.
-CS_SCANS='\{8\}T\[0-9\]\{6\}Z-@spells the run id'"'"'s expression
+# CS_SCANS — one `<ERE>@<what it catches>` per line, read by cs_scan. The
+# expression's braces may be escaped, so a BRE spelling (\{8\}) is caught too.
+CS_SCANS='\\?\{8\\?\}T\[0-9\]\\?\{6\\?\}Z-@spells the run id'"'"'s expression
 \]T\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]Z-@spells the run id'"'"'s glob
 %Y%m%dT%H%M%SZ@mints a run id from the clock
 "(run|parent)":"\\\(@scrapes an event'"'"'s JSON for its run'
@@ -3054,6 +3055,9 @@ expect_resolved '' "no file but the trace spells the run id, mints one or scrape
 t_repo
 cat >"$REPO/expr.sh" <<'EOF746'
 grep -E '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}$'
+EOF746
+cat >"$REPO/bre.sh" <<'EOF746'
+sed -n 's/^\([0-9]\{8\}T[0-9]\{6\}Z-[0-9]*-[0-9a-f]\{8\}\)$/\1/p'
 EOF746
 cat >"$REPO/glob.sh" <<'EOF746'
 case $id in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-*) ;; esac
@@ -3075,6 +3079,7 @@ cp "$REPO/expr.sh" "$REPO/scripts/trace.sh"
 t_commit "$REPO" "test: plant the ways round the trace" >/dev/null
 t_exec cs_scan "$REPO"
 expect_out_has "expr.sh: spells the run id's expression" "the scan catches a file spelling the run id's expression"
+expect_out_has "bre.sh: spells the run id's expression" "the scan catches a file spelling it in BRE, \\{8\\}"
 expect_out_has "glob.sh: spells the run id's glob" "the scan catches a file spelling the run id's glob"
 expect_out_has "clock.sh: mints a run id from the clock" "the scan catches a file minting a run id from the clock"
 expect_out_has "scrape.sh: scrapes an event's JSON for its run" "the scan catches a file scraping an event's JSON for its run"
