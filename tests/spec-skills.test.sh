@@ -505,6 +505,10 @@ oracle_forms_agree "$rline1" "rubric question 1"
 t_text_has "$publish" 'the oracle: `<command>`' "the publish step writes a mechanical ticket's oracle as a body line"
 in_order "$publish" "the oracle line opens the Acceptance section of a mechanical ticket" \
 	'`mechanical`' "Acceptance section" 'the oracle: `<command>`'
+# #759: the dispatcher reads a heading or a bold lead, and /to-tickets names
+# the one shape it writes, so a ticket it publishes never relies on the second.
+in_order "$publish" "the publish step names the one shape it opens the Acceptance section with, a heading" \
+	'`mechanical`' "Acceptance section" "opened by an \`## Acceptance\` heading, the one shape this skill writes" 'the oracle: `<command>`'
 t_text_has "$publish" "the one command rubric question 1 names" "the publish step's oracle line points back at the rubric question that asks for it"
 draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$TIX_ABS")
 t_text_has "$draft" 'the oracle: `<command>`' "step 2 drafts a mechanical ticket's oracle line, so the quiz sees it before the human confirms the tier"
