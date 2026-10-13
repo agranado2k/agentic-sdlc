@@ -44,6 +44,10 @@
 # release — the rule is in scripts/agents.lib.sh now, so every consumer gets
 # it, and nothing of it is left here to drift from it.
 #
+# WHAT IT DOES ADD (ADR-0018, ADR-0020, ADR-0027): the family bridge and the
+# fence, both below — kit policy the shared resolver's exact comparison
+# cannot express, and both for the reviewer tier only.
+#
 # Usage:
 #   sh scripts/agents.kit.sh <tier> [domain]
 #   AGENT_SESSION_MODEL=<model> sh scripts/agents.kit.sh reviewer [domain]
@@ -157,12 +161,20 @@ _kit_fold() {
 #               fallback list. The first is asked of the resolver itself, with
 #               no session or unreachable name, so its domain check — the
 #               whitelist for its own eval — is the only one; a malformed
-#               domain prints nothing here and the resolver says why below.
+#               domain prints nothing here and the resolver says why below;
+#   head        the same, the fallback list left out — the candidates the
+#               fence below reads;
+#   serves      the policy's AGENT_KIT_REVIEWER_FALLBACK_SERVES, which says
+#               whether the fence below applies at all.
 _kit_policy() {
 	(
 		. scripts/agents.lib.sh
 		agents_load_config >/dev/null 2>&1
 		AGENTS_TIER_QUIET=1
+		if [ "$1" = serves ]; then
+			printf '%s\n' "${AGENT_KIT_REVIEWER_FALLBACK_SERVES:-}"
+			exit 0
+		fi
 		if [ "$1" = values ]; then
 			agents_values 2>/dev/null | while IFS= read -r _kit_v; do
 				agents_split_harness "$_kit_v"
@@ -175,7 +187,9 @@ _kit_policy() {
 			unset AGENT_SESSION_MODEL AGENT_UNREACHABLE_MODELS
 			sh scripts/agents.lib.sh --model reviewer "$2" 2>/dev/null
 		) || _kit_dv=
-		for _kit_v in $_kit_dv ${AGENT_TIER_REVIEWER:-} ${AGENT_TIER_REVIEWER_FALLBACK:-}; do
+		_kit_fb=${AGENT_TIER_REVIEWER_FALLBACK:-}
+		[ "$1" = head ] && _kit_fb=
+		for _kit_v in $_kit_dv ${AGENT_TIER_REVIEWER:-} $_kit_fb; do
 			agents_split_harness "$_kit_v"
 			printf '%s\n' "$_ah_model"
 		done
@@ -225,8 +239,10 @@ if [ "$_kit_tier" = reviewer ] && [ -f "$AGENTS_CONFIG" ] &&
 		case $_kit_cover in *[!\ ]*) ;; *) _kit_cover=$_kit_n ;; esac
 		_kit_unr="$_kit_unr $_kit_cover"
 	done
+	_kit_sesfam=' '
 	if [ -n "${AGENT_SESSION_MODEL:-}" ]; then
 		_kit_first=
+		_kit_sesfam=" $AGENT_SESSION_MODEL $(_kit_family "$AGENT_SESSION_MODEL" session)"
 		for _kit_v in $(_kit_family "$AGENT_SESSION_MODEL" session); do
 			if [ -z "$_kit_first" ]; then _kit_first=$_kit_v; else _kit_unr="$_kit_unr $_kit_v"; fi
 		done
@@ -235,6 +251,55 @@ if [ "$_kit_tier" = reviewer ] && [ -f "$AGENTS_CONFIG" ] &&
 	if [ -n "$_kit_unr" ]; then
 		AGENT_UNREACHABLE_MODELS=$_kit_unr
 		export AGENT_UNREACHABLE_MODELS
+	fi
+	# THE FENCE (ADR-0027, #763). The reviewer's fallback reviews a diff the
+	# reviewer's own family wrote, and no other: in this policy the Opus
+	# family reviews what the Sonnet family wrote, and every other author
+	# keeps the Sonnet-only reviewer. The shared resolver cannot tell the two
+	# apart — it walks to the fallback whenever the candidates before it are
+	# skipped, whether as the session's own or as unreachable — so this
+	# wrapper decides first. When the walk's head (the domain answer and the
+	# plain reviewer) holds nothing of the session's family, the fallback is
+	# not this author's: if the head is spent, so is the walk, and nothing is
+	# printed, in every form (`--model`, `--alias`, `--harness`, bare). A
+	# head candidate still reachable is the resolver's answer as before, so
+	# that case delegates untouched.
+	#
+	# The fence is the policy's to ask for, in a kit-only variable no
+	# consumer's resolver reads: AGENT_KIT_REVIEWER_FALLBACK_SERVES, empty or
+	# `any` for ADR-0013's walk as it always was, `own-family` for the fence.
+	# Any other value is refused, exit 2: a misspelt fence would otherwise be
+	# no fence, in silence.
+	_kit_fence=
+	case $(_kit_policy serves) in
+	'' | any) ;;
+	own-family)
+		_kit_head=$(_kit_policy head "$_kit_domain")
+		[ "$_kit_head" != "$(_kit_policy candidates "$_kit_domain")" ] && _kit_fence=1
+		;;
+	*)
+		echo "x agents: AGENT_KIT_REVIEWER_FALLBACK_SERVES in $AGENTS_CONFIG is '$(_kit_policy serves)' — expected empty, 'any' or 'own-family'." >&2
+		exit 2
+		;;
+	esac
+	if [ -n "$_kit_fence" ]; then
+		_kit_skips=
+		for _kit_v in $_kit_head; do
+			case $_kit_sesfam in *" $_kit_v "*) _kit_fence= && break ;; esac
+			case " ${AGENT_UNREACHABLE_MODELS:-} " in
+			*" $_kit_v "*) _kit_skips="${_kit_skips:+$_kit_skips, }$_kit_v (named unreachable)" ;;
+			*) _kit_fence= && break ;;
+			esac
+		done
+	fi
+	if [ -n "$_kit_fence" ]; then
+		if [ "${AGENTS_TIER_QUIET:-}" != 1 ]; then
+			echo "!  agents: every reviewer candidate was skipped — $_kit_skips." >&2
+			echo "   The reviewer's fallback reviews only a diff the reviewer's own family wrote" >&2
+			echo "   (the kit's ADR-0027), and this author is of another family. Nothing is" >&2
+			echo "   printed: here, spawn no review — it waits for its reviewer; say so in your report." >&2
+		fi
+		exit 0
 	fi
 fi
 
