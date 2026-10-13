@@ -292,8 +292,8 @@ hook_deny() {
 # nests in, the one the spawner's own prompt handed it (the ticket's TRACE_RUN,
 # with TRACE_PARENT). The first line only, so text a spawn prompt quotes
 # further down — a ticket body, a review comment — can never name a run. Each
-# id is held to the shape the shared script mints (stamp, pid, eight hex
-# digits) and is only ever a value on an event: it is never executed, and a
+# id is held to the shape the shared script mints — judged by its own `id
+# --check`, never a copy — and is only ever a value on an event: it is never executed, and a
 # line that does not match exactly is no channel at all. With no parent on the
 # line the parent is empty, never read from this checkout's stack: a run named
 # from elsewhere has its lineage elsewhere — the shared script's own rule for an
@@ -438,7 +438,7 @@ hook_spawn_in() {
 	_hs_s=${_hs_r%% *}
 	_hs_k=${_hs_r#* }
 	case $_hs_k in *' '*) return 1 ;; esac
-	# DELIBERATE COUPLING, like hook_run_id_ok's: the four tiers are the kit's
+	# DELIBERATE COUPLING: the four tiers are the kit's
 	# fixed vocabulary (docs/capability-tiers.md), spelled here too so a hook
 	# reads no policy file to size a stop; a typo never mints a summary row.
 	case $_hs_t in tier=planner | tier=implementer | tier=mechanical | tier=reviewer) ;; *) return 1 ;; esac
@@ -472,23 +472,13 @@ hook_spawn_word_ok() {
 }
 
 # hook_run_id_ok <value> — is this a run id the shared script could have
-# minted? `<YYYYMMDD>T<HHMMSS>Z-<pid>-<eight hex digits>`, and nothing more;
+# minted? The shape is the script's to say, and it says it with `id --check`
+# (#746): no copy of it lives here to drift. The bound is this file's own —
 # 64 characters at most, past any pid a host hands out, so no line of any
 # length is carried onto an event.
-# DELIBERATE COUPLING: this repeats the shape of the shared script's
-# trace_id, which exposes no check of its own. The leg that catches a drift is
-# `tests/trace-hooks.test.sh` §47's first: the id a real `begin` printed is
-# handed over and carried. One predicate owned by the script is a release,
-# recorded as a candidate ticket (review of PR #524).
 hook_run_id_ok() {
-	case ${1:-} in
-	[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-?*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
-	*) return 1 ;;
-	esac
-	_ri_pid=${1#*Z-}
-	_ri_pid=${_ri_pid%-*}
-	case $_ri_pid in '' | *[!0-9]*) return 1 ;; esac
-	[ "${#1}" -le 64 ]
+	[ -n "${1:-}" ] && [ "${#1}" -le 64 ] || return 1
+	(cd "$hook_repo" && sh scripts/trace.sh id --check "$1") 2>/dev/null
 }
 
 # hook_agent_transcript <session transcript> [<agent id>] — the transcript of
