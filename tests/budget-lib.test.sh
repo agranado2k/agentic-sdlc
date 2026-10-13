@@ -81,6 +81,7 @@ PATH_NOSD="$NOSD:$PATH"
 # ---------------------------------------------------------------------------
 banner "1. budget_derive prints the record and sets nothing"
 # ---------------------------------------------------------------------------
+# runtime/R16.
 PATH=$PATH_NOSD lib budget_derive
 expect_status 0 "budget_derive derives against the fake host"
 s_field mode derived "mode is derived"
@@ -138,6 +139,7 @@ expect_out_is same "budget_derive sets no variable in the shell that called it"
 # ---------------------------------------------------------------------------
 banner "2. A policy that cannot be a budget is refused, and the caller lives"
 # ---------------------------------------------------------------------------
+# runtime/R17.
 bad() { printf '%s\n' "$1" >"$SCRATCH/bad.config.sh"; AGENTS_CONFIG="$SCRATCH/bad.config.sh" PATH=$PATH_NOSD lib budget_derive; }
 bad 'AGENT_BUDGET_TASKS_PERCENT=100'
 expect_status 2 "a percentage of 100 is refused, exit 2"
@@ -174,6 +176,7 @@ expect_status 2 "--tasks with a leading zero is refused the same way"
 # ---------------------------------------------------------------------------
 banner "3. budget_run runs the command under the record's rung"
 # ---------------------------------------------------------------------------
+# runtime/R18: budget_run.
 REC="$SCRATCH/record"
 V="$SCRATCH/verdict"
 LIMITS='echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null) DATA=$(ulimit -d)"; exit 7'
@@ -300,6 +303,7 @@ expect_status 5 "a derived record on the no-op rung still runs the command"
 # ---------------------------------------------------------------------------
 banner "4. budget_verdict reads the run's counters"
 # ---------------------------------------------------------------------------
+# runtime/R18: budget_verdict.
 # verdict <rung> <file content|-absent> [started] — a verdict file by hand,
 # as budget_run's wrapper leaves it.
 verdict() {

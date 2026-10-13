@@ -191,6 +191,7 @@ probe=$(AGENT_SUITE_BUDGET=off sh -u -c '. "$0"; note "probe skip" >/dev/null; p
 # ---------------------------------------------------------------------------
 banner "The two retired assertion families stay gone (#752)"
 # ---------------------------------------------------------------------------
+# runtime/R27.
 # A merged family (t_run, LAST_*, assert_status, assert_out_*) and a split one
 # (t_run_split, S_*, s_assert_*) are deleted from the test harness; this scan
 # fails while any of their names is defined or called under tests/. Names are
@@ -226,6 +227,7 @@ _hit=$(retired_names "$KIT/tests")
 # ---------------------------------------------------------------------------
 banner "The expect_* family: t_exec keeps three registers, every expect_* goes red and green"
 # ---------------------------------------------------------------------------
+# runtime/R22, runtime/R23, runtime/R24 and runtime/R25.
 # One family for every suite's claims (#749): t_exec fills T_OUT, T_ERR and
 # T_STATUS apart; an expect_* that does not hold prints FAIL, counts exactly
 # one failure and shows both streams — stdout under '>', stderr under '|'.
@@ -292,6 +294,7 @@ done
 # ---------------------------------------------------------------------------
 banner "Only the test harness defines an assertion (#749)"
 # ---------------------------------------------------------------------------
+# runtime/R26.
 # A suite that redefines one of tests/lib.sh's assertions shadows it, and its
 # claims then rest on a copy nobody drives red (kit-demo's assert_out_lacks did).
 # shadowed_assertions <tests-dir> — prints file:name for every function defined

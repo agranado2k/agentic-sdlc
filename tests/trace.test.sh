@@ -2601,6 +2601,8 @@ banner "35. current answers \"which run am I in?\", and id owns the run id's sha
 # nothing, exit 0, when no run is open, when TRACE_RUN is set empty, or when
 # the trace is unconfigured. `id` mints a run id and writes nothing; `id
 # --check <id>` is 0 for every id the trace mints and 1 for anything else.
+# Requirements held here: runtime/R3 (the line current prints), runtime/R4
+# (nothing, exit 0), runtime/R5 (id) and runtime/R6 (id --check).
 t_repo
 CU_REPO=$REPO
 mkdir -p "$CU_REPO/scripts"
@@ -2781,7 +2783,7 @@ rr_run() {
 	)
 }
 rr_field() { printf '%s\n' "$T_OUT" | sed -n "s/^$1=//p"; }
-# R7: begin registers its run, opened `stack`, naming parent, session,
+# runtime/R7: begin registers its run, opened `stack`, naming parent, session,
 # checkout, process id, host and start time.
 RR_OUTER=$(rr_run TRACE_SESSION=rr-a begin implement 2>/dev/null)
 t_exec rr_run TRACE_SESSION=rr-a runs "$RR_OUTER"
@@ -2799,7 +2801,7 @@ expect_out_has "host=$RR_HOST" "names this host"
 RR_INNER=$(rr_run TRACE_SESSION=rr-a begin review-pr 2>/dev/null)
 t_exec rr_run TRACE_SESSION=rr-a runs "$RR_INNER"
 expect_out_has "parent=$RR_OUTER" "a nested begin's entry names the run it nests in"
-# R8: begin --detached mints, registers `detached`, prints the id, touches no stack.
+# runtime/R8: begin --detached mints, registers `detached`, prints the id, touches no stack.
 RR_KEY=$(printf '%s' "$RR_TOP" | git hash-object --stdin)
 _rr_stacks=$(cat "$RR/current/$RR_KEY".*.runs | cksum)
 t_exec rr_run TRACE_SESSION=rr-a begin --detached agent-dispatch
@@ -2814,7 +2816,7 @@ expect_out_has "opened=detached" "opened detached"
 expect_out_has "parent=$RR_INNER" "its parent is the run current when it was minted"
 grep "\"run\":\"$RR_DET\"" "$RR/events/$TODAY.jsonl" | grep -qF '"kind":"run.start"' &&
 	pass "and its run.start is in the event log, the durable record" || fail "no run.start for the detached run"
-# R11: runs lists one line per entry.
+# runtime/R11: runs lists one line per entry.
 t_exec rr_run runs
 expect_status 0 "runs exits 0"
 [ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 3 ] && pass "runs prints one line per open run: three" || fail "runs printed: $T_OUT"
@@ -2823,7 +2825,7 @@ for _rr_r in "$RR_OUTER" "$RR_INNER" "$RR_DET"; do
 done
 printf '%s\n' "$T_OUT" | grep "^$RR_DET " | grep -qw detached && printf '%s\n' "$T_OUT" | grep "^$RR_OUTER " | grep -qw stack &&
 	pass "and each line says how its run was opened" || fail "runs lines do not say stack/detached: $T_OUT"
-# R10: end removes the entry — a stack run, and a detached one.
+# runtime/R10: end removes the entry — a stack run, and a detached one.
 rr_run TRACE_SESSION=rr-a end "$RR_INNER" 2>/dev/null
 t_exec rr_run runs "$RR_INNER"
 expect_status 1 "end <run> removes its entry: runs <id> then exits 1"
@@ -2838,7 +2840,7 @@ grep "\"run\":\"$RR_DET\"" "$RR/events/$TODAY.jsonl" | grep -F '"kind":"run.end"
 	fail "ending a detached run moved a stack"
 t_exec rr_run TRACE_SESSION=rr-a end "$RR_DET"
 expect_status 2 "a detached run ended twice is not open: exit 2"
-# R12: an id with no entry.
+# runtime/R12: an id with no entry.
 t_exec rr_run runs "$(sh "$TRACE" id)"
 expect_status 1 "runs <id> for an id with no entry exits 1"
 expect_out_is "" "and prints nothing"
@@ -2847,7 +2849,7 @@ expect_status 1 "a value no run id has names no entry either, and reads no path"
 expect_out_is "" "printing nothing"
 expect_exit 2 "runs takes one id at most" -- rr_run runs "$RR_OUTER" "$RR_OUTER"
 expect_exit 2 "begin --detached with no skill is a usage error" -- rr_run begin --detached
-# R14: concurrent registrations are all held.
+# runtime/R14: concurrent registrations are all held.
 _rr_i=0
 : >"$SCRATCH/rr-ids"
 while [ $_rr_i -lt 8 ]; do
@@ -2863,7 +2865,7 @@ done <"$SCRATCH/rr-ids"
 	pass "eight begin --detached at once: eight ids, eight entries held" ||
 	fail "concurrent registrations: $(grep -c . "$SCRATCH/rr-ids") ids, $_rr_held entries"
 while read -r _rr_r; do rr_run end "$_rr_r" >/dev/null 2>&1; done <"$SCRATCH/rr-ids"
-# R13: an entry whose process is gone reads stale, and stays.
+# runtime/R13: an entry whose process is gone reads stale, and stays.
 sh -c 'cd "$1" && TRACE_CONFIG="$2" sh scripts/trace.sh begin --detached agent-dispatch >"$3" 2>/dev/null && exec sleep 60' rr "$RR_REPO" "$RRON" "$SCRATCH/rr-live" &
 _rr_pid=$!
 _rr_i=0
@@ -2984,7 +2986,7 @@ t_exec rr_run runs "$RR_DEAD"
 expect_out_has "opened=detached" "a detached entry"
 expect_out_has "state=stale" "whose process has exited reads stale"
 rm -f "$RR/runs/$RR_DEAD"
-# R9: unconfigured, begin --detached still prints a well-formed id and writes nothing.
+# runtime/R9: unconfigured, begin --detached still prints a well-formed id and writes nothing.
 t_repo
 RR_OFF_REPO=$REPO
 mkdir -p "$RR_OFF_REPO/scripts"
@@ -3033,6 +3035,7 @@ banner "37. Callers reach run identity only through the trace (ticket #746)"
 # from the clock, or scrape an event's JSON for the run it carries. The dated
 # records that quote history are exempt: VERSION, UPDATING.md, the diary and
 # the decision records.
+# Requirement held here: runtime/R15.
 # CS_SCANS — one `<ERE>@<what it catches>` per line, read by cs_scan. The
 # expression's braces may be escaped, so a BRE spelling (\{8\}) is caught too.
 CS_SCANS='\\?\{8\\?\}T\[0-9\]\\?\{6\\?\}Z-@spells the run id'"'"'s expression
