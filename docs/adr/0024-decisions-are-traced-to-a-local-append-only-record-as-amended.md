@@ -4,7 +4,7 @@
 - **Date**: 2026-10-10
 - **Deciders**: the implementer session for #692, under ADR-0021 and the operator's delegation of rulings (2026-10-10); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: supersedes ADR-0008 whole, consolidating it with its clause numbers kept; written under ADR-0021 clauses 1 to 4, and it reverses nothing; folds in ADR-0023 clause 1 (clause 5 here) and the readers ADR-0019 clause 1 and ADR-0023 clause 3 name (clause 7 here), both of which stay binding for their own decisions
-- **Superseded by**: — (amended 2026-10-10 for #723: clause 7 names the landing script's third read, `pr.open`, as ADR-0019 now records it; amended 2026-10-11 for #744: clause 5 names two readers of a run's identity — `stack <dir>` for a caller in another checkout, `current` for the caller's own — and `id` as the one owner of the run id's shape)
+- **Superseded by**: — (amended 2026-10-10 for #723: clause 7 names the landing script's third read, `pr.open`, as ADR-0019 now records it; amended 2026-10-11 for #744: clause 5 names two readers of a run's identity — `stack <dir>` for a caller in another checkout, `current` for the caller's own — and `id` as the one owner of the run id's shape; amended 2026-10-11 for #745: clause 5 links ADR-0026, the open-run registry and `begin --detached`)
 
 ## Context and problem statement
 
@@ -329,6 +329,11 @@ Chosen: **option 1**.
      listed, refuses the whole answer — a partial "nothing open"
      would read as leave to prune. Unconfigured, it prints nothing, exit 0.
      (`--all` is ADR-0023 clause 1.)
+   - **Every open run is registered by id** — ADR-0026: `begin` registers
+     its run, `begin --detached` mints and registers one on no stack, `end`
+     removes the entry of the run it closes, and `runs [<id>]` reads the
+     registry. The registry is the "what is running now" view; the event log
+     stays the durable record.
    - **A subagent's run is handed over at spawn, on its prompt's first
      line**: `Trace-Run: <run id> [<parent run id>]` and nothing else on it.
      The agent harness writes the prompt verbatim as the first user line of
@@ -487,7 +492,7 @@ each was folded:
 - Clause 5 — the session-keyed stack (#453); `stack <dir>` (#472); the
   `Trace-Run:` channel (#474); `end <run>` (#543); a bare `end` deprecated
   (#560); `Trace-Spawn:` (#583); the spawn guard (#627); `stack --all`
-  (ADR-0023, #680); `current` and `id` (#744). The line cap and the blob store arrived with #248.
+  (ADR-0023, #680); `current` and `id` (#744); the open-run registry and `begin --detached` (ADR-0026, #745). The line cap and the blob store arrived with #248.
 - Clause 6 — the dated price table and its kit-only refresh (#270).
 - Clause 7 — the readers are the operator and `/retro` (#309); the landing
   script as an operator-run reader (ADR-0019, #630, and its review-verdict
