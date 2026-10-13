@@ -313,6 +313,69 @@ case "$T_ERR" in
 *) fail "a buried oracle line was read: $T_ERR" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "3b. The section opens by a heading or a bold lead, either way (#759)"
+# ---------------------------------------------------------------------------
+# /to-tickets once wrote the section as a bold paragraph lead, and the reader
+# knew only a heading: two mechanical tickets lost their cascade (#750, #751).
+# acc_ticket <file> <the section's opening line> <its first line> [<a line after>]
+acc_ticket() {
+	{
+		echo "Some context, then the ticket's Acceptance section."
+		echo
+		echo "$2"
+		[ -n "$3" ] && echo "$3"
+		[ -n "${4:-}" ] && echo "$4"
+		echo "- the thing is done"
+	} >"$1"
+}
+# shape_finds <name> <ticket file> — the oracle is read: the cheap rung runs
+# and, its oracle green, passes.
+shape_finds() {
+	fresh_wt
+	FIXTURE_ORACLE_GREEN=1
+	export FIXTURE_ORACLE_GREEN
+	cascade "$2"
+	unset FIXTURE_ORACLE_GREEN
+	case "$T_ERR" in
+	*"cascade refused"*) fail "$1: the cascade was refused: $T_ERR" ;;
+	*) printf '%s\n' "$T_OUT" | grep -q 'REPORT from model-cheap' &&
+		pass "$1: the oracle is read and the cheap rung staged" ||
+		fail "$1: the cheap rung never ran: $T_OUT" ;;
+	esac
+}
+# shape_none <name> <ticket file> — no oracle is read: refused, said.
+shape_none() {
+	fresh_wt
+	cascade "$2"
+	case "$T_ERR" in
+	*"cascade refused"*"names no oracle"*) pass "$1: no oracle is read" ;;
+	*) fail "$1: an oracle was read: $T_ERR $T_OUT" ;;
+	esac
+}
+_oline='the oracle: `sh tests/oracle.sh`'
+T_S="$SCRATCH/shape"
+acc_ticket "$T_S-h3" '### Acceptance' '' "$_oline"
+shape_finds "a level-3 heading, a blank line, the oracle" "$T_S-h3"
+acc_ticket "$T_S-bold-dot" '**Acceptance.**' "$_oline"
+shape_finds "a bold lead '**Acceptance.**' alone, the oracle on the next line" "$T_S-bold-dot"
+acc_ticket "$T_S-bold" '**Acceptance**' '' "$_oline"
+shape_finds "a bold lead '**Acceptance**' alone, a blank line, the oracle" "$T_S-bold"
+acc_ticket "$T_S-bold-inline" "**Acceptance.** $_oline" ''
+shape_finds "a bold lead followed on its line by the oracle" "$T_S-bold-inline"
+acc_ticket "$T_S-bold-prose" '**Acceptance.** The suite case holds it.' "$_oline"
+shape_none "a bold lead whose first line is prose, the oracle after it" "$T_S-bold-prose"
+acc_ticket "$T_S-bold-prose2" '**Acceptance.**' '- the suite case holds it' "$_oline"
+shape_none "a bold lead alone whose next line is not the oracle" "$T_S-bold-prose2"
+acc_ticket "$T_S-outside" "$_oline" '' '**Acceptance.**'
+shape_none "an oracle line before any Acceptance section" "$T_S-outside"
+acc_ticket "$T_S-midline" 'The **Acceptance.** lead mid-sentence opens nothing.' "$_oline"
+shape_none "a bold 'Acceptance' that does not open its line" "$T_S-midline"
+# A bold "Acceptance" in prose that names no oracle opens nothing: a heading
+# further down still opens the section (review of #768, M-1).
+acc_ticket "$T_S-prose-then-heading" '**Acceptance** is below, under its heading.' '## Acceptance' "$_oline"
+shape_finds "prose led by a bold 'Acceptance', then the heading and its oracle" "$T_S-prose-then-heading"
+
 # A worktree with no pairing guard has nothing to judge a rung by.
 fresh_wt
 rm "$WT/scripts/guards.kit.sh"
