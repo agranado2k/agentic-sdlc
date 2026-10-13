@@ -30,7 +30,7 @@
 # THE SUITE'S BUDGET IS DERIVED UNDER THIS FILE TOO. tests/lib.sh runs every
 # suite inside the budget a dispatched worker gets (ADR-0006, #209), and
 # reads the six AGENT_BUDGET_* variables from here — never from the
-# environment's $AGENTS_CONFIG. None is set: the dispatcher's defaults are
+# environment's $AGENTS_CONFIG. None is set: the Budget library's defaults are
 # the kit's answer for its own suite, re-measured by #209 with room to spare.
 # Set one here, in the shape scripts/agents.config.sh documents, to tighten
 # the suite's ceiling for every developer at once.

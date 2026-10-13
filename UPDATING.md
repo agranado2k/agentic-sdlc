@@ -227,17 +227,28 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
-**Arriving from 0.72.0 or older, the dispatcher reaches run identity only
+**Arriving from 0.73.0 or older, the dispatcher reaches run identity only
 through the trace.** No file joins or leaves at 0.74.0. One shared file
 changes content besides this recipe: `scripts/agent-dispatch.sh` opens a
 worker's run with the trace's `begin --detached` and closes it with
 `end <run>` at every way out, so the run is in `runs` while the worker works
 and a dispatch writes the run's `run.start` and `run.end` around its spawn
 pair; it reads the dispatching run with `current`, and mints no id of its
-own. Take it with the 0.72.0 trace, whose verbs it calls. Part 2, step 9b: if
-you carry the claude-code adapter, re-copy
-`adapters/claude-code/hooks/hook.lib.sh` — it checks a `Trace-Run:` line's
-ids with the trace's `id --check` in place of its own copy of the shape.
+own. Take it with the 0.72.0 trace or later, whose verbs it calls. Part 2,
+step 9b: if you carry the Claude Code adapter, re-copy its
+`hooks/hook.lib.sh` — it checks a `Trace-Run:` line's ids with the trace's
+`id --check` in place of its own copy of the shape.
+
+**Arriving from 0.72.0 or older, the dispatcher is executed only.**
+No file joins or leaves at 0.73.0. `scripts/agent-dispatch.sh` drops the
+layer that let it be sourced: run it, as every caller the kit ships does, and
+nothing changes — every budget line, note and exit status reads as before.
+Two things do. A copy run under another name is the dispatcher it was, where
+it used to refuse with exit 2; and a script of yours that sourced the
+dispatcher for its budget gets no `_budget_*` function from it now — source
+`scripts/budget.lib.sh` and call its four functions instead, the header of
+that file says how. `scripts/budget.lib.sh` changes a comment only. Part 2
+has nothing to take.
 
 **Arriving from 0.71.0 or older, every open run is registered by id.**
 No file joins or leaves at 0.72.0. One shared file changes content besides
@@ -1293,10 +1304,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 2979 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 2978 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3133 insertions(+), 1 deletion(-)
+ 3 files changed, 3132 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

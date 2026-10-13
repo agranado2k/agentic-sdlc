@@ -8,10 +8,10 @@
 # login session's task ceiling, #205) fails as a red suite instead of a frozen
 # host. This suite is the test harness's oracle for that, through two seams:
 #
-#   1. THE DISPATCHER'S SOURCING SEAM. tests/lib.sh takes the derivation from
-#      scripts/agent-dispatch.sh by sourcing it, so a suite and a worker cannot
-#      disagree about a number. Sourced, the dispatcher defines and runs
-#      nothing; _budget_derive then answers what --dry-run shows.
+#   1. THE BUDGET LIBRARY. tests/lib.sh takes the derivation, the ladder and
+#      the verdict from scripts/budget.lib.sh's four functions — the ones the
+#      dispatcher calls — so a suite and a worker cannot disagree about a
+#      number, and no file outside the library names a private helper of it.
 #   2. THE TEST HARNESS SEAM. A STUB SUITE — a script that sources tests/lib.sh the
 #      way every suite does — is run as `sh stub.sh`, against a fake host the
 #      dispatcher already knows how to read (AGENT_DISPATCH_HOST_ROOT), so the
@@ -32,7 +32,6 @@
 set -u
 
 KIT=$(cd "$(dirname "$0")/.." && pwd)
-DISPATCH="$KIT/scripts/agent-dispatch.sh"
 
 # This suite is the test harness's oracle, so it cannot lean on the test
 # harness's own recursion bound to be one: a test harness that lost that
@@ -49,65 +48,94 @@ export SUITE_BUDGET_TEST_DEPTH
 t_init
 
 # ---------------------------------------------------------------------------
-banner "1. Sourcing the dispatcher defines the derivation and runs nothing"
+banner "1. The test harness reaches the Budget through the library's interface"
 # ---------------------------------------------------------------------------
-# The seam tests/lib.sh uses. Sourced with _dispatch_here set (the same shape
-# as scripts/agents.lib.sh's _agents_here), the dispatcher must define its
-# _budget_* functions and return before it parses arguments, sweeps scratch or
-# resolves a tier — with the suite's own arguments untouched, and nothing on
-# either stream. A dispatcher that ran when sourced would print its usage and
-# exit 2 here.
-t_exec sh -c '_dispatch_here="$1"; . "$2"; command -v _budget_derive >/dev/null && echo "defined: _budget_derive"; command -v _budget_scope_props >/dev/null && echo "defined: _budget_scope_props"; command -v _budget_counters_text >/dev/null && echo "defined: _budget_counters_text"; shift 2; echo "args: $*"; case $- in *u*) echo "nounset: on" ;; *) echo "nounset: off" ;; esac' probe "$KIT/scripts" "$DISPATCH" a b
-expect_status 0 "sourcing the dispatcher with _dispatch_here set exits 0 — it ran no dispatch"
-expect_out_has "defined: _budget_derive" "…and defines _budget_derive"
-expect_out_has "defined: _budget_scope_props" "…and _budget_scope_props"
-expect_out_has "defined: _budget_counters_text" "…and _budget_counters_text"
-expect_out_has "args: a b" "…and leaves the sourcing shell's arguments alone"
-expect_out_has "nounset: off" "…and its options — the dispatcher's set -u is the dispatch's, below the seam"
-expect_out_lacks "usage:" "…without printing the usage"
-expect_err_lacks "dispatch:"
-
-# Sourced WITHOUT _dispatch_here there is nowhere to find agents.lib.sh, and
-# the dispatcher says so rather than guessing from the sourcing script's $0
-# — with a `return`, so an interactive shell that sourced it by hand stays
-# open and reads the status. The same branch is reached by EXECUTING a copy
-# under any other name — the detection is $0's, as scripts/agents.lib.sh's
-# is — so the message names both causes.
-t_exec sh -c '. "$1"; echo "sourcing status $?"' probe "$DISPATCH"
-expect_out_has "sourcing status 2" "sourcing without _dispatch_here is refused with status 2 — and the sourcing shell goes on"
-expect_err_has "_dispatch_here"
-expect_err_has "a name other than agent-dispatch.sh"
-RENAMED="$SCRATCH/renamed"; mkdir -p "$RENAMED"
-cp "$DISPATCH" "$RENAMED/dispatch"; cp "$KIT/scripts/agents.lib.sh" "$RENAMED/agents.lib.sh"
-t_exec sh "$RENAMED/dispatch" implementer --prompt 'x' --dry-run
-expect_status 2 "a copy executed under another name is refused, exit 2"
-expect_err_has "a name other than agent-dispatch.sh"
-
-# _budget_derive answers what the dry run shows, from the same fake host the
+# tests/lib.sh confines a suite through scripts/budget.lib.sh — budget_derive,
+# budget_run, budget_verdict and budget_inherited_bounds — the same four the
+# dispatcher calls, so a suite and a worker cannot disagree about a number
+# (#742, #748). The numbers come from the library on the same fake host the
 # dispatch suite uses: 25% of the slice's 10008 tasks, 50% of 2091 MiB.
 t_fake_host "$SCRATCH/host" 10008 2141820
-# derive — source the seam against the fake host and print what it derived.
-derive() { t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" "$@" sh -c '_dispatch_here="$1"; . "$2"; _budget_derive; _budget_scope_props "$BUDGET_RUNG"; printf "mode=%s tasks=%s memory=%s rung=%s\nprops=%s\n" "$BUDGET_MODE" "$BUDGET_TASKS" "$BUDGET_MEMORY" "$BUDGET_RUNG" "$SCOPE_PROPS"' probe "$KIT/scripts" "$DISPATCH"; }
+# derive — source the library the way a caller does, against the fake host,
+# and print its record.
+derive() { t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" "$@" sh -c '_budget_here="$1"
+. "$1/budget.lib.sh"
+budget_derive' probe "$KIT/scripts"; }
 derive
-expect_status 0 "_budget_derive derives against the fake host"
-expect_out_has "mode=derived tasks=2502 memory=1045" "…the same numbers the dispatch suite's dry run shows: 25% of 10008, 50% of 2091 MiB"
-expect_out_has "TasksMax=2502" "…and the scope properties carry the task ceiling"
-expect_out_has "OOMPolicy=continue" "…and the OOM policy the ADR amendment records"
+expect_status 0 "budget_derive derives against the fake host"
+expect_out_has "tasks=2502" "…the task ceiling the dispatch suite's dry run shows: 25% of 10008"
+expect_out_has "memory_mib=1045" "…and the memory ceiling: 50% of 2091 MiB"
 # The policy file is read through the same reader: a ceiling in it clamps.
 CFG_SMALL="$SCRATCH/small.config.sh"
 printf "AGENT_BUDGET_TASKS_CEILING='300'\nAGENT_BUDGET_MEMORY_CEILING_MIB='600'\n" >"$CFG_SMALL"
 derive AGENTS_CONFIG="$CFG_SMALL"
-expect_out_has "tasks=300 memory=600" "the policy file's clamps apply through the seam"
-# The inherited case is the dispatcher's own: an outer budget in the
-# environment is taken as given and derives nothing.
+expect_out_has "tasks=300" "the policy file's task clamp applies through the library"
+expect_out_has "memory_mib=600" "…and its memory clamp"
+# The inherited case: an outer budget in the environment is taken as given.
 derive AGENT_DISPATCH_BUDGET_TASKS=777 AGENT_DISPATCH_BUDGET_MEMORY_MIB=888
-expect_out_has "mode=inherited tasks=777 memory=888" "an outer dispatch's budget is inherited through the seam"
-# And a policy value that cannot be a budget is refused where the sourcing
-# shell can hear it: exit 2, never a default.
+expect_out_has "mode=inherited" "an outer dispatch's budget is inherited through the library"
+expect_out_has "tasks=777" "…its task ceiling as given"
+# And a policy value that cannot be a budget is refused where the caller can
+# hear it: status 2, never a default, and the caller's shell goes on.
 printf "AGENT_BUDGET_TASKS_PERCENT='lots'\n" >"$CFG_SMALL"
-derive AGENTS_CONFIG="$CFG_SMALL"
-expect_status 2 "a policy value that is not a whole number is refused through the seam"
+t_exec env AGENT_DISPATCH_HOST_ROOT="$HOST" AGENTS_CONFIG="$CFG_SMALL" sh -c '_budget_here="$1"
+. "$1/budget.lib.sh"
+budget_derive
+echo "caller status $?"' probe "$KIT/scripts"
+expect_out_has "caller status 2" "a policy value that is not a whole number is refused with status 2 — and the caller goes on"
 expect_err_has "AGENT_BUDGET_TASKS_PERCENT"
+
+# R21: no file outside the library names a function private to it. The
+# private names are read from the library itself — every function it defines
+# whose name starts with an underscore, the counters reader it ships as text
+# among them — so a private helper added or renamed there is held here with
+# no edit to this suite. The dated records are exempt: VERSION's history,
+# UPDATING.md, the diary and the decision records quote what a file said
+# when it was written, and rewriting a record to drop a name would falsify
+# it. Every other tracked file, code and prose alike, is held.
+# private_names_outside <root> — prints `<file>: <name>` for each hit under a
+# git tree at <root>; nothing when clean.
+private_names_outside() {
+	_pno_names=$(sed -n 's/^\(_[A-Za-z0-9_]*\)() *[({].*/\1/p' "$1/scripts/budget.lib.sh" | sort -u)
+	[ -n "$_pno_names" ] || { echo "no private names read from $1/scripts/budget.lib.sh"; return 0; }
+	for _pno_n in $_pno_names; do
+		git -C "$1" grep -lw -e "$_pno_n" -- . ':!scripts/budget.lib.sh' ':!VERSION' ':!UPDATING.md' ':!docs/diary.md' ':!docs/adr' 2>/dev/null |
+			sed "s|\$|: $_pno_n|"
+	done
+}
+HITS=$(private_names_outside "$KIT")
+[ -z "$HITS" ] && pass "no file outside scripts/budget.lib.sh names a function private to it" ||
+	fail "files outside scripts/budget.lib.sh name its private functions: $(printf '%s' "$HITS" | tr '\n' ';')"
+# …and the check can fail: a scratch tree whose one caller names a private
+# helper is caught, by file and by name — the helper read from the library,
+# so this suite names none of its own. A record that quotes one is not.
+PNO="$SCRATCH/pno"
+mkdir -p "$PNO/scripts"
+cp "$KIT/scripts/budget.lib.sh" "$PNO/scripts/budget.lib.sh"
+PLANT=$(sed -n 's/^\(_[A-Za-z0-9_]*\)() *[({].*/\1/p' "$PNO/scripts/budget.lib.sh" | head -n 1)
+printf '#!/bin/sh\n%s\n' "$PLANT" >"$PNO/caller.sh"
+printf 'quotes %s as it once was\n' "$PLANT" >"$PNO/VERSION"
+git -C "$PNO" init -q && git -C "$PNO" add -A
+HITS=$(private_names_outside "$PNO")
+if [ -n "$PLANT" ] && [ "$HITS" = "caller.sh: $PLANT" ]; then
+	pass "…and a caller that names one is caught — the record that quotes one is not"
+else
+	fail "the private-name check on a planted caller printed '$HITS', expected 'caller.sh: $PLANT'"
+fi
+
+# The dispatcher no longer supports being sourced, so it no longer asks what
+# name it runs under: a copy executed under another name, with the two
+# libraries beside it, is the dispatcher it was.
+RENAMED="$SCRATCH/renamed"; mkdir -p "$RENAMED"
+cp "$KIT/scripts/agent-dispatch.sh" "$RENAMED/dispatch"
+cp "$KIT/scripts/agents.lib.sh" "$KIT/scripts/budget.lib.sh" "$RENAMED/"
+t_exec env AGENTS_CONFIG="$KIT/scripts/agents.kit.config.sh" sh "$KIT/scripts/agent-dispatch.sh" implementer --prompt 'x' --dry-run
+ORIG_STATUS=$T_STATUS ORIG_OUT=$T_OUT
+t_exec env AGENTS_CONFIG="$KIT/scripts/agents.kit.config.sh" sh "$RENAMED/dispatch" implementer --prompt 'x' --dry-run
+expect_status "$ORIG_STATUS" "a copy of the dispatcher executed under another name answers as the dispatcher does"
+[ -n "$ORIG_OUT" ] && [ "$T_OUT" = "$ORIG_OUT" ] && pass "…with the same output, word for word" ||
+	fail "the renamed copy printed '$T_OUT', the dispatcher '$ORIG_OUT'"
+expect_err_lacks "a name other than agent-dispatch.sh"
 
 # ---------------------------------------------------------------------------
 banner "2. A suite that sources tests/lib.sh runs inside the budget, once"
@@ -174,6 +202,28 @@ case "$RUNG" in
 scope | scope-tasks | rlimit | none) pass "the marker names the rung: $RUNG" ;;
 *) fail "the marker names no rung this suite knows: '$RUNG'" ;;
 esac
+# The test harness needs the Budget library and nothing of the dispatcher's:
+# a stub root whose scripts/ is the kit's own less scripts/agent-dispatch.sh
+# runs its suite inside the same budget, with the same marker.
+NODISP="$SCRATCH/kit-nodispatch"
+mkdir -p "$NODISP/tests" "$NODISP/scripts"
+for f in "$KIT"/scripts/*; do [ "${f##*/}" = agent-dispatch.sh ] || ln -s "$f" "$NODISP/scripts/${f##*/}"; done
+cp "$GREEN" "$NODISP/tests/green.sh"
+stub sh "$NODISP/tests/green.sh"
+expect_status 0 "a suite whose kit root carries no dispatcher still runs through the test harness"
+expect_out_has "budget: applied: tasks 256, memory 1045 MiB, rung " "…inside the budget the library derived, the marker unchanged"
+[ "$(starts)" = 2 ] && pass "…and its file ran exactly twice" || fail "the dispatcher-less stub ran $(starts) time(s) — expected 2"
+# And the library is the one file it cannot run without: a stub root whose
+# scripts/ lacks scripts/budget.lib.sh is refused out loud, naming the file,
+# exit 2 — the dispatcher's own answer — never a shell's bare `.` error.
+NOLIB="$SCRATCH/kit-nolib"
+mkdir -p "$NOLIB/tests" "$NOLIB/scripts"
+for f in "$KIT"/scripts/*; do [ "${f##*/}" = budget.lib.sh ] || ln -s "$f" "$NOLIB/scripts/${f##*/}"; done
+cp "$GREEN" "$NOLIB/tests/green.sh"
+stub sh "$NOLIB/tests/green.sh"
+expect_status 2 "a suite whose kit root carries no Budget library is refused, exit 2"
+expect_err_has "tests/lib.sh: cannot find budget.lib.sh in $NOLIB/scripts"
+expect_out_lacks "budget:" "…and the suite body never ran"
 # A suite's own status passes through the test harness untouched.
 stub STUB_EXIT=5 sh "$GREEN"
 expect_status 5 "a suite's own exit status passes through"
@@ -418,7 +468,8 @@ if [ "$RUNG" = scope ]; then
 	printf '#!/bin/sh\nexit 0\n' >"$SDFAKE/systemd-run"; chmod +x "$SDFAKE/systemd-run"
 	stub_on "$HOST_RL" PATH="$SDFAKE:$PATH" sh "$GREEN"
 	expect_status 0 "a scope whose wrapper never wrote a verdict passes the run's status through"
-	expect_err_has "verdict is missing"
+	expect_err_has "started marker is missing" "…the library's own reason: the wrapper never started"
+	expect_err_has "The budget verdict cannot be read; the run's own status (0) passes through." "…and the run's status passed through, said as the dispatcher says it"
 else
 	printf '  --    the scope rung is not offered here (rung: %s) — the scope legs are skipped\n' "$RUNG"
 fi
