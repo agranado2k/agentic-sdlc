@@ -134,8 +134,10 @@ skipping yours — a review's lenses name the diff's author instead (`/review-pr
 §3). **A reviewer spawn that fails on its first call** (rate limit, login):
 re-resolve with `AGENT_UNREACHABLE_MODELS='<id or spawn word> …'` added.
 A spent walk prints nothing, with a warning your report quotes (ADR-0013).
-**Here the walk is Sonnet only** (ADR-0020, amended): nothing printed means spawn
-no review — never inherit — and a session off the Sonnet family spawns it.
+**Here the walk is Sonnet, and Opus for a diff the Sonnet family wrote** (ADR-0027):
+name the diff's author — a cascade rung's model when a rung wrote it — and a
+Sonnet author gets `opus`; every other author keeps Sonnet only. Nothing printed
+means spawn no review, never inherit: the review waits for its reviewer.
 
 ## Agent trust boundary
 

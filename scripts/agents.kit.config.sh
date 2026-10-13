@@ -67,8 +67,9 @@
 #
 # THREE TIERS FOLLOW A FAMILY INSTEAD (the operator, 2026-10-08): the planner
 # is `opus` and the mechanical tier `sonnet` (ADR-0018), and the reviewer
-# `sonnet` too, with no fallback past it (ADR-0020 as amended, #724) — the bare family
-# word, "the newest in that family", not a pinned id. The rule above holds for
+# `sonnet` too, with `opus` past it for a diff the Sonnet family wrote and
+# for no other (ADR-0027, #763) — the bare family word, "the newest in that
+# family", not a pinned id. The rule above holds for
 # every other tier. The trade: no diff and no decision when Opus or Sonnet
 # moves, in exchange for the tiers where the operator wants the current model
 # always being on it. The family word reaches both consumption paths unchanged: the
@@ -184,12 +185,12 @@ AGENT_CASCADE_MECHANICAL='sonnet'
 #      `reviewer self-implemented`, the same sessions
 #        -> sonnet: the domain is deliberately unmapped below, so it falls
 #           back to the plain tier — one decision, not two copies of it
-#      either form, a session on the Sonnet family — `sonnet` (the mechanical
-#      tier's word) or any pinned Sonnet id
-#        -> NOTHING, and the resolver's spent-walk warning: refused its own
-#           family by the kit wrapper's family bridge (ADR-0018 clause 4,
-#           widened by ADR-0020), with no fallback past it (below). That
-#           session spawns no review; one off the Sonnet family spawns it.
+#      either form, an author on the Sonnet family — `sonnet` (the
+#      mechanical tier's word, and the cascade's cheap rung) or any pinned
+#      Sonnet id
+#        -> opus: refused its own family by the kit wrapper's family bridge
+#           (ADR-0018 clause 4, widened by ADR-0020), and answered by the
+#           fallback (below, ADR-0027).
 #
 #    The trade: a session that names nothing gets `sonnet` whatever it runs
 #    on, so a mechanical session that does not say what it runs on is handed
@@ -210,29 +211,54 @@ AGENT_TIER_REVIEWER='sonnet'
 #    value as a second decision to keep in sync (the same reason there is no
 #    AGENT_TIER_IMPLEMENTER_CODE, below). The domain still means something:
 #    asked with it, the resolver walks the same candidates, and the session's
-#    own family is refused by AGENT_SESSION_MODEL, not by a third model.
+#    own family is refused by AGENT_SESSION_MODEL, and the fallback below
+#    answers it.
 #
-#    THE ORDERED FALLBACK (ADR-0013, #548) IS EMPTY, BY DECISION. The
-#    operator, 2026-10-10 (ADR-0020's amendment, #724): reviews — the
-#    reviewer and every review lens — run on the Sonnet family only, with
-#    no Opus fallback. It was `opus claude-fable-5-1`, and on PR #722 a
-#    review that ran on Sonnet was recorded as Opus. So the walk is the
-#    domain answer and the plain reviewer, and nothing past them:
+#    THE ORDERED FALLBACK (ADR-0013, #548) IS `opus`, FOR ONE AUTHOR ONLY.
+#    The operator, 2026-10-13 (ADR-0027, #763, amending ADR-0020's
+#    amendment of 2026-10-10): a diff the Sonnet family wrote is reviewed by
+#    the Opus family; every other diff keeps the Sonnet-only reviewer. The
+#    cascade's cheap rung is the Sonnet family (AGENT_CASCADE_MECHANICAL,
+#    above), so with the list empty every diff the cascade exists to produce
+#    had no reviewer at all and landed with --no-review, by construction.
+#    It was empty from #724, and `opus claude-fable-5-1` before that.
 #
-#      a Sonnet session, or any session whose Sonnet is named unreachable
-#        -> nothing, with the resolver's warning. In THIS repo nothing
-#           printed is not "inherit the session": the session spawns no
-#           review, and a session off the Sonnet family spawns it on
-#           `sonnet` — or, Sonnet unreachable, the review waits and the
-#           report quotes the warning. Never an Opus or Fable review.
+#    Name the diff's AUTHOR as the session — the cascade rung's model when a
+#    rung wrote it, never the Opus session that spawned the rung — or the
+#    walk answers the session's reviewer, not the author's.
+#
+#    The shared resolver walks to the fallback whenever the candidates
+#    before it are skipped, as the session's own or as unreachable alike, so
+#    on its own it would hand `opus` to a Fable or an unnamed author whose
+#    Sonnet is unreachable. The FENCE below is the kit wrapper's answer:
+#    the fallback serves only an author of the reviewer's own family, and
+#    any other author whose Sonnet is spent is answered nothing. So:
+#
+#      a Sonnet author (`sonnet`, any claude-sonnet-* id)
+#        -> opus; and with opus named unreachable, nothing — never Sonnet,
+#           and never Fable: the list holds one word, by decision
+#      an Opus author, `opus` named unreachable or not  -> sonnet
+#      an Opus author whose Sonnet is unreachable
+#        -> nothing: opus is its own family, refused by the bridge
+#      a Fable, other or unnamed author whose Sonnet is unreachable
+#        -> nothing, refused by the fence, with its warning
+#
+#    In THIS repo nothing printed is not "inherit the session": spawn no
+#    review, quote the warning, and the review waits for its reviewer.
 #
 #    The cross-vendor reviewer comes back as a decision of its own, not as
 #    an entry here by default.
 #
-#    tests/agents-tiers.test.sh pins the empty list, and walks every
-#    session through the kit wrapper to its end: every answer is the
-#    reviewer's family.
-AGENT_TIER_REVIEWER_FALLBACK=''
+#    tests/agents-tiers.test.sh pins the list and the fence, and walks
+#    every session through the kit wrapper to its end: every answer is the
+#    reviewer's family, or the fallback's for a Sonnet author.
+AGENT_TIER_REVIEWER_FALLBACK='opus'
+#
+#    THE FENCE — kit-only, read by scripts/agents.kit.sh and by no shared
+#    resolver: `own-family` lets the fallback answer only an author of the
+#    plain reviewer's family; empty or `any` is ADR-0013's walk as it was.
+#    Any other value is refused, exit 2.
+AGENT_KIT_REVIEWER_FALLBACK_SERVES='own-family'
 
 # ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN

@@ -959,17 +959,20 @@ _k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_word" sh "$LIB
 	fail "a session named by its spawn word '$_k_word' got '${_k_ans:-nothing}' — the implementer's own model '$_k_imp', or nothing"
 # Every model the policy maps can be a session's, so every one is asked. The
 # self-implemented form never answers the session's own model: a session on
-# the reviewer's own model is answered nothing, its walk spent by decision
-# (ADR-0020's amendment, #724), and any other session gets another model. The
-# plain form answers another model or nothing at all, never the session's.
+# the reviewer's own model is answered the fallback, the Opus family that
+# reviews a diff the Sonnet family wrote (ADR-0027, #763), and any other
+# session gets another model. The plain form answers another model or nothing
+# at all, never the session's.
+_k_fbw=$(. "$KIT_CONFIG"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
+_k_fbw=${_k_fbw%% *}
 for _k_tier in planner implementer mechanical; do
 	_k_ses=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" "$_k_tier" 2>/dev/null)
 	[ -n "$_k_ses" ] || continue
 	_k_ans=$(env AGENTS_CONFIG="$KIT_CONFIG" AGENT_SESSION_MODEL="$_k_ses" sh "$LIB" reviewer self-implemented 2>/dev/null)
 	if [ "$_k_ses" = "$_k_rev" ]; then
-		[ -z "$_k_ans" ] &&
-			pass "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' answers nothing — the reviewer's own family has no next answer (#724)" ||
-			fail "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' gave '$_k_ans' — expected nothing: reviews run on the reviewer's family only"
+		[ -n "$_k_ans" ] && [ "$_k_ans" = "$_k_fbw" ] &&
+			pass "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' answers the fallback '$_k_fbw' — a diff the reviewer's own family wrote (#763)" ||
+			fail "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' gave '${_k_ans:-nothing}' — expected the fallback '${_k_fbw:-nothing}' (ADR-0027)"
 	else
 		[ -n "$_k_ans" ] && [ "$_k_ans" != "$_k_ses" ] &&
 			pass "on a '$_k_ses' session ($_k_tier), 'reviewer self-implemented' answers '$_k_ans', not the session's own" ||
@@ -980,21 +983,26 @@ for _k_tier in planner implementer mechanical; do
 		pass "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answers '${_k_ans:-nothing}', never the session's own" ||
 		fail "on a '$_k_ses' session ($_k_tier), plain 'reviewer' answered the session's own model '$_k_ans'"
 done
-# THE KIT'S FALLBACK (#548, ADR-0013 clause 5) IS EMPTY, BY DECISION
-# (ADR-0020's amendment of 2026-10-10, #724): reviews run on the Sonnet family
-# only, so neither of the kit's policies names a next answer past it — a walk
-# past `sonnet` would be a review on another family, which the operator ruled
-# out. And no answer on the walk is ever a session's own model: for every
-# session tier, each answer the walk gives is named unreachable in turn until
-# it is spent, and not one of those answers is the session's model. That
-# exact comparison is the shared resolver's; the family — a spawn word, a
-# pinned id of a family-word candidate — is held through the kit wrapper below.
-for _k_pol in "$KIT_CONFIG" "$KIT/scripts/agents.kit.codex.config.sh"; do
-	_k_fb=$(. "$_k_pol"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
-	[ -z "$_k_fb" ] &&
-		pass "$(basename "$_k_pol") names no reviewer fallback — the review stays on the Sonnet family (#724)" ||
-		fail "$(basename "$_k_pol") names the reviewer fallback '$_k_fb' — a walk past Sonnet reviews on another family (ADR-0020's amendment, #724)"
-done
+# THE KIT'S FALLBACK (#548, ADR-0013 clause 5) IS THE PLANNER'S FAMILY WORD,
+# AND NOTHING PAST IT (ADR-0027, #763, amending ADR-0020's amendment of
+# 2026-10-10): a diff the Sonnet family wrote — a cascade rung's, or a Sonnet
+# session's — is reviewed by the Opus family, and every other diff keeps the
+# Sonnet-only reviewer, which the kit wrapper's fence holds (below). The Codex
+# policy names none: no Codex session is on the Sonnet family. And no answer
+# on the walk is ever a session's own model: for every session tier, each
+# answer the walk gives is named unreachable in turn until it is spent, and
+# not one of those answers is the session's model. That exact comparison is
+# the shared resolver's; the family — a spawn word, a pinned id of a
+# family-word candidate — is held through the kit wrapper below.
+_k_planfb=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" planner 2>/dev/null)
+_k_fb=$(. "$KIT_CONFIG"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
+[ -n "$_k_planfb" ] && [ "$_k_fb" = "$_k_planfb" ] &&
+	pass "agents.kit.config.sh's reviewer fallback is the planner's family word '$_k_planfb', and nothing past it (ADR-0027, #763)" ||
+	fail "agents.kit.config.sh's reviewer fallback is '${_k_fb:-empty}' — expected the planner's family word '$_k_planfb' alone (ADR-0027, #763)"
+_k_fb=$(. "$KIT/scripts/agents.kit.codex.config.sh"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
+[ -z "$_k_fb" ] &&
+	pass "agents.kit.codex.config.sh names no reviewer fallback — no Codex session is on the Sonnet family (#724, ADR-0027)" ||
+	fail "agents.kit.codex.config.sh names the reviewer fallback '$_k_fb' — a walk past Sonnet reviews on another family (ADR-0020's amendment, #724)"
 _k_walk_bad=
 for _k_spec in planner implementer mechanical 'implementer content'; do
 	# shellcheck disable=SC2086 # the tier and its optional domain, split on purpose
@@ -1078,14 +1086,14 @@ WALK
 [ -z "$_k_famwalk_bad" ] && [ "$_k_famwalk_n" -gt 0 ] &&
 	pass "walked through the wrapper, no session is handed a model of its own family ($_k_famwalk_n answers over:$_k_sessions)" ||
 	fail "a session was handed its own family, or the walk answered nothing:$_k_famwalk_bad"
-# THE OPERATOR'S RULING, AS ASKED (#660, narrowed by #724). A session on the
-# planner's family — by the planner's family word or by the implementer's
-# pinned Opus id — is handed the reviewer's family word, plain and
-# self-implemented. A session on the reviewer's own family — by that word or
-# by a pinned id of it — is handed nothing, with the spent walk's warning: the
-# review is spawned from a session off that family (ADR-0020's amendment).
+# THE OPERATOR'S RULING, AS ASKED (#660, narrowed by #724, amended by #763).
+# A session on the planner's family — by the planner's family word or by the
+# implementer's pinned Opus id — is handed the reviewer's family word, plain
+# and self-implemented. A session on the reviewer's own family — by that word
+# or by a pinned id of it — is handed the planner's family word: a diff the
+# Sonnet family wrote is reviewed by the Opus family (ADR-0027).
 _k_plan=$(AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" planner 2>/dev/null)
-for _k_case in "$_k_plan:$_k_rev" "$_k_imp:$_k_rev" "$_k_rev:" "$_k_vendor-$_k_rev-9-9:"; do
+for _k_case in "$_k_plan:$_k_rev" "$_k_imp:$_k_rev" "$_k_rev:$_k_plan" "$_k_vendor-$_k_rev-9-9:$_k_plan"; do
 	_k_ses=${_k_case%%:*} _k_want=${_k_case#*:}
 	for _k_dom in '' self-implemented; do
 		# shellcheck disable=SC2086 # the optional domain, absent when empty
@@ -1113,18 +1121,80 @@ t_exec env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL=opus AGENT_UNREACHABLE_MODE
 	case $T_ERR in *"every reviewer candidate was skipped"*) true ;; *) false ;; esac &&
 	pass "AGENT_SESSION_MODEL=opus, sonnet unreachable: nothing printed, and the spent walk warns" ||
 	fail "AGENT_SESSION_MODEL=opus, sonnet unreachable: printed '${T_OUT:-nothing}' (status $T_STATUS), stderr '$T_ERR' — expected nothing and the spent-walk warning"
-# SONNET ONLY, FOR EVERY SESSION (#724). Walked to the end through the kit
-# wrapper, in both of the kit's policies, every answer any session is handed
-# folds to the reviewer's family word: no walk ever reaches another family.
-# Proved able to fail first, on a throwaway whose fallback names another
-# family — the shape both policies had until this ticket — and on a tree with
-# no wrapper at all: a walk that answers nothing is reported, never a pass.
-off_family() { # <reviewer word>, walk_answers lines on stdin — prints each answer off that family, or "none answered"
+# #763's acceptance (ADR-0027): a diff the Sonnet family wrote — the cascade's
+# cheap rung, or a Sonnet session — resolves an Opus reviewer, plain and
+# self-implemented, by the word or by a pinned Sonnet id; with Opus named
+# unreachable it resolves nothing, never its own family. And the fallback
+# serves ONLY that author: an Opus, a Fable or an unnamed author whose Sonnet
+# is unreachable is answered nothing, with the spent walk's warning — never
+# an Opus review in place of the Sonnet one (the fence in the kit wrapper).
+for _k_case in 'sonnet::opus' 'claude-sonnet-5-5::opus' 'sonnet:sonnet:opus' \
+	'sonnet:opus:' 'claude-sonnet-5-5:opus:' \
+	'opus:sonnet:' 'claude-opus-5-5:sonnet:' 'fable:sonnet:' 'claude-fable-5-1:sonnet:' \
+	'model-nobody-maps:sonnet:' ':sonnet:'; do
+	_k_ses=${_k_case%%:*} _k_rest=${_k_case#*:}
+	_k_unr=${_k_rest%%:*} _k_want=${_k_rest#*:}
+	for _k_dom in '' self-implemented; do
+		# shellcheck disable=SC2086 # the optional domain, absent when empty
+		t_exec env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL="$_k_ses" AGENT_UNREACHABLE_MODELS="$_k_unr" sh "$KIT_WRAPPER" reviewer $_k_dom
+		_k_label="author '${_k_ses:-unnamed}'${_k_unr:+, '$_k_unr' unreachable}: 'reviewer${_k_dom:+ $_k_dom}'"
+		if [ -n "$_k_want" ]; then
+			[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$_k_want" ] &&
+				pass "$_k_label is '$_k_want' (ADR-0027, #763)" ||
+				fail "$_k_label gave '${T_OUT:-nothing}' (status $T_STATUS), expected '$_k_want' — stderr: $T_ERR"
+		else
+			[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
+				case $T_ERR in *"every reviewer candidate was skipped"* | *"no reviewer model differs"*) true ;; *) false ;; esac &&
+				pass "$_k_label is nothing, with the spent walk's warning (ADR-0027, #763)" ||
+				fail "$_k_label printed '${T_OUT:-nothing}' (status $T_STATUS), stderr '$T_ERR' — expected nothing and the spent-walk warning"
+		fi
+	done
+done
+# The flagged and alias forms are the same question: the fence holds for
+# `--model` and `--alias` too, or the spelling a caller picks walks past it.
+for _k_flag in --model --alias; do
+	t_exec env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL=fable AGENT_UNREACHABLE_MODELS=sonnet sh "$KIT_WRAPPER" "$_k_flag" reviewer
+	[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
+		pass "a Fable author, Sonnet unreachable: '$_k_flag reviewer' prints nothing either (#763)" ||
+		fail "a Fable author, Sonnet unreachable: '$_k_flag reviewer' printed '${T_OUT:-nothing}' (status $T_STATUS) — the fence leaks through $_k_flag"
+done
+# The fence is the policy's to ask for (AGENT_KIT_REVIEWER_FALLBACK_SERVES):
+# the kit's Claude Code policy asks for it, and a value the wrapper does not
+# know is refused, exit 2 — a misspelt fence would be no fence, in silence.
+# Every throwaway policy below names none, and walks as ADR-0013 has it.
+_k_serves=$(. "$KIT_CONFIG"; printf '%s' "${AGENT_KIT_REVIEWER_FALLBACK_SERVES:-}")
+[ "$_k_serves" = own-family ] &&
+	pass "agents.kit.config.sh asks for the fence: the fallback serves only the reviewer's own family (ADR-0027)" ||
+	fail "agents.kit.config.sh's AGENT_KIT_REVIEWER_FALLBACK_SERVES is '${_k_serves:-empty}', expected 'own-family' (ADR-0027)"
+FENCEBAD="$SCRATCH/fence-bad"
+mkdir -p "$FENCEBAD/scripts"
+cp "$KIT/scripts/agents.kit.sh" "$KIT/scripts/agents.lib.sh" "$FENCEBAD/scripts/"
+{ cat "$KIT_CONFIG"; echo "AGENT_KIT_REVIEWER_FALLBACK_SERVES='own-famliy'"; } >"$FENCEBAD/scripts/agents.kit.config.sh"
+t_exec env -C "$FENCEBAD" -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL=fable AGENT_UNREACHABLE_MODELS=sonnet sh scripts/agents.kit.sh reviewer
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && case $T_ERR in *AGENT_KIT_REVIEWER_FALLBACK_SERVES*own-famliy*) true ;; *) false ;; esac &&
+	pass "a misspelt AGENT_KIT_REVIEWER_FALLBACK_SERVES is refused, exit 2, naming the value" ||
+	fail "a misspelt AGENT_KIT_REVIEWER_FALLBACK_SERVES gave '${T_OUT:-nothing}' (status $T_STATUS), stderr '$T_ERR' — expected exit 2"
+t_exec env -u AGENT_HARNESS_SELF AGENT_SESSION_MODEL=sonnet sh "$KIT_WRAPPER" --alias reviewer
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = opus ] &&
+	pass "a Sonnet author: '--alias reviewer' is the spawn word 'opus' (#763)" ||
+	fail "a Sonnet author: '--alias reviewer' gave '${T_OUT:-nothing}' (status $T_STATUS), expected 'opus'"
+# SONNET FOR EVERY OTHER AUTHOR, OPUS FOR SONNET'S (#724, amended by #763,
+# ADR-0027). Walked to the end through the kit wrapper, in both of the kit's
+# policies, every answer a session off the reviewer's family is handed folds
+# to the reviewer's family word, and every answer a session ON that family is
+# handed folds to the fallback's: no walk ever reaches a third family, and the
+# fallback never answers an author it was not decided for. Proved able to
+# fail first, on a throwaway whose fallback names a third family past the
+# second, and on a tree with no wrapper at all: a walk that answers nothing is
+# reported, never a pass.
+off_family() { # <reviewer word> [<fallback word>], walk_answers lines on stdin — prints each answer off the family its session is owed, or "none answered"
 	_of_n=0
 	while read -r _of_ses _of_dom _of_ans; do
 		[ -n "$_of_ses" ] || continue
 		_of_n=$((_of_n + 1))
-		[ "$_of_ans" != NEVER-SPENT ] && [ "$(_k_fold "$_of_ans")" = "$1" ] ||
+		_of_want=$1
+		[ -n "${2:-}" ] && [ "$(_k_fold "$_of_ses")" = "$1" ] && _of_want=$2
+		[ "$_of_ans" != NEVER-SPENT ] && [ "$(_k_fold "$_of_ans")" = "$_of_want" ] ||
 			echo "'$_of_ses' reviewer $_of_dom -> $_of_ans"
 	done
 	[ "$_of_n" -gt 0 ] || echo "none answered"
@@ -1139,20 +1209,23 @@ AGENT_TIER_MECHANICAL='small'
 AGENT_TIER_REVIEWER='small'
 AGENT_TIER_REVIEWER_FALLBACK='strong vendor-third-3'
 OFFFAM_CFG
-case "$(walk_answers "$OFFFAM" bait strong small | off_family small)" in
-*"'small' reviewer - -> strong"*) pass "the Sonnet-only walk catches a fallback of another family on its bait" ;;
-*) fail "the Sonnet-only walk missed its bait — the check is vacuous" ;;
+case "$(walk_answers "$OFFFAM" bait strong small | off_family small strong)" in
+*"'small' reviewer - -> vendor-third-3"*) pass "the family walk catches a fallback past the owed family on its bait" ;;
+*) fail "the family walk missed its bait — the check is vacuous" ;;
 esac
-case "$(walk_answers "$SCRATCH/no-such-tree" '' small 2>/dev/null | off_family small)" in
-*"none answered"*) pass "the Sonnet-only walk reports a walk that answered nothing, rather than passing vacuously" ;;
-*) fail "the Sonnet-only walk passed a walk that answered nothing" ;;
+case "$(walk_answers "$SCRATCH/no-such-tree" '' small 2>/dev/null | off_family small strong)" in
+*"none answered"*) pass "the family walk reports a walk that answered nothing, rather than passing vacuously" ;;
+*) fail "the family walk passed a walk that answered nothing" ;;
 esac
 # The kit policy's walk is the family walk's above, read once, through the
-# same baited check.
-_k_off=$(printf '%s\n' "$_k_walk" | off_family "$_k_rev")
+# same baited check. Its sessions include a Fable one: an author off the
+# reviewer's family that is not the fallback's either, the one the fence is
+# for — without it, its walk reaches the fallback once Sonnet is spent.
+# shellcheck disable=SC2086 # the session list, split on purpose
+_k_off=$({ printf '%s\n' "$_k_walk"; walk_answers "$KIT" '' fable; } | off_family "$_k_rev" "$_k_fbw")
 [ -z "$_k_off" ] &&
-	pass "agents.kit.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family (over:$_k_sessions)" ||
-	fail "agents.kit.config.sh: a reviewer walk left the '$_k_rev' family, or answered nothing: $(printf '%s' "$_k_off" | tr '\n' ';')"
+	pass "agents.kit.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family, or '$_k_fbw' for a '$_k_rev' author (over:$_k_sessions fable)" ||
+	fail "agents.kit.config.sh: a reviewer walk left the family its author is owed, or answered nothing: $(printf '%s' "$_k_off" | tr '\n' ';')"
 _k_off=$(walk_answers "$KIT" codex opus claude-opus-5-5 gpt-5.6-sol "$_k_rev" | off_family "$_k_rev")
 [ -z "$_k_off" ] &&
 	pass "agents.kit.codex.config.sh: walked to the end, every reviewer answer is the '$_k_rev' family" ||
@@ -1251,9 +1324,10 @@ banner "The wrapper never hands a review to the session's own model (#224, ADR-0
 # the case ADR-0007 refuses. The config cannot know who is asking; the
 # caller can say. When $AGENT_SESSION_MODEL names the session's model and the
 # reviewer answer equals it, the resolver warns and walks to the policy's
-# ordered fallback (ADR-0013); a spent walk prints nothing — and the kit's
-# fallback is empty (ADR-0020's amendment, #724), so here it is spent at
-# once. Unset, nothing changes — every case above ran without it.
+# ordered fallback (ADR-0013); a spent walk prints nothing. The kit's
+# fallback is the planner's family word alone (ADR-0027, #763), so a session
+# on the reviewer's own model is handed that, and named unreachable too it is
+# spent. Unset, nothing changes — every case above ran without it.
 # t_exec (tests/lib.sh) is the runner that keeps stdout and stderr apart —
 # the whole contract here, since a warning merged into stdout would read as a
 # model id. `env` carries the session model into the child without exporting it
@@ -1272,31 +1346,32 @@ wrap '' reviewer; K_REV=$W_OUT
 wrap '' reviewer self-implemented; K_SELF=$W_OUT
 wrap '' implementer; K_IMP=$W_OUT
 K_FB=$(. "$KIT_CONFIG"; printf '%s' "${AGENT_TIER_REVIEWER_FALLBACK:-}")
-[ -n "$K_REV" ] && [ "$K_SELF" = "$K_REV" ] && [ -z "$K_FB" ] &&
-	pass "premise: the kit maps reviewer and reviewer self-implemented to one model ('$K_REV'), with no fallback past it" ||
+[ -n "$K_REV" ] && [ "$K_SELF" = "$K_REV" ] && [ -n "$K_FB" ] && [ "$K_FB" != "$K_REV" ] &&
+	pass "premise: the kit maps reviewer and reviewer self-implemented to one model ('$K_REV'), with the fallback '$K_FB' past it" ||
 	fail "premise broken: reviewer='$K_REV' self-implemented='$K_SELF' fallback='$K_FB' — the section below cannot mean anything"
 
 # (1) The session runs on the self-implemented answer: refused it, and the
-# walk is spent — nothing printed, and the warning says so.
+# walk answers the fallback — never the session's own model — and the warning
+# names what it skipped.
 wrap "$K_SELF" reviewer self-implemented
-[ "$W_STATUS" = 0 ] && [ -z "$W_OUT" ] &&
-	pass "on a '$K_SELF' session, 'reviewer self-implemented' prints nothing — never the session's own model" ||
-	fail "on a '$K_SELF' session, 'reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — expected nothing"
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_FB" ] &&
+	pass "on a '$K_SELF' session, 'reviewer self-implemented' prints the fallback '$K_FB' — never the session's own model" ||
+	fail "on a '$K_SELF' session, 'reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — expected '$K_FB'"
 case "$W_ERR_TEXT" in
-*"session's own"*"($K_SELF)"*) pass "…and warns that the mapped answer was the session's own model" ;;
+*"$K_SELF (the session's own model)"*) pass "…and warns that the mapped answer was the session's own model" ;;
 *) fail "…but did not warn — stderr: '$W_ERR_TEXT'" ;;
 esac
 K_BARE_ERR=$W_ERR_TEXT
 
 # (2) The session runs on the plain reviewer's model and asks for the plain
-# reviewer: refused, nothing printed — never the session's own model — and
-# the warning names what it skipped.
+# reviewer: refused, the fallback printed — never the session's own model —
+# and the warning names what it skipped.
 wrap "$K_REV" reviewer
-[ "$W_STATUS" = 0 ] && [ -z "$W_OUT" ] &&
-	pass "on a '$K_REV' session, 'reviewer' prints nothing, not the session's own model" ||
-	fail "on a '$K_REV' session, 'reviewer' printed '$W_OUT' (status $W_STATUS) — expected nothing"
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_FB" ] &&
+	pass "on a '$K_REV' session, 'reviewer' prints the fallback '$K_FB', not the session's own model" ||
+	fail "on a '$K_REV' session, 'reviewer' printed '$W_OUT' (status $W_STATUS) — expected '$K_FB'"
 case "$W_ERR_TEXT" in
-*"session's own"*"($K_REV)"*) pass "…and warns that it skipped the session's own model" ;;
+*"$K_REV (the session's own model)"*) pass "…and warns that it skipped the session's own model" ;;
 *) fail "…but did not name the skip — stderr: '$W_ERR_TEXT'" ;;
 esac
 
@@ -1321,8 +1396,8 @@ wrap "$K_IMP" implementer
 # (5) The quiet switch silences the refusal's warning too, and changes nothing else.
 t_exec env AGENT_SESSION_MODEL="$K_SELF" AGENTS_TIER_QUIET=1 sh "$KIT_WRAPPER" reviewer self-implemented
 W_OUT=$T_OUT; W_ERR_TEXT=$T_ERR
-[ -z "$W_OUT" ] && [ -z "$W_ERR_TEXT" ] &&
-	pass "AGENTS_TIER_QUIET=1 keeps the empty answer and drops the warning" ||
+[ "$W_OUT" = "$K_FB" ] && [ -z "$W_ERR_TEXT" ] &&
+	pass "AGENTS_TIER_QUIET=1 keeps the answer and drops the warning" ||
 	fail "AGENTS_TIER_QUIET=1: stdout '$W_OUT', stderr '$W_ERR_TEXT'"
 
 # (6) The flagged form is the same question. `--model reviewer` is what
@@ -1330,11 +1405,10 @@ W_OUT=$T_OUT; W_ERR_TEXT=$T_ERR
 # half back (ADR-0005 clause 4), and the wrapper forwards the WHOLE signature —
 # so a guard that read $1 alone would let exactly the refused answer through,
 # silently, by the spelling the policy file itself documents. Its warning is
-# held equal to the bare form's, not to a domain name: the shared resolver's
-# spent-walk warning names no domain, and the kit's walk is spent at once (#724).
+# held equal to the bare form's: the same walk, the same skips, the same words.
 wrap "$K_SELF" --model reviewer self-implemented
-[ "$W_STATUS" = 0 ] && [ -z "$W_OUT" ] &&
-	pass "'--model reviewer self-implemented' is refused like the bare form, printing nothing" ||
+[ "$W_STATUS" = 0 ] && [ "$W_OUT" = "$K_FB" ] &&
+	pass "'--model reviewer self-implemented' is refused like the bare form, printing the fallback" ||
 	fail "'--model reviewer self-implemented' gave '$W_OUT' (status $W_STATUS) — the flagged spelling walks past the refusal"
 [ -n "$W_ERR_TEXT" ] && [ "$W_ERR_TEXT" = "$K_BARE_ERR" ] &&
 	pass "…and warns exactly as the bare form does" ||
@@ -2023,13 +2097,14 @@ famrev AGENT_SESSION_MODEL=vendor-third-9 AGENT_UNREACHABLE_MODELS='small strong
 	fail "AGENT_SESSION_MODEL=vendor-third-9 gave '$T_OUT', expected vendor-third-3 (stderr '$T_ERR')"
 # The kit's own policy, through its own wrapper: a mechanical session names
 # itself `sonnet`, the policy's word for its tier, and must not be handed the
-# self-implemented reviewer, which follows the Sonnet family (ADR-0020) — and
-# with nothing past it (#724), the spawn word printed is none at all.
+# self-implemented reviewer, which follows the Sonnet family (ADR-0020) — it
+# is handed the fallback's spawn word, the planner's family (ADR-0027, #763).
 _k_mech=$(env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" mechanical 2>/dev/null)
+_k_planw=$(env AGENTS_CONFIG="$KIT_CONFIG" sh "$LIB" planner 2>/dev/null)
 t_exec env AGENT_SESSION_MODEL="$_k_mech" sh "$KIT_WRAPPER" --alias reviewer self-implemented
-[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
-	pass "a '$_k_mech' session asking '--alias reviewer self-implemented' gets no spawn word, not its own family" ||
-	fail "a '$_k_mech' session asking '--alias reviewer self-implemented' got '${T_OUT:-nothing}' (status $T_STATUS) — expected nothing"
+[ "$T_STATUS" = 0 ] && [ -n "$T_OUT" ] && [ "$T_OUT" = "$_k_planw" ] &&
+	pass "a '$_k_mech' session asking '--alias reviewer self-implemented' gets '$_k_planw', not its own family" ||
+	fail "a '$_k_mech' session asking '--alias reviewer self-implemented' got '${T_OUT:-nothing}' (status $T_STATUS) — expected '$_k_planw'"
 
 # --alias bridges the two spellings a PINNED id has to satisfy. The CLI takes
 # the full id; the in-session spawn parameter takes the family word. Pinning
