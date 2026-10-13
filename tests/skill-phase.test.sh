@@ -434,12 +434,13 @@ for bad in 0587 abc '#' 1234567 '587 x'; do
 done
 
 # INSIDE A DISPATCHED WORKER (#743). scripts/agent-dispatch.sh opens the
-# worker's run with the trace's `begin --detached` (#746) and hands it down as TRACE_RUN, the dispatching run as
-# TRACE_PARENT; a skill dispatch the worker runs reads both back through the
-# trace script and checks each against the trace's id shape. A worker run in
-# any other shape is dropped there, and the two lines with it — so this leg
-# runs the real crossing, a stub worker that dispatches a skill, and reads the
-# prompt that worker's skill dispatch staged.
+# worker's run with the trace's `begin --detached` (#746) and hands it down
+# as TRACE_RUN, the dispatching run as TRACE_PARENT; a skill dispatch the
+# worker runs reads both back through the trace script and checks each
+# against the trace's id shape. A worker run in any other shape is dropped
+# there, and the two lines with it — so this leg runs the real crossing, a
+# stub worker that dispatches a skill, and reads the prompt that worker's
+# skill dispatch staged.
 NEST743="$SCRATCH/nesting-worker"
 cat >"$NEST743" <<NEST_EOF
 #!/bin/sh

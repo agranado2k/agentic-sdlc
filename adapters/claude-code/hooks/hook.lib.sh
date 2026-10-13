@@ -293,8 +293,8 @@ hook_deny() {
 # with TRACE_PARENT). The first line only, so text a spawn prompt quotes
 # further down — a ticket body, a review comment — can never name a run. Each
 # id is held to the shape the shared script mints — judged by its own `id
-# --check`, never a copy — and is only ever a value on an event: it is never executed, and a
-# line that does not match exactly is no channel at all. With no parent on the
+# --check`, never a copy — and is only ever a value on an event: it is never
+# executed, and a line that does not match exactly is no channel at all. With no parent on the
 # line the parent is empty, never read from this checkout's stack: a run named
 # from elsewhere has its lineage elsewhere — the shared script's own rule for an
 # environment that names the run.
