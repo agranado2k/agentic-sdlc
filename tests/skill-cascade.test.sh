@@ -53,6 +53,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 cat >/dev/null
+[ -z "${FIXTURE_RUNS_LOG:-}" ] || { echo "rung on $model"; sh "$FIXTURE_TRACE" runs; } >>"$FIXTURE_RUNS_LOG" 2>&1
 dirty=''
 for f in *-leftover.txt; do [ -e "$f" ] && dirty=' DIRTY'; done
 echo "$model$dirty" >work.txt
@@ -139,21 +140,25 @@ cascade() { # <ticket file> [extra args…]
 		--prompt 'do the ticket' "$@"
 }
 
-# spawn_rungs — the cascade's rung records, `<outcome> <rung> <run>` per line.
+# spawn_rungs — the cascade's rung records, `<outcome> <rung> <subject>` per
+# line; every rung record's subject is the cascade's run, `run:<id>`.
 spawn_rungs() {
 	cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null |
 		grep '"kind":"spawn"' | grep '"rung"' |
-		sed -n 's/.*"run":"\([^"]*\)".*"outcome":"\([a-z-]*\)".*"rung":"\{0,1\}\([0-9]\).*/\2 \3 \1/p'
+		sed -n 's/.*"subject":"\([^"]*\)".*"outcome":"\([a-z-]*\)".*"rung":"\{0,1\}\([0-9]\).*/\2 \3 \1/p'
 }
+# trace_t <trace.sh argument …> — the stub tree's trace, on the suite's trace.
+trace_t() { env TRACE_CONFIG="$STUBTREE/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$STUBTREE/scripts/trace.sh" "$@"; }
 
 # ---------------------------------------------------------------------------
 banner "1. A red oracle on the cheap rung escalates to the mapped model (spend/R17, spend/R18)"
 # ---------------------------------------------------------------------------
 fresh_wt
-FIXTURE_CHEAP_LEFTOVER=1
-export FIXTURE_CHEAP_LEFTOVER
+FIXTURE_CHEAP_LEFTOVER=1 FIXTURE_RUNS_LOG="$SCRATCH/runs-746.log" FIXTURE_TRACE="$STUBTREE/scripts/trace.sh"
+export FIXTURE_CHEAP_LEFTOVER FIXTURE_RUNS_LOG FIXTURE_TRACE
+rm -f "$FIXTURE_RUNS_LOG"
 cascade "$T_ORACLE"
-unset FIXTURE_CHEAP_LEFTOVER
+unset FIXTURE_CHEAP_LEFTOVER FIXTURE_RUNS_LOG FIXTURE_TRACE
 [ "$T_STATUS" = 0 ] && pass "the cascade exits 0 when its last rung passes" ||
 	fail "the cascade exited $T_STATUS: $T_ERR"
 [ "$(cat "$WT/work.txt" 2>/dev/null)" = model-mapped ] &&
@@ -179,6 +184,25 @@ rungs=$(spawn_rungs)
 case "$T_ERR" in
 *escalat*) pass "the escalation is said on stderr" ;;
 *) fail "nothing on stderr says the ticket escalated: $T_ERR" ;;
+esac
+# THE CASCADE'S RUN IS A RUN OF THE TRACE'S (#746): `begin --detached` opens
+# it, `end <run>` closes it, so `runs` lists it while a rung works and not after.
+_cs_run=$(printf '%s\n' "$rungs" | sed -n '1s/.* run://p')
+t_exec trace_t id --check "$_cs_run"
+expect_status 0 "the cascade's run is one the trace minted"
+_cs_log=$(cat "$SCRATCH/runs-746.log" 2>/dev/null)
+case $_cs_log in
+*"rung on model-cheap"*"$_cs_run detached live"*) pass "while rung 1 works, runs lists the cascade's run, detached and live" ;;
+*) fail "the runs rung 1 saw: $_cs_log" ;;
+esac
+_cs_worker=$(printf '%s\n' "$_cs_log" | sed -n '/rung on model-cheap/,/rung on/p' | awk -v p="$_cs_run" '$5 == p { print $1 }' | head -1)
+[ -n "$_cs_worker" ] && pass "…and the rung's own worker run beside it, the cascade's run its parent" ||
+	fail "no run in rung 1's runs names the cascade's run as parent: $_cs_log"
+t_exec trace_t runs
+expect_resolved "" "…and once the cascade is over, runs lists nothing"
+case $(cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep '"kind":"run.end"' | grep -F "\"run\":\"$_cs_run\"") in
+*'"outcome":"ok"'*) pass "…its run closed by a run.end, outcome ok" ;;
+*) fail "the cascade's run has no run.end with outcome ok" ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -501,7 +525,13 @@ cascade_keep "$T_ORACLE"
 	fail "the hand-back touched the worktree: $(git -C "$WT" status --porcelain)"
 _p="$(state_dir)/prompt"
 _l1=$(sed -n 1p "$_p" 2>/dev/null) _l2=$(sed -n 2p "$_p" 2>/dev/null)
-printf '%s\n' "$_l1" | grep -Eqx 'Trace-Run: [0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}( [0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8})?' &&
+# Well-formed is the trace's to judge: `Trace-Run: ` then one or two ids the
+# trace's `id --check` accepts, and nothing more.
+_hb_ids=${_l1#Trace-Run: }
+_hb_run=${_hb_ids%% *} _hb_parent=''
+case $_hb_ids in *' '*) _hb_parent=${_hb_ids#* } ;; esac
+case $_l1 in 'Trace-Run: '*) ;; *) _hb_run='' ;; esac
+trace_t id --check "$_hb_run" && { [ -z "$_hb_parent" ] || trace_t id --check "$_hb_parent"; } &&
 	pass "the rung's prompt opens with a well-formed Trace-Run line" || fail "the rung prompt's first line reads '$_l1'"
 [ "$_l2" = 'Trace-Spawn: tier=mechanical domain=none skill=implement ticket=#682' ] &&
 	pass "…and a Trace-Spawn line under it, naming the tier, skill and ticket" ||
@@ -513,6 +543,10 @@ case "$T_ERR" in
 *"agent type 'mechanical'"*--rung-done*) pass "stderr names the agent type to spawn and the --rung-done call that follows" ;;
 *) fail "stderr does not say how to drive the rung: $T_ERR" ;;
 esac
+# The handed-back rung is still the cascade's: its run stays open across the
+# hand-back, so `runs` lists it while the session works the rung.
+t_exec trace_t runs
+expect_out_has "$_hb_run detached" "the cascade's run stays in runs across the hand-back"
 [ "$(rung_seq)" = "in-session1 " ] && pass "the hand-back is recorded in-session on rung 1" ||
 	fail "the hand-back recorded '$(spawn_rungs)'"
 
@@ -537,6 +571,8 @@ case "$_r1" in
 esac
 [ ! -e "$(state_dir)" ] && pass "a finished cascade leaves no hand-back state behind" ||
 	fail "the hand-back state survived the cascade"
+t_exec trace_t runs
+expect_out_lacks "$_hb_run" "…and --rung-done's end closes the cascade's run: runs no longer lists it"
 
 # Both rungs in-session: the escalation hands rung 2 back the same way, and a
 # green in-session rung 2 ends the cascade.

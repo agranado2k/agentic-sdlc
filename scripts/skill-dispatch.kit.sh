@@ -315,18 +315,22 @@ done
 # `Trace-Run: <run> [<parent>]`, then `Trace-Spawn: tier=<tier>
 # domain=<domain|none> skill=<skill> ticket=<#N|none>` — exactly the channel
 # the adapter's subagent-stop hook reads (ADR-0008 clause 5, #583 amendment).
-# The run is the one this dispatch runs under, asked of the trace script the
-# way agent-dispatch.sh asks it (a dry-run emit, which writes nothing); with no
-# trace script, the environment's. No run, no lines: a Trace-Spawn line with
-# no Trace-Run line above it is no line to the hook.
+# The run is the one this dispatch runs under, asked of the trace with
+# `current` — the run and parent an emit from here would stamp (#746). An
+# unconfigured trace answers no identity, so there the environment's is used,
+# as it is with no trace script. Each id is held to the shape with the trace's
+# own `id --check`; with no trace script nothing can be checked and nothing is
+# written. No run, no lines: a Trace-Spawn line with no Trace-Run line above
+# it is no line to the hook.
+TRACE_SH="$ROOT/scripts/trace.sh"
 SPAWN_LINES=''
 _sl_run=${TRACE_RUN:-} _sl_parent=${TRACE_PARENT:-}
-if [ -f "$ROOT/scripts/trace.sh" ]; then
-	_sl_ev=$(TRACE_QUIET=1 sh "$ROOT/scripts/trace.sh" emit kind=note --dry-run 2>/dev/null) || _sl_ev=''
-	_sl_run=$(printf '%s\n' "$_sl_ev" | sed -n 's/.*"run":"\([^"]*\)".*/\1/p')
-	_sl_parent=$(printf '%s\n' "$_sl_ev" | sed -n 's/.*"parent":"\([^"]*\)".*/\1/p')
+if [ -f "$TRACE_SH" ] && [ -n "$(TRACE_QUIET=1 sh "$TRACE_SH" dir 2>/dev/null)" ]; then
+	_sl_cur=$(TRACE_QUIET=1 sh "$TRACE_SH" current 2>/dev/null) || _sl_cur=''
+	_sl_run=${_sl_cur%% *} _sl_parent=''
+	case $_sl_cur in *' '*) _sl_parent=${_sl_cur#* } ;; esac
 fi
-_sl_id_ok() { printf '%s\n' "$1" | grep -Eqx '[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}'; }
+_sl_id_ok() { [ -n "$1" ] && [ -f "$TRACE_SH" ] && sh "$TRACE_SH" id --check "$1" 2>/dev/null; }
 if [ -n "$_sl_run" ] && _sl_id_ok "$_sl_run"; then
 	_sl_id_ok "$_sl_parent" || _sl_parent=''
 	_sl_tier=${TIER_ARGS%% *} _sl_domain=none
@@ -471,6 +475,16 @@ _cascade_emit() {
 		tier=mechanical ${_cascade_domain:+domain=$_cascade_domain} skill="${SKILL#/}" "$@" >/dev/null 2>&1 || :
 }
 
+# _cascade_close <status> — end the cascade's run, once: ok on 0, stopped on
+# anything else. A hand-back leaves it open for --rung-done to close.
+_cascade_close() {
+	[ "${CASCADE_OPEN:-0}" = 1 ] || return 0
+	CASCADE_OPEN=0
+	if [ "$1" = 0 ]; then _cc_outcome=ok; else _cc_outcome=stopped; fi
+	TRACE_QUIET=1 sh "$TRACE_SH" end "$CASCADE_RUN" outcome="$_cc_outcome" \
+		reason="the cascade exited $1" >/dev/null 2>&1 || :
+}
+
 # _cascade_rung <n> <policy file> <out file> <args…> — one rung, in the
 # worktree. Sets RUNG_STATUS, and ORACLE_EXIT / GUARD_EXIT when it was judged.
 _cascade_rung() {
@@ -537,12 +551,16 @@ _cascade_handback() {
 	printf '%s\n' "$CASCADE_BASE" >"$CASCADE_STATE/base"
 	_hb_parent=''
 	_sl_id_ok "$CASCADE_PARENT" && _hb_parent=" $CASCADE_PARENT"
+	_hb_lines=0
+	_sl_id_ok "$CASCADE_RUN" && _hb_lines=1
 	_hb_ticket=none
 	[ -z "$TICKET" ] || _hb_ticket="#$TICKET"
 	{
-		printf 'Trace-Run: %s%s\n' "$CASCADE_RUN" "$_hb_parent"
-		printf 'Trace-Spawn: tier=%s domain=%s skill=%s ticket=%s\n' \
-			"$_cascade_tier" "${_cascade_domain:-none}" "${SKILL#/}" "$_hb_ticket"
+		if [ "$_hb_lines" = 1 ]; then
+			printf 'Trace-Run: %s%s\n' "$CASCADE_RUN" "$_hb_parent"
+			printf 'Trace-Spawn: tier=%s domain=%s skill=%s ticket=%s\n' \
+				"$_cascade_tier" "${_cascade_domain:-none}" "${SKILL#/}" "$_hb_ticket"
+		fi
 		printf 'You are rung %s of a cheap-first cascade. Work only in the worktree %s, and commit your work there.\n' \
 			"$_hb_n" "$CASCADE_WT_ABS"
 		printf 'Stop before anything leaves that worktree: no push, no pull request, no review request, and never dispatch this ticket again.\n'
@@ -558,6 +576,9 @@ _cascade_handback() {
 		reason='the model names no agent harness this dispatcher runs; the calling session spawns the rung, then runs the dispatch again with --rung-done'
 	echo "skill-dispatch: rung $_hb_n is yours to spawn in-session — agent type '$_cascade_tier', model '${_hb_model:-none: the spawn inherits}', its prompt verbatim from $CASCADE_STATE/prompt. When the rung returns, run this same command again with --rung-done: the oracle and the pairing guard judge what it committed in $CASCADE_WT_ABS." >&2
 	cat "$_hb_out"
+	# The run stays open: the session works the rung under it, and the
+	# --rung-done call that judges the rung closes it.
+	CASCADE_OPEN=0
 	exit 3
 }
 
@@ -566,7 +587,8 @@ _cascade() {
 	CASCADE_STATE="$(cd "$CASCADE_WT" && git rev-parse --absolute-git-dir)/skill-cascade"
 	CASCADE_WT_ABS=$(cd "$CASCADE_WT" && pwd)
 	_cs_tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-cascade.XXXXXX") || die "no scratch for the cascade"
-	trap 'rm -rf "$_cs_tmp"' EXIT
+	CASCADE_RUN='' CASCADE_OPEN=0
+	trap '_cs_rc=$?; rm -rf "$_cs_tmp"; _cascade_close "$_cs_rc"' EXIT
 	case "$AGENTS_CONFIG" in *"'"*) die "the policy path carries a quote; the cascade cannot stage its rung policy" ;; esac
 	{
 		printf ". '%s'\n" "$AGENTS_CONFIG"
@@ -583,6 +605,7 @@ _cascade() {
 			die "--rung-done: the rung was handed back against another --base; run the dispatch again from the start"
 		CASCADE_RUN=$(cat "$CASCADE_STATE/run")
 		CASCADE_PARENT=$(cat "$CASCADE_STATE/parent" 2>/dev/null || :)
+		_sl_id_ok "$CASCADE_RUN" && CASCADE_OPEN=1
 		_cs_done=$(cat "$CASCADE_STATE/rung")
 		_cascade_judge
 		case "$_cs_done" in
@@ -596,15 +619,18 @@ _cascade() {
 		esac
 	fi
 
-	# A run in the trace script's own shape — stamp, pid, eight hex digits —
-	# so an in-session rung's Trace-Run line is one the adapter's hooks read.
-	_cs_hex=$(od -An -N4 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
-	printf '%s\n' "$_cs_hex" | grep -Eqx '[0-9a-f]{8}' || _cs_hex=$(printf '%08x' "$$")
-	CASCADE_RUN="$(date -u +%Y%m%dT%H%M%SZ)-$$-$_cs_hex"
-	CASCADE_PARENT=${TRACE_RUN:-}
-	if [ -z "${TRACE_RUN+set}" ] && [ -f "$ROOT/scripts/trace.sh" ]; then
-		CASCADE_PARENT=$(TRACE_QUIET=1 sh "$ROOT/scripts/trace.sh" emit kind=note --dry-run 2>/dev/null |
-			sed -n 's/.*"run":"\([^"]*\)".*/\1/p')
+	# The cascade's run is the trace's: `begin --detached` mints it, registers
+	# it with the run this dispatch is under as its parent — the one the
+	# Trace-Run line above was read from — and pushes no stack. It stays open
+	# across a hand-back, and _cascade_close ends it when the cascade does
+	# (#746). Called as this process's own child, never in a pipe, so the
+	# registry records this dispatcher as the run's process.
+	CASCADE_PARENT=$_sl_run
+	if [ -f "$TRACE_SH" ] && CASCADE_RUN=$(TRACE_QUIET=1 sh "$TRACE_SH" begin --detached "${SKILL#/}" \
+		${TICKET:+"subject=ticket:#$TICKET"}) && [ -n "$CASCADE_RUN" ]; then
+		CASCADE_OPEN=1
+	else
+		CASCADE_RUN=''
 	fi
 	rm -rf "$CASCADE_STATE"
 
@@ -616,6 +642,7 @@ _cascade() {
 			reason='the cascade model names an agent harness that is not reachable from here; an oracle cannot judge work this process never ran'
 		echo "skill-dispatch: cascade refused — the cascade model's agent harness is not reachable from here (exit $RUNG_STATUS); running on the mechanical tier's mapped model" >&2
 		rm -rf "$_cs_tmp"
+		_cascade_close 69
 		# shellcheck disable=SC2086
 		exec sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@"
 		;;
