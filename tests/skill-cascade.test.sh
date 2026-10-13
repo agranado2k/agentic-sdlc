@@ -371,6 +371,10 @@ acc_ticket "$T_S-outside" "$_oline" '' '**Acceptance.**'
 shape_none "an oracle line before any Acceptance section" "$T_S-outside"
 acc_ticket "$T_S-midline" 'The **Acceptance.** lead mid-sentence opens nothing.' "$_oline"
 shape_none "a bold 'Acceptance' that does not open its line" "$T_S-midline"
+# A bold "Acceptance" in prose that names no oracle opens nothing: a heading
+# further down still opens the section (review of #768, M-1).
+acc_ticket "$T_S-prose-then-heading" '**Acceptance** is below, under its heading.' '## Acceptance' "$_oline"
+shape_finds "prose led by a bold 'Acceptance', then the heading and its oracle" "$T_S-prose-then-heading"
 
 # A worktree with no pairing guard has nothing to judge a rung by.
 fresh_wt

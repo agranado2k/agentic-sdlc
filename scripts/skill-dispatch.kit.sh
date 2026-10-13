@@ -395,7 +395,8 @@ case "$TIER_ARGS" in *' '*) _cascade_domain=${TIER_ARGS#* } ;; esac
 # section opens with a heading (`## Acceptance`, any level) or a bold lead at
 # the start of a line (`**Acceptance.**` or `**Acceptance**`); text after the
 # lead on its own line is the section's first line, and with none the first
-# non-blank line below it is (#759).
+# non-blank line below it is (#759). A bold lead with text after it that is
+# not an oracle line is prose and opens nothing: a heading below still can.
 _cascade_oracle_line() {
 	[ -f "$1" ] || return 0
 	awk '
@@ -404,8 +405,8 @@ _cascade_oracle_line() {
 			rest = $0
 			sub(/^\*\*Acceptance\.?\*\*[ \t]*/, "", rest)
 			if (rest == "") { in_acc = 1; next }
-			if (index(rest, "the oracle: `")) print rest
-			exit
+			if (index(rest, "the oracle: `")) { print rest; exit }
+			next
 		}
 		in_acc && /^[ \t]*$/ { next }
 		in_acc { if (index($0, "the oracle: `")) print; exit }
