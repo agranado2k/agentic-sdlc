@@ -2795,7 +2795,27 @@
 # detached run and stale; the root manual's trace row; tests/trace.test.sh
 # section 36.
 
-shared-layer: 0.72.0
+# 0.73.0 — a suite runs under the same Budget ladder a worker does (ticket
+# #748, PRD #742). NO file joins or leaves the shared layer. TWO shared files
+# change content. scripts/agent-dispatch.sh drops its sourced-or-executed
+# layer: it is executed only, so a copy run under another name is the
+# dispatcher it was where it used to refuse, exit 2, and sourcing it is no
+# longer supported — the kit's test harness, its one sourcing caller, now
+# sources scripts/budget.lib.sh instead. scripts/budget.lib.sh changes a
+# comment only: budget_inherited_bounds has its caller. Every dry-run line,
+# stderr note and exit status a dispatch gives is unchanged, and the
+# AGENT_BUDGET_* inputs mean what they meant. UPDATING.md: the
+# arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none.
+# Kit-only, never shipped: tests/lib.sh confines each suite through the
+# library's four functions and holds no ladder of its own, the suite budget
+# marker byte-identical; tests/suite-budget.test.sh drives the library's
+# interface where it probed the dispatcher's sourcing seam, and fails while
+# any tracked file outside the library names a function private to it;
+# README and the glossary name the library as the ladder's home.
+
+shared-layer: 0.73.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

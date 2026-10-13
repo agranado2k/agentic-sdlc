@@ -87,7 +87,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/docs-conformance/config.mjs` | Everything the gate enforces, as data. **Yours** — the engine is shared, the rules are not. |
 | `scripts/guards.config.sh` | **Yours.** The one place the guards learn your repo's shape — source globs, test globs, contract artifacts. |
 | `scripts/agents.lib.sh` | The capability-tier resolver: `sh scripts/agents.lib.sh implementer` prints the model that tier maps to. Shared layer; holds the four tier names and no model. |
-| `scripts/budget.lib.sh` | The worker Budget: a task and a memory ceiling on a command's whole process tree, derived from the host and applied down the strongest rung it offers. Four sourced functions: the dispatcher calls `budget_derive`, `budget_run` and `budget_verdict`; `budget_inherited_bounds` ships ahead of its caller, the test harness (#748), and until then only its suite drives it. Shared layer. |
+| `scripts/budget.lib.sh` | The worker Budget: a task and a memory ceiling on a command's whole process tree, derived from the host and applied down the strongest rung it offers. Four sourced functions: the dispatcher calls `budget_derive`, `budget_run` and `budget_verdict`; the test harness confines every suite through the same three and asks `budget_inherited_bounds` first, so a suite and a worker share one ladder (#748). Shared layer. |
 | `scripts/agents.config.sh` | **Yours.** Tier → model id, for your provider. Ships empty on purpose — the kit names no model, because model ids rot faster than anything else it could carry. |
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
@@ -252,7 +252,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.72.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.73.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -823,15 +823,16 @@ skeleton (K0).
   bounds its caller.
 
 - `sh tests/suite-budget.test.sh` proves every suite runs inside the worker
-  budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite
-  sources it: sourcing `scripts/agent-dispatch.sh` defines its derivation and
-  runs nothing, a stub suite run through the test harness against a fake host
-  comes back inside a budget of that host's numbers, a fork loop and a
-  greedy allocation come back as failures naming the ceiling with exit 71
-  while the calling shell still forks, the rlimit rung refuses forks inside
-  the suite's own shell, the off switch runs a stub bare and says so, the
-  marker bounds the recursion, and a scope that refuses to open falls to
-  rlimits out loud.
+  budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite sources
+  it, confining the suite through `scripts/budget.lib.sh`'s four functions and
+  naming none of its private ones: a stub suite run through the test harness
+  against a fake host comes back inside a budget of that host's numbers, one
+  whose kit root lacks the library is refused naming the file, a fork loop and a
+  greedy allocation come back as failures naming the ceiling with exit 71 while
+  the calling shell still forks, the rlimit rung refuses forks inside the
+  suite's own shell, the off switch runs a stub bare and says so, the marker
+  bounds the recursion, and a scope that refuses to open falls to rlimits out
+  loud.
 
 - `sh tests/gate-path-roots.test.sh` holds the docs gate's two engines to one
   set of path roots: the reduced POSIX form's list must equal the policy
