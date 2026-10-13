@@ -2815,7 +2815,34 @@
 # any tracked file outside the library names a function private to it;
 # README and the glossary name the library as the ladder's home.
 
-shared-layer: 0.73.0
+# 0.74.0 — callers reach run identity only through the trace (ticket
+# #746, PRD #742). NO file joins and NO file leaves the shared layer. ONE
+# shared file changes content besides UPDATING.md: scripts/agent-dispatch.sh
+# opens a worker's run with the trace's `begin --detached` — so the run is the
+# trace's own, in `runs` while the worker works, its parent the dispatching
+# run — and closes it with `end <run>` at every way out once it is open, ok on
+# exit 0 and stopped on anything else, a signal before the spawn included; it
+# reads the dispatching run with `current` where it scraped a dry-run emit's
+# JSON, and mints no id of its own. A dispatch adds the run's run.start and
+# run.end around its spawn pair; a dry run, the in-session exit and a refusal
+# still write nothing new. With no trace script beside it the worker is
+# handed an empty run, and a trace that refuses the begin still hands it an
+# id from `id`. And UPDATING.md: the arriving-from paragraph, and both worked
+# examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): the claude-code adapter's hook library
+# checks a Trace-Run line's ids with the trace's `id --check` in place of its
+# own copy of the shape — re-copy the adapter's hooks/hook.lib.sh if you
+# carry it. Templates (9c): none.
+# Kit-only, never shipped: scripts/skill-dispatch.kit.sh reads its run with
+# `current`, checks ids with `id --check`, and opens a cascade's run with
+# `begin --detached`, kept open across a hand-back and ended with the
+# cascade; tests/trace.test.sh section 37 fails while any file but the trace
+# spells the run id's shape, mints one or scrapes an event for its run;
+# tests/agent-dispatch.test.sh, tests/skill-cascade.test.sh,
+# tests/skill-phase.test.sh and tests/trace-hooks.test.sh move with them.
+
+shared-layer: 0.74.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

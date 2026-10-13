@@ -1556,10 +1556,12 @@ spawn587() {
 		-e 's/<#N|none>/#587/' -e 's/#<N>/#587/')
 	printf '{"type":"user","message":{"role":"user","content":"Trace-Run: %s\\n%s\\nGo."}}\n' \
 		"$SPAWN587_RUN" "$_s5_filled" >"$SCRATCH/spawn587.jsonl"
-	# shellcheck disable=SC1091
-	_s5_read=$( (. "$ROOT/adapters/claude-code/hooks/hook.lib.sh" &&
-		hook_spawn_handed "$SCRATCH/spawn587.jsonl" &&
-		printf '%s %s' "$hook_spawn_tier" "$hook_spawn_skill") 2>/dev/null) || _s5_read=''
+	# The library finds its repository from $0, as the hook that sources it
+	# would be named: `sh -c` sets $0 to the library itself, never this suite.
+	# shellcheck disable=SC2016
+	_s5_read=$(sh -c '. "$0" && hook_spawn_handed "$1" &&
+		printf "%s %s" "$hook_spawn_tier" "$hook_spawn_skill"' \
+		"$ROOT/adapters/claude-code/hooks/hook.lib.sh" "$SCRATCH/spawn587.jsonl" 2>/dev/null) || _s5_read=''
 	case $_s5_read in
 	*" $1") pass "/$1's spawn step ('$2') spells a Trace-Spawn line the hook reads: $_s5_line" ;;
 	*) fail "/$1's Trace-Spawn line is not one the hook accepts: $_s5_line (filled: $_s5_filled)" ;;
@@ -1574,7 +1576,8 @@ spawn587 to-tickets '**A tool-restricted subagent reads that file, and returns a
 # The holder itself must be able to fail: a line out of grammar is refused.
 printf '{"type":"user","message":{"role":"user","content":"Trace-Run: %s\\nTrace-Spawn: tier=implementer skill=implement ticket=#587\\nGo."}}\n' \
 	"$SPAWN587_RUN" >"$SCRATCH/spawn587.jsonl"
-( . "$ROOT/adapters/claude-code/hooks/hook.lib.sh" && hook_spawn_handed "$SCRATCH/spawn587.jsonl") 2>/dev/null &&
+# shellcheck disable=SC2016
+sh -c '. "$0" && hook_spawn_handed "$1"' "$ROOT/adapters/claude-code/hooks/hook.lib.sh" "$SCRATCH/spawn587.jsonl" 2>/dev/null &&
 	fail "the hook's reader accepted a Trace-Spawn line with no domain — the holder above proves nothing" ||
 	pass "the hook's reader refuses a line out of grammar, so the holder above can fail"
 

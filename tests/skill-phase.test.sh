@@ -151,8 +151,13 @@ t_exec sh "$DISPATCH" --tier-of /no-such-skill
 STUBTREE="$SCRATCH/stubtree"
 mkdir -p "$STUBTREE/scripts"
 cp "$ROOT/scripts/agents.kit.sh" "$ROOT/scripts/agents.lib.sh" "$ROOT/scripts/budget.lib.sh" \
-	"$ROOT/scripts/agent-dispatch.sh" "$ROOT/scripts/skill-dispatch.kit.sh" "$STUBTREE/scripts/"
+	"$ROOT/scripts/agent-dispatch.sh" "$ROOT/scripts/skill-dispatch.kit.sh" "$ROOT/scripts/trace.sh" "$STUBTREE/scripts/"
 cp -R "$ROOT/.agents" "$STUBTREE/.agents"
+# The trace script rides along, as it does in the kit: the dispatcher checks a
+# run id with its `id --check` (#746). Its twin names no directory, so nothing
+# is recorded unless a leg points it at one, and puts this line back after.
+TRACE_OFF="TRACE_DIR=''"
+printf '%s\n' "$TRACE_OFF" >"$STUBTREE/scripts/trace.kit.config.sh"
 STUB="$SCRATCH/stub-agent-harness"
 cat >"$STUB" <<'STUB_EOF'
 #!/bin/sh
@@ -355,7 +360,6 @@ banner "4c. The kit's own dispatches are traced (owed since #249's review)"
 # wrote nothing at all. The wrapper names it, $ROOT-anchored like
 # AGENTS_CONFIG. The stub tree carries a twin pointing at scratch, and no
 # shipped policy file, so only the wrapper's choice can make the line appear.
-cp "$ROOT/scripts/trace.sh" "$STUBTREE/scripts/"
 printf "TRACE_DIR='%s'\n" "$SCRATCH/kit-trace" >"$STUBTREE/scripts/trace.kit.config.sh"
 stub_dispatch /review-pr --prompt 'traced review'
 if grep -rqs '"kind":"spawn"' "$SCRATCH/kit-trace"; then
@@ -363,7 +367,7 @@ if grep -rqs '"kind":"spawn"' "$SCRATCH/kit-trace"; then
 else
 	fail "a kit dispatch wrote no spawn record — the wrapper does not name scripts/trace.kit.config.sh (exit $T_STATUS)"
 fi
-rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
+printf '%s\n' "$TRACE_OFF" >"$STUBTREE/scripts/trace.kit.config.sh"
 
 # ---------------------------------------------------------------------------
 banner "4d. A dispatched worker's prompt opens with the run and what the spawn served (#587)"
@@ -429,13 +433,14 @@ for bad in 0587 abc '#' 1234567 '587 x'; do
 		fail "--ticket '$bad' exited $T_STATUS"
 done
 
-# INSIDE A DISPATCHED WORKER (#743). scripts/agent-dispatch.sh mints the
-# worker's run and hands it down as TRACE_RUN, the dispatching run as
-# TRACE_PARENT; a skill dispatch the worker runs reads both back through the
-# trace script and checks each against the trace's id shape. A worker run in
-# any other shape is dropped there, and the two lines with it — so this leg
-# runs the real crossing, a stub worker that dispatches a skill, and reads the
-# prompt that worker's skill dispatch staged.
+# INSIDE A DISPATCHED WORKER (#743). scripts/agent-dispatch.sh opens the
+# worker's run with the trace's `begin --detached` (#746) and hands it down
+# as TRACE_RUN, the dispatching run as TRACE_PARENT; a skill dispatch the
+# worker runs reads both back through the trace script and checks each
+# against the trace's id shape. A worker run in any other shape is dropped
+# there, and the two lines with it — so this leg runs the real crossing, a
+# stub worker that dispatches a skill, and reads the prompt that worker's
+# skill dispatch staged.
 NEST743="$SCRATCH/nesting-worker"
 cat >"$NEST743" <<NEST_EOF
 #!/bin/sh
@@ -450,11 +455,10 @@ AGENT_HARNESS_NEST_CMD='$NEST743 {model_flag} < {prompt_file}'
 AGENT_HARNESS_NEST_MODEL_FLAG=''
 AGENT_TIER_IMPLEMENTER='nest:'
 NEST_CFG
-cp "$ROOT/scripts/trace.sh" "$STUBTREE/scripts/"
 printf "TRACE_DIR='%s'\n" "$SCRATCH/nest-trace" >"$STUBTREE/scripts/trace.kit.config.sh"
 spawn_dispatch AGENTS_CONFIG="$SCRATCH/nesting.config.sh" TRACE_DIR="$SCRATCH/nest-trace" \
 	TRACE_RUN=$PARENT587 sh scripts/agent-dispatch.sh implementer --prompt 'x'
-rm -f "$STUBTREE/scripts/trace.sh" "$STUBTREE/scripts/trace.kit.config.sh"
+printf '%s\n' "$TRACE_OFF" >"$STUBTREE/scripts/trace.kit.config.sh"
 [ "$T_STATUS" = 0 ] || fail "the dispatch whose worker runs a skill dispatch exited $T_STATUS: $T_ERR"
 worker743=$(printf '%s\n' "$T_OUT" | sed -n 's/^worker TRACE_RUN=//p')
 p=$(dry_prompt)

@@ -4126,16 +4126,16 @@ stop474 "$TR474/$SESSION/subagents/agent-$AGENT.jsonl" TRACE_RUN=from-the-env-47
 	pass "a TRACE_RUN already in the hook's environment still wins over the channel" ||
 	fail "agent.stop under TRACE_RUN=from-the-env-474 carries run '$(str "$STOP" run)'"
 # The line is held to the run id's shape, whole, on the prompt's first line.
-# H-1, review of PR #524: one leg per rejection in the run id's check — a pid
-# that is not digits, and an id past 64 characters whose every part has the
-# shape (a pid of 50 digits).
+# The shape is the trace's, judged by its `id --check`, whose own cases in
+# tests/trace.test.sh hold every rejection (#746); here, only that the hook
+# asks it — of the run and of the parent — and the hook's own bound: an id
+# past 64 characters whose every part has the shape (a pid of 50 digits).
 STAMP474=${WT474%%Z-*}Z
 HEX474=${WT474##*-}
 for bad in 'Trace-Run: $(touch pwned-474)' "Trace-Run: $WT474 and more" "trace-run: $WT474" \
 	"Run the suite.\\\\nTrace-Run: $WT474" "Trace-Run: ${WT474%-*}" \
-	"Trace-Run: $STAMP474-12a4-$HEX474" \
 	"Trace-Run: $STAMP474-12345678901234567890123456789012345678901234567890-$HEX474" \
-	"Trace-Run: $WT474 $STAMP474-12a4-$HEX474" "Trace-Run: $WT474 $OUT474 $OUT474" \
+	"Trace-Run: $WT474 ${OUT474%-*}" "Trace-Run: $WT474 $OUT474 $OUT474" \
 	"Trace-Run: $WT474\\\\tFORGED tail"; do
 	prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/bad-474.jsonl" "$bad"
 	stop474 "$SCRATCH/bad-474.jsonl"
