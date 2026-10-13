@@ -823,16 +823,16 @@ skeleton (K0).
   bounds its caller.
 
 - `sh tests/suite-budget.test.sh` proves every suite runs inside the worker
-  budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite
-  sources it, confining the suite through `scripts/budget.lib.sh`'s four
-  functions and naming none of its private ones: a stub suite run through the
-  test harness against a fake host comes back inside a budget of that host's
-  numbers, one whose kit root lacks the library is refused naming the file, a fork loop and a
-  greedy allocation come back as failures naming the ceiling with exit 71
-  while the calling shell still forks, the rlimit rung refuses forks inside
-  the suite's own shell, the off switch runs a stub bare and says so, the
-  marker bounds the recursion, and a scope that refuses to open falls to
-  rlimits out loud.
+  budget (ADR-0006, #209) that `tests/lib.sh` applies the moment a suite sources
+  it, confining the suite through `scripts/budget.lib.sh`'s four functions and
+  naming none of its private ones: a stub suite run through the test harness
+  against a fake host comes back inside a budget of that host's numbers, one
+  whose kit root lacks the library is refused naming the file, a fork loop and a
+  greedy allocation come back as failures naming the ceiling with exit 71 while
+  the calling shell still forks, the rlimit rung refuses forks inside the
+  suite's own shell, the off switch runs a stub bare and says so, the marker
+  bounds the recursion, and a scope that refuses to open falls to rlimits out
+  loud.
 
 - `sh tests/gate-path-roots.test.sh` holds the docs gate's two engines to one
   set of path roots: the reduced POSIX form's list must equal the policy
