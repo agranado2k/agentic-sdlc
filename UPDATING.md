@@ -227,7 +227,7 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
-**Arriving from 0.71.0 or older, the dispatcher is executed only.**
+**Arriving from 0.72.0 or older, the dispatcher is executed only.**
 No file joins or leaves at 0.73.0. `scripts/agent-dispatch.sh` drops the
 layer that let it be sourced: run it, as every caller the kit ships does, and
 nothing changes — every budget line, note and exit status reads as before.
@@ -237,6 +237,17 @@ dispatcher for its budget gets no `_budget_*` function from it now — source
 `scripts/budget.lib.sh` and call its four functions instead, the header of
 that file says how. `scripts/budget.lib.sh` changes a comment only. Part 2
 has nothing to take.
+
+**Arriving from 0.71.0 or older, every open run is registered by id.**
+No file joins or leaves at 0.72.0. One shared file changes content besides
+this recipe: `scripts/trace.sh` keeps an open-run registry — one file per run
+begun and not ended, under the trace directory's `runs/` — which `begin`
+adds to and `end` removes from. `begin --detached <skill>` mints a run,
+registers it and touches no run stack, and `end <run>` closes it from any
+checkout; `runs` lists the open runs and `runs <id>` prints one, a stack
+run on no run stack or a detached run whose process is gone reading
+`stale`. Every call valid at 0.71.0 behaves as it did. A trace directory you keep out of version control keeps `runs/` out
+with it. Nothing for Part 2.
 
 **Arriving from 0.70.1 or older, the worker Budget lives in its own library.**
 One file joins at 0.71.0, `scripts/budget.lib.sh`; none leaves. It is the

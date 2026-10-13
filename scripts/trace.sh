@@ -6,6 +6,7 @@
 #                            [--blob <file>|--blob=<file>|-] [--dry-run]
 #   sh scripts/trace.sh blob <file>|-
 #   sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
+#   sh scripts/trace.sh begin --detached <skill> [subject=<type:ref>] [<field>=<value> …]
 #   sh scripts/trace.sh end [<run>] [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
 #   sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
@@ -16,6 +17,7 @@
 #   sh scripts/trace.sh stack <dir> --all
 #   sh scripts/trace.sh current
 #   sh scripts/trace.sh id [--check <id>]
+#   sh scripts/trace.sh runs [<id>]
 #
 # WHAT IT IS. Every decision the chain makes — a tier stamped, a model resolved,
 # a finding raised or rejected, a PR iterated, a merge landed — is one JSON line
@@ -28,7 +30,7 @@
 # prints the resolved directory, `begin` the run id it just opened, `show` the
 # matching lines, `summary` its table, `export` its rows, `emit --dry-run` the
 # line it would append, `stack` a checkout's open run and the run below it, `current` this
-# process's own run and its parent, `id` a fresh run id; a
+# process's own run and its parent, `id` a fresh run id, `runs` the open runs; a
 # successful `emit` and a successful `end` print nothing on stdout — a bare
 # `end`, with no <run>, is deprecated and says so in one stderr line naming
 # the run it closed (#560). Every diagnostic is on stderr, prefixed `trace:`.
@@ -122,6 +124,19 @@
 # per working tree and per session (#453), and `begin` and `end` are its only
 # writers — an emit never touches it, so fifty parallel sub-agents only ever
 # append.
+#
+# EVERY OPEN RUN IS REGISTERED BY ID (the kit's ADR-0026). The open-run
+# registry is one file per run that has begun and not ended, runs/<run id>
+# under the trace directory, landed by rename so parallel writers never share
+# a file. `begin` registers its run (opened `stack`); `begin --detached` mints
+# a run, registers it (opened `detached`), prints it and touches no stack — the
+# run of a dispatched worker or a cascade, whose owner holds the id and ends it
+# with `end <run>` from wherever it stands; `end` removes the entry of the run
+# it closes. `runs` prints one line per entry, `runs <id>` one entry's fields.
+# A stack run reads `stale` once it is on no run stack, a detached one once
+# its process is gone from this host; a stale entry stays: only `end` removes
+# one. The registry answers "what is running now"; the
+# event log stays the durable record.
 #
 # A BLOB IS A PAYLOAD THAT DOES NOT FIT ON A LINE — a prompt, a tool result,
 # spike evidence. `--blob <file>` (or `--blob=<file>`, the same thing; or `-`
@@ -231,6 +246,7 @@ usage() {
 usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value> …] [data.<key>=<value> …] [--blob <file>|-] [--dry-run]
        sh scripts/trace.sh blob <file>|-
        sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
+       sh scripts/trace.sh begin --detached <skill> [subject=<type:ref>] [<field>=<value> …]
        sh scripts/trace.sh end [<run>] [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
        sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
@@ -241,6 +257,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh stack <dir> --all
        sh scripts/trace.sh current
        sh scripts/trace.sh id [--check <id>]
+       sh scripts/trace.sh runs [<id>]
          (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
 	exit 2
@@ -682,6 +699,7 @@ trace_key() {
 	_tk_top=${1:-}
 	[ -n "$_tk_top" ] || _tk_top=$(trace_git rev-parse --show-toplevel) || _tk_top=
 	[ -n "$_tk_top" ] || _tk_top=$(cd "$_trace_here/.." && pwd -P)
+	TRACE_TOPLEVEL=$_tk_top
 	TRACE_KEY=$(printf '%s' "$_tk_top" | trace_hash_stdin)
 	[ -n "$TRACE_KEY" ] || return 1
 	TRACE_POINTER="$TRACE_ROOT_DIR/current/$TRACE_KEY"
@@ -1101,6 +1119,128 @@ trace_emit() {
 }
 
 # ---------------------------------------------------------------------------
+# The open-run registry: runs/<run id>, one file per run begun and not ended.
+#
+# AN ENTRY is `<field>=<value>` lines in a fixed order — run, parent, session,
+# checkout, opened (`stack` or `detached`), pid, host, started — and its file
+# name is its run id, held to TRACE_RUN_ID_ERE before any path is built from
+# one, so no value a caller passes can name another file. Staged under tmp/,
+# on the trace directory's own filesystem, and landed by ONE rename: a reader
+# sees a whole entry or none, and two processes registering at once write two
+# files, never one (craft §11).
+#
+# THE PROCESS is the one that called this script ($PPID): for a dispatcher's
+# `run=$(sh scripts/trace.sh begin --detached …)` that is the dispatcher, alive
+# for as long as its worker is. Only a DETACHED run's state is judged by it: a
+# stack run's comes from its run stack (trace_reg_state), since an agent
+# harness's one-command shell is gone the moment `begin` returns. Stale is a
+# report, never a verdict, which is why nothing but `end` removes an entry
+# (the kit's ADR-0026).
+
+# trace_register <run> <parent> <opened> — lands <run>'s entry. Needs
+# TRACE_ROOT_DIR, and trace_key and trace_identity already asked.
+trace_register() {
+	_rg_dir="$TRACE_ROOT_DIR/runs"
+	mkdir -p "$_rg_dir" "$TRACE_ROOT_DIR/tmp" || die "cannot create the open-run registry under $TRACE_ROOT_DIR"
+	_trace_stage=$(mktemp "$TRACE_ROOT_DIR/tmp/run.XXXXXX") || die "cannot stage an open-run registry entry under $TRACE_ROOT_DIR/tmp"
+	# A newline in a value would forge a field, so each value is one line.
+	for _rg_v in "run=$1" "parent=$2" "session=${_id_session:-}" "checkout=${TRACE_TOPLEVEL:-}" "opened=$3" \
+		"pid=$PPID" "host=$(uname -n 2>/dev/null)" "started=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; do
+		printf '%s' "$_rg_v" | tr '\n' ' '
+		echo
+	done >"$_trace_stage" || die "cannot stage the registry entry for $1"
+	mv "$_trace_stage" "$_rg_dir/$1" || die "cannot land the registry entry at $_rg_dir/$1"
+	_trace_stage=
+}
+
+# trace_unregister <run> — removes <run>'s entry, after its run.end is written.
+# A run begun before the registry existed has none, which is not an error; an
+# entry that will not go is said on stderr — the run IS closed, and the line
+# that says so is already in the log, so the exit stays 0.
+trace_unregister() {
+	trace_matches "$1" "$TRACE_RUN_ID_ERE" || return 0
+	rm -f "$TRACE_ROOT_DIR/runs/$1" 2>/dev/null ||
+		echo "!  trace: closed $1, but its open-run registry entry at $TRACE_ROOT_DIR/runs/$1 could not be removed — runs will list it until it is." >&2
+	return 0
+}
+
+# trace_reg_field <entry file> <field> — the field's value, or nothing.
+trace_reg_field() { sed -n "s/^$2=//p" "$1" 2>/dev/null | sed -n '1p'; }
+
+# trace_reg_state <entry file> — a STACK run's state is its stack's: `live`
+# while its id is on a run stack, `stale` once it is on none, `unknown` when a
+# stack that exists cannot be read — never judged by pid, because an agent
+# harness's one-command shell, the process a begin names, is gone the moment
+# the command returns while the run is still open. A run id is minted unique,
+# so the stack that holds it is its session's. A DETACHED run's state is its
+# process's: `live` while it runs on this host, `stale` once it is gone from
+# this host, `unknown` for an entry from another host or with no process id:
+# no answer is better than a guess. A process this user may not signal answers
+# as gone; the registry is the trace directory's, whose writers are this user.
+trace_reg_state() {
+	if [ "$(trace_reg_field "$1" opened)" = stack ]; then
+		_rs_run=${1##*/}
+		_rs_state=stale
+		_rs_set=$-
+		set +f
+		for _rs_stk in "$TRACE_ROOT_DIR"/current/*.runs; do
+			[ -f "$_rs_stk" ] || continue
+			if [ ! -r "$_rs_stk" ]; then
+				_rs_state=unknown
+				continue
+			fi
+			grep -qxF -- "$_rs_run" "$_rs_stk" 2>/dev/null && { _rs_state=live; break; }
+		done
+		case $_rs_set in *f*) set -f ;; esac
+		echo "$_rs_state"
+		return 0
+	fi
+	_rs_pid=$(trace_reg_field "$1" pid)
+	case $_rs_pid in '' | *[!0-9]*) echo unknown; return 0 ;; esac
+	[ "$(trace_reg_field "$1" host)" = "$(uname -n 2>/dev/null)" ] || { echo unknown; return 0; }
+	if kill -0 "$_rs_pid" 2>/dev/null; then echo live; else echo stale; fi
+}
+
+# trace_runs [<id>] — `runs`: one line per entry, `<run> <opened> <state>
+# <started> <parent|->`, oldest run first; `runs <id>`: that entry's fields,
+# one `<field>=<value>` per line, then `state=<state>`. An id with no entry —
+# one no run id has the shape of included — is exit 1 and nothing printed.
+# An entry that exists and cannot be read refuses with exit 2, as a stack
+# does. Unconfigured: `runs` prints nothing and exits 0, and `runs <id>`
+# names no entry. Writes nothing, ever.
+trace_runs() {
+	[ $# -le 1 ] || usage
+	case ${1-} in -?*) usage ;; esac
+	if [ $# -eq 1 ]; then
+		trace_dir || { trace_unconfigured_note; return 1; }
+		trace_matches "$1" "$TRACE_RUN_ID_ERE" || return 1
+		_rn_f="$TRACE_ROOT_DIR/runs/$1"
+		[ -f "$_rn_f" ] || return 1
+		_rn_body=$(cat "$_rn_f" 2>/dev/null) || die "the open-run registry entry at $_rn_f exists and cannot be read"
+		printf '%s\nstate=%s\n' "$_rn_body" "$(trace_reg_state "$_rn_f")"
+		return 0
+	fi
+	trace_dir || { trace_unconfigured_note; return 0; }
+	_rn_dir="$TRACE_ROOT_DIR/runs"
+	[ -d "$_rn_dir" ] || return 0
+	{ [ -r "$_rn_dir" ] && [ -x "$_rn_dir" ]; } || die "the open-run registry at $_rn_dir cannot be listed"
+	_rn_out=
+	_rn_set=$-
+	set +f
+	set -- "$_rn_dir"/*
+	case $_rn_set in *f*) set -f ;; esac
+	for _rn_f in "$@"; do
+		[ -f "$_rn_f" ] || continue
+		trace_matches "${_rn_f##*/}" "$TRACE_RUN_ID_ERE" || continue
+		[ -r "$_rn_f" ] || die "the open-run registry entry at $_rn_f exists and cannot be read"
+		_rn_parent=$(trace_reg_field "$_rn_f" parent)
+		_rn_out="$_rn_out${_rn_f##*/} $(trace_reg_field "$_rn_f" opened) $(trace_reg_state "$_rn_f") $(trace_reg_field "$_rn_f" started) ${_rn_parent:--}$_trace_nl"
+	done
+	printf '%s' "$_rn_out"
+	return 0
+}
+
+# ---------------------------------------------------------------------------
 # begin / end — the two ends of a run.
 
 # trace_reject_owned <subcommand> <argument…> — begin and end own kind, run and
@@ -1124,17 +1264,27 @@ trace_reject_owned() {
 	return 0
 }
 
-# trace_begin <skill> [<field>=<value> …] — prints a fresh run id, appends
-# run.start, and pushes the run. The event is written BEFORE the push, so a
-# refused argument leaves no run open that nobody will close.
+# trace_begin [--detached] <skill> [<field>=<value> …] — prints a fresh run
+# id, appends run.start, registers the run and pushes it. The event is written
+# BEFORE the entry and the push, so a refused argument leaves no run open that
+# nobody will close. `--detached` registers the run and pushes nothing: its
+# owner holds the id and closes it with `end <run>`. Unconfigured, a detached
+# begin still prints a run id — its caller hands the id on whether or not
+# anything records it — and writes nothing.
 trace_begin() {
+	_bg_detached=
+	[ "${1-}" = --detached ] && { _bg_detached=1; shift; }
 	[ $# -ge 1 ] || usage
 	_bg_skill=$1
 	shift
 	case $_bg_skill in '' | -* | *=*) usage ;; esac
 	trace_reject_owned begin "$@"
 	trace_arg_session "$@"
-	trace_dir || { trace_unconfigured_note; return 0; }
+	if ! trace_dir; then
+		trace_unconfigured_note
+		[ -z "$_bg_detached" ] || { trace_id; echo; }
+		return 0
+	fi
 	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
 	_bg_run=$(trace_id)
 	# The run that is current NOW is the one this one nests inside.
@@ -1144,7 +1294,12 @@ trace_begin() {
 	else
 		trace_emit kind=run.start skill="$_bg_skill" run="$_bg_run" "$@"
 	fi
-	trace_push "$_bg_run"
+	if [ -n "$_bg_detached" ]; then
+		trace_register "$_bg_run" "$_id_run" detached
+	else
+		trace_register "$_bg_run" "$_id_run" stack
+		trace_push "$_bg_run"
+	fi
 	printf '%s\n' "$_bg_run"
 }
 
@@ -1185,6 +1340,20 @@ trace_end() {
 		trace_session_ok "$_en_want" || usage
 	fi
 	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
+	# A DETACHED run is on no stack: its entry is what says it is open, and
+	# its parent is the one the entry names. Ended from any checkout or
+	# session — its owner holds the id, which is the whole of its identity.
+	if [ -n "$_en_want" ] && trace_matches "$_en_want" "$TRACE_RUN_ID_ERE" &&
+		[ "$(trace_reg_field "$TRACE_ROOT_DIR/runs/$_en_want" opened)" = detached ]; then
+		_en_parent=$(trace_reg_field "$TRACE_ROOT_DIR/runs/$_en_want" parent)
+		if [ -n "$_en_parent" ]; then
+			trace_emit kind=run.end run="$_en_want" parent="$_en_parent" "$@"
+		else
+			trace_emit kind=run.end run="$_en_want" "$@"
+		fi
+		trace_unregister "$_en_want"
+		return 0
+	fi
 	trace_stack_readable || die "cannot close a run this working tree's stack will not answer for"
 	_en_run=$(trace_stack top)
 	[ -n "$_en_run" ] || die "no run is open for this session in this working tree — begin opens one, end closes it"
@@ -1203,6 +1372,7 @@ trace_end() {
 		trace_emit kind=run.end run="$_en_run" "$@"
 	fi
 	trace_pop
+	trace_unregister "$_en_run"
 	[ -n "$_en_named" ] || trace_bare_end_note "$_en_run"
 }
 
@@ -2283,5 +2453,6 @@ dir) trace_dir && printf '%s\n' "$TRACE_ROOT_DIR"; exit 0 ;;
 stack) trace_stack_of "$@" ;;
 current) trace_current "$@" ;;
 id) trace_id_cmd "$@"; exit $? ;;
+runs) trace_runs "$@"; exit $? ;;
 *) usage ;;
 esac

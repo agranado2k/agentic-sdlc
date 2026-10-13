@@ -2750,4 +2750,277 @@ done
 grep -F '| [0024]' "$KIT/docs/adr/INDEX.md" | grep -qF '(#744)' && pass "and the index row records the amendment (#744)" ||
 	fail "ADR-0024's index row does not record the #744 amendment"
 
+banner "36. Every open run is queryable by id: the open-run registry (ticket #745)"
+# ---------------------------------------------------------------------------
+# A dispatched worker's run and a cascade's lived only in an environment
+# variable; nothing answered "what is running now?". The registry is one entry
+# per run that has begun and not ended, keyed by run id: `begin` adds one
+# (opened `stack`), `begin --detached` mints a run and adds one (opened
+# `detached`) without touching any stack, `end <run>` removes it; `runs` lists
+# the entries and `runs <id>` prints one; an entry whose process is gone on
+# this host reads `stale` and stays. The event log stays the durable record.
+t_repo
+RR_REPO=$REPO
+mkdir -p "$RR_REPO/scripts"
+cp "$TRACE" "$RR_REPO/scripts/trace.sh"
+t_commit "$RR_REPO" "chore: carry the trace script" >/dev/null
+RR_TOP=$(git -C "$RR_REPO" rev-parse --show-toplevel)
+RR="$SCRATCH/registry-745"; RRON=$(policy "$RR")
+RR_HOST=$(uname -n)
+# rr_run [NAME=value …] <trace.sh args…> — cu_run's shape, on this fixture.
+rr_run() {
+	(
+		cd "$RR_REPO" || exit 2
+		unset TRACE_RUN TRACE_PARENT
+		export TRACE_CONFIG="$RRON"
+		while case ${1:-} in [A-Z]*=*) true ;; *) false ;; esac; do
+			export "$1"
+			shift
+		done
+		exec sh scripts/trace.sh "$@"
+	)
+}
+rr_field() { printf '%s\n' "$T_OUT" | sed -n "s/^$1=//p"; }
+# R7: begin registers its run, opened `stack`, naming parent, session,
+# checkout, process id, host and start time.
+RR_OUTER=$(rr_run TRACE_SESSION=rr-a begin implement 2>/dev/null)
+t_exec rr_run TRACE_SESSION=rr-a runs "$RR_OUTER"
+expect_status 0 "runs <id> answers for a run begin opened"
+expect_out_has "run=$RR_OUTER" "its entry names the run"
+expect_out_has "opened=stack" "opened on a stack"
+expect_out_has "session=rr-a" "names its session"
+expect_out_has "checkout=$RR_TOP" "names the checkout it began in"
+expect_out_has "host=$RR_HOST" "names this host"
+[ "$(rr_field pid | grep -Ec '^[0-9]+$')" = 1 ] && pass "names a process id, in digits" || fail "no pid=<digits> line: $T_OUT"
+[ "$(rr_field started | grep -Ec '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$')" = 1 ] &&
+	pass "names its start, a UTC second" || fail "no started=<UTC second> line: $T_OUT"
+[ "$(printf '%s\n' "$T_OUT" | grep -c '^parent=')" = 1 ] && [ -z "$(rr_field parent)" ] &&
+	pass "and an outermost run's parent is empty" || fail "an outermost run's parent line: $T_OUT"
+RR_INNER=$(rr_run TRACE_SESSION=rr-a begin review-pr 2>/dev/null)
+t_exec rr_run TRACE_SESSION=rr-a runs "$RR_INNER"
+expect_out_has "parent=$RR_OUTER" "a nested begin's entry names the run it nests in"
+# R8: begin --detached mints, registers `detached`, prints the id, touches no stack.
+RR_KEY=$(printf '%s' "$RR_TOP" | git hash-object --stdin)
+_rr_stacks=$(cat "$RR/current/$RR_KEY".*.runs | cksum)
+t_exec rr_run TRACE_SESSION=rr-a begin --detached agent-dispatch
+expect_status 0 "begin --detached exits 0"
+RR_DET=$T_OUT
+expect_exit 0 "and prints one run id the trace's own check accepts" -- sh "$TRACE" id --check "$RR_DET"
+[ "$(cat "$RR/current/$RR_KEY".*.runs | cksum)" = "$_rr_stacks" ] && [ "$(rr_run TRACE_SESSION=rr-a current)" = "$RR_INNER $RR_OUTER" ] &&
+	pass "no run stack changed: the session's current run is still its own" || fail "begin --detached touched a run stack"
+t_exec rr_run TRACE_SESSION=rr-a runs "$RR_DET"
+expect_status 0 "runs <id> answers for a detached run"
+expect_out_has "opened=detached" "opened detached"
+expect_out_has "parent=$RR_INNER" "its parent is the run current when it was minted"
+grep "\"run\":\"$RR_DET\"" "$RR/events/$TODAY.jsonl" | grep -qF '"kind":"run.start"' &&
+	pass "and its run.start is in the event log, the durable record" || fail "no run.start for the detached run"
+# R11: runs lists one line per entry.
+t_exec rr_run runs
+expect_status 0 "runs exits 0"
+[ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 3 ] && pass "runs prints one line per open run: three" || fail "runs printed: $T_OUT"
+for _rr_r in "$RR_OUTER" "$RR_INNER" "$RR_DET"; do
+	printf '%s\n' "$T_OUT" | grep -q "^$_rr_r " && pass "a line opens with $_rr_r" || fail "no runs line opens with $_rr_r: $T_OUT"
+done
+printf '%s\n' "$T_OUT" | grep "^$RR_DET " | grep -qw detached && printf '%s\n' "$T_OUT" | grep "^$RR_OUTER " | grep -qw stack &&
+	pass "and each line says how its run was opened" || fail "runs lines do not say stack/detached: $T_OUT"
+# R10: end removes the entry — a stack run, and a detached one.
+rr_run TRACE_SESSION=rr-a end "$RR_INNER" 2>/dev/null
+t_exec rr_run runs "$RR_INNER"
+expect_status 1 "end <run> removes its entry: runs <id> then exits 1"
+expect_out_is "" "and prints nothing"
+t_exec rr_run TRACE_SESSION=rr-b end "$RR_DET" outcome=ok
+expect_status 0 "end <run> closes a detached run from any session — it is on no stack"
+t_exec rr_run runs "$RR_DET"
+expect_status 1 "and removes its entry"
+grep "\"run\":\"$RR_DET\"" "$RR/events/$TODAY.jsonl" | grep -F '"kind":"run.end"' | grep -qF "\"parent\":\"$RR_INNER\"" &&
+	pass "its run.end carries the parent its entry named" || fail "no run.end with the detached run's parent"
+[ "$(rr_run TRACE_SESSION=rr-a current)" = "$RR_OUTER" ] && pass "and the session's stack is untouched by it" ||
+	fail "ending a detached run moved a stack"
+t_exec rr_run TRACE_SESSION=rr-a end "$RR_DET"
+expect_status 2 "a detached run ended twice is not open: exit 2"
+# R12: an id with no entry.
+t_exec rr_run runs "$(sh "$TRACE" id)"
+expect_status 1 "runs <id> for an id with no entry exits 1"
+expect_out_is "" "and prints nothing"
+t_exec rr_run runs ../current
+expect_status 1 "a value no run id has names no entry either, and reads no path"
+expect_out_is "" "printing nothing"
+expect_exit 2 "runs takes one id at most" -- rr_run runs "$RR_OUTER" "$RR_OUTER"
+expect_exit 2 "begin --detached with no skill is a usage error" -- rr_run begin --detached
+# R14: concurrent registrations are all held.
+_rr_i=0
+: >"$SCRATCH/rr-ids"
+while [ $_rr_i -lt 8 ]; do
+	rr_run begin --detached cascade >>"$SCRATCH/rr-ids" 2>/dev/null &
+	_rr_i=$((_rr_i + 1))
+done
+wait
+_rr_held=0
+while read -r _rr_r; do
+	rr_run runs "$_rr_r" >/dev/null 2>&1 && _rr_held=$((_rr_held + 1))
+done <"$SCRATCH/rr-ids"
+[ "$(grep -c . "$SCRATCH/rr-ids")" = 8 ] && [ $_rr_held = 8 ] &&
+	pass "eight begin --detached at once: eight ids, eight entries held" ||
+	fail "concurrent registrations: $(grep -c . "$SCRATCH/rr-ids") ids, $_rr_held entries"
+while read -r _rr_r; do rr_run end "$_rr_r" >/dev/null 2>&1; done <"$SCRATCH/rr-ids"
+# R13: an entry whose process is gone reads stale, and stays.
+sh -c 'cd "$1" && TRACE_CONFIG="$2" sh scripts/trace.sh begin --detached agent-dispatch >"$3" 2>/dev/null && exec sleep 60' rr "$RR_REPO" "$RRON" "$SCRATCH/rr-live" &
+_rr_pid=$!
+_rr_i=0
+while [ ! -s "$SCRATCH/rr-live" ] && [ $_rr_i -lt 50 ]; do sleep 0.1 2>/dev/null || sleep 1; _rr_i=$((_rr_i + 1)); done
+RR_LIVE=$(cat "$SCRATCH/rr-live")
+t_exec rr_run runs "$RR_LIVE"
+expect_out_has "pid=$_rr_pid" "a detached run's process is the one that asked for it"
+expect_out_has "state=live" "and while that process runs, its entry reads live"
+t_exec rr_run runs
+printf '%s\n' "$T_OUT" | grep "^$RR_LIVE " | grep -qw live && pass "runs says live on its line" || fail "runs line for a live run: $T_OUT"
+kill "$_rr_pid" 2>/dev/null
+wait "$_rr_pid" 2>/dev/null
+t_exec rr_run runs "$RR_LIVE"
+expect_status 0 "once its process is gone the entry is still there"
+expect_out_has "state=stale" "and reads stale"
+t_exec rr_run runs
+printf '%s\n' "$T_OUT" | grep "^$RR_LIVE " | grep -qw stale && pass "runs says stale on its line" || fail "runs line for a stale run: $T_OUT"
+t_exec rr_run runs
+printf '%s\n' "$T_OUT" | grep -q "^$RR_LIVE " && pass "and reading it did not remove it — only end does" || fail "a stale entry vanished on read"
+t_exec rr_run end "$RR_LIVE"
+expect_status 0 "end closes a stale run"
+expect_exit 1 "and that removes it" -- rr_run runs "$RR_LIVE"
+# ADR-0026 clause 4: an entry with no process id this host can ask about
+# reads `unknown` — another host's, or a pid that is missing or not digits.
+# Hand-written entries, so no process of this suite's stands behind them.
+# rr_entry <run> <pid> <host> — lands an entry the way trace_register shapes one.
+# A fourth argument names how it was opened; detached when left out.
+rr_entry() {
+	printf 'run=%s\nparent=\nsession=rr-h\ncheckout=%s\nopened=%s\npid=%s\nhost=%s\nstarted=2000-01-01T00:00:00Z\n' \
+		"$1" "$RR_TOP" "${4:-detached}" "$2" "$3" >"$RR/runs/$1"
+}
+RR_FAR=20000103T000000Z-1-cccccccc
+RR_NOPID=20000104T000000Z-1-dddddddd
+RR_BADPID=20000105T000000Z-1-eeeeeeee
+rr_entry "$RR_FAR" "$$" rr-other-host
+rr_entry "$RR_NOPID" '' "$RR_HOST"
+rr_entry "$RR_BADPID" x "$RR_HOST"
+t_exec rr_run runs "$RR_FAR"
+expect_out_has "state=unknown" "an entry from another host reads unknown, even with a pid alive here"
+t_exec rr_run runs "$RR_NOPID"
+expect_out_has "state=unknown" "an entry with no pid reads unknown"
+t_exec rr_run runs "$RR_BADPID"
+expect_out_has "state=unknown" "an entry whose pid is not digits reads unknown"
+t_exec rr_run runs
+expect_out_has "$RR_FAR detached unknown " "and runs says unknown on its line"
+# ADR-0026 clause 3: runs lists the oldest run first — landed newest first here.
+RR_OLD=20000101T000000Z-1-aaaaaaaa
+RR_NEW=20000102T000000Z-1-bbbbbbbb
+rr_entry "$RR_NEW" '' "$RR_HOST"
+rr_entry "$RR_OLD" '' "$RR_HOST"
+# rr_first_two — the run ids of the first two lines runs prints.
+rr_first_two() { rr_run runs | cut -d' ' -f1 | sed -n '1,2p'; }
+t_exec rr_first_two
+expect_out_is "$RR_OLD
+$RR_NEW" "runs prints the oldest run first"
+for _rr_r in "$RR_FAR" "$RR_NOPID" "$RR_BADPID" "$RR_OLD" "$RR_NEW"; do rm -f "$RR/runs/$_rr_r"; done
+# ADR-0026 clause 3: an entry, or the registry, that exists and cannot be read
+# refuses with exit 2 — never read as absent.
+rr_entry "$RR_OLD" '' "$RR_HOST"
+chmod 000 "$RR/runs/$RR_OLD"
+if [ -r "$RR/runs/$RR_OLD" ]; then
+	echo "  skip  the unreadable-entry refusals: this user reads a mode-000 file"
+else
+	t_exec rr_run runs "$RR_OLD"
+	expect_status 2 "runs <id> refuses an entry it cannot read: exit 2"
+	expect_err_has "cannot be read" "naming the entry it could not read"
+	t_exec rr_run runs
+	expect_status 2 "and runs refuses the listing with it: exit 2"
+	expect_err_has "cannot be read" "naming it there too"
+fi
+chmod 644 "$RR/runs/$RR_OLD"
+rm -f "$RR/runs/$RR_OLD"
+chmod 000 "$RR/runs"
+if [ -r "$RR/runs" ]; then
+	echo "  skip  the unlistable-registry refusal: this user lists a mode-000 directory"
+else
+	t_exec rr_run runs
+	expect_status 2 "a registry that cannot be listed refuses: exit 2"
+	expect_err_has "cannot be listed" "naming the registry"
+fi
+chmod 755 "$RR/runs"
+# ADR-0026 clause 4: a STACK run's state is its stack's, never a pid's. An
+# agent harness runs each command in a fresh shell, so the process a begin
+# names is gone when the command returns; the run is live while it is on its
+# session's stack. The begin below runs in a shell that has exited before
+# runs is asked, from another.
+RR_STK=$(rr_run TRACE_SESSION=rr-s begin implement 2>/dev/null)
+t_exec rr_run TRACE_SESSION=rr-t runs "$RR_STK"
+expect_out_has "opened=stack" "a stack run begun from a shell that has since exited"
+expect_out_has "state=live" "reads live from another shell while it is on its stack"
+t_exec rr_run runs
+expect_out_has "$RR_STK stack live " "and runs says live on its line"
+t_exec cat "$RR/current/$RR_KEY.rr-s.runs"
+expect_out_is "$RR_STK" "its session's stack holds the run"
+chmod 000 "$RR/current/$RR_KEY.rr-s.runs"
+if [ -r "$RR/current/$RR_KEY.rr-s.runs" ]; then
+	echo "  skip  the unreadable-stack state: this user reads a mode-000 file"
+else
+	t_exec rr_run runs "$RR_STK"
+	expect_out_has "state=unknown" "a stack run whose stack cannot be read reads unknown, never stale"
+fi
+chmod 644 "$RR/current/$RR_KEY.rr-s.runs"
+t_exec rr_run TRACE_SESSION=rr-s end "$RR_STK" outcome=ok
+expect_status 0 "end closes the stack run"
+expect_exit 1 "and removes its entry" -- rr_run runs "$RR_STK"
+# A stack entry whose run is on no stack reads stale, whatever its pid says.
+RR_OFFSTK=20000106T000000Z-1-ffffffff
+rr_entry "$RR_OFFSTK" "$$" "$RR_HOST" stack
+t_exec rr_run runs "$RR_OFFSTK"
+expect_out_has "state=stale" "a stack entry on no stack reads stale, even with a pid alive here"
+rm -f "$RR/runs/$RR_OFFSTK"
+# The pid judgement stays for a detached run: one whose process is dead reads stale.
+t_exec sh -c 'echo $$'
+RR_DEADPID=$T_OUT
+RR_DEAD=20000107T000000Z-1-abababab
+rr_entry "$RR_DEAD" "$RR_DEADPID" "$RR_HOST"
+t_exec rr_run runs "$RR_DEAD"
+expect_out_has "opened=detached" "a detached entry"
+expect_out_has "state=stale" "whose process has exited reads stale"
+rm -f "$RR/runs/$RR_DEAD"
+# R9: unconfigured, begin --detached still prints a well-formed id and writes nothing.
+t_repo
+RR_OFF_REPO=$REPO
+mkdir -p "$RR_OFF_REPO/scripts"
+cp "$TRACE" "$RR_OFF_REPO/scripts/trace.sh"
+printf "TRACE_DIR=''\n" >"$RR_OFF_REPO/scripts/trace.config.sh"
+t_commit "$RR_OFF_REPO" "chore: carry the trace script, unconfigured" >/dev/null
+t_exec env -u TRACE_RUN -u TRACE_CONFIG -u TRACE_DIR TRACE_QUIET=1 sh "$RR_OFF_REPO/scripts/trace.sh" begin --detached agent-dispatch
+expect_status 0 "unconfigured, begin --detached exits 0"
+expect_exit 0 "and prints a run id the check accepts" -- sh "$TRACE" id --check "$T_OUT"
+[ -z "$(git -C "$RR_OFF_REPO" status --porcelain --ignored)" ] && pass "and writes nothing: the checkout holds no new file" ||
+	fail "unconfigured begin --detached wrote: $(git -C "$RR_OFF_REPO" status --porcelain --ignored)"
+t_exec env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" runs
+expect_resolved "" "unconfigured, runs prints nothing and exits 0"
+t_exec env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" end "$RR_OUTER"
+expect_status 0 "and end of an open run is the silent no-op every unconfigured call is"
+# The surface names the new verbs.
+t_exec sh "$TRACE"
+expect_err_has 'trace.sh runs [<id>]' "the usage names runs [<id>]"
+expect_err_has 'trace.sh begin --detached <skill>' "and begin --detached <skill>"
+sed -n '2,26p' "$TRACE" | grep -qF 'sh scripts/trace.sh runs [<id>]' && sed -n '2,26p' "$TRACE" | grep -qF 'sh scripts/trace.sh begin --detached <skill>' &&
+	pass "and so does the script's header" || fail "the header's command list does not name runs and begin --detached"
+grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF '`runs [<id>]`' && grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF '`begin --detached`' &&
+	pass "the root manual's trace row names runs and begin --detached" || fail "AGENTS.md's trace row does not name \`runs [<id>]\` and \`begin --detached\`"
+_rr_adr=$(ls "$KIT"/docs/adr/0026-*.md 2>/dev/null | head -1)
+[ -n "$_rr_adr" ] && grep -qiF 'open runs are registered by id' "$_rr_adr" && grep -qF 'ADR-0024' "$_rr_adr" &&
+	pass "ADR-0026 records that open runs are registered by id, against ADR-0024" ||
+	fail "no docs/adr/0026-*.md titled 'open runs are registered by id' naming ADR-0024"
+adr8_states "$ADR8_NEXT" 5 'ADR-0026' && pass "ADR-0024 clause 5 links ADR-0026" || fail "ADR-0024 clause 5 does not link ADR-0026"
+grep -F '| [0024]' "$KIT/docs/adr/INDEX.md" | grep -qF '(#745)' && grep -qF '| [0026]' "$KIT/docs/adr/INDEX.md" &&
+	pass "and the index records the amendment (#745) and the new record" || fail "INDEX.md lacks ADR-0024's #745 amendment or ADR-0026's row"
+grep -qF '**Open-run registry**' "$KIT/docs/domain-glossary.md" && pass "the glossary names the open-run registry" ||
+	fail "the glossary has no Open-run registry entry"
+# An entry of its own, not a bold word inside another entry's prose.
+for _rr_term in 'Detached run' 'Stale'; do
+	grep -q -- "^- \*\*$_rr_term\*\* — " "$KIT/docs/domain-glossary.md" && pass "and an entry for $_rr_term" ||
+		fail "the glossary has no entry of its own for $_rr_term"
+done
+
 t_done "trace script"
