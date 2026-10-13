@@ -3033,20 +3033,52 @@ banner "37. Callers reach run identity only through the trace (ticket #746)"
 # from the clock, or scrape an event's JSON for the run it carries. The dated
 # records that quote history are exempt: VERSION, UPDATING.md, the diary and
 # the decision records.
-# cs_hits <ERE> — the tracked files that match it, the exempt ones left out.
-cs_hits() {
-	git -C "$KIT" grep -lE -- "$1" -- . ':!scripts/trace.sh' ':!tests/trace.test.sh' \
-		':!VERSION' ':!UPDATING.md' ':!docs/diary.md' ':!docs/adr/' 2>/dev/null
-}
-while IFS='@' read -r _cs_ere _cs_what; do
-	_cs_hit=$(cs_hits "$_cs_ere" | tr '\n' ' ')
-	[ -z "$_cs_hit" ] && pass "no file but the trace $_cs_what" ||
-		fail "only the trace $_cs_what, and so do: $_cs_hit"
-done <<'EOF746'
-\{8\}T\[0-9\]\{6\}Z-@spells the run id's expression
-\]T\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]Z-@spells the run id's glob
+# CS_SCANS — one `<ERE>@<what it catches>` per line, read by cs_scan.
+CS_SCANS='\{8\}T\[0-9\]\{6\}Z-@spells the run id'"'"'s expression
+\]T\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]\[0-9\]Z-@spells the run id'"'"'s glob
 %Y%m%dT%H%M%SZ@mints a run id from the clock
-"(run|parent)":"\\\(@scrapes an event's JSON for its run
+"(run|parent)":"\\\(@scrapes an event'"'"'s JSON for its run'
+# cs_scan <repo> — `<file>: <what>` for each tracked file a scan catches, the
+# exempt ones left out; nothing when no file is caught.
+cs_scan() {
+	printf '%s\n' "$CS_SCANS" | while IFS='@' read -r _cs_ere _cs_what; do
+		git -C "$1" grep -lE -- "$_cs_ere" -- . ':!scripts/trace.sh' ':!tests/trace.test.sh' \
+			':!VERSION' ':!UPDATING.md' ':!docs/diary.md' ':!docs/adr/' 2>/dev/null |
+			while IFS= read -r _cs_file; do printf '%s: %s\n' "$_cs_file" "$_cs_what"; done
+	done
+}
+t_exec cs_scan "$KIT"
+expect_resolved '' "no file but the trace spells the run id, mints one or scrapes an event for it"
+# The scan must be able to fail: a fixture holding one file per way round the
+# trace is caught file by file, and a near miss and an exempt file are not.
+t_repo
+cat >"$REPO/expr.sh" <<'EOF746'
+grep -E '^[0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{8}$'
 EOF746
+cat >"$REPO/glob.sh" <<'EOF746'
+case $id in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-*) ;; esac
+EOF746
+cat >"$REPO/clock.sh" <<'EOF746'
+run=$(date -u +%Y%m%dT%H%M%SZ)-$$
+EOF746
+cat >"$REPO/scrape.sh" <<'EOF746'
+sed -n 's/.*"run":"\([^"]*\)".*/\1/p' events.jsonl
+EOF746
+cat >"$REPO/near.sh" <<'EOF746'
+stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+printf '{"run":"%s"}\n' "$run"
+grep -E '[0-9]{8}' dates
+sh scripts/trace.sh id --check "$id"
+EOF746
+mkdir -p "$REPO/scripts"
+cp "$REPO/expr.sh" "$REPO/scripts/trace.sh"
+t_commit "$REPO" "test: plant the ways round the trace" >/dev/null
+t_exec cs_scan "$REPO"
+expect_out_has "expr.sh: spells the run id's expression" "the scan catches a file spelling the run id's expression"
+expect_out_has "glob.sh: spells the run id's glob" "the scan catches a file spelling the run id's glob"
+expect_out_has "clock.sh: mints a run id from the clock" "the scan catches a file minting a run id from the clock"
+expect_out_has "scrape.sh: scrapes an event's JSON for its run" "the scan catches a file scraping an event's JSON for its run"
+expect_out_lacks "near.sh" "a near miss — an ISO stamp, an event written, eight digits, id --check — is not caught"
+expect_out_lacks "scripts/trace.sh" "the trace itself is exempt"
 
 t_done "trace script"
