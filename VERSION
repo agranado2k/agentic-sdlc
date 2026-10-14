@@ -2894,7 +2894,38 @@
 # bootstrap.sh's kit-own list; tests/trace.test.sh section 38; the root
 # manual's trace row names the form.
 
-shared-layer: 0.76.0
+# 0.77.0 — a frontier's session cap is held to the vendor's usage window
+# (ticket #776). NO file joins and NO file leaves the shared layer. ONE
+# shared file changes content besides UPDATING.md: scripts/agents.lib.sh
+# gains `--session-cap <n>`, which prints the lower of <n> — the cap the
+# host's concurrent-subagent limit gave — and the policy's
+# AGENT_WINDOW_SESSIONS, the most review-bearing sessions one usage window
+# carries; <n> itself when the policy states no window or there is no
+# policy. Either number that is not a whole number of at least one is exit
+# 2, nothing printed, and so is a named policy that is missing. --ids does
+# not list the window. Every call valid at 0.76.0 behaves as it did.
+# Evidence: in PRD #742's wave the usage window stopped every parallel
+# session at once five times (retro-20261014T104726Z).
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): to-tickets — step 5's hand-off holds its session cap to the
+# usage window through `sh scripts/agents.lib.sh --session-cap <the cap>`
+# and says which bound held. review-pr — SKILL.md and its six lens files,
+# lens-api-crud.md, lens-pattern.md, lens-reuse-dry.md, lens-security.md,
+# lens-simplicity.md and lens-test-hygiene.md, run the band rule's test on
+# a LOW as three questions before raising it (#774). implement — CASCADE.md
+# scopes its --deliver step to a cascade that ran (#777). Wiring (9b): none.
+# Templates (9c): templates/workflows/ai-review-prompt.md carries the same
+# three questions on a LOW (#774).
+# Config (9d): scripts/agents.config.sh gains AGENT_WINDOW_SESSIONS='',
+# documented — MERGE the block in; empty keeps today's cap.
+# Kit-only, never shipped: ADR-0029, its index row and its place on
+# bootstrap.sh's kit-own list; the kit's two policy twins carry
+# AGENT_WINDOW_SESSIONS='3'; tests/agents-tiers.test.sh's --session-cap
+# section; the glossary's Session cap entry and the root manual's resolver
+# row name the form.
+
+shared-layer: 0.77.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

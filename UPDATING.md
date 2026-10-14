@@ -227,6 +227,23 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
+**Arriving from 0.76.0 or older, a frontier's session cap is held to the
+usage window.** No file joins or leaves at 0.77.0. One shared file changes
+content besides this recipe: `scripts/agents.lib.sh` gains `--session-cap
+<n>`. It prints the lower of `<n>`, the cap the host's concurrent-subagent
+limit gave, and your policy's `AGENT_WINDOW_SESSIONS`, the most
+review-bearing sessions one usage window of your vendor carries. With no
+window stated it prints `<n>`. A number that is not a whole number of at
+least one, in the argument or the policy, is exit 2 with nothing printed.
+Every call valid at 0.76.0 behaves as it did. Part 2: `/to-tickets` step 5
+runs the form at its hand-off (9a), and `scripts/agents.config.sh` gains
+`AGENT_WINDOW_SESSIONS=''` with its comment block (9d, MERGE). Left empty,
+your cap is what it was; set it once a usage window has stopped your
+parallel sessions together. The same window also moves `/review-pr`'s
+`SKILL.md`, its six lens files and `ai-review-prompt.md` (9a, 9c: a LOW
+passes three questions before it is raised) and `/implement`'s
+`CASCADE.md` (9a: `--deliver` only after a cascade ran).
+
 **Arriving from 0.75.0 or older, a run opened before the registry can be
 closed.** No file joins or leaves at 0.76.0. One shared file changes content
 besides this recipe: `scripts/trace.sh` gains `end --unregistered <run>
@@ -1273,7 +1290,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.76.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.77.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -1285,10 +1302,10 @@ order by the locale's collation, and only the paths move, never the verdicts.
 
 ```console
 $ kit tag --list --sort=-v:refname
-v0.76.0
+v0.77.0
 v0.1.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.76.0
+v0.1.0 -> v0.77.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1329,10 +1346,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3015 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3032 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3169 insertions(+), 1 deletion(-)
+ 3 files changed, 3186 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1402,7 +1419,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.76.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.77.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1470,10 +1487,10 @@ WARN  docs conformance: advisories (gate stays green)
   [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
       -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
-OK  docs gate: all checks passed (shared-layer 0.76.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.77.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.76.0
-Part 1 complete — shared layer at v0.76.0. The update is not done: go to step 8.
+0.77.0
+Part 1 complete — shared layer at v0.77.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -2346,7 +2363,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.76.0 case for this file, and `ADD` is the 0.3.0 → 0.76.0
+`MERGE` is the 0.4.0 → 0.77.0 case for this file, and `ADD` is the 0.3.0 → 0.77.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -2716,14 +2733,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.76.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.77.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.76.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.77.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -2927,7 +2944,7 @@ NEW       docs/specs/README.md
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.76.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.77.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -2957,7 +2974,7 @@ WARN  docs conformance: advisories (gate stays green)
   [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
       -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
-OK  docs gate: all checks passed (shared-layer 0.76.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.77.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
@@ -2971,7 +2988,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.76.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.77.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a
