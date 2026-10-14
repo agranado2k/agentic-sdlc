@@ -4,7 +4,7 @@
 - **Date**: 2026-10-08
 - **Deciders**: the implementer session for #630, on the operator's standing delegation of rulings (2026-10-08); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: ADR-0008 clause 7, in one respect — it names one more operator-run reader of the trace (clause 1 below)
-- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; amended 2026-10-10 for #723: the script's third read, `pr.open`, recorded and held by a check; see the amendments below)
+- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; amended 2026-10-10 for #723: the script's third read, `pr.open`, recorded and held by a check; amended 2026-10-14 for #775: a fourth read, `ticket.start` on the landed ticket, recorded on `merge.land` as `data.ticket_start=no` when absent; see the amendments below)
 
 ## Context and problem statement
 
@@ -138,3 +138,26 @@ operator's yes.
    every `show --kind` read in the script, following a wrapper's `"$1"` to
    its calls, and fails on a kind this record's Decision outcome and
    amendments do not name; its baits prove it can.
+
+## Amendment 2026-10-14 — the `ticket.start` read (#775)
+
+Two `/implement` runs opened PRs with no `ticket.start` (#730 as PR #739,
+#732 as PR #736), and the 2026-10-07 retro found the same gap (#592):
+`/retro`'s chain-health question could not tell a ticket nobody started from
+one the trace lost. Decided by the implementer session for #775 on the
+operator's standing delegation; the merge of its pull request is the
+operator's yes.
+
+1. **Clause 1 reads a fourth kind.** The script reads `show` for
+   `ticket.start` on the ticket it lands — the PR's first closing reference,
+   or `--ticket` — beside `pr.iterate`, `review.verdict` and `pr.open` on the
+   PR; still no skill gains a read.
+2. **What the read is for.** When the trace holds no `ticket.start` on
+   `ticket:#<N>`, the landing's `merge.land` carries `data.ticket_start=no`;
+   with one, or with no ticket known, it carries nothing extra. Like the
+   `pr.open` read it is no check: it never refuses and takes no override.
+   Unconfigured, nothing is read (clause 5). The key is the script's alone,
+   like the iteration and review keys: `/merge-train`'s own `merge.land`
+   names none of them.
+3. The amendment above's clause 3 now names four kinds; `tests/land.test.sh`
+   section 15 holds the list, and section 18 drives the read.

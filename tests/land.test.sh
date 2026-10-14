@@ -933,7 +933,7 @@ banner "10. /merge-train's merge.land takes the landing script's fields (#634)"
 # data.no_iteration, data.reviewed and data.no_review answer a trace read
 # (ADR-0019) that no chain skill makes (ADR-0008 clause 7), so the train names
 # none of them.
-LAND_ONLY='iterated no_iteration reviewed no_review'
+LAND_ONLY='iterated no_iteration reviewed no_review ticket_start'
 land_keys=$(env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$TRACE" export 2>/dev/null |
 	grep -F '"kind":"merge.land"' | grep -F '"outcome":"landed"' |
 	sed 's/.*"data":{//' | grep -oE '(^|,)"[a-z_]+":' | tr -d ',":' | sort -u)
@@ -1322,9 +1322,9 @@ land_reads_unnamed() {
 	done
 }
 _lr_read=$(land_read_kinds "$LAND" | tr '\n' ' ')
-[ "$_lr_read" = "pr.iterate pr.open review.verdict " ] &&
-	pass "the script's reads are the three kinds: $_lr_read" ||
-	fail "the script's reads read as '$_lr_read', not pr.iterate, pr.open and review.verdict"
+[ "$_lr_read" = "pr.iterate pr.open review.verdict ticket.start " ] &&
+	pass "the script's reads are the four kinds: $_lr_read" ||
+	fail "the script's reads read as '$_lr_read', not pr.iterate, pr.open, review.verdict and ticket.start"
 _lr_miss=$(land_reads_unnamed "$LAND" "$ADR19")
 [ -z "$_lr_miss" ] && pass "ADR-0019 names every kind the landing script reads" ||
 	fail "ADR-0019 does not name the landing script's read of: $(echo $_lr_miss)"
@@ -1529,5 +1529,51 @@ bait .agents/skills/review-pr/SKILL.md 'gh pr merge <N> --auto' "a merge in anot
 MT="$KIT/.agents/skills/merge-train/SKILL.md"
 assert_file_has "$MT" "a merge outside the landing script is not a landing"
 assert_file_has "$MT" "lands only after the release is cut"
+
+# ---------------------------------------------------------------------------
+banner "18. A landing whose ticket the trace never saw started says so (#775)"
+# ---------------------------------------------------------------------------
+# Two /implement runs opened PRs with no ticket.start (#730, #732), and /retro's
+# chain-health question could not tell a ticket nobody started from one the
+# trace lost. The landing reads ticket.start on the ticket it closes and, when
+# the trace holds none, its merge.land carries data.ticket_start=no; with one,
+# or with no ticket known, nothing extra.
+# started <ticket> — a ticket.start on ticket:#<ticket>, as /implement writes it.
+started() {
+	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=ticket.start \
+		"subject=ticket:#$1" tier=implementer outcome=read reason=seeded </dev/null >/dev/null 2>&1 ||
+		fail "could not seed a ticket.start on ticket:#$1"
+}
+# landing_of <pr> — the PR's landed merge.land, one line.
+landing_of() { show "pr:#$1" --kind merge.land | grep -F '"outcome":"landed"'; }
+iterated 720 721 722 723 724
+land STUB_TICKET=190 720
+expect_status 0 "a PR whose ticket was never started lands"
+landing_of 720 | grep -qF '"ticket_start":"no"' && pass "its merge.land records ticket_start=no" ||
+	fail "a never-started ticket's merge.land lacks ticket_start=no: $(landing_of 720)"
+
+started 191
+land STUB_TICKET=191 721
+expect_status 0 "a PR whose ticket was started lands"
+[ -n "$(landing_of 721)" ] && ! landing_of 721 | grep -qF '"ticket_start"' &&
+	pass "a started ticket's merge.land records nothing extra" ||
+	fail "a started ticket's merge.land carries ticket_start, or none was written: $(landing_of 721)"
+
+# A ticket.start on #1920 is not one on #192: the subject is matched whole.
+started 1920
+land STUB_TICKET=192 722
+landing_of 722 | grep -qF '"ticket_start":"no"' && pass "a ticket.start on a longer number does not count as #192's" ||
+	fail "#1920's ticket.start was read as #192's: $(landing_of 722)"
+
+started 193
+land STUB_TICKET= 723 --ticket 193
+[ -n "$(landing_of 723)" ] && ! landing_of 723 | grep -qF '"ticket_start"' &&
+	pass "--ticket names the ticket read, as the closing reference does" ||
+	fail "a started ticket named by --ticket was recorded unstarted: $(landing_of 723)"
+
+land STUB_TICKET= 724
+[ -n "$(landing_of 724)" ] && ! landing_of 724 | grep -qF '"ticket_start"' &&
+	pass "with no ticket known, nothing is read and nothing extra recorded" ||
+	fail "a landing with no ticket recorded ticket_start: $(landing_of 724)"
 
 t_done "land one PR by hand"
