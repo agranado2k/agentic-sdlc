@@ -255,8 +255,10 @@ done
 # the file as the tracker's answer. Its exits keep their meaning: 0 the
 # checked lines, of which only the Tier: and Domain: values are taken; 3 no
 # stamp, and the skill's phase answers, said; anything else is a stop, exit
-# 2, the refused text never printed. Sets TIER_ARGS, or _fs_none on exit 3.
+# 2, the refused text never printed. Sets _fs_tier and _fs_domain, or _fs_none
+# on exit 3 or on a stamp naming no tier.
 _fs_read_stamp() {
+	_fs_tier='' _fs_domain='' _fs_none=''
 	[ -f "$CASCADE_TICKET" ] || die "--ticket-file '$CASCADE_TICKET' is not a file"
 	if [ ! -f "$ROOT/scripts/stamp.sh" ]; then
 		_fs_none=1
@@ -281,11 +283,53 @@ _fs_read_stamp() {
 	# The checked lines only: a value the checker passed, one word each.
 	_fs_tier=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Tt][Ii][Ee][Rr][[:space:]]*:[[:space:]]*\([a-z]*\)[[:space:]]*$/\1/p' | head -n 1)
 	_fs_domain=$(printf '%s\n' "$_fs_lines" | sed -n 's/^[[:space:]]*[Dd][Oo][Mm][Aa][Ii][Nn][[:space:]]*:[[:space:]]*\([a-z-]*\)[[:space:]]*$/\1/p' | head -n 1)
-	if is_tier "$_fs_tier"; then
-		TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}"
-	else
-		_fs_none=1
-	fi
+	is_tier "$_fs_tier" || { _fs_tier='' _fs_none=1; }
+}
+
+# _cascade_oracle_line <ticket file> — the line that opens the ticket's
+# Acceptance section, when it is an oracle line; nothing otherwise. An oracle
+# line anywhere else in the body is prose, as /implement step 1 reads it. The
+# section opens with a heading (`## Acceptance`, any level) or a bold lead at
+# the start of a line (`**Acceptance.**` or `**Acceptance**`); text after the
+# lead on its own line is the section's first line, and with none the first
+# non-blank line below it is (#759). A bold lead with text after it that is
+# not an oracle line is prose and opens nothing: a heading below still can.
+_cascade_oracle_line() {
+	[ -f "$1" ] || return 0
+	awk '
+		/^#+[ \t]*Acceptance[ \t]*$/ { in_acc = 1; next }
+		!in_acc && /^\*\*Acceptance\.?\*\*/ {
+			rest = $0
+			sub(/^\*\*Acceptance\.?\*\*[ \t]*/, "", rest)
+			if (rest == "") { in_acc = 1; next }
+			if (index(rest, "the oracle: `")) { print rest; exit }
+			next
+		}
+		in_acc && /^[ \t]*$/ { next }
+		in_acc { if (index($0, "the oracle: `")) print; exit }
+	' "$1"
+}
+
+# _cascade_oracle <ticket file> <worktree> — the closed-list command the
+# ticket's oracle line selects, or nothing. Typed from this list, never from
+# the ticket.
+_cascade_oracle() {
+	_co_text=$(_cascade_oracle_line "$1" | sed -n 's/^.*the oracle: `\([^`]*\)`.*$/\1/p')
+	case "$_co_text" in
+	'sh scripts/check.sh' | 'scripts/check.sh') printf '%s\n' 'sh scripts/check.sh' ;;
+	"sh -c 'for t in tests/*.sh; do sh \"\$t\" || exit 1; done'")
+		printf '%s\n' "$_co_text"
+		;;
+	'sh tests/'*.sh)
+		_co_name=${_co_text#sh tests/}
+		_co_name=${_co_name%.sh}
+		case "$_co_name" in
+		'' | *[!A-Za-z0-9._-]*) return 0 ;;
+		esac
+		[ -f "$2/tests/$_co_name.sh" ] && printf 'sh tests/%s.sh\n' "$_co_name"
+		;;
+	esac
+	return 0
 }
 
 if [ -n "$OVERRIDE_TIER" ]; then
@@ -296,8 +340,9 @@ if [ -n "$OVERRIDE_TIER" ]; then
 else
 	[ -z "$OVERRIDE_DOMAIN" ] || die "--domain without --tier: a domain is the second half of a ticket's stamp, not a sizing of its own"
 	TIER_ARGS=''
-	_fs_none=''
+	_fs_none='' _fs_tier=''
 	[ -z "$CASCADE_TICKET" ] || _fs_read_stamp
+	[ -z "$_fs_tier" ] || TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}"
 	if [ -n "$TIER_ARGS" ]; then
 		TIER_SOURCE="the ticket file's stamp"
 	else
@@ -305,6 +350,51 @@ else
 		TIER_SOURCE="$SKILL's own phase${_fs_none:+ (the ticket file carries no stamp)}"
 	fi
 fi
+# --- the review of a cascade-built diff (#778, ADR-0030) --------------------
+# WHY. ADR-0027 gives a diff the Sonnet family wrote an Opus reviewer only when
+# the session names the rung's model as the author, and nothing checked it:
+# the rung's commits carry a co-author trailer naming the SESSION's family, so
+# a session that trusts git gets a same-family review. So a passed verdict
+# records its rung's model as the author (_cascade_verdict, below), in the
+# trace and in the worktree's git dir, and here the review dispatch reads it
+# back: for a review-pr dispatch, the recorded author is AGENT_SESSION_MODEL,
+# whatever the session named. A cascade-built ticket — a --ticket-file stamped
+# mechanical, whose oracle line selects a closed-list command, under a policy
+# that declares a cascade — with no author recorded for it is refused, exit 2:
+# the session's own model is the wrong answer, so no default stands in for it.
+# The record is the worktree's: --worktree, or the checkout this runs in.
+CASCADE_AUTHOR_NAME=skill-cascade-author
+if [ "${SKILL#/}" = review-pr ]; then
+	_ra_wt=${CASCADE_WT:-.}
+	_ra_author='' _ra_file=''
+	_ra_gd=$(cd "$_ra_wt" 2>/dev/null && git rev-parse --absolute-git-dir 2>/dev/null) &&
+		_ra_file="$_ra_gd/$CASCADE_AUTHOR_NAME"
+	if [ -n "$_ra_file" ] && [ -f "$_ra_file" ]; then
+		_ra_model=$(sed -n 's/^model=//p' "$_ra_file" | head -n 1)
+		_ra_ticket=$(sed -n 's/^ticket=//p' "$_ra_file" | head -n 1)
+		case "$_ra_ticket" in
+		none | "#$TICKET") _ra_author=$_ra_model ;;
+		*) [ -n "$TICKET" ] || _ra_author=$_ra_model ;;
+		esac
+	fi
+	_ra_built=0
+	if [ -n "$CASCADE_TICKET" ]; then
+		_fs_read_stamp
+		if [ "$_fs_tier" = mechanical ] &&
+			[ -n "$(sh -c '. "$1" >/dev/null 2>&1; printf "%s" "${AGENT_CASCADE_MECHANICAL:-}"' _ "$AGENTS_CONFIG")" ] &&
+			[ -n "$(_cascade_oracle "$CASCADE_TICKET" "$_ra_wt")" ]; then
+			_ra_built=1
+		fi
+	fi
+	if [ -n "$_ra_author" ]; then
+		AGENT_SESSION_MODEL=$_ra_author
+		export AGENT_SESSION_MODEL
+		echo "skill-dispatch: the diff's author is '$_ra_author', the model its cascade's passed verdict recorded; the reviewer is resolved against that author, not the session" >&2
+	elif [ "$_ra_built" = 1 ]; then
+		die "review refused — ticket ${TICKET:+#$TICKET }is cascade-built and '$_ra_wt' holds no rung author recorded for it; the reviewer is resolved from the author, never the session's own model. Judge the rung first — the cascade's own call with --rung-done records its verdict and its author — then dispatch the review again"
+	fi
+fi
+
 for a in "$@"; do
 	[ "$a" = --dry-run ] || continue
 	echo "skill-dispatch: tier '$TIER_ARGS' — from $TIER_SOURCE" >&2
@@ -403,52 +493,6 @@ _cascade_tier=${TIER_ARGS%% *}
 _cascade_domain=''
 case "$TIER_ARGS" in *' '*) _cascade_domain=${TIER_ARGS#* } ;; esac
 
-# _cascade_oracle_line <ticket file> — the line that opens the ticket's
-# Acceptance section, when it is an oracle line; nothing otherwise. An oracle
-# line anywhere else in the body is prose, as /implement step 1 reads it. The
-# section opens with a heading (`## Acceptance`, any level) or a bold lead at
-# the start of a line (`**Acceptance.**` or `**Acceptance**`); text after the
-# lead on its own line is the section's first line, and with none the first
-# non-blank line below it is (#759). A bold lead with text after it that is
-# not an oracle line is prose and opens nothing: a heading below still can.
-_cascade_oracle_line() {
-	[ -f "$1" ] || return 0
-	awk '
-		/^#+[ \t]*Acceptance[ \t]*$/ { in_acc = 1; next }
-		!in_acc && /^\*\*Acceptance\.?\*\*/ {
-			rest = $0
-			sub(/^\*\*Acceptance\.?\*\*[ \t]*/, "", rest)
-			if (rest == "") { in_acc = 1; next }
-			if (index(rest, "the oracle: `")) { print rest; exit }
-			next
-		}
-		in_acc && /^[ \t]*$/ { next }
-		in_acc { if (index($0, "the oracle: `")) print; exit }
-	' "$1"
-}
-
-# _cascade_oracle <ticket file> <worktree> — the closed-list command the
-# ticket's oracle line selects, or nothing. Typed from this list, never from
-# the ticket.
-_cascade_oracle() {
-	_co_text=$(_cascade_oracle_line "$1" | sed -n 's/^.*the oracle: `\([^`]*\)`.*$/\1/p')
-	case "$_co_text" in
-	'sh scripts/check.sh' | 'scripts/check.sh') printf '%s\n' 'sh scripts/check.sh' ;;
-	"sh -c 'for t in tests/*.sh; do sh \"\$t\" || exit 1; done'")
-		printf '%s\n' "$_co_text"
-		;;
-	'sh tests/'*.sh)
-		_co_name=${_co_text#sh tests/}
-		_co_name=${_co_name%.sh}
-		case "$_co_name" in
-		'' | *[!A-Za-z0-9._-]*) return 0 ;;
-		esac
-		[ -f "$2/tests/$_co_name.sh" ] && printf 'sh tests/%s.sh\n' "$_co_name"
-		;;
-	esac
-	return 0
-}
-
 if [ "$_cascade_tier" = mechanical ]; then
 	CASCADE_MODEL=$(sh -c '. "$1" >/dev/null 2>&1; printf "%s" "${AGENT_CASCADE_MECHANICAL:-}"' _ "$AGENTS_CONFIG")
 fi
@@ -528,11 +572,18 @@ _cascade_emit() {
 }
 
 # _cascade_verdict <rung> <model> <outcome> <reason> — a judged rung's record:
-# passed, escalated or failed, with the oracle's and the guard's exit codes.
-# The one place a verdict is written, so a field it gains is added here once.
+# passed, escalated or failed, with the oracle's and the guard's exit codes,
+# and the rung's model as data.author — the model that wrote the rung's work
+# (#778). The one place a verdict is written, so a field it gains is added
+# here once. A PASSED verdict also leaves the author in the worktree's git dir
+# (never its working tree, which the guard judges), the record the review
+# dispatch above resolves its reviewer from: the passed rung's work is the
+# diff under review, and no other rung's is.
 _cascade_verdict() {
 	_cascade_emit model="$2" outcome="$3" data.rung="$1" data.oracle_exit="$ORACLE_EXIT" \
-		data.guard_exit="$GUARD_EXIT" reason="$4"
+		data.guard_exit="$GUARD_EXIT" ${2:+data.author="$2"} reason="$4"
+	[ "$3" = passed ] && [ -n "$2" ] || return 0
+	printf 'model=%s\nticket=%s\n' "$2" "${TICKET:+#}${TICKET:-none}" >"$CASCADE_AUTHOR"
 }
 
 # _cascade_close <status> — end the cascade's run, once: ok on 0, stopped on
@@ -646,6 +697,7 @@ _cascade_handback() {
 # _cascade <dispatch args…> — the two rungs. Never returns.
 _cascade() {
 	CASCADE_STATE="$(cd "$CASCADE_WT" && git rev-parse --absolute-git-dir)/skill-cascade"
+	CASCADE_AUTHOR="${CASCADE_STATE%/*}/$CASCADE_AUTHOR_NAME"
 	CASCADE_WT_ABS=$(cd "$CASCADE_WT" && pwd)
 	_cs_tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-cascade.XXXXXX") || die "no scratch for the cascade"
 	CASCADE_RUN='' CASCADE_OPEN=0
@@ -693,7 +745,7 @@ _cascade() {
 	else
 		CASCADE_RUN=''
 	fi
-	rm -rf "$CASCADE_STATE"
+	rm -rf "$CASCADE_STATE" "$CASCADE_AUTHOR"
 
 	_cascade_rung 1 "$_cs_tmp/cheap.config.sh" "$_cs_tmp/rung1.out" "$@"
 	case "$RUNG_STATUS" in

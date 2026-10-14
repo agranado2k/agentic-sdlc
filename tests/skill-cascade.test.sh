@@ -797,6 +797,140 @@ grep -q -- '--rung-done' "$_cascade_doc" 2>/dev/null && grep -q 'CASCADE.md' "$R
 	pass "/implement opens CASCADE.md, which names the --rung-done call" ||
 	fail "/implement does not say how a session drives an in-session rung"
 
+# ---------------------------------------------------------------------------
+banner "9. A cascade diff's reviewer is resolved from the author its verdict recorded (#778)"
+# ---------------------------------------------------------------------------
+# ADR-0027 gives a diff the Sonnet family wrote an Opus reviewer only when the
+# session names the rung's model as the author. Nothing checked it, and the
+# rung's commits carry a co-author trailer naming the session's family. So a
+# passed verdict records its rung's model as the author — in the trace, and in
+# the worktree's git dir where the review dispatch reads it — and the review
+# dispatch for a cascade-built ticket resolves against that author, whatever
+# the session names, and refuses when none is recorded (ADR-0030).
+cat >"$STUBTREE/scripts/agents.kit.stub.config.sh" <<'CFG'
+AGENT_HARNESSES='stub'
+AGENT_HARNESS_STUB_CMD='STUB --model-flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_PLANNER='opus'
+AGENT_TIER_IMPLEMENTER='opus'
+AGENT_TIER_MECHANICAL='sonnet'
+AGENT_TIER_REVIEWER='sonnet'
+AGENT_TIER_REVIEWER_FALLBACK='opus'
+AGENT_CASCADE_MECHANICAL='sonnet'
+CFG
+sed -i "s|STUB --model-flag|$STUB --model-flag|" "$STUBTREE/scripts/agents.kit.stub.config.sh"
+T_MECH_CASC="$SCRATCH/ticket-mech-cascade.md"
+{
+	echo "Tier: mechanical"
+	echo
+	echo "## Acceptance"
+	echo
+	echo 'the oracle: `sh tests/oracle.sh`'
+	echo "- the thing is done"
+} >"$T_MECH_CASC"
+T_IMPL="$SCRATCH/ticket-impl.md"
+{
+	echo "Tier: implementer"
+	echo
+	echo "## Acceptance"
+	echo "- the thing is done"
+} >"$T_IMPL"
+review() { # <session model or empty> <ticket file> [extra args…]
+	_rv_ses=$1 _rv_tf=$2
+	shift 2
+	t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub ${_rv_ses:+AGENT_SESSION_MODEL=$_rv_ses} \
+		sh scripts/skill-dispatch.kit.sh review-pr --tier reviewer --ticket 682 \
+		--ticket-file "$_rv_tf" --worktree "$WT" \
+		--set BRANCH=b --set BASE=main --set-file SPEC="$_rv_tf" "$@"
+}
+# The cascade: rung 1 on the Sonnet family, in-session, green.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE"
+spawn_in_session sonnet
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN
+[ "$T_STATUS" = 0 ] && [ "$(rung_seq)" = "in-session1 passed1 " ] ||
+	fail "the Sonnet rung did not pass: status $T_STATUS, rungs '$(spawn_rungs)': $T_ERR"
+_pv=$(cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep '"outcome":"passed"')
+case "$_pv" in
+*'"author":"sonnet"'*) pass "the passed verdict records the rung's model as the author" ;;
+*) fail "the passed verdict carries no author: $_pv" ;;
+esac
+for _ses in opus sonnet claude-fable-5-1 ''; do
+	review "$_ses" "$T_MECH_CASC"
+	[ "$T_STATUS" = 3 ] && [ "$T_OUT" = opus ] &&
+		pass "a Sonnet rung's diff gets the Opus reviewer, the session naming '${_ses:-nothing}'" ||
+		fail "the session naming '${_ses:-nothing}' got '$T_OUT', exit $T_STATUS: $T_ERR"
+done
+case "$T_ERR" in
+*"author"*sonnet*) pass "…and stderr says the reviewer was resolved against the recorded author" ;;
+*) fail "stderr does not name the recorded author: $T_ERR" ;;
+esac
+review opus "$T_MECH_CASC" --dry-run
+case "$T_ERR" in
+*"model 'opus'"*) pass "the dry run names the reviewer the recorded author resolves" ;;
+*) fail "the dry run does not name the opus reviewer: $T_ERR" ;;
+esac
+
+# The record holds for its own ticket only.
+review opus "$T_MECH_CASC" --ticket 999
+[ "$T_STATUS" = 2 ] && pass "a record for another ticket is no author: the cascade ticket's review is refused" ||
+	fail "a record for ticket #682 answered ticket #999: exit $T_STATUS, '$T_OUT'"
+
+# A cascade-built ticket whose worktree holds no recorded author is refused.
+fresh_wt
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "a cascade ticket with no recorded author is refused, exit 2, no reviewer named" ||
+	fail "a cascade ticket with no author exited $T_STATUS with '$T_OUT': $T_ERR"
+case "$T_ERR" in
+*"no rung author"*--rung-done*) pass "…naming what is missing and the --rung-done call that records it" ;;
+*) fail "the refusal does not say what is missing: $T_ERR" ;;
+esac
+# A rung handed back and never judged has no author either.
+cascade_keep "$T_ORACLE"
+spawn_in_session sonnet
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && pass "a handed-back rung with no verdict records no author: refused" ||
+	fail "an unjudged rung's review exited $T_STATUS with '$T_OUT'"
+
+# A cascade with no passed verdict records no author for a review to use:
+# rung 1 escalated, rung 2 handed back and not yet judged.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_RED=1
+export FIXTURE_ORACLE_RED
+cascade_keep "$T_ORACLE"
+spawn_in_session sonnet
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_RED
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && pass "a cascade that escalated, with no passed verdict, leaves no author: refused" ||
+	fail "a failed cascade's review exited $T_STATUS with '$T_OUT'"
+# A fresh cascade forgets the author an earlier one in the worktree recorded.
+fresh_wt
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE"
+spawn_in_session sonnet
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE"
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && pass "a cascade started again clears the author the last one recorded" ||
+	fail "a restarted cascade's review exited $T_STATUS with '$T_OUT'"
+
+# A ticket the cascade did not build keeps resolving against the session.
+fresh_wt
+review opus "$T_IMPL"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = sonnet ] &&
+	pass "an implementer ticket's review resolves against the session as before" ||
+	fail "an implementer ticket's review exited $T_STATUS with '$T_OUT': $T_ERR"
+write_policy 'stub:model-cheap'
+
 SHIPPED="$ROOT/scripts/agents.config.sh"
 grep -q "^AGENT_CASCADE_MECHANICAL=''" "$SHIPPED" &&
 	pass "spend/R24: the shipped policy file carries AGENT_CASCADE_MECHANICAL, empty" ||
