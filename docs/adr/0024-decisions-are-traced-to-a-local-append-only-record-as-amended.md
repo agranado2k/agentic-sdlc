@@ -4,7 +4,7 @@
 - **Date**: 2026-10-10
 - **Deciders**: the implementer session for #692, under ADR-0021 and the operator's delegation of rulings (2026-10-10); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: supersedes ADR-0008 whole, consolidating it with its clause numbers kept; written under ADR-0021 clauses 1 to 4, and it reverses nothing; folds in ADR-0023 clause 1 (clause 5 here) and the readers ADR-0019 clause 1 and ADR-0023 clause 3 name (clause 7 here), both of which stay binding for their own decisions
-- **Superseded by**: — (amended 2026-10-10 for #723: clause 7 names the landing script's third read, `pr.open`, as ADR-0019 now records it; amended 2026-10-11 for #744: clause 5 names two readers of a run's identity — `stack <dir>` for a caller in another checkout, `current` for the caller's own — and `id` as the one owner of the run id's shape; amended 2026-10-11 for #745: clause 5 links ADR-0026, the open-run registry and `begin --detached`)
+- **Superseded by**: — (amended 2026-10-10 for #723: clause 7 names the landing script's third read, `pr.open`, as ADR-0019 now records it; amended 2026-10-11 for #744: clause 5 names two readers of a run's identity — `stack <dir>` for a caller in another checkout, `current` for the caller's own — and `id` as the one owner of the run id's shape; amended 2026-10-11 for #745: clause 5 links ADR-0026, the open-run registry and `begin --detached`; amended 2026-10-14 for #769: clause 5 makes the run id mandatory — a bare `end` refuses, exit 2, the step the #560 deprecation announced)
 
 ## Context and problem statement
 
@@ -288,16 +288,16 @@ Chosen: **option 1**.
      open is refused. The id is one path segment of `[A-Za-z0-9._-]`; an
      empty one is exit 2, never a bare `end`. Unconfigured, a named `end` is
      the silent no-op every call is. Every shipped skill names its
-     run at `end`. A bare `end` is deprecated: it still closes the top, exit
-     0, then prints one trace-prefixed stderr line (silenced by
-     `TRACE_QUIET=1`) naming the run it closed and the named form
-     `sh scripts/trace.sh end <that run>`, and saying a later release makes
-     the id mandatory. A bare `end` that closes nothing names nothing. The
-     kit's own skills, hooks, scripts and suites carry no bare `end`, and the
-     trace suite holds them to it. The mandatory id is a later release, its
-     own ticket; what reopens that is a caller shown unable to carry the id
-     from its `begin` to its `end` — then the bare form stays, deprecated,
-     until the run can be named another way.
+     run at `end`. **The run id is mandatory: a bare `end` refuses, exit 2**,
+     writing no event and leaving the stack and the registry as it found
+     them; its trace-prefixed stderr line names the form,
+     `sh scripts/trace.sh end <run>`, and never the run that is open — a
+     caller with no run of its own would copy that id. `TRACE_QUIET=1` does
+     not silence it, a refusal not being a note. Unconfigured, a bare `end`
+     is the silent no-op too, so a skill whose `begin` printed nothing may
+     leave the id out. The kit's own skills, hooks, scripts and suites carry
+     no bare `end`, and the trace suite holds them to it. What reopens this
+     is a caller shown unable to carry the id from its `begin` to its `end`.
    - **A run's identity has two readers, and no caller reads a stack's
      file.** `stack <dir>` for a caller in another checkout (environment
      ignored), and `current` for the caller's own identity. **`current`**
@@ -491,7 +491,7 @@ each was folded:
   unsupported schema (#271).
 - Clause 5 — the session-keyed stack (#453); `stack <dir>` (#472); the
   `Trace-Run:` channel (#474); `end <run>` (#543); a bare `end` deprecated
-  (#560); `Trace-Spawn:` (#583); the spawn guard (#627); `stack --all`
+  (#560), then refused (#769); `Trace-Spawn:` (#583); the spawn guard (#627); `stack --all`
   (ADR-0023, #680); `current` and `id` (#744); the open-run registry and `begin --detached` (ADR-0026, #745). The line cap and the blob store arrived with #248.
 - Clause 6 — the dated price table and its kit-only refresh (#270).
 - Clause 7 — the readers are the operator and `/retro` (#309); the landing
