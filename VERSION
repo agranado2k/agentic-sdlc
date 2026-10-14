@@ -2914,7 +2914,9 @@
 # lens-api-crud.md, lens-pattern.md, lens-reuse-dry.md, lens-security.md,
 # lens-simplicity.md and lens-test-hygiene.md, run the band rule's test on
 # a LOW as three questions before raising it (#774). implement — CASCADE.md
-# scopes its --deliver step to a cascade that ran (#777). Wiring (9b): none.
+# scopes its --deliver step to a cascade that ran (#777). /pr-iterate — step
+# 6's re-review raises its findings through /review-pr's recording step,
+# inside its own run and before its verdict (#770). Wiring (9b): none.
 # Templates (9c): templates/workflows/ai-review-prompt.md carries the same
 # three questions on a LOW (#774).
 # Config (9d): scripts/agents.config.sh gains AGENT_WINDOW_SESSIONS='',
