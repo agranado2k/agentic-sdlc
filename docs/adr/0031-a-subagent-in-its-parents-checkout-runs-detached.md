@@ -35,8 +35,9 @@ run.
    shared stack in place, so the parent's lines still carry the child's run
    while it is on top.
 3. **The re-reviewer works in a checkout of its own.** Rejected: a second
-   worktree per re-review costs a checkout for a read, and `/pr-iterate`
-   cannot spawn into a checkout the agent harness does not offer.
+   worktree per re-review costs a checkout and its cleanup for what is a
+   read, and the spawn would have to say where to work, which a skill
+   cannot hold to anything.
 
 ## Decision outcome
 
@@ -44,11 +45,15 @@ Chosen: **option 1.**
 
 1. `/pr-iterate`'s spawn prompt for the re-reviewer says, in those words,
    to begin `sh scripts/trace.sh begin --detached review-pr
-   subject=pr:#<N> || :`, to put `TRACE_RUN=<the run id that begin
-   printed>` before every other trace line of the review, and to end it by
-   that id.
-2. A re-review run in the parent's own session is not a subagent. It
-   begins on the stack as before.
+   subject=pr:#<N> || :` in place of `/review-pr`'s own `begin`, never as
+   well as it, to put `TRACE_RUN=<the run id that begin printed>` before
+   every other trace line of the review, and to end it by that id. A
+   reviewer that ran both would leave a stack run above its parent's, and
+   the parent's `end` would be refused as on #781.
+2. This record changes nothing for a re-review the parent runs itself,
+   with no subagent. That review follows `/review-pr`'s own `begin` on the
+   stack. It is the session's own nested run, so the stack stays last in,
+   first out.
 
 ## Consequences
 

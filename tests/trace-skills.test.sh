@@ -1999,7 +1999,8 @@ rereview_run_missing() {
 	printf '%s\n' "$_rr_sc" | grep -qF 'on no run stack' || echo on-no-stack
 	printf '%s\n' "$_rr_sc" | grep -qF 'PR #781' || echo names-781
 	printf '%s\n' "$_rr_sc" | grep -qF '`TRACE_RUN=<the run id that begin printed>` before every other trace line' || echo carries-its-run
-	printf '%s\n' "$_rr_sc" | grep -qE 'begin --detached review-pr subject=pr:#<N> \|\| :`.*`sh scripts/trace\.sh end <the run id your begin printed> [^`]*\|\| :`' || echo ends-by-id
+	printf '%s\n' "$_rr_sc" | grep -qE 'begin --detached review-pr subject=pr:#<N> \|\| :`.*`sh scripts/trace\.sh end <the run id your begin printed> [^`]*\|\| :` — that id, never the `Trace-Run:` line' || echo ends-by-id
+	printf '%s\n' "$_rr_sc" | grep -qF 'in place of `/review-pr`'"'"'s own `begin`, never as well as it' || echo replaces-review-pr-begin
 	printf '%s\n' "$_rr_sc" | grep -qF 'never the `Trace-Run:` line' || echo not-the-parents-id
 	printf '%s\n' "$_rr_sc" | grep -qF 'never a bare `end`' || echo no-bare-end
 	# One opening, not two in a row (#770's author, tidied for #782).
@@ -2013,6 +2014,8 @@ for b in \
 	's/`sh scripts\/trace\.sh begin --detached review-pr subject=pr:#<N> || :`/`sh scripts\/trace.sh begin review-pr subject=pr:#<N> || :`/' \
 	's/on no run stack/on this iteration'"'"'s run stack/' \
 	's/PR #781/the PR/' \
+	's/in place of `\/review-pr`'"'"'s own `begin`, never as well as it/beside `\/review-pr`'"'"'s own `begin`/' \
+	's/` — that id, never the `Trace-Run:` line/` — never the `Trace-Run:` line/' \
 	's/`TRACE_RUN=<the run id that begin printed>` before every other trace line/nothing before its trace lines/' \
 	's/`sh scripts\/trace\.sh end <the run id your begin printed> outcome=ok/`sh scripts\/trace.sh end "$TRACE_RUN" outcome=ok/' \
 	's/In the same prompt, have it record/Say in the re-reviewer'"'"'s spawn prompt, in those words, to record/' \
