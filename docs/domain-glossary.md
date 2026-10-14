@@ -304,9 +304,12 @@ Grouped by the seam each term belongs to. Entry shape:
   concurrent-subagent limit divided by the seven lenses one `/review-pr`
   spawns, rounded down and never below one. The limit is the agent tool's,
   read as the project states it in its workflow article; unstated, the cap
-  is one session at a time. Not the **Budget**: that bounds one worker's
+  is one session at a time. The cap is then held to the vendor's usage
+  window — the most review-bearing sessions one window carries, a value in
+  the agents policy that `--session-cap` reads — whichever is lower; a
+  window that runs out stops every session on it at once. Not the **Budget**: that bounds one worker's
   process tree by the host's memory and tasks, this bounds how many sessions
-  share the tool's subagent slots. Ref: #483.
+  share the tool's subagent slots. Ref: #483, ADR-0029.
 - **Trace** — the append-only record of the chain's decisions: one event per
   line, per-day files under a trace directory the policy file names, written
   by `scripts/trace.sh` and read only after the fact — by the operator, a

@@ -4,7 +4,7 @@
 - **Date**: 2026-10-13
 - **Deciders**: the operator (Arthur Granado), option (a) on #763, recorded on that issue on 2026-10-13; built by the planner session for #763
 - **Supersedes / amends**: amends ADR-0020 as amended on 2026-10-10 (#724), for the Claude Code session's policy only: the reviewer's fallback is `opus` again, for an author on the Sonnet family and no other. A partial reversal of that amendment, so a new record and not a second in-place amendment (`docs/adr/INDEX.md`, conventions)
-- **Superseded by**: —
+- **Superseded by**: — (clause 4 amended by ADR-0030, 2026-10-14: for a diff the cascade built, the author is the one its passed verdict recorded, read by the review dispatch, and a cascade-built ticket with none is refused)
 
 ## Context and problem statement
 

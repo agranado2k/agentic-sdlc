@@ -302,3 +302,17 @@ AGENT_TIER_REVIEWER=''
 # separated, each a model or `<token>:<model>`; empty means no next answer, and
 # a spent list prints nothing — never the session's own model. The kit's ADR-0013 records why.
 #   AGENT_TIER_REVIEWER_FALLBACK='<a second reviewer> <a third>'
+
+# ---------------------------------------------------------------------------
+# THE USAGE WINDOW — how many review-bearing sessions run together
+# ---------------------------------------------------------------------------
+# A vendor meters use per window, and a window that runs out stops every
+# session drawing on it at once — each one mid-ticket. /to-tickets' hand-off
+# states a frontier's session cap from the host's concurrent-subagent limit,
+# then holds it to this value through `sh scripts/agents.lib.sh --session-cap
+# <n>`: the most review-bearing sessions — an /implement that ends at a
+# /review-pr — one usage window of your plan carries. Empty states no window,
+# and the subagent cap stands. A whole number of at least one; anything else
+# is refused, exit 2. Your vendor's and your plan's fact, never the kit's.
+#   AGENT_WINDOW_SESSIONS='<sessions one usage window carries>'
+AGENT_WINDOW_SESSIONS=''

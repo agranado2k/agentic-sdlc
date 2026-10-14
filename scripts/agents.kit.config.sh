@@ -261,6 +261,15 @@ AGENT_TIER_REVIEWER_FALLBACK='opus'
 AGENT_KIT_REVIEWER_FALLBACK_SERVES='own-family'
 
 # ---------------------------------------------------------------------------
+# THE USAGE WINDOW (ADR-0029, #776). The operator's working rule since PRD
+# #742's wave, where the vendor's usage window stopped every parallel
+# session at once five times: at most three review-bearing sessions run
+# together, each review on one reviewer. /to-tickets' hand-off holds its
+# session cap to it through `sh scripts/agents.kit.sh --session-cap <n>`.
+# ---------------------------------------------------------------------------
+AGENT_WINDOW_SESSIONS='3'
+
+# ---------------------------------------------------------------------------
 # OPTIONAL SECOND AXIS: TASK DOMAIN
 # ---------------------------------------------------------------------------
 # The resolver takes an optional second argument, the task DOMAIN
