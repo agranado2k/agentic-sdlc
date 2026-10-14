@@ -87,9 +87,14 @@ unnecessary complexity, copy-paste blocks worth extracting once; LOW is minor
 simplifications and style.
 
 **Raise a LOW only when it passes the test of `/review-pr` §5's band rule, a
-clear and mechanical fix inside this diff;** drop every other LOW before it
-reaches the report, since triage declines it under that rule anyway, and only a
-candidate ticket, a LOW that asks this PR for nothing, is exempt.
+clear and mechanical fix inside this diff, run before you write it down, as
+three questions:** is the fix whole, so its `↳ fix:` line spells out the whole
+edit, with no choice between designs left to whoever applies it; is it inside,
+so that edit touches only lines this diff added or changed; and is it
+mechanical, so it leaves behavior as it is, owing no new test and undoing no
+choice a comment, record or other ticket already made — a LOW that fails any one
+of them is dropped, not raised, since triage declines it under that rule anyway,
+and only a candidate ticket, a LOW that asks this PR for nothing, is exempt.
 
 **Then ask which case the duplication is, because the two leave the report
 differently.** A duplication **the diff ADDS** — a new copy of something that

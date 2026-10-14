@@ -1352,4 +1352,57 @@ case $T_ERR in
 esac
 rm -f "$AUTHOR_POLICY"
 
+# ---------------------------------------------------------------------------
+banner "19. A lens runs the band rule's acceptance test on a LOW before raising it (#774)"
+# ---------------------------------------------------------------------------
+# Retro 2026-10-14: after #732 landed, 13 of 18 LOWs the lenses raised on
+# #757, #761 and #764 were still declined under the band. Section 17's
+# sentence named the test — "a clear and mechanical fix inside this diff" —
+# and left a lens to judge "clear" itself; every LOW a lens can write a fix
+# for looked clear to it. Triage declined them as a design call, a behavior
+# change owing a test, a documented choice, a line owed by another ticket.
+# So the sentence now carries the test itself, as the questions triage asks,
+# and this leg pins each question's wording into §5 and into every lens
+# prompt, so a prompt that drops or softens one is named.
+band_questions='fix|its `↳ fix:` line spells out the whole edit, with no choice between designs left to whoever applies it
+diff|that edit touches only lines this diff added or changed
+behavior|it leaves behavior as it is, owing no new test and undoing no choice a comment, record or other ticket already made
+drop|a LOW that fails any one of them is dropped, not raised'
+# band_questions_missing <file>… — "<file>: <question>" for each question the
+# file's band-test sentence does not carry, one per line.
+band_questions_missing() {
+	for _bq_f in "$@"; do
+		_bq_s=$(sentences <"$_bq_f" | grep -F "the test of \`/review-pr\` §5's band rule" | head -n 1)
+		printf '%s\n' "$band_questions" | while IFS= read -r _bq; do
+			case "$_bq_s" in *"${_bq#*|}"*) ;; *) printf '%s: %s\n' "$(basename "$_bq_f")" "${_bq%%|*}" ;; esac
+		done
+	done
+}
+miss=$(band_questions_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "§5's band test asks the acceptance questions: the whole edit, inside the diff, no behavior, drop on any no" ||
+	fail "§5's band test lacks its acceptance questions: $miss (#774)"
+miss=$(band_questions_missing "$LENS_DIR"/lens-*.md "$WORKER_ABS" "$ROOT/$TWIN" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "all six lens files, the worker contract and its CI twin ask the acceptance questions before a LOW" ||
+	fail "these prompts raise a LOW without the band rule's acceptance test: $miss (#774)"
+# A bait per lens: a copy with one question softened must be named, the
+# lens and the question both.
+for _bq_l in "$LENS_DIR"/lens-*.md; do
+	_bq_n=$(basename "$_bq_l")
+	sed 's/owing no new test and //' "$_bq_l" >"$SCRATCH/$_bq_n"
+	! cmp -s "$SCRATCH/$_bq_n" "$_bq_l" && band_questions_missing "$SCRATCH/$_bq_n" | grep -qxF "$_bq_n: behavior" &&
+		pass "bait: $_bq_n without the behavior question is named" ||
+		fail "bait: $_bq_n without the behavior question was not caught — or the bait planted nothing"
+	rm -f "$SCRATCH/$_bq_n"
+done
+for b in \
+	'fix|s/, with no choice between designs left to whoever applies it//' \
+	'diff|s/touches only lines this diff added or changed/touches this diff/' \
+	'drop|s/is dropped, not raised/is raised as a LOW/'; do
+	sed "${b#*|}" "$SKILL_ABS" >"$SCRATCH/774-skill.md"
+	! cmp -s "$SCRATCH/774-skill.md" "$SKILL_ABS" && band_questions_missing "$SCRATCH/774-skill.md" | grep -qxF "774-skill.md: ${b%%|*}" &&
+		pass "bait: §5 without the '${b%%|*}' question is named" ||
+		fail "bait: §5 without the '${b%%|*}' question was not caught — or the bait planted nothing"
+done
+rm -f "$SCRATCH/774-skill.md"
+
 t_done "/review-pr output contract"
