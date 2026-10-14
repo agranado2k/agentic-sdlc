@@ -372,10 +372,10 @@ if [ "${SKILL#/}" = review-pr ]; then
 	if [ -n "$_ra_file" ] && [ -f "$_ra_file" ]; then
 		_ra_model=$(sed -n 's/^model=//p' "$_ra_file" | head -n 1)
 		_ra_ticket=$(sed -n 's/^ticket=//p' "$_ra_file" | head -n 1)
-		case "$_ra_ticket" in
-		none | "#$TICKET") _ra_author=$_ra_model ;;
-		*) [ -n "$TICKET" ] || _ra_author=$_ra_model ;;
-		esac
+		# A record answers the dispatch's own ticket, or a ticketless
+		# dispatch only when the cascade itself ran with no ticket: another
+		# ticket's record left in this worktree is no author for this review.
+		[ "$_ra_ticket" = "${TICKET:+#}${TICKET:-none}" ] && _ra_author=$_ra_model
 	fi
 	_ra_built=0
 	if [ -n "$CASCADE_TICKET" ]; then

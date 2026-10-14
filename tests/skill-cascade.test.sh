@@ -929,6 +929,76 @@ review opus "$T_IMPL"
 [ "$T_STATUS" = 3 ] && [ "$T_OUT" = sonnet ] &&
 	pass "an implementer ticket's review resolves against the session as before" ||
 	fail "an implementer ticket's review exited $T_STATUS with '$T_OUT': $T_ERR"
+
+# A review dispatched with no --ticket takes only a record the cascade wrote
+# with no ticket (`ticket=none`), never one another ticket's cascade left.
+review_nt() { # <session model> <ticket file> [extra args…] — no --ticket
+	_rv_ses=$1 _rv_tf=$2
+	shift 2
+	t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub AGENT_SESSION_MODEL="$_rv_ses" \
+		sh scripts/skill-dispatch.kit.sh review-pr --tier reviewer \
+		--ticket-file "$_rv_tf" --worktree "$WT" \
+		--set BRANCH=b --set BASE=main --set-file SPEC="$_rv_tf" "$@"
+}
+fresh_wt
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE"
+spawn_in_session sonnet
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN
+review_nt opus "$T_IMPL"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = sonnet ] &&
+	pass "a ticketless review ignores the record ticket #682's cascade left" ||
+	fail "a ticketless review took ticket #682's author: exit $T_STATUS, '$T_OUT': $T_ERR"
+review_nt opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "…and a ticketless cascade-built review with only another ticket's record is refused" ||
+	fail "a ticketless cascade review exited $T_STATUS with '$T_OUT': $T_ERR"
+# A cascade run with no --ticket records `ticket=none`, which a ticketless
+# review takes.
+fresh_wt
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --tier mechanical --ticket-file "$T_ORACLE" --worktree "$WT" --base "$BASE" \
+	--prompt 'do the ticket'
+spawn_in_session sonnet
+t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --tier mechanical --ticket-file "$T_ORACLE" --worktree "$WT" --base "$BASE" \
+	--prompt 'do the ticket' --rung-done
+unset FIXTURE_ORACLE_GREEN
+review_nt opus "$T_MECH_CASC"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = opus ] &&
+	pass "a ticketless cascade's record answers a ticketless review: the Opus reviewer" ||
+	fail "a ticketless review of a ticketless cascade exited $T_STATUS with '$T_OUT': $T_ERR"
+
+# An escalated cascade whose rung 2 passes: the author is rung 2's model, the
+# implementer's, so the reviewer is resolved against that family, not rung 1's.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_RED=1
+export FIXTURE_ORACLE_RED
+cascade_keep "$T_ORACLE"
+spawn_in_session sonnet
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_RED
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+spawn_in_session opus
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN
+[ "$T_STATUS" = 0 ] && [ "$(rung_seq)" = "in-session1 escalated1 in-session2 passed2 " ] ||
+	fail "the escalated cascade did not pass on rung 2: status $T_STATUS, rungs '$(spawn_rungs)': $T_ERR"
+_pv=$(cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep '"outcome":"passed"')
+case "$_pv" in
+*'"author":"opus"'*) pass "a rung-2 pass records rung 2's model as the author" ;;
+*) fail "the rung-2 passed verdict reads: $_pv" ;;
+esac
+review sonnet "$T_MECH_CASC"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = sonnet ] &&
+	pass "…so its review resolves against the Opus author, whatever the session names: the Sonnet reviewer" ||
+	fail "a rung-2 diff's review exited $T_STATUS with '$T_OUT': $T_ERR"
 write_policy 'stub:model-cheap'
 
 SHIPPED="$ROOT/scripts/agents.config.sh"
