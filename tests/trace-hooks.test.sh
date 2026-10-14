@@ -56,6 +56,34 @@ TODAY=$(date -u +%Y-%m-%d)
 failures=0
 SKIPPED=0
 HAVE_NODE=0
+
+# working_node_path — PATH with the directory of the first node that actually
+# RUNS put in front. A version-manager shim (mise, asdf) first on PATH answers
+# `command -v node` yet exits 1 on a config-parse error, and that error would
+# become every usage leg's failure reason. Prints the PATH unchanged when no
+# node runs.
+working_node_path() {
+	# A shim that runs today still re-reads its manager's config on every call,
+	# and a leg that fakes HOME breaks it: pin the binary it execs.
+	if _wn_real=$(node -p process.execPath 2>/dev/null) && [ -x "$_wn_real" ]; then
+		printf '%s' "${_wn_real%/*}:$PATH"
+		return 0
+	fi
+	_wn_ifs=$IFS
+	IFS=:
+	for _wn_d in $PATH; do
+		[ -n "$_wn_d" ] && [ -x "$_wn_d/node" ] || continue
+		if "$_wn_d/node" -e 0 >/dev/null 2>&1; then
+			IFS=$_wn_ifs
+			printf '%s' "$_wn_d:$PATH"
+			return 0
+		fi
+	done
+	IFS=$_wn_ifs
+	printf '%s' "$PATH"
+}
+PATH=$(working_node_path)
+export PATH
 command -v node >/dev/null 2>&1 && HAVE_NODE=1
 
 # --- fixture helpers ---------------------------------------------------------
@@ -5032,6 +5060,58 @@ if [ "$HAVE_NODE" = 1 ] && [ "$B674" = "$B674_PINNED" ]; then
 	fi
 else
 	note "node is not on PATH, or the kit's bound is not the pinned one: the late hand-back legs did not run"
+fi
+
+# ---------------------------------------------------------------------------
+banner "55. A failing version-manager shim first on PATH does not fail the hook legs (#771)"
+# ---------------------------------------------------------------------------
+# The suite resolves a node that runs before it drives anything; a shim that
+# answers `command -v` and then errors must not become a leg's failure reason.
+if [ "$HAVE_NODE" = 1 ]; then
+	SHIMDIR="$SCRATCH/badshim"
+	mkdir -p "$SHIMDIR"
+	printf '#!/bin/sh\necho "mise ERROR: config parse failed" >&2\nexit 1\n' >"$SHIMDIR/node"
+	chmod +x "$SHIMDIR/node"
+	SHIMMED="$SHIMDIR:$PATH"
+	if env PATH="$SHIMMED" node -e 0 >/dev/null 2>&1; then
+		fail "the planted shim does not fail — the leg would prove nothing"
+	else
+		pass "the planted shim fails when it is first on PATH"
+		FIXED=$(PATH="$SHIMMED"; working_node_path)
+		env PATH="$FIXED" node -e 0 >/dev/null 2>&1 &&
+			pass "the suite's PATH resolution puts a node that runs first" ||
+			fail "the resolved PATH still reaches the failing shim"
+		new_trace
+		t_exec env PATH="$FIXED" TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end.json"
+		[ "$T_STATUS" = 0 ] && [ -n "$(ev_of session.usage)" ] &&
+			case $(ev_of session.usage) in *'"outcome":"fail"'*) false ;; *) true ;; esac &&
+			pass "a hook driven with the resolved PATH records its usage, not the shim's error" ||
+			fail "the hook leg tripped on the shim: $T_ERR $(ev_of session.usage)"
+	fi
+	# mise's own shape: a shim that runs under the real HOME and fails once a
+	# leg fakes it. Only the pin to the binary it execs gets past this one.
+	REAL_NODE=$(node -p process.execPath)
+	HOMESHIM="$SCRATCH/homeshim"
+	FAKEHOME55="$SCRATCH/home-55"
+	mkdir -p "$HOMESHIM" "$FAKEHOME55"
+	printf '#!/bin/sh\n[ "$HOME" = "%s" ] || { echo "mise ERROR: config parse failed" >&2; exit 1; }\nexec "%s" "$@"\n' \
+		"$HOME" "$REAL_NODE" >"$HOMESHIM/node"
+	chmod +x "$HOMESHIM/node"
+	if env PATH="$HOMESHIM:$PATH" node -e 0 >/dev/null 2>&1 &&
+		! env PATH="$HOMESHIM:$PATH" HOME="$FAKEHOME55" node -e 0 >/dev/null 2>&1; then
+		pass "premise: the HOME-bound shim runs under the real HOME and fails under a faked one"
+		FIXED=$(PATH="$HOMESHIM:$PATH"; working_node_path)
+		new_trace
+		t_exec env PATH="$FIXED" HOME="$FAKEHOME55" TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end.json"
+		[ "$T_STATUS" = 0 ] && [ -n "$(ev_of session.usage)" ] &&
+			case $(ev_of session.usage) in *'"outcome":"fail"'*) false ;; *) true ;; esac &&
+			pass "a hook under a faked HOME, past a HOME-bound shim, records its usage — the binary is pinned" ||
+			fail "the HOME-bound shim reached the hook under a faked HOME: $T_ERR $(ev_of session.usage)"
+	else
+		fail "premise: the HOME-bound shim does not behave as mise's does — the leg would prove nothing"
+	fi
+else
+	echo "  skip  node is not on PATH — the shim leg needs a node to resolve"
 fi
 
 if [ "$SKIPPED" -gt 0 ]; then
