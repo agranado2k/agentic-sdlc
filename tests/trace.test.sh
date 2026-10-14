@@ -758,7 +758,7 @@ done <<'EOF'
 5|#627|The subagent-stop hook reads the first-line form too, through the same parser, so the guard refuses exactly the prompts the stop would record as `unattributed`.
 5|#453|The Claude Code adapter's subagent-stop hook keys the stack on the payload's `session_id` the same way.
 5|ADR-0023 clause 1|Its refusals are `stack <dir>`'s, exit 2 with nothing on stdout, and one more:
-5|#560|then the bare form stays, deprecated, until the run can be named another way.
+5|#769|writing no event and leaving the stack and the registry as it found them
 1|#569, the pointer|`summary` and `export` say the count once and point at `verify`; a resolver that fails judges nothing there
 1|#569, the advisory's shape|one stderr line naming the file, the line and the value, never a bad line and never the verdict
 1|#409|with tool capture on, the call it refused is swept too. `/retro`'s question 6 counts the denials per session and per tool.
@@ -2060,17 +2060,20 @@ case $T_ERR in *'end <run> closes only'*) fail "end id=1 was read as a run id: $
 	pass "and none of the refused ends wrote a line or popped the run" || fail "a refused end wrote or popped: $(tail -n 1 "$OWFILE")"
 [ "$(env TRACE_CONFIG="$OWON" TRACE_SESSION=sess-543 sh "$TRACE" stack "$KIT" | sed -n 1p)" = "$OWX" ] &&
 	pass "the open run is still the one begin opened" || fail "the stack top moved after refused ends"
-# Back-compat: a bare end still closes the top, whoever began it.
-t_exec ow end outcome=ok reason='bare' # bare end: the back-compat case #560 keeps
-[ "$T_STATUS" = 0 ] && case $(tail -n 1 "$OWFILE") in *'"run":"'"$OWX"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
-	pass "a bare end still closes the top of the stack" || fail "the bare end exited $T_STATUS: $(tail -n 1 "$OWFILE")"
+# A bare end closes nothing (#769, section 29): the run begin opened is still open.
+t_exec ow end outcome=ok reason='bare' # bare end: refused since #769
+[ "$T_STATUS" = 2 ] && [ "$(ow_lines)" = "$_ow_n" ] &&
+	pass "a bare end is refused too, and writes nothing" || fail "the bare end exited $T_STATUS: $(tail -n 1 "$OWFILE")"
+t_exec ow end "$OWX" outcome=ok reason='named'
+[ "$T_STATUS" = 0 ] && case $(tail -n 1 "$OWFILE") in *'"run":"'"$OWX"'"'*'"reason":"named"'*) true ;; *) false ;; esac &&
+	pass "and the run it left open closes by its id" || fail "end <run> after a refused bare end exited $T_STATUS: $(tail -n 1 "$OWFILE")"
 # Unconfigured, a named end is the no-op every call is — even a malformed one.
 expect_exit 0 "unconfigured, end 'x/y' is the silent no-op" -- env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" end 'x/y'
 # The interface is recorded where a caller reads it.
 t_exec sh "$TRACE"
-case $T_ERR in *'trace.sh end [<run>] [outcome='*) pass "the usage names end [<run>]" ;; *) fail "the usage does not name 'end [<run>]': $T_ERR" ;; esac
-sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh end [<run>] [outcome=' &&
-	pass "and so does the script's header" || fail "the header's command list does not name end [<run>]"
+case $T_ERR in *'trace.sh end <run> [outcome='*) pass "the usage names end <run>, the run not optional (#769)" ;; *) fail "the usage does not name 'end <run>': $T_ERR" ;; esac
+sed -n '2,20p' "$TRACE" | grep -qF 'sh scripts/trace.sh end <run> [outcome=' &&
+	pass "and so does the script's header" || fail "the header's command list does not name end <run>"
 # Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _ow_adr=$(sed -n '/Amended 2026-10-05 (#543)/,/^[0-9][0-9]*\. \|^## /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
 case $_ow_adr in *'`end <run>`'*'exit 2'*) pass "ADR-0008 carries the dated #543 amendment: end <run>, exit 2" ;;
@@ -2083,51 +2086,59 @@ case $(adr8_clause 5) in
 *'`end <run>`'*'exit 2'*) pass "the successor's clause 5 folds the #543 rule in: end <run>, exit 2" ;;
 *) fail "the successor's clause 5 does not name \`end <run>\` and exit 2 (the #543 rule)" ;;
 esac
-
 # ---------------------------------------------------------------------------
-banner "29. A bare end is deprecated: it still closes the top, and says so (ticket #560)"
+banner "29. A bare end refuses: exit 2, nothing written, nothing popped (tickets #560, #769)"
 # ---------------------------------------------------------------------------
-# #543 made `end <run>` close only the run it names, but left a bare `end`
-# meaning what it always meant, so the guarantee was opt-in: a caller that
-# skipped its `begin` and typed a bare `end` still closed its parent's run.
-# A later release makes the id mandatory (ADR-0008, #560 amendment); until
-# then a bare `end` keeps working and says, in one line on stderr, which run
-# it closed and the named form that would have closed it.
+# #543 made `end <run>` close only the run it names; #560 deprecated the bare
+# form and still let it close the top. A re-reviewer spawned inside
+# /pr-iterate then ended its parent's run with a bare `end` (PR #767), so the
+# deprecation was a claim: the guarantee stays opt-in while the bare form
+# closes anything. Since #769 the id is mandatory — a bare `end` is a usage
+# error, exit 2, that writes no event, leaves the stack as it found it, and
+# names the form to use without naming the run that is open: a caller that
+# never began has no run of its own, and handing it the top's id would teach
+# it to close its parent's.
 DP="$SCRATCH/deprecate-560"; DPON=$(policy "$DP")
 DPFILE="$DP/events/$TODAY.jsonl"
 dp() { env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 sh "$TRACE" "$@"; }
-DPR=$(dp begin implement subject='ticket:#560')
-t_exec dp end outcome=ok reason='bare' # bare end: the deprecated form, driven on purpose
-[ "$T_STATUS" = 0 ] && case $(tail -n 1 "$DPFILE") in *'"kind":"run.end"'*'"run":"'"$DPR"'"'*'"reason":"bare"'*) true ;; *) false ;; esac &&
-	pass "a bare end still closes the top of the stack, exit 0" || fail "the bare end exited $T_STATUS: $(tail -n 1 "$DPFILE")"
+dp_lines() { wc -l <"$DPFILE" | tr -d ' '; }
+DPR=$(dp begin implement subject='ticket:#769')
+_dp_n=$(dp_lines)
+t_exec dp end outcome=ok reason='bare' # bare end: the refused form, driven on purpose
+[ "$T_STATUS" = 2 ] && pass "a bare end with a run open is exit 2" || fail "the bare end exited $T_STATUS: $T_ERR"
+[ "$(dp_lines)" = "$_dp_n" ] && pass "and writes no event" || fail "a refused bare end wrote: $(tail -n 1 "$DPFILE")"
+[ "$(dp stack "$KIT" | sed -n 1p)" = "$DPR" ] && pass "and leaves the stack as it found it, the run begin opened on top" ||
+	fail "the stack top after a refused bare end is '$(dp stack "$KIT" | sed -n 1p)', not $DPR"
+[ "$(dp runs "$DPR" | grep -c .)" -ge 1 ] && pass "and the run is still registered open" || fail "a refused bare end unregistered $DPR"
 [ -z "$T_OUT" ] && pass "and prints nothing on stdout" || fail "a bare end printed on stdout: $T_OUT"
-[ "$(printf '%s\n' "$T_ERR" | grep -c .)" = 1 ] && pass "and exactly one line on stderr" || fail "a bare end said, on stderr: $T_ERR"
-case $T_ERR in *'trace:'*deprecated*) pass "a trace-prefixed line saying a bare end is deprecated" ;; *) fail "the stderr line does not say deprecated: $T_ERR" ;; esac
-case $T_ERR in *"$DPR"*) pass "naming the run it closed" ;; *) fail "the stderr line does not name the run it closed, $DPR: $T_ERR" ;; esac
-case $T_ERR in *"trace.sh end $DPR"*) pass "and the named form that closes it: trace.sh end <that run>" ;; *) fail "the stderr line does not give 'trace.sh end $DPR': $T_ERR" ;; esac
-case $T_ERR in *mandatory*) pass "and that a later release makes the id mandatory" ;; *) fail "the stderr line does not say the id becomes mandatory: $T_ERR" ;; esac
-# The named form prints nothing new — on either stream.
-DPR=$(dp begin implement subject='ticket:#560')
+case $T_ERR in *'trace:'*'end <run>'*) pass "a trace-prefixed line naming the form to use: end <run>" ;; *) fail "the refusal does not name 'end <run>': $T_ERR" ;; esac
+case $T_ERR in *"$DPR"*) fail "the refusal names the open run $DPR — a caller with no run of its own would copy it: $T_ERR" ;; *) pass "and never the run that is open" ;; esac
+# TRACE_QUIET silences notes, never a refusal.
+t_exec env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 TRACE_QUIET=1 sh "$TRACE" end outcome=ok # bare end: TRACE_QUIET over the refusal
+[ "$T_STATUS" = 2 ] && [ -n "$T_ERR" ] && [ "$(dp_lines)" = "$_dp_n" ] &&
+	pass "TRACE_QUIET=1 does not turn the refusal into a close" || fail "a quiet bare end: exit $T_STATUS, stderr '$T_ERR'"
+# Not even with no field at all — the shape the #767 re-reviewer typed.
+t_exec dp end # bare end: no field at all
+[ "$T_STATUS" = 2 ] && [ "$(dp_lines)" = "$_dp_n" ] && pass "a bare end with no field is refused the same way" ||
+	fail "a fieldless bare end: exit $T_STATUS, stderr '$T_ERR'"
+# The named form still closes its run, printing nothing on either stream.
 t_exec dp end "$DPR" outcome=ok reason='named'
 [ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && [ -z "$T_ERR" ] &&
+	case $(tail -n 1 "$DPFILE") in *'"kind":"run.end"'*'"run":"'"$DPR"'"'*'"reason":"named"'*) true ;; *) false ;; esac &&
 	pass "a named end closes its run and prints nothing on either stream" || fail "the named end: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
-# A note, like every other note the script says: TRACE_QUIET=1 silences it.
-DPR=$(dp begin implement subject='ticket:#560')
-t_exec env TRACE_CONFIG="$DPON" TRACE_SESSION=sess-560 TRACE_QUIET=1 sh "$TRACE" end outcome=ok # bare end: TRACE_QUIET over the deprecated form
-[ "$T_STATUS" = 0 ] && [ -z "$T_ERR" ] && case $(tail -n 1 "$DPFILE") in *'"run":"'"$DPR"'"'*) true ;; *) false ;; esac &&
-	pass "TRACE_QUIET=1 silences the notice, and the bare end still closes the run" || fail "a quiet bare end: exit $T_STATUS, stderr '$T_ERR'"
-# Closing nothing, it names nothing: the refusals are what they were.
-t_exec dp end outcome=ok # bare end: nothing open, so nothing to name
-[ "$T_STATUS" = 2 ] && case $T_ERR in *deprecated*) false ;; *) true ;; esac &&
-	pass "a bare end with nothing open is exit 2 and carries no notice — it closed nothing" || fail "a bare end on an empty stack: exit $T_STATUS, stderr '$T_ERR'"
-t_exec env TRACE_CONFIG="$OFF" sh "$TRACE" end outcome=ok # bare end: unconfigured, the no-op
-[ "$T_STATUS" = 0 ] && case $T_ERR in *deprecated*) false ;; *) true ;; esac &&
-	pass "unconfigured, a bare end is the no-op it was, with no notice" || fail "an unconfigured bare end: exit $T_STATUS, stderr '$T_ERR'"
+# Nothing open: still exit 2.
+t_exec dp end outcome=ok # bare end: nothing open
+[ "$T_STATUS" = 2 ] && pass "a bare end with nothing open is exit 2" || fail "a bare end on an empty stack: exit $T_STATUS, stderr '$T_ERR'"
+# Unconfigured, every call is the silent no-op — a skill whose begin printed
+# nothing leaves the id out, and that `end` must stay harmless.
+t_exec env TRACE_CONFIG="$OFF" TRACE_QUIET=1 sh "$TRACE" end outcome=ok # bare end: unconfigured, the no-op
+[ "$T_STATUS" = 0 ] && [ -z "$T_ERR" ] &&
+	pass "unconfigured, a bare end is the no-op it was" || fail "an unconfigured bare end: exit $T_STATUS, stderr '$T_ERR'"
 # The interface is recorded where a caller reads it.
-sed -n '2,36p' "$TRACE" | sed 's/^# *//' | tr '\n' ' ' | grep -q 'bare `end`[^.]*deprecated' &&
-	pass "the script's header says a bare end is deprecated" || fail "the header does not say a bare \`end\` is deprecated"
-grep -F '| Record a decision, or read the trail |' "$KIT/AGENTS.md" | grep -qF 'a bare `end` is deprecated' &&
-	pass "and so does the manual's trace row" || fail "AGENTS.md's trace row does not say a bare \`end\` is deprecated"
+sed -n '2,40p' "$TRACE" | sed 's/^# *//' | tr '\n' ' ' | grep -q 'bare `end`[^.]*exit 2' &&
+	pass "the script's header says a bare end is exit 2" || fail "the header does not say a bare \`end\` is exit 2"
+grep -F '| Record a decision, or read the trail |' "$KIT/AGENTS.md" | grep -qF 'a bare `end` refuses, exit 2' &&
+	pass "and so does the manual's trace row" || fail "AGENTS.md's trace row does not say a bare \`end\` refuses, exit 2"
 # Reads ADR-0008 on purpose: the amendment's own text, kept there as history (#692).
 _dp_adr=$(sed -n '/Amended 2026-10-06 (#560)/,/^[0-9][0-9]*\. \|^## /p' "$(ls "$KIT"/docs/adr/0008-*.md)" | tr '\n' ' ')
 for _dp_t in 'deprecat' 'mandatory' 'reopen' 'stderr'; do
@@ -2137,17 +2148,18 @@ done
 grep -m1 '^- \*\*Superseded by\*\*' "$(ls "$KIT"/docs/adr/0008-*.md)" | grep -qF 'Decided for #560' &&
 	pass "ADR-0008's header ledger records the #560 amendment" || fail "ADR-0008's Superseded-by ledger stops short of #560"
 case $(adr8_clause 5) in
-*'bare `end` is deprecated'*mandatory*) pass "the successor's clause 5 folds the #560 rule in: a bare end is deprecated, the id to become mandatory" ;;
-*) fail "the successor's clause 5 does not say a bare \`end\` is deprecated and the id becomes mandatory (the #560 rule)" ;;
+*'bare `end` refuses'*'exit 2'*) pass "the successor's clause 5 says a bare end refuses, exit 2 (#769)" ;;
+*) fail "the successor's clause 5 does not say a bare \`end\` refuses, exit 2 (the #769 rule)" ;;
 esac
+grep -m1 '^- \*\*Superseded by\*\*' "$ADR8_NEXT" | grep -qF 'amended 2026-10-14 for #769' &&
+	pass "and its header ledger records the #769 amendment" || fail "the successor's Superseded-by ledger stops short of #769"
 
 # No bare end is left in what the kit runs: its skills, hooks, scripts, suites,
 # adapters and stamped sources. A bare end is the trace script — by path, by a
 # variable, or by a suite's wrapper — followed by `end` and then a field, a
 # redirect, a pipe, a separator or the end of the line, never a run id. Only
 # this suite may keep one, on a line marked `# bare end:`, because driving the
-# deprecated form is what this section and section 28's back-compat case are
-# for.
+# refused form is what this section and section 28's refusal case are for.
 bare_ends() {
 	grep -nE '(trace(\.kit)?\.sh|\$\{?TRACE(_SH)?\}?|[A-Za-z]*_trace|(^|[[:space:]])ow)["'"'"']?[[:space:]]+end([[:space:]]+([A-Za-z_][A-Za-z0-9_.]*=|[>|;&)`]|2>)|[[:space:]]*$)' "$@" /dev/null |
 		grep -vE '^([^:]*/)?tests/trace\.test\.sh:[0-9]+:.*# bare end: '

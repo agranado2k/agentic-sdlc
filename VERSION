@@ -2842,7 +2842,37 @@
 # tests/agent-dispatch.test.sh, tests/skill-cascade.test.sh,
 # tests/skill-phase.test.sh and tests/trace-hooks.test.sh move with them.
 
-shared-layer: 0.74.0
+# 0.75.0 — a bare `end` refuses (ticket #769). NO file joins and NO file
+# leaves the shared layer. ONE shared file changes content besides
+# UPDATING.md: scripts/trace.sh makes the run id mandatory at `end`, the
+# step 0.57.0's deprecation announced. A bare `end` — no <run> — is exit 2,
+# writes no event and leaves the run stack and the open-run registry as it
+# found them; its one stderr line names the form, `sh scripts/trace.sh end
+# <run>`, and never the run that is open, and TRACE_QUIET=1 does not silence
+# it. Unconfigured it is still the silent no-op every call is, so a skill
+# whose `begin` printed nothing may leave the id out. The deprecation notice
+# is gone with the form it announced; the usage and the header say
+# `end <run>`. Evidence: a re-reviewer spawned inside /pr-iterate closed its
+# parent's run with a bare `end` on PR #767, after #543 and #560 closed.
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate's re-review on a pushed head runs in a review-pr
+# run of its own — its spawn prompt says to open it with `begin review-pr`
+# and close it by the id that begin printed, never the `Trace-Run:` line's
+# and never a bare `end`. And from #759, landed since 0.74.0: /to-tickets
+# and /implement's COVERS.md say the Acceptance section's two shapes — a
+# heading at any level, or a bold `**Acceptance.**` lead — and
+# /implement's CASCADE.md says a bold lead in prose falls through to a later
+# heading. Wiring (9b): none. Templates (9c): none.
+# Kit-only, never shipped: tests/trace.test.sh sections 28 and 29 drive a
+# bare `end` red (exit 2, no event, the stack and registry unchanged, the
+# open run never named) and hold ADR-0024 clause 5 to it;
+# tests/trace-skills.test.sh section 31 holds /pr-iterate's re-review text
+# to the begin/end-by-id form, baited; ADR-0024 clause 5 is amended in
+# place for #769, and the root manual's trace row says a bare `end`
+# refuses.
+
+shared-layer: 0.75.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

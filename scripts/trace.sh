@@ -7,7 +7,7 @@
 #   sh scripts/trace.sh blob <file>|-
 #   sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
 #   sh scripts/trace.sh begin --detached <skill> [subject=<type:ref>] [<field>=<value> …]
-#   sh scripts/trace.sh end [<run>] [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
+#   sh scripts/trace.sh end <run> [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
 #   sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
 #   sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
@@ -32,8 +32,8 @@
 # line it would append, `stack` a checkout's open run and the run below it, `current` this
 # process's own run and its parent, `id` a fresh run id, `runs` the open runs; a
 # successful `emit` and a successful `end` print nothing on stdout — a bare
-# `end`, with no <run>, is deprecated and says so in one stderr line naming
-# the run it closed (#560). Every diagnostic is on stderr, prefixed `trace:`.
+# `end`, with no <run>, closes nothing: it refuses with exit 2 (#769). Every
+# diagnostic is on stderr, prefixed `trace:`.
 # Exit 0 is done,
 # INCLUDING the unconfigured no-op; exit 2 is a usage error, an unknown kind,
 # an outcome its kind does not declare, a data value its kind's shape refuses
@@ -112,10 +112,11 @@
 # A RUN IS A SKILL INVOCATION, and `begin`/`end` are its two ends: `begin`
 # prints a fresh run id, appends run.start and pushes the run onto a stack
 # under the trace directory; `end` pops it and appends run.end with the
-# outcome — and `end <run>`, naming the id `begin` printed, pops only that
-# run: a stack whose top is any other run is exit 2, nothing written (#543),
-# since a subagent sharing a session and a checkout shares the stack, and a
-# bare `end` from one that never began would close its parent's run.
+# outcome — `end <run>`, naming the id `begin` printed, pops only that run:
+# a stack whose top is any other run is exit 2, nothing written (#543), since
+# a subagent sharing a session and a checkout shares the stack, and a bare
+# `end` from one that never began would close its parent's run — which is why
+# a bare `end` is exit 2 too (#769).
 # Every emit in between carries that run without being told, and a
 # nested `begin` carries the outer run as its `parent`. Identity's precedence
 # is an explicit field, then TRACE_SESSION / TRACE_RUN / TRACE_PARENT in the
@@ -247,7 +248,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh blob <file>|-
        sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
        sh scripts/trace.sh begin --detached <skill> [subject=<type:ref>] [<field>=<value> …]
-       sh scripts/trace.sh end [<run>] [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
+       sh scripts/trace.sh end <run> [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
        sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
        sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
@@ -1303,15 +1304,17 @@ trace_begin() {
 	printf '%s\n' "$_bg_run"
 }
 
-# trace_end [<run>] [<field>=<value> …] — pops this session's current run in
-# this working tree and appends run.end for it. With no run open it is exit 2:
-# a pop with nothing to pop is a caller's mistake, not an outcome to record.
-# NAMED, it closes that run or nothing (#543): a top that is any other run is
-# exit 2 naming the run that is open, before a line is written or the stack
-# touched. A bare `end` closes the top whoever began it — a subagent sharing
-# the session and the checkout that skipped its own `begin` closed its
-# parent's run that way — so a caller that holds its run id names it. A bare
-# `end` is deprecated (#560): it still closes the top, then says so on stderr.
+# trace_end <run> [<field>=<value> …] — pops <run>, this session's current run
+# in this working tree, and appends run.end for it. With no run open it is
+# exit 2: a pop with nothing to pop is a caller's mistake, not an outcome to
+# record. It closes the run it names or nothing (#543): a top that is any
+# other run is exit 2 naming the run that is open, before a line is written or
+# the stack touched. A BARE `end` — no <run> — is exit 2 as well, nothing
+# written and nothing popped (#769, after #560 deprecated it): it would close
+# the top whoever began it, and a subagent sharing the session and the
+# checkout that skipped its own `begin` closed its parent's run that way. Its
+# refusal names the form, never the open run — a caller with no run of its
+# own would copy that id and close its parent's run all the same.
 trace_end() {
 	_en_want=
 	_en_named=
@@ -1327,23 +1330,24 @@ trace_end() {
 	fi
 	trace_reject_owned end "$@"
 	trace_arg_session "$@"
-	# Unconfigured, every call is the silent no-op — a named end included, so
-	# the checks on the name below are the configured trace's alone.
+	# Unconfigured, every call is the silent no-op — a bare or a named end
+	# included, so the checks on the name below are the configured trace's
+	# alone, and a skill whose `begin` printed nothing may leave the id out.
 	trace_dir || { trace_unconfigured_note; return 0; }
+	[ -n "$_en_named" ] ||
+		die "end closes only the run it names — sh scripts/trace.sh end <run>, the id your begin printed; a bare end closes nothing (#769)"
 	# An EMPTY first argument is a caller that meant to name a run and lost
-	# it (`end "$RUN"`, RUN unset); read as a bare end it would pop the top,
-	# the parent-closing case #543 shuts (review M-2, PR #551). Otherwise one
-	# token of [A-Za-z0-9._-], the class every id `begin` mints is in:
-	# anything else can never be on the stack, so it is a usage error.
-	if [ -n "$_en_named" ]; then
-		[ -n "$_en_want" ] || die "end was handed an empty run id — name the run your begin printed, or pass none"
-		trace_session_ok "$_en_want" || usage
-	fi
+	# it (`end "$RUN"`, RUN unset), refused with its own words (review M-2,
+	# PR #551). Otherwise one token of [A-Za-z0-9._-], the class every id
+	# `begin` mints is in: anything else can never be on the stack, so it is a
+	# usage error.
+	[ -n "$_en_want" ] || die "end was handed an empty run id — name the run your begin printed"
+	trace_session_ok "$_en_want" || usage
 	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
 	# A DETACHED run is on no stack: its entry is what says it is open, and
 	# its parent is the one the entry names. Ended from any checkout or
 	# session — its owner holds the id, which is the whole of its identity.
-	if [ -n "$_en_want" ] && trace_matches "$_en_want" "$TRACE_RUN_ID_ERE" &&
+	if trace_matches "$_en_want" "$TRACE_RUN_ID_ERE" &&
 		[ "$(trace_reg_field "$TRACE_ROOT_DIR/runs/$_en_want" opened)" = detached ]; then
 		_en_parent=$(trace_reg_field "$TRACE_ROOT_DIR/runs/$_en_want" parent)
 		if [ -n "$_en_parent" ]; then
@@ -1357,7 +1361,7 @@ trace_end() {
 	trace_stack_readable || die "cannot close a run this working tree's stack will not answer for"
 	_en_run=$(trace_stack top)
 	[ -n "$_en_run" ] || die "no run is open for this session in this working tree — begin opens one, end closes it"
-	[ -z "$_en_want" ] || [ "$_en_want" = "$_en_run" ] ||
+	[ "$_en_want" = "$_en_run" ] ||
 		die "the run open for this session in this working tree is $_en_run, not $_en_want — end <run> closes only the run it names, and a run nested in it ends first"
 	_en_parent=$(trace_stack below)
 	# The event FIRST, the pop after it: `run` and `parent` are passed
@@ -1373,18 +1377,6 @@ trace_end() {
 	fi
 	trace_pop
 	trace_unregister "$_en_run"
-	[ -n "$_en_named" ] || trace_bare_end_note "$_en_run"
-}
-
-# trace_bare_end_note <run> — the one line a bare `end` says once it has closed
-# <run> (#560): deprecated, the run it closed, the named form that closes it,
-# and that a later release makes the id mandatory (the kit's ADR-0008 clause 5, #560
-# amendment). A note like every other — stderr, silenced by TRACE_QUIET=1 —
-# and only after a close: a bare `end` refused, or unconfigured, closed nothing
-# and has nothing to name.
-trace_bare_end_note() {
-	[ "${TRACE_QUIET:-}" = 1 ] && return 0
-	echo "!  trace: a bare end is deprecated — it closed $1, the top of this stack; name the run begin printed: sh scripts/trace.sh end $1. A later release makes the run id mandatory (the kit's ADR-0008)." >&2
 }
 
 # trace_stack_of <dir> [session=<id>] — the run open in the checkout <dir> is
