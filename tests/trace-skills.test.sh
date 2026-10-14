@@ -2014,4 +2014,46 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "32. /pr-iterate's re-review raises its findings through /review-pr's recording step (#770)"
+# ---------------------------------------------------------------------------
+# Retro 2026-10-14: /pr-iterate's re-reviews on a pushed head recorded a
+# review.verdict and no finding.raise — 16 triages on 7 PRs had no raise
+# behind them, so /retro's review-signal question could divide them by
+# nothing. #629 closed the gap for /review-pr; this holds the re-review to the
+# same step: the spawn prompt says, in those words, to record each finding as
+# /review-pr §6 step 3 records it — data.agent from its roster, data.posted=no
+# — inside the review-pr run of its own, before its verdict, and so before the
+# next iteration triages it. The line stays /review-pr's: section 5 holds
+# finding.raise to one emitter, so /pr-iterate names the step and carries none.
+# rereview_raise_missing <skill file> — one word per claim the stop conditions drop.
+rereview_raise_missing() {
+	_rf_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
+	printf '%s\n' "$_rf_sc" | grep -qE 're-reviewer.s spawn prompt, in those words,[^.]*record each finding as `/review-pr` §6 step 3 records it' || echo through-review-pr-step
+	printf '%s\n' "$_rf_sc" | grep -qF 'one `finding.raise` per finding' || echo one-raise-per-finding
+	printf '%s\n' "$_rf_sc" | grep -qF '`data.agent` a token from its roster' || echo agent-from-roster
+	printf '%s\n' "$_rf_sc" | grep -qF '`data.posted=no`' || echo posted-no
+	printf '%s\n' "$_rf_sc" | grep -qE 'inside that run, before its verdict' || echo before-verdict
+	printf '%s\n' "$_rf_sc" | grep -qE 'before the next iteration triages' || echo before-triage
+	printf '%s\n' "$_rf_sc" | grep -qF 'kind=finding.raise' && echo own-emit-line
+}
+_rf=$(rereview_raise_missing "$PI")
+[ -z "$_rf" ] && pass "/pr-iterate's re-review raises each finding through /review-pr §6 step 3, before its verdict and the next triage" ||
+	fail "/pr-iterate's re-review drops: $(echo $_rf)"
+for b in \
+	's/record each finding as `\/review-pr` §6 step 3 records it/record its verdict/' \
+	's/one `finding.raise` per finding/its findings/' \
+	's/`data.agent` a token from its roster/`data.agent` its title/' \
+	's/`data.posted=no`/`data.posted=yes`/' \
+	's/inside that run, before its verdict/after its run/' \
+	's/before the next iteration triages/when the operator triages/' \
+	's/one `finding.raise` per finding/one `finding.raise` per finding (`sh scripts\/trace.sh emit kind=finding.raise subject=pr:#<N> || :`)/'; do
+	sed "$b" "$PI" >"$SCRATCH/bait770.md"
+	if ! cmp -s "$SCRATCH/bait770.md" "$PI" && [ -n "$(rereview_raise_missing "$SCRATCH/bait770.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
+
 t_done "trace skills contract"
