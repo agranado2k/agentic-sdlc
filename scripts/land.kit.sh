@@ -40,6 +40,9 @@
 #   1d. Writes pr.open on pr:#<N> (data.via=land, related to the ticket and
 #      the head branch) when the trace holds none for it: a PR opened outside
 #      /implement still joins its ticket for /retro (#638).
+#   1e. Marks merge.land data.ticket_start=no when the trace holds no
+#      ticket.start on the landed ticket (#775): /retro then tells a ticket
+#      nobody started from one the trace lost. Never a refusal.
 #   2. Merges with the merge-commit method (`gh pr merge <N> --merge`) — the
 #      one /merge-train's hard rule 3 reads from the local workflow article
 #      (in this repo, the root AGENTS.md). A merge the forge rejects
@@ -341,6 +344,16 @@ if [ -n "$(trace_read dir)" ] &&
 	# The landing's own arguments sit in "$@" for step 2: the optional field
 	# is spelled as an argument only when it is there, never by `set --`.
 	trace quiet kind=pr.open "subject=pr:#$PR" ${_po_rel:+"related=$_po_rel"} outcome=opened data.via=land "reason=$TITLE"
+fi
+
+# --- 1e. a ticket the trace never saw started (#775) ---------------------------
+# /implement records ticket.start when it reads the stamp; a PR whose ticket has
+# none reaches /retro looking like a trace that lost it. When the trace holds no
+# ticket.start on ticket:#<N>, merge.land says data.ticket_start=no; with one, or
+# with no ticket known, it says nothing. Unconfigured, nothing is read.
+if [ -n "$TICKET" ] && [ -n "$(trace_read dir)" ] &&
+	! trace_read show "ticket:#$TICKET" --kind ticket.start | grep -qF "\"subject\":\"ticket:#$TICKET\""; then
+	set -- "$@" data.ticket_start=no
 fi
 
 # --- 2. the merge -------------------------------------------------------------
