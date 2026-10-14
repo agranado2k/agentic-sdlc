@@ -3237,4 +3237,65 @@ _ur_adr=$(ls "$KIT"/docs/adr/0028-*.md 2>/dev/null | head -n 1)
 	fail "no docs/adr/0028-*.md naming 'end --unregistered <run>' and saying it amends ADR-0024 clause 5"
 grep -qF '| [0028]' "$KIT/docs/adr/INDEX.md" && pass "and the index has its row" || fail "INDEX.md has no ADR-0028 row"
 
+# ---------------------------------------------------------------------------
+banner "39. A subagent's run in its parent's checkout is detached, and ends by id under the parent's (ticket #782)"
+# ---------------------------------------------------------------------------
+# PR #781: /pr-iterate's re-reviewer began its review-pr run on the run stack
+# it shares with its parent — one checkout, one session — and its `end <run>`
+# was refused, because the parent's run sat on top. A stack is last in, first
+# out; a parent and its subagent are not. The child begins detached instead
+# (ADR-0026): its run is on no stack, its emits carry it by TRACE_RUN, and
+# `end <run>` closes it whatever sits on the stack, leaving the parent's runs
+# where they were. ADR-0031 records the choice.
+t_repo
+SR_REPO=$REPO
+mkdir -p "$SR_REPO/scripts"
+cp "$TRACE" "$SR_REPO/scripts/trace.sh"
+t_commit "$SR_REPO" "chore: carry the trace script" >/dev/null
+SR="$SCRATCH/subrun-782"; SRON=$(policy "$SR")
+# sr_run [NAME=value …] <trace.sh args…> — one session, one checkout, the
+# leading assignments exported; the suite's own run cleared first.
+sr_run() {
+	(
+		cd "$SR_REPO" || exit 2
+		unset TRACE_RUN TRACE_PARENT
+		export TRACE_CONFIG="$SRON" TRACE_SESSION=sr-one
+		while case ${1:-} in [A-Z]*=*) true ;; *) false ;; esac; do
+			export "$1"
+			shift
+		done
+		exec sh scripts/trace.sh "$@"
+	)
+}
+SR_PARENT=$(sr_run begin pr-iterate subject=pr:#1 2>/dev/null)
+# The stack form, for contrast: a child's run under the parent's next one.
+SR_STACKED=$(sr_run begin review-pr subject=pr:#1 2>/dev/null)
+SR_ABOVE=$(sr_run begin pr-iterate subject=pr:#1 2>/dev/null)
+t_exec sr_run end "$SR_STACKED" outcome=ok
+expect_status 2 "a child's stack run with the parent's run above it cannot be ended by id — the #781 refusal"
+sr_run end "$SR_ABOVE" outcome=ok 2>/dev/null
+sr_run end "$SR_STACKED" outcome=ok 2>/dev/null
+# The detached form.
+t_exec sr_run begin --detached review-pr subject=pr:#1
+expect_status 0 "the child begins detached in its parent's checkout"
+SR_CHILD=$T_OUT
+SR_ABOVE=$(sr_run begin pr-iterate subject=pr:#1 2>/dev/null)
+[ "$(sr_run current)" = "$SR_ABOVE $SR_PARENT" ] &&
+	pass "the parent's stack holds only the parent's runs" || fail "the parent's stack: $(sr_run current)"
+sr_run TRACE_RUN="$SR_CHILD" emit kind=review.verdict subject=pr:#1 outcome=pass data.lenses=1 2>/dev/null
+grep -F '"kind":"review.verdict"' "$SR/events/$TODAY.jsonl" | grep -qF "\"run\":\"$SR_CHILD\"" &&
+	pass "the child's emit carries its own run through TRACE_RUN" || fail "the child's verdict does not carry $SR_CHILD"
+t_exec sr_run end "$SR_CHILD" outcome=ok reason=pass
+expect_status 0 "the child ends its run by id with the parent's run on top"
+[ "$(sr_run current)" = "$SR_ABOVE $SR_PARENT" ] &&
+	pass "and the parent's stack is as it was" || fail "the child's end moved the parent's stack: $(sr_run current)"
+grep -F '"kind":"run.end"' "$SR/events/$TODAY.jsonl" | grep -F "\"run\":\"$SR_CHILD\"" | grep -qF "\"parent\":\"$SR_PARENT\"" &&
+	pass "its run.end names the parent run it was begun under" || fail "no run.end for $SR_CHILD naming $SR_PARENT"
+t_exec sr_run runs "$SR_CHILD"
+expect_status 1 "and its registry entry is gone"
+t_exec sr_run end "$SR_ABOVE" outcome=ok
+expect_status 0 "the parent then ends its own runs by id, top first"
+t_exec sr_run end "$SR_PARENT" outcome=ok
+expect_status 0 "down to the outermost"
+
 t_done "trace script"
