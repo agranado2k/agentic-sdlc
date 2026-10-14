@@ -2239,6 +2239,77 @@ for _fam_word in opus sonnet; do
 		fail "the kit's --ids lacks '$_fam_word': $T_OUT"
 done
 
+# ---------------------------------------------------------------------------
+banner "--session-cap: the frontier's cap held to the usage window (#776, ADR-0029)"
+# ---------------------------------------------------------------------------
+# A frontier's session cap counted only the host's concurrent-subagent limit,
+# and one vendor usage window stopped every parallel session at once, five
+# times in one wave. The policy now states the most review-bearing sessions one
+# usage window carries, AGENT_WINDOW_SESSIONS, and `--session-cap <n>` — n the
+# cap the subagent limit gave — prints the lower of the two. Unstated, the
+# subagent cap stands. The value is policy, so the shipped file leaves it empty
+# and the kit's own twin carries the operator's number.
+WIN_CFG="$SCRATCH/window.policy.sh"
+printf '%s\n' "AGENT_WINDOW_SESSIONS='3'" >"$WIN_CFG"
+t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --session-cap 4
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = 3 ] && [ -z "$T_ERR" ] &&
+	pass "--session-cap takes the usage window when it is lower than the subagent cap (4 -> 3)" ||
+	fail "--session-cap 4 under a window of 3 (status $T_STATUS): $T_OUT | $T_ERR"
+t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --session-cap 2
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = 2 ] &&
+	pass "--session-cap keeps the subagent cap when it is the lower (2 under a window of 3)" ||
+	fail "--session-cap 2 under a window of 3 (status $T_STATUS): $T_OUT | $T_ERR"
+t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --session-cap 3
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = 3 ] && pass "--session-cap at the window prints the window" ||
+	fail "--session-cap 3 under a window of 3 (status $T_STATUS): $T_OUT"
+t_exec env AGENTS_CONFIG="$SHIPPED" sh "$LIB" --session-cap 4
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = 4 ] && [ -z "$T_ERR" ] &&
+	pass "with the window unstated (the shipped policy), the subagent cap stands, silently" ||
+	fail "--session-cap 4 over the shipped policy (status $T_STATUS): $T_OUT | $T_ERR"
+t_exec env -u AGENTS_CONFIG GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$SCRATCH/ids-nopolicy/agents.lib.sh" --session-cap 5
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = 5 ] &&
+	pass "with no policy file at all, the subagent cap stands" ||
+	fail "--session-cap with no policy (status $T_STATUS): $T_OUT | $T_ERR"
+for _sc_bad in '' 0 -1 three 2x 04; do
+	t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --session-cap "$_sc_bad"
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && printf '%s\n' "$T_ERR" | grep -qF 'takes a whole number' &&
+		pass "--session-cap refuses the subagent cap '$_sc_bad' — exit 2, nothing printed" ||
+		fail "--session-cap '$_sc_bad' exited $T_STATUS: $T_OUT"
+done
+t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --session-cap 4 5
+[ "$T_STATUS" = 2 ] && pass "--session-cap takes one number — exit 2 on a second" || fail "--session-cap 4 5 exited $T_STATUS"
+for _sc_win in 0 three -2 '3 4'; do
+	printf "AGENT_WINDOW_SESSIONS='%s'\n" "$_sc_win" >"$SCRATCH/window-bad.policy.sh"
+	t_exec env AGENTS_CONFIG="$SCRATCH/window-bad.policy.sh" sh "$LIB" --session-cap 4
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && printf '%s\n' "$T_ERR" | grep -qF AGENT_WINDOW_SESSIONS &&
+		pass "a policy window of '$_sc_win' is refused, exit 2, the variable named — never read as no window" ||
+		fail "a policy window of '$_sc_win' (status $T_STATUS): $T_OUT | $T_ERR"
+done
+t_exec env AGENTS_CONFIG="$SCRATCH/no-such-policy.sh" sh "$LIB" --session-cap 4
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && pass "--session-cap with a named policy that is missing is exit 2" ||
+	fail "--session-cap with a missing named policy exited $T_STATUS: $T_OUT"
+# The shipped policy names the variable and leaves it empty: a vendor's
+# window and a plan's size are the operator's facts, never the kit's.
+grep -q "^AGENT_WINDOW_SESSIONS=''" "$SHIPPED" &&
+	pass "the shipped policy carries AGENT_WINDOW_SESSIONS, empty" ||
+	fail "scripts/agents.config.sh does not ship AGENT_WINDOW_SESSIONS=''"
+# The kit's own twins carry the operator's working rule, and the kit wrapper
+# passes the form through to the policy it picked.
+for _sc_pol in "$KIT/scripts/agents.kit.config.sh" "$KIT/scripts/agents.kit.codex.config.sh"; do
+	grep -q "^AGENT_WINDOW_SESSIONS='[1-9][0-9]*'" "$_sc_pol" &&
+		pass "$(basename "$_sc_pol") states the kit's usage window" ||
+		fail "$(basename "$_sc_pol") states no AGENT_WINDOW_SESSIONS"
+done
+_sc_kit=$(sed -n "s/^AGENT_WINDOW_SESSIONS='\([0-9]*\)'.*/\1/p" "$KIT/scripts/agents.kit.config.sh")
+t_exec env -u AGENT_HARNESS_SELF sh "$KIT_WRAPPER" --session-cap 99
+[ "$T_STATUS" = 0 ] && [ -n "$_sc_kit" ] && [ "$T_OUT" = "$_sc_kit" ] &&
+	pass "the kit wrapper's --session-cap is held to the kit's window ($_sc_kit)" ||
+	fail "the kit wrapper's --session-cap 99 (status $T_STATUS): $T_OUT | $T_ERR"
+# The window is a value, never an id: --ids does not list it.
+t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --ids
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "--ids does not read the window as a model id" ||
+	fail "--ids over a window-only policy printed: $T_OUT"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s per-shell case(s) skipped above — this host proved less than a full-shell host would\n' "$SKIPPED"
 fi

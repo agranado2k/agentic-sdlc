@@ -630,6 +630,28 @@ else
 		pass "the session-cap sentences spell no number but one and $lens_word"
 	fi
 fi
+# The usage window (#776, ADR-0029): one vendor usage window stopped every
+# parallel session at once, five times in one wave, though the subagent cap
+# held. The hand-off holds its cap to the window the agents policy states,
+# through the resolver and never a number of its own; run as the step writes
+# it, the command caps at the window when the window is the lower.
+t_text_has "$handoff" "usage window" "the hand-off names the vendor's usage window as the cap's second bound"
+t_text_has "$handoff" "prints whichever is lower" "the hand-off's cap is the lower of the subagent cap and the window"
+t_text_has "$handoff" "never a number this skill names" "the window, like the limit, is never a number the skill names"
+sc_cmd=$(printf '%s\n' "$handoff" | grep -o 'sh scripts/agents\.lib\.sh --session-cap' | head -n 1)
+if [ -z "$sc_cmd" ]; then
+	fail "the hand-off does not hold its cap to the window through 'sh scripts/agents.lib.sh --session-cap'"
+else
+	sc_dir=$(mktemp -d "${TMPDIR:-/tmp}/spec-skills-776.XXXXXX")
+	printf '%s\n' "AGENT_WINDOW_SESSIONS='2'" >"$sc_dir/window.policy.sh"
+	sc_out=$(cd "$ROOT" && AGENTS_CONFIG="$sc_dir/window.policy.sh" $sc_cmd 4 2>/dev/null)
+	[ "$sc_out" = 2 ] && pass "the hand-off's command, run as written, caps a subagent cap of four at a window of two" ||
+		fail "the hand-off's '$sc_cmd 4' under a window of two printed '$sc_out'"
+	sc_out=$(cd "$ROOT" && AGENTS_CONFIG="$sc_dir/window.policy.sh" $sc_cmd 1 2>/dev/null)
+	[ "$sc_out" = 1 ] && pass "…and keeps a subagent cap that is already the lower" ||
+		fail "the hand-off's '$sc_cmd 1' under a window of two printed '$sc_out'"
+	rm -rf "${sc_dir:?}"
+fi
 in_order "$quiz" "the quiz shows the cap beside the DAG, before the human is asked to challenge it" \
 	"the DAG" "the session cap beside the frontier" "ask the user to challenge"
 # The place the hand-off reads the limit from exists: the consumer's workflow
