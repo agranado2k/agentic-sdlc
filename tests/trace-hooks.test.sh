@@ -5088,6 +5088,28 @@ if [ "$HAVE_NODE" = 1 ]; then
 			pass "a hook driven with the resolved PATH records its usage, not the shim's error" ||
 			fail "the hook leg tripped on the shim: $T_ERR $(ev_of session.usage)"
 	fi
+	# mise's own shape: a shim that runs under the real HOME and fails once a
+	# leg fakes it. Only the pin to the binary it execs gets past this one.
+	REAL_NODE=$(node -p process.execPath)
+	HOMESHIM="$SCRATCH/homeshim"
+	FAKEHOME55="$SCRATCH/home-55"
+	mkdir -p "$HOMESHIM" "$FAKEHOME55"
+	printf '#!/bin/sh\n[ "$HOME" = "%s" ] || { echo "mise ERROR: config parse failed" >&2; exit 1; }\nexec "%s" "$@"\n' \
+		"$HOME" "$REAL_NODE" >"$HOMESHIM/node"
+	chmod +x "$HOMESHIM/node"
+	if env PATH="$HOMESHIM:$PATH" node -e 0 >/dev/null 2>&1 &&
+		! env PATH="$HOMESHIM:$PATH" HOME="$FAKEHOME55" node -e 0 >/dev/null 2>&1; then
+		pass "premise: the HOME-bound shim runs under the real HOME and fails under a faked one"
+		FIXED=$(PATH="$HOMESHIM:$PATH"; working_node_path)
+		new_trace
+		t_exec env PATH="$FIXED" HOME="$FAKEHOME55" TRACE_DIR="$TDIR" sh "$HOOKS/session-end.sh" <"$SCRATCH/end.json"
+		[ "$T_STATUS" = 0 ] && [ -n "$(ev_of session.usage)" ] &&
+			case $(ev_of session.usage) in *'"outcome":"fail"'*) false ;; *) true ;; esac &&
+			pass "a hook under a faked HOME, past a HOME-bound shim, records its usage — the binary is pinned" ||
+			fail "the HOME-bound shim reached the hook under a faked HOME: $T_ERR $(ev_of session.usage)"
+	else
+		fail "premise: the HOME-bound shim does not behave as mise's does — the leg would prove nothing"
+	fi
 else
 	echo "  skip  node is not on PATH — the shim leg needs a node to resolve"
 fi
