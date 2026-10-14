@@ -168,7 +168,7 @@ esac
 _q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 DISPATCH_CALL="sh $(_q "$0")"
 for a in "$@"; do
-	case "$a" in --rung-done | --deliver | --dry-run) continue ;; esac
+	case "$a" in --rung-done | --deliver | --restart | --dry-run) continue ;; esac
 	DISPATCH_CALL="$DISPATCH_CALL $(_q "$a")"
 done
 
@@ -188,6 +188,7 @@ CASCADE_WT=''
 CASCADE_BASE=''
 RUNG_DONE=0
 DELIVER=0
+RESTART=0
 PROMPT_RAW=''
 PROMPT_FILE_RAW=''
 _count=$#
@@ -220,6 +221,7 @@ while [ "$_count" -gt 0 ]; do
 		;;
 	--rung-done) RUNG_DONE=1 ;;
 	--deliver) DELIVER=1 ;;
+	--restart) RESTART=1 ;;
 	--ticket-file | --worktree | --base)
 		[ "$_count" -gt 0 ] || die "$a needs a value"
 		case "$a" in
@@ -481,6 +483,9 @@ fi
 #   --rung-done            judge the rung this worktree handed back, go on
 #   --deliver              run nothing: 0 when no rung handed back here awaits
 #                          its verdict, else 2 naming the --rung-done call (#777)
+#   --restart              start over from rung 1 though a rung handed back
+#                          here awaits its verdict, ending that rung's run
+#                          stopped; without it, that plain call is exit 2 (#787)
 #
 # EXIT. 0 a rung passed; 1 the mapped rung was red; 3 a rung handed back for
 # the caller to spawn; any other dispatch status that is not a worker's (2, 4,
@@ -532,6 +537,20 @@ fi
 	die "--deliver asks a cascade whether a rung it handed back awaits its verdict, and this dispatch runs no cascade"
 [ "$DELIVER" = 0 ] || [ "$RUNG_DONE" = 0 ] ||
 	die "--deliver and --rung-done are two calls: --rung-done records the rung's verdict, then --deliver asks whether the PR may open"
+[ "$RESTART" = 0 ] || [ "$CASCADE" = 1 ] ||
+	die "--restart starts a cascade over, and this dispatch runs no cascade"
+[ "$RESTART" = 0 ] || { [ "$RUNG_DONE" = 0 ] && [ "$DELIVER" = 0 ]; } ||
+	die "--restart starts the cascade over; it is never the same call as --rung-done or --deliver"
+
+# The worktree's hand-back state, and — while a rung handed back there awaits
+# its verdict — the --rung-done call that records it: the call the hand-back
+# saved, or this one when the state predates the saved call.
+CASCADE_STATE=''
+[ "$CASCADE" = 1 ] && CASCADE_STATE="$(cd "$CASCADE_WT" && git rev-parse --absolute-git-dir)/skill-cascade"
+_staged_call() {
+	_sc_call=$(cat "$CASCADE_STATE/call" 2>/dev/null) || _sc_call=''
+	printf '%s --rung-done' "${_sc_call:-$DISPATCH_CALL}"
+}
 
 # --- the open-PR step (#777) -------------------------------------------------
 # WHY. PR #762 was opened by hand after the cascade's cheap rung, which was
@@ -545,12 +564,8 @@ fi
 # verdict is recorded — so while it stands, --deliver is exit 2, naming the
 # --rung-done call that records the verdict.
 if [ "$DELIVER" = 1 ]; then
-	_dl_state="$(cd "$CASCADE_WT" && git rev-parse --absolute-git-dir)/skill-cascade"
-	if [ -f "$_dl_state/rung" ]; then
-		_dl_call=$(cat "$_dl_state/call" 2>/dev/null) || _dl_call=''
-		[ -n "$_dl_call" ] || _dl_call="$DISPATCH_CALL"
-		die "--deliver refused — rung $(cat "$_dl_state/rung") was handed back in '$CASCADE_WT' and has no recorded verdict; the pull request does not open until it has one. Record it first: $_dl_call --rung-done"
-	fi
+	[ ! -f "$CASCADE_STATE/rung" ] ||
+		die "--deliver refused — rung $(cat "$CASCADE_STATE/rung") was handed back in '$CASCADE_WT' and has no recorded verdict; the pull request does not open until it has one. Record it first: $(_staged_call)"
 	echo "skill-dispatch: no rung handed back in '$CASCADE_WT' awaits a verdict; deliver: push and open the pull request" >&2
 	exit 0
 fi
@@ -562,6 +577,27 @@ for a in "$@"; do
 	fi
 	break
 done
+
+# --- a re-run while a rung awaits its verdict (#787) --------------------------
+# WHY. Re-running the plain cascade command while a rung it handed back still
+# awaited its verdict once wiped the hand-back, left the earlier cascade's run
+# open in the open-run registry and started over — and a session resuming
+# after a usage-limit stop is the one likely to re-run it. So that call
+# refuses, exit 2, naming the --rung-done call --deliver names, and touches
+# neither the worktree nor the run. Starting over is an explicit choice: the
+# same call with --restart ends the staged rung's run, stopped, said, and runs
+# the cascade from rung 1 under a new one. It never resets the worktree.
+if [ "$CASCADE" = 1 ] && [ "$RUNG_DONE" = 0 ] && [ -f "$CASCADE_STATE/rung" ]; then
+	[ "$RESTART" = 1 ] ||
+		die "cascade refused — rung $(cat "$CASCADE_STATE/rung") was handed back in '$CASCADE_WT' and has no recorded verdict; re-running the cascade would discard it. Record its verdict: $(_staged_call) — or start over, ending its run, with the same call and --restart"
+	_rs_run=$(cat "$CASCADE_STATE/run" 2>/dev/null) || _rs_run=''
+	if _sl_id_ok "$_rs_run"; then
+		TRACE_QUIET=1 sh "$TRACE_SH" end "$_rs_run" outcome=stopped \
+			reason="the cascade was restarted with rung $(cat "$CASCADE_STATE/rung") unjudged" >/dev/null 2>&1 || :
+		echo "skill-dispatch: --restart — rung $(cat "$CASCADE_STATE/rung") was handed back unjudged; its run $_rs_run is ended, stopped, and the cascade starts over from rung 1" >&2
+	fi
+	rm -rf "$CASCADE_STATE"
+fi
 
 # _cascade_emit <field=value …> — one event under the cascade's run, or none.
 _cascade_emit() {
@@ -696,7 +732,6 @@ _cascade_handback() {
 
 # _cascade <dispatch args…> — the two rungs. Never returns.
 _cascade() {
-	CASCADE_STATE="$(cd "$CASCADE_WT" && git rev-parse --absolute-git-dir)/skill-cascade"
 	CASCADE_AUTHOR="${CASCADE_STATE%/*}/$CASCADE_AUTHOR_NAME"
 	CASCADE_WT_ABS=$(cd "$CASCADE_WT" && pwd)
 	_cs_tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-cascade.XXXXXX") || die "no scratch for the cascade"
@@ -715,7 +750,7 @@ _cascade() {
 		[ -f "$CASCADE_STATE/run" ] && [ -f "$CASCADE_STATE/rung" ] && [ -f "$CASCADE_STATE/base" ] ||
 			die "--rung-done: no rung was handed back in '$CASCADE_WT' — run the dispatch without it first"
 		[ "$(cat "$CASCADE_STATE/base")" = "$CASCADE_BASE" ] ||
-			die "--rung-done: the rung was handed back against another --base; run the dispatch again from the start"
+			die "--rung-done: the rung was handed back against another --base; judge it with that --base, or start over with the plain call and --restart"
 		CASCADE_RUN=$(cat "$CASCADE_STATE/run")
 		CASCADE_PARENT=$(cat "$CASCADE_STATE/parent" 2>/dev/null || :)
 		_sl_id_ok "$CASCADE_RUN" && CASCADE_OPEN=1
