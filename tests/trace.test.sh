@@ -3101,4 +3101,140 @@ expect_out_has "scrape.sh: scrapes an event's JSON for its run" "the scan catche
 expect_out_lacks "near.sh" "a near miss — an ISO stamp, an event written, eight digits, id --check — is not caught"
 expect_out_lacks "scripts/trace.sh" "the trace itself is exempt"
 
+banner "38. A run opened before the open-run registry is closed by name, stopped (ticket #772)"
+# ---------------------------------------------------------------------------
+# Runs begun before the registry existed (ADR-0026) have no entry, and the
+# checkout whose stack held them is gone, so no `end` could ever close one:
+# every retro counted them again. `end --unregistered <run> reason=<text>`
+# closes such a run with one run.end, outcome=stopped, and nothing else — only
+# when it has a run.start, no run.end, no registry entry, and sits on no run
+# stack of a checkout that still exists. Any other run is exit 2, nothing
+# written. ADR-0028 records it.
+t_repo
+UR_REPO=$REPO
+mkdir -p "$UR_REPO/scripts"
+cp "$TRACE" "$UR_REPO/scripts/trace.sh"
+t_commit "$UR_REPO" "chore: carry the trace script" >/dev/null
+UR="$SCRATCH/unreg-772"; URON=$(policy "$UR")
+# ur_in <dir> [NAME=value …] <trace.sh args…> — the copy <dir> checks out, run from
+# <dir>, the leading assignments exported; the suite's own run cleared first.
+ur_in() {
+	(
+		cd "$1" || exit 2
+		shift
+		unset TRACE_RUN TRACE_PARENT
+		export TRACE_CONFIG="$URON"
+		while case ${1:-} in [A-Z]*=*) true ;; *) false ;; esac; do
+			export "$1"
+			shift
+		done
+		exec sh scripts/trace.sh "$@"
+	)
+}
+# ur_snap — everything the trace holds: the events, the registry, the stacks.
+ur_snap() {
+	(
+		cd "$UR" || exit 0
+		cat events/*.jsonl 2>/dev/null
+		ls runs 2>/dev/null
+		for _us_f in current/*; do [ -f "$_us_f" ] && { echo "$_us_f"; cat "$_us_f"; }; done
+	) 2>/dev/null
+}
+# ur_ends <run> — how many run.end lines name <run>.
+ur_ends() { grep -h '"kind":"run.end"' "$UR"/events/*.jsonl 2>/dev/null | grep -cF "\"run\":\"$1\""; }
+# The pre-registry shape, as the real ones are: begun in a linked worktree
+# that has since been removed, its entry gone (the registry did not exist yet).
+UR_WT="$SCRATCH/unreg-wt"
+git -C "$UR_REPO" worktree add -q "$UR_WT" -b unreg-wt 2>/dev/null
+UR_OUTER=$(ur_in "$UR_WT" TRACE_SESSION=ur-old begin implement 2>/dev/null)
+UR_PRE=$(ur_in "$UR_WT" TRACE_SESSION=ur-old begin review-pr 2>/dev/null)
+rm -f "$UR/runs/$UR_OUTER" "$UR/runs/$UR_PRE"
+git -C "$UR_REPO" worktree remove --force "$UR_WT"
+# And one on no stack at all: a run.start and nothing else.
+UR_BARE=$(ur_in "$UR_REPO" id)
+ur_in "$UR_REPO" emit kind=run.start skill=retro run="$UR_BARE" 2>/dev/null
+[ -n "$UR_OUTER" ] && [ -n "$UR_PRE" ] && [ ! -e "$UR/runs/$UR_PRE" ] && [ ! -d "$UR_WT" ] &&
+	pass "fixture: two runs begun in a removed worktree, unregistered and never ended" ||
+	fail "fixture: outer '$UR_OUTER', inner '$UR_PRE', entry or worktree left behind"
+t_exec ur_in "$UR_REPO" TRACE_SESSION=ur-now end --unregistered "$UR_PRE" reason='opened before the registry'
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "end --unregistered closes a pre-registry run: exit 0, nothing on stdout" ||
+	fail "end --unregistered on a pre-registry run: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
+[ "$(ur_ends "$UR_PRE")" = 1 ] && pass "and writes exactly one run.end for it" || fail "run.end lines for $UR_PRE: $(ur_ends "$UR_PRE")"
+_ur_line=$(grep -h '"kind":"run.end"' "$UR"/events/*.jsonl | grep -F "\"run\":\"$UR_PRE\"")
+case $_ur_line in *'"outcome":"stopped","reason":"opened before the registry"'*) pass "outcome=stopped, with the reason given" ;;
+*) fail "the run.end does not carry outcome=stopped and the reason: $_ur_line" ;; esac
+case $_ur_line in *"\"run\":\"$UR_PRE\",\"parent\":\"$UR_OUTER\""*) pass "and the parent its run.start named" ;;
+*) fail "the run.end does not carry the run.start's parent $UR_OUTER: $_ur_line" ;; esac
+case $_ur_line in *'"via":"unregistered"'*) pass "marked data.via=unregistered, so a reader tells it from an owner's end" ;;
+*) fail "the run.end carries no data.via=unregistered: $_ur_line" ;; esac
+[ ! -e "$UR/runs/$UR_PRE" ] && pass "and registers nothing" || fail "end --unregistered left a registry entry"
+expect_exit 0 "its parent, pre-registry too, closes the same way" -- ur_in "$UR_REPO" end --unregistered "$UR_OUTER" reason='opened before the registry'
+expect_exit 0 "and so does a run.start on no stack at all" -- ur_in "$UR_REPO" end --unregistered "$UR_BARE" reason='opened before the registry'
+[ "$(ur_ends "$UR_OUTER")" = 1 ] && [ "$(ur_ends "$UR_BARE")" = 1 ] && pass "one run.end each" ||
+	fail "run.end lines: outer $(ur_ends "$UR_OUTER"), bare $(ur_ends "$UR_BARE")"
+# ur_refused <label> <run> [<args>…] — exit 2 and the trace exactly as it was.
+ur_refused() {
+	_ur_label=$1
+	shift
+	_ur_before=$(ur_snap)
+	t_exec ur_in "$UR_REPO" TRACE_SESSION=ur-now end --unregistered "$@"
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && [ "$(ur_snap)" = "$_ur_before" ] &&
+		pass "$_ur_label: exit 2, nothing written" ||
+		fail "$_ur_label: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR', trace changed: $([ "$(ur_snap)" = "$_ur_before" ] && echo no || echo yes)"
+}
+ur_refused "a run already ended (by this form)" "$UR_PRE" reason=again
+UR_ENDED=$(ur_in "$UR_REPO" TRACE_SESSION=ur-done begin retro 2>/dev/null)
+ur_in "$UR_REPO" TRACE_SESSION=ur-done end "$UR_ENDED" 2>/dev/null
+ur_refused "a run its owner ended" "$UR_ENDED" reason=x
+expect_said "run.end"
+UR_DET=$(ur_in "$UR_REPO" begin --detached dispatch 2>/dev/null)
+ur_refused "a registered run" "$UR_DET" reason=x
+expect_said "registry"
+UR_LIVE=$(ur_in "$UR_REPO" TRACE_SESSION=ur-live begin implement 2>/dev/null)
+rm -f "$UR/runs/$UR_LIVE"
+ur_refused "a run on a live stack of the root checkout, its entry gone" "$UR_LIVE" reason=x
+expect_said "stack"
+UR_WT2="$SCRATCH/unreg-wt2"
+git -C "$UR_REPO" worktree add -q "$UR_WT2" -b unreg-wt2 2>/dev/null
+UR_LIVE2=$(ur_in "$UR_WT2" begin implement 2>/dev/null)
+ur_in "$UR_WT2" begin review-pr >/dev/null 2>&1
+rm -f "$UR/runs/$UR_LIVE2"
+ur_refused "a run below the top of a linked worktree's live stack" "$UR_LIVE2" reason=x
+ur_refused "a run with no run.start" "$(ur_in "$UR_REPO" id)" reason=x
+expect_said "run.start"
+UR_OPEN=$(ur_in "$UR_REPO" id)
+ur_in "$UR_REPO" emit kind=run.start skill=retro run="$UR_OPEN" 2>/dev/null
+ur_refused "no reason" "$UR_OPEN"
+expect_said "reason"
+ur_refused "an empty reason" "$UR_OPEN" reason=
+ur_refused "an outcome of the caller's own — the form sets it" "$UR_OPEN" outcome=ok reason=x
+ur_refused "even outcome=stopped spelled again" "$UR_OPEN" outcome=stopped reason=x
+ur_refused "a value no run id has the shape of" "not-a-run" reason=x
+ur_refused "no run at all" reason=x
+ur_refused "an empty run" "" reason=x
+if [ "$(id -u)" != 0 ]; then
+	_ur_stk=$(ls "$UR"/current/*.runs | head -n 1)
+	chmod 000 "$_ur_stk"
+	ur_refused "a stack that cannot be read — never read as 'on no stack'" "$UR_OPEN" reason=x
+	chmod 600 "$_ur_stk"
+else
+	skip "running as root — chmod 000 denies no read, so the unreadable-stack case cannot be driven"
+fi
+expect_exit 0 "the run every refusal above left alone still closes" -- ur_in "$UR_REPO" end --unregistered "$UR_OPEN" reason=x
+t_exec env TRACE_CONFIG="$OFF" sh "$UR_REPO/scripts/trace.sh" end --unregistered "$UR_OPEN" reason=x
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "unconfigured, it is the silent no-op every call is" ||
+	fail "unconfigured end --unregistered: exit $T_STATUS, stdout '$T_OUT'"
+t_exec sh "$TRACE"
+case $T_ERR in *'trace.sh end --unregistered <run> reason=<text>'*) pass "the usage names end --unregistered" ;;
+*) fail "the usage does not name 'trace.sh end --unregistered <run> reason=<text>': $T_ERR" ;; esac
+sed -n '2,24p' "$TRACE" | grep -qF 'sh scripts/trace.sh end --unregistered <run> reason=<text>' &&
+	pass "and so does the script's header" || fail "the header's command list does not name end --unregistered"
+grep -F 'scripts/trace.sh' "$KIT/AGENTS.md" | grep -qF '`end --unregistered <run> reason=<text>`' &&
+	pass "the root manual's trace row names it" || fail "AGENTS.md's trace row does not name \`end --unregistered <run> reason=<text>\`"
+_ur_adr=$(ls "$KIT"/docs/adr/0028-*.md 2>/dev/null | head -n 1)
+[ -n "$_ur_adr" ] && grep -qF 'end --unregistered <run>' "$_ur_adr" && grep -qF 'amends ADR-0024 clause 5' "$_ur_adr" &&
+	pass "ADR-0028 records the form, as a new record that amends ADR-0024 clause 5 (ADR-0021 clause 5)" ||
+	fail "no docs/adr/0028-*.md naming 'end --unregistered <run>' and saying it amends ADR-0024 clause 5"
+grep -qF '| [0028]' "$KIT/docs/adr/INDEX.md" && pass "and the index has its row" || fail "INDEX.md has no ADR-0028 row"
+
 t_done "trace script"
