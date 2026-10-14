@@ -2890,8 +2890,9 @@
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # Skills (9a): none. Wiring (9b): none. Templates (9c): none.
 # Kit-only, never shipped: ADR-0028 (a new record amending ADR-0024 clause
-# 5, which is at its amendment cap) and its index row; tests/trace.test.sh
-# section 38; the root manual's trace row names the form.
+# 5, which is at its amendment cap), its index row and its place on
+# bootstrap.sh's kit-own list; tests/trace.test.sh section 38; the root
+# manual's trace row names the form.
 
 shared-layer: 0.76.0
 

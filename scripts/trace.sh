@@ -143,8 +143,8 @@
 # <run>` reaches it: `end --unregistered <run> reason=<text>` closes it,
 # outcome `stopped`, only while the log has its run.start and no run.end, the
 # registry has no entry for it, and no stack of a checkout that still exists
-# holds it — any other run is exit 2, nothing written (#772, the kit's
-# ADR-0028).
+# holds it — any other run is exit 2, nothing written (#772,
+# the kit's ADR-0028).
 #
 # A BLOB IS A PAYLOAD THAT DOES NOT FIT ON A LINE — a prompt, a tool result,
 # spike evidence. `--blob <file>` (or `--blob=<file>`, the same thing; or `-`
