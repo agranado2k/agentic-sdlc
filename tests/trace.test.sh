@@ -2159,8 +2159,7 @@ grep -m1 '^- \*\*Superseded by\*\*' "$ADR8_NEXT" | grep -qF 'amended 2026-10-14 
 # variable, or by a suite's wrapper — followed by `end` and then a field, a
 # redirect, a pipe, a separator or the end of the line, never a run id. Only
 # this suite may keep one, on a line marked `# bare end:`, because driving the
-# deprecated form is what this section and section 28's back-compat case are
-# for.
+# refused form is what this section and section 28's refusal case are for.
 bare_ends() {
 	grep -nE '(trace(\.kit)?\.sh|\$\{?TRACE(_SH)?\}?|[A-Za-z]*_trace|(^|[[:space:]])ow)["'"'"']?[[:space:]]+end([[:space:]]+([A-Za-z_][A-Za-z0-9_.]*=|[>|;&)`]|2>)|[[:space:]]*$)' "$@" /dev/null |
 		grep -vE '^([^:]*/)?tests/trace\.test\.sh:[0-9]+:.*# bare end: '
