@@ -1979,7 +1979,7 @@ for b in \
 done
 
 # ---------------------------------------------------------------------------
-banner "31. /pr-iterate's re-review begins and ends a review-pr run of its own, by id (#769)"
+banner "31. /pr-iterate's re-review begins a detached review-pr run of its own and ends it by id (#769, #782)"
 # ---------------------------------------------------------------------------
 # PR #767: the re-reviewer /pr-iterate spawned on a pushed head ended its
 # parent's run with a bare `end` — the iteration's pr.iterate and two triages
@@ -1987,23 +1987,38 @@ banner "31. /pr-iterate's re-review begins and ends a review-pr run of its own, 
 # trace now refuses a bare `end` (exit 2); the skill's re-review text is held
 # here to the form that never needs one: the re-reviewer opens a review-pr run
 # of its own and closes it by the id its begin printed — that id, never the
-# `Trace-Run:` line's, and never a bare `end`.
+# `Trace-Run:` line's, and never a bare `end`. PR #781: a re-reviewer's run on
+# the stack it shares with its parent could not be ended while the parent's
+# run sat above it, so the run is begun detached (ADR-0026, ADR-0031) and
+# every other trace line of the review carries it by TRACE_RUN.
 # rereview_run_missing <skill file> — one word per claim the stop conditions drop.
 rereview_run_missing() {
 	_rr_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
 	printf '%s\n' "$_rr_sc" | grep -qE 'again on (that|the new) head \(do NOT post[^`]*in a review-pr run of its own' || echo own-run
-	printf '%s\n' "$_rr_sc" | grep -qF '`sh scripts/trace.sh begin review-pr subject=pr:#<N> || :`' || echo begins-review-pr
-	printf '%s\n' "$_rr_sc" | grep -qE 'begin review-pr subject=pr:#<N> \|\| :`[^`]*`sh scripts/trace\.sh end <the run id your begin printed> [^`]*\|\| :`' || echo ends-by-id
+	printf '%s\n' "$_rr_sc" | grep -qF '`sh scripts/trace.sh begin --detached review-pr subject=pr:#<N> || :`' || echo begins-detached
+	printf '%s\n' "$_rr_sc" | grep -qF 'on no run stack' || echo on-no-stack
+	printf '%s\n' "$_rr_sc" | grep -qF 'PR #781' || echo names-781
+	printf '%s\n' "$_rr_sc" | grep -qF '`TRACE_RUN=<the run id that begin printed>` before every other trace line' || echo carries-its-run
+	printf '%s\n' "$_rr_sc" | grep -qE 'begin --detached review-pr subject=pr:#<N> \|\| :`.*`sh scripts/trace\.sh end <the run id your begin printed> [^`]*\|\| :` — that id, never the `Trace-Run:` line' || echo ends-by-id
+	printf '%s\n' "$_rr_sc" | grep -qF 'in place of `/review-pr`'"'"'s own `begin`, never as well as it' || echo replaces-review-pr-begin
 	printf '%s\n' "$_rr_sc" | grep -qF 'never the `Trace-Run:` line' || echo not-the-parents-id
 	printf '%s\n' "$_rr_sc" | grep -qF 'never a bare `end`' || echo no-bare-end
+	# One opening, not two in a row (#770's author, tidied for #782).
+	[ "$(printf '%s\n' "$_rr_sc" | grep -o "spawn prompt, in those words," | grep -c .)" -le 1 ] || echo one-opening
 }
 _rr=$(rereview_run_missing "$PI")
-[ -z "$_rr" ] && pass "/pr-iterate's re-review opens a review-pr run of its own and closes it by id, never a bare end" ||
+[ -z "$_rr" ] && pass "/pr-iterate's re-review opens a detached review-pr run of its own, carries it by TRACE_RUN and closes it by id, never a bare end" ||
 	fail "/pr-iterate's re-review drops: $(echo $_rr)"
 for b in \
 	's/in a review-pr run of its own/in this iteration'"'"'s run/' \
-	's/`sh scripts\/trace\.sh begin review-pr subject=pr:#<N> || :`/its run/' \
+	's/`sh scripts\/trace\.sh begin --detached review-pr subject=pr:#<N> || :`/`sh scripts\/trace.sh begin review-pr subject=pr:#<N> || :`/' \
+	's/on no run stack/on this iteration'"'"'s run stack/' \
+	's/PR #781/the PR/' \
+	's/in place of `\/review-pr`'"'"'s own `begin`, never as well as it/beside `\/review-pr`'"'"'s own `begin`/' \
+	's/` — that id, never the `Trace-Run:` line/` — never the `Trace-Run:` line/' \
+	's/`TRACE_RUN=<the run id that begin printed>` before every other trace line/nothing before its trace lines/' \
 	's/`sh scripts\/trace\.sh end <the run id your begin printed> outcome=ok/`sh scripts\/trace.sh end "$TRACE_RUN" outcome=ok/' \
+	's/In the same prompt, have it record/Say in the re-reviewer'"'"'s spawn prompt, in those words, to record/' \
 	's/never the `Trace-Run:` line/or the `Trace-Run:` line/' \
 	's/never a bare `end`/or a bare `end`/'; do
 	sed "$b" "$PI" >"$SCRATCH/bait769.md"
@@ -2029,7 +2044,7 @@ banner "32. /pr-iterate's re-review raises its findings through /review-pr's rec
 # rereview_raise_missing <skill file> — one word per claim the stop conditions drop.
 rereview_raise_missing() {
 	_rf_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
-	printf '%s\n' "$_rf_sc" | grep -qE 're-reviewer.s spawn prompt, in those words,[^.]*record each finding as `/review-pr` §6 step 3 records it' || echo through-review-pr-step
+	printf '%s\n' "$_rf_sc" | grep -qE 'In the same prompt, have it record each finding as `/review-pr` §6 step 3 records it' || echo through-review-pr-step
 	printf '%s\n' "$_rf_sc" | grep -qF 'one `finding.raise` per finding' || echo one-raise-per-finding
 	printf '%s\n' "$_rf_sc" | grep -qF '`data.agent` a token from its roster' || echo agent-from-roster
 	printf '%s\n' "$_rf_sc" | grep -qF '`data.posted=no`' || echo posted-no

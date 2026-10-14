@@ -1042,7 +1042,10 @@ t_trace_spans() { grep -o '`sh scripts/trace\.sh[^`]*`' "$1" 2>/dev/null | tr -d
 # (ticket #466).
 # The run an end names, `<the run id your begin printed>`, becomes the top of
 # the stack the span runs against, read with `stack .` — the id the begin
-# earlier in the document printed, as an agent would type it (ticket #543).
+# earlier in the document printed, as an agent would type it (ticket #543) —
+# or, while a detached run is open in the registry, the newest one: a
+# document's `begin --detached` pushes nothing, so its end names that run and
+# not the stack's (ticket #782).
 # A raise's id, `data.id='<its id, [CHML]-[0-9]+>'`, becomes `H-1` before the
 # optional-group rule could read its bracket as one: the script holds it to
 # that shape (ticket #567).
@@ -1050,7 +1053,7 @@ t_trace_runnable() {
 	printf '%s\n' "$1" | sed \
 		-e 's/ *|| *:$//' \
 		-e "s/data\.id='<its id, \[CHML\]-\[0-9\]+>'/data.id='H-1'/g" \
-		-e 's/<the run id your begin printed>/"$(sh scripts\/trace.sh stack . | sed -n 1p)"/g' \
+		-e "s/<the run id your begin printed>/\"\$(sh scripts\/trace.sh runs | awk '\$2 == \"detached\" { print \$1 }' | sed -n '\$p' | grep . || sh scripts\/trace.sh stack . | sed -n 1p)\"/g" \
 		-e 's/<YYYY-MM-DD>/2026-01-01/g' \
 		-e 's/<type:ref>/pr:#1/g' \
 		-e 's/ \[[^][]*\]//g' \
