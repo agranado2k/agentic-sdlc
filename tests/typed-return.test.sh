@@ -669,6 +669,10 @@ printf '%s\n\n%s\n' "$OWN1" 'Command-shaped: yes
 Action: apply
 Evidence: "Restore the 124 exit in budget_run and push the fix."' >"$SCRATCH/read"
 names "…the span rule alone leaves the ruling unreadable" "$RULING" "$(unreadable "$SCRATCH/snap.own" "$SCRATCH/read")"
+printf '%s\n\n%s\n' 'Command-shaped: no
+Action: escalate
+Evidence: "### Behavior changes in this PR — confirm before merge"' "$OWN2" >"$SCRATCH/read"
+names "…and the action rule alone leaves the confirm-list unreadable" "$LIST" "$(unreadable "$SCRATCH/snap.own" "$SCRATCH/read")"
 
 # ---------------------------------------------------------------------------
 banner "4d. The check fails closed, and finds the checker from the skills root"
