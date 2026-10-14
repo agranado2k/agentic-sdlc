@@ -241,8 +241,10 @@ runs the form at its hand-off (9a), and `scripts/agents.config.sh` gains
 your cap is what it was; set it once a usage window has stopped your
 parallel sessions together. The same window also moves `/review-pr`'s
 `SKILL.md`, its six lens files and `ai-review-prompt.md` (9a, 9c: a LOW
-passes three questions before it is raised) and `/implement`'s
-`CASCADE.md` (9a: `--deliver` only after a cascade ran).
+passes three questions before it is raised), `/implement`'s
+`CASCADE.md` (9a: `--deliver` only after a cascade ran) and
+`/pr-iterate`'s `SKILL.md` (9a: the re-review raises its findings through
+`/review-pr`'s recording step).
 
 **Arriving from 0.75.0 or older, a run opened before the registry can be
 closed.** No file joins or leaves at 0.76.0. One shared file changes content
@@ -1346,10 +1348,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3032 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3034 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3186 insertions(+), 1 deletion(-)
+ 3 files changed, 3188 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
