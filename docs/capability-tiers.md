@@ -45,7 +45,9 @@ with `--rung-done`: the oracle and the guard then judge what the rung
 committed, and the cascade goes on from there (#682). The open-PR step waits
 on that verdict: the same dispatch with `--deliver` exits 0 only when no
 handed-back rung awaits one, and otherwise names the `--rung-done` call
-(#777). `/implement`'s
+(#777). A plain re-run refuses the same way and moves nothing; starting
+over is the explicit `--restart`, which ends the staged rung's run (#787).
+`/implement`'s
 `CASCADE.md` is how a session drives it.
 
 ## The mapping is data, and the kit carries its own
