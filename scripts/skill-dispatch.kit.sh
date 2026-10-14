@@ -162,6 +162,16 @@ case "$1" in
 -*) die "unknown option '$1'" ;;
 esac
 
+# The call as typed, shell-quoted, without the flags that only steer one call:
+# a hand-back stages it, so a refused --deliver can name the --rung-done call
+# in full (#777).
+_q() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+DISPATCH_CALL="sh $(_q "$0")"
+for a in "$@"; do
+	case "$a" in --rung-done | --deliver | --dry-run) continue ;; esac
+	DISPATCH_CALL="$DISPATCH_CALL $(_q "$a")"
+done
+
 SKILL=$1
 shift
 [ $# -gt 0 ] || usage
@@ -177,6 +187,7 @@ CASCADE_TICKET=''
 CASCADE_WT=''
 CASCADE_BASE=''
 RUNG_DONE=0
+DELIVER=0
 PROMPT_RAW=''
 PROMPT_FILE_RAW=''
 _count=$#
@@ -208,6 +219,7 @@ while [ "$_count" -gt 0 ]; do
 		esac
 		;;
 	--rung-done) RUNG_DONE=1 ;;
+	--deliver) DELIVER=1 ;;
 	--ticket-file | --worktree | --base)
 		[ "$_count" -gt 0 ] || die "$a needs a value"
 		case "$a" in
@@ -377,6 +389,8 @@ fi
 # and `in-session` on the mapped one, handed to the caller unjudged.
 #
 #   --rung-done            judge the rung this worktree handed back, go on
+#   --deliver              run nothing: 0 when no rung handed back here awaits
+#                          its verdict, else 2 naming the --rung-done call (#777)
 #
 # EXIT. 0 a rung passed; 1 the mapped rung was red; 3 a rung handed back for
 # the caller to spawn; any other dispatch status that is not a worker's (2, 4,
@@ -470,6 +484,32 @@ if [ -n "$CASCADE_MODEL" ]; then
 fi
 [ "$RUNG_DONE" = 0 ] || [ "$CASCADE" = 1 ] ||
 	die "--rung-done judges a rung a cascade handed back in-session, and this dispatch runs no cascade"
+[ "$DELIVER" = 0 ] || [ "$CASCADE" = 1 ] ||
+	die "--deliver asks a cascade whether a rung it handed back awaits its verdict, and this dispatch runs no cascade"
+[ "$DELIVER" = 0 ] || [ "$RUNG_DONE" = 0 ] ||
+	die "--deliver and --rung-done are two calls: --rung-done records the rung's verdict, then --deliver asks whether the PR may open"
+
+# --- the open-PR step (#777) -------------------------------------------------
+# WHY. PR #762 was opened by hand after the cascade's cheap rung, which was
+# never judged through --rung-done: its verdict was never recorded and its
+# spawn never ended. A session resuming after a usage-limit stop is where that
+# happens — it finds commits in the worktree and takes them for a passed rung.
+# So the open-PR step is the dispatcher's to hand out: the same command with
+# --deliver runs nothing and exits 0 only when no rung it handed back in the
+# worktree awaits a verdict. A staged hand-back is exactly that — the state
+# under <git dir>/skill-cascade is written at the hand-back and removed once a
+# verdict is recorded — so while it stands, --deliver is exit 2, naming the
+# --rung-done call that records the verdict.
+if [ "$DELIVER" = 1 ]; then
+	_dl_state="$(cd "$CASCADE_WT" && git rev-parse --absolute-git-dir)/skill-cascade"
+	if [ -f "$_dl_state/rung" ]; then
+		_dl_call=$(cat "$_dl_state/call" 2>/dev/null) || _dl_call=''
+		[ -n "$_dl_call" ] || _dl_call="$DISPATCH_CALL"
+		die "--deliver refused — rung $(cat "$_dl_state/rung") was handed back in '$CASCADE_WT' and has no recorded verdict; the pull request does not open until it has one. Record it first: $_dl_call --rung-done"
+	fi
+	echo "skill-dispatch: no rung handed back in '$CASCADE_WT' awaits a verdict; deliver: push and open the pull request" >&2
+	exit 0
+fi
 for a in "$@"; do
 	[ "$a" = --dry-run ] || continue
 	if [ "$CASCADE" = 1 ]; then
@@ -485,6 +525,14 @@ _cascade_emit() {
 	TRACE_RUN=$CASCADE_RUN TRACE_PARENT=$CASCADE_PARENT \
 		sh "$ROOT/scripts/trace.sh" emit kind=spawn subject="run:$CASCADE_RUN" \
 		tier=mechanical ${_cascade_domain:+domain=$_cascade_domain} skill="${SKILL#/}" "$@" >/dev/null 2>&1 || :
+}
+
+# _cascade_verdict <rung> <model> <outcome> <reason> — a judged rung's record:
+# passed, escalated or failed, with the oracle's and the guard's exit codes.
+# The one place a verdict is written, so a field it gains is added here once.
+_cascade_verdict() {
+	_cascade_emit model="$2" outcome="$3" data.rung="$1" data.oracle_exit="$ORACLE_EXIT" \
+		data.guard_exit="$GUARD_EXIT" reason="$4"
 }
 
 # _cascade_close <status> — end the cascade's run, once: ok on 0, stopped on
@@ -561,6 +609,7 @@ _cascade_handback() {
 	printf '%s\n' "$CASCADE_PARENT" >"$CASCADE_STATE/parent"
 	printf '%s\n' "$_hb_n" >"$CASCADE_STATE/rung"
 	printf '%s\n' "$CASCADE_BASE" >"$CASCADE_STATE/base"
+	printf '%s\n' "$DISPATCH_CALL" >"$CASCADE_STATE/call"
 	_hb_parent=''
 	_sl_id_ok "$CASCADE_PARENT" && _hb_parent=" $CASCADE_PARENT"
 	_hb_lines=0
@@ -667,14 +716,12 @@ _cascade() {
 # one. Never returns.
 _cascade_after1() {
 	if [ "$ORACLE_EXIT" = 0 ] && [ "$GUARD_EXIT" = 0 ]; then
-		_cascade_emit model="$_m1" outcome=passed data.rung=1 data.oracle_exit=0 data.guard_exit=0 \
-			reason='the oracle and the pairing guard are green on the cascade model'
+		_cascade_verdict 1 "$_m1" passed 'the oracle and the pairing guard are green on the cascade model'
 		rm -rf "$CASCADE_STATE"
 		[ ! -f "$_cs_tmp/rung1.out" ] || cat "$_cs_tmp/rung1.out"
 		exit 0
 	fi
-	_cascade_emit model="$_m1" outcome=escalated data.rung=1 data.oracle_exit="$ORACLE_EXIT" \
-		data.guard_exit="$GUARD_EXIT" reason='the oracle or the pairing guard is red on the cascade model'
+	_cascade_verdict 1 "$_m1" escalated 'the oracle or the pairing guard is red on the cascade model'
 	echo "skill-dispatch: cascade escalated — oracle exit $ORACLE_EXIT, pairing guard exit $GUARD_EXIT on the cascade model; resetting the worktree to $CASCADE_BASE and running the mechanical tier's mapped model" >&2
 	(cd "$CASCADE_WT" && git reset -q --hard "$CASCADE_BASE" && git clean -qfd) ||
 		die "the reset of '$CASCADE_WT' to $CASCADE_BASE failed; rung 2 does not run on a dirty tree"
@@ -733,12 +780,10 @@ _cascade_after2() {
 	_m2=$(_cascade_model "$_cs_cfg2")
 	rm -rf "$CASCADE_STATE"
 	if [ "$ORACLE_EXIT" = 0 ] && [ "$GUARD_EXIT" = 0 ]; then
-		_cascade_emit model="$_m2" outcome=passed data.rung=2 data.oracle_exit=0 data.guard_exit=0 \
-			reason='the oracle and the pairing guard are green on the mapped model'
+		_cascade_verdict 2 "$_m2" passed 'the oracle and the pairing guard are green on the mapped model'
 		exit 0
 	fi
-	_cascade_emit model="$_m2" outcome=failed data.rung=2 data.oracle_exit="$ORACLE_EXIT" \
-		data.guard_exit="$GUARD_EXIT" reason='the oracle or the pairing guard is red on the mapped model too'
+	_cascade_verdict 2 "$_m2" failed 'the oracle or the pairing guard is red on the mapped model too'
 	echo "skill-dispatch: cascade failed — the mapped model's rung is red too (oracle exit $ORACLE_EXIT, pairing guard exit $GUARD_EXIT); the ticket goes back to a human" >&2
 	exit 1
 }

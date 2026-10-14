@@ -42,7 +42,10 @@ rung whose model names no agent harness — the kit's own cascade model among
 them — is handed back to the calling session (exit 3, its spawn prompt staged
 in the worktree's git dir), which spawns it and runs the same dispatch again
 with `--rung-done`: the oracle and the guard then judge what the rung
-committed, and the cascade goes on from there (#682). `/implement`'s
+committed, and the cascade goes on from there (#682). The open-PR step waits
+on that verdict: the same dispatch with `--deliver` exits 0 only when no
+handed-back rung awaits one, and otherwise names the `--rung-done` call
+(#777). `/implement`'s
 `CASCADE.md` is how a session drives it.
 
 ## The mapping is data, and the kit carries its own

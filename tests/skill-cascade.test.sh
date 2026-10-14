@@ -722,6 +722,73 @@ cascade_keep "$T_ORACLE" --rung-done --base "$(git -C "$WT" rev-parse HEAD)"
 t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
 	implement --tier implementer --prompt x --rung-done
 [ "$T_STATUS" = 2 ] && pass "--rung-done outside a cascade is exit 2" || fail "--rung-done outside a cascade exited $T_STATUS"
+
+# ---------------------------------------------------------------------------
+banner "8. No open-PR step while a staged rung has no verdict (#777)"
+# ---------------------------------------------------------------------------
+# PR #762 was opened by hand after the cheap rung, never judged through
+# --rung-done: its verdict was never recorded and its spawn never ended. A
+# session resuming after a usage-limit stop is where that happens. So the
+# open-PR step is the dispatcher's to hand out: the same command with
+# --deliver exits 0 only when no rung it staged in the worktree awaits a
+# verdict, and otherwise refuses, naming the --rung-done call that records it.
+write_policy 'model-cheap-bare' 'model-mapped-bare'
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --deliver
+[ "$T_STATUS" = 2 ] && pass "a staged rung with no verdict: --deliver refuses, exit 2" ||
+	fail "--deliver with rung 1 unjudged exited $T_STATUS: $T_ERR"
+case "$T_ERR" in
+*"rung 1"*"scripts/skill-dispatch.kit.sh"*"'$T_ORACLE'"*--rung-done*) pass "…naming the rung and the --rung-done call that records its verdict, in full" ;;
+*) fail "…but stderr does not name the --rung-done call: $T_ERR" ;;
+esac
+[ "$(rung_seq)" = "in-session1 " ] && [ -e "$(state_dir)/rung" ] &&
+	[ "$(cat "$WT/work.txt" 2>/dev/null)" = model-cheap-bare ] &&
+	pass "…and the refusal judges nothing, records nothing and keeps the hand-back" ||
+	fail "the refusal moved something: rungs '$(spawn_rungs)', work '$(cat "$WT/work.txt" 2>/dev/null)'"
+cascade_keep "$T_ORACLE" --rung-done
+[ "$T_STATUS" = 0 ] && [ "$(rung_seq)" = "in-session1 passed1 " ] &&
+	pass "the named --rung-done call records the verdict" ||
+	fail "--rung-done after the refusal exited $T_STATUS, rungs '$(spawn_rungs)': $T_ERR"
+cascade_keep "$T_ORACLE" --deliver
+[ "$T_STATUS" = 0 ] && pass "after --rung-done, --deliver proceeds: exit 0" ||
+	fail "--deliver after the verdict exited $T_STATUS: $T_ERR"
+[ "$(rung_seq)" = "in-session1 passed1 " ] && pass "…recording nothing of its own" ||
+	fail "--deliver recorded rungs '$(spawn_rungs)'"
+unset FIXTURE_ORACLE_GREEN
+
+# Rung 2 handed back after rung 1's verdict is a staged rung too.
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done
+spawn_in_session model-mapped-bare
+cascade_keep "$T_ORACLE" --deliver
+case "$T_STATUS $T_ERR" in
+"2 "*"rung 2"*--rung-done*) pass "a handed-back rung 2 with no verdict is refused the same way" ;;
+*) fail "--deliver with rung 2 unjudged exited $T_STATUS: $T_ERR" ;;
+esac
+
+# A worktree no rung was handed back in has nothing awaiting a verdict.
+fresh_wt
+cascade_keep "$T_ORACLE" --deliver
+[ "$T_STATUS" = 0 ] && [ ! -e "$WT/work.txt" ] &&
+	pass "--deliver where nothing was staged is exit 0, and runs no rung" ||
+	fail "--deliver on a fresh worktree exited $T_STATUS: $T_ERR"
+cascade_keep "$T_ORACLE" --deliver --rung-done
+[ "$T_STATUS" = 2 ] && pass "--deliver with --rung-done is exit 2: one asks, the other judges" ||
+	fail "--deliver --rung-done exited $T_STATUS"
+t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --tier implementer --prompt x --deliver
+[ "$T_STATUS" = 2 ] && pass "--deliver outside a cascade is exit 2" || fail "--deliver outside a cascade exited $T_STATUS"
+grep -q -- '--deliver' "$ROOT/.agents/skills/implement/CASCADE.md" 2>/dev/null &&
+	pass "/implement's CASCADE.md names the --deliver call before the open-PR step" ||
+	fail "CASCADE.md does not name --deliver"
 write_policy 'stub:model-cheap'
 
 # The calling skill says how a session drives a rung.
