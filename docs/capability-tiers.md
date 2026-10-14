@@ -99,7 +99,12 @@ have, gets nothing and a warning. Here, nothing printed for the reviewer does
 not mean "inherit the session". The session spawns no review, its report
 quotes the warning and says the review is still owed, and the review waits for
 its reviewer. It never moves to another family. A cascade-built PR therefore
-lands with its Opus review, not with `--no-review`. The Codex policy keeps an
+lands with its Opus review, not with `--no-review`. For a diff the cascade built, the
+author is not the session's to name (ADR-0030, #778): the passed verdict
+records its rung's model, and the `review-pr` dispatch resolves against it
+whatever `AGENT_SESSION_MODEL` says. Hand it the ticket body as
+`--ticket-file`: a cascade-built ticket with no recorded author is refused,
+never reviewed on the session's model. The Codex policy keeps an
 empty fallback: no Codex session is on the Sonnet family.
 
 ## The policy behind the mapping
