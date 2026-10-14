@@ -2271,8 +2271,8 @@ t_exec env -u AGENTS_CONFIG GIT_CEILING_DIRECTORIES="$SCRATCH" sh "$SCRATCH/ids-
 	pass "with no policy file at all, the subagent cap stands" ||
 	fail "--session-cap with no policy (status $T_STATUS): $T_OUT | $T_ERR"
 for _sc_bad in '' 0 -1 three 2x 04; do
-	t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --session-cap $_sc_bad
-	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	t_exec env AGENTS_CONFIG="$WIN_CFG" sh "$LIB" --session-cap "$_sc_bad"
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && printf '%s\n' "$T_ERR" | grep -qF 'takes a whole number' &&
 		pass "--session-cap refuses the subagent cap '$_sc_bad' — exit 2, nothing printed" ||
 		fail "--session-cap '$_sc_bad' exited $T_STATUS: $T_OUT"
 done
