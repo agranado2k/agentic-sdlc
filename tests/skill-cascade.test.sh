@@ -1018,4 +1018,80 @@ _kit_mech=$(sh -c '. "$1"; printf "%s" "$AGENT_TIER_MECHANICAL"' _ "$ROOT/script
 	pass "the kit's cascade rung is the mechanical tier's own model ('$_kit_casc'), so a red rung escalates to the implementer's" ||
 	fail "the kit's cascade rung '$_kit_casc' differs from the mechanical tier's '$_kit_mech' (ADR-0018 makes them one)"
 
+# ---------------------------------------------------------------------------
+banner "10. Re-running the cascade refuses while a staged rung has no verdict (#787)"
+# ---------------------------------------------------------------------------
+# Re-running the plain command once wiped the staged rung, left the earlier
+# cascade's run open in the registry and started over — and a session resuming
+# after a usage-limit stop is the one likely to re-run it. Now it refuses,
+# naming the --rung-done call --deliver names, and moves nothing. Starting
+# over is --restart: explicit, and it ends the staged rung's run.
+write_policy 'model-cheap-bare'
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+_rr_run=$(cat "$(state_dir)/run" 2>/dev/null)
+_rr_head=$(git -C "$WT" rev-parse HEAD)
+_rr_state=$(cat "$(state_dir)"/* 2>/dev/null | cksum)
+cascade_keep "$T_ORACLE"
+[ "$T_STATUS" = 2 ] && pass "a staged rung with no verdict: the plain cascade refuses, exit 2" ||
+	fail "re-running the cascade with rung 1 unjudged exited $T_STATUS: $T_ERR"
+case "$T_ERR" in
+*"rung 1"*"scripts/skill-dispatch.kit.sh"*"'$T_ORACLE'"*--rung-done*--restart*) pass "…naming the --rung-done call --deliver names, and --restart to start over" ;;
+*) fail "…but stderr does not name the --rung-done call: $T_ERR" ;;
+esac
+[ "$(git -C "$WT" rev-parse HEAD)" = "$_rr_head" ] && [ "$(cat "$WT/work.txt" 2>/dev/null)" = model-cheap-bare ] &&
+	[ -z "$(git -C "$WT" status --porcelain --untracked-files=all)" ] &&
+	pass "…the worktree untouched: the rung's commit and its work stand" ||
+	fail "the refusal touched the worktree: head $(git -C "$WT" rev-parse HEAD), work '$(cat "$WT/work.txt" 2>/dev/null)'"
+[ "$(cat "$(state_dir)"/* 2>/dev/null | cksum)" = "$_rr_state" ] && [ "$(rung_seq)" = "in-session1 " ] &&
+	pass "…the staged rung kept as it was, nothing recorded" ||
+	fail "the refusal moved the hand-back: rungs '$(spawn_rungs)'"
+t_exec trace_t runs
+expect_out_has "$_rr_run detached" "…and the staged rung's run still open, the only cascade run"
+[ "$(printf '%s\n' "$T_OUT" | grep -c detached)" = 1 ] && pass "…no second cascade run begun" ||
+	fail "the refusal began a run: $T_OUT"
+cascade_keep "$T_ORACLE" --rung-done
+[ "$T_STATUS" = 0 ] && [ "$(rung_seq)" = "in-session1 passed1 " ] &&
+	pass "the named --rung-done call records the verdict" ||
+	fail "--rung-done after the refusal exited $T_STATUS, rungs '$(spawn_rungs)': $T_ERR"
+cascade_keep "$T_ORACLE"
+[ "$T_STATUS" = 3 ] && [ -n "$(cat "$(state_dir)/run" 2>/dev/null)" ] &&
+	[ "$(cat "$(state_dir)/run")" != "$_rr_run" ] &&
+	pass "after --rung-done the plain cascade runs again, under a new run" ||
+	fail "the cascade after the verdict exited $T_STATUS: $T_ERR"
+
+# Starting over is the explicit --restart: the staged rung's run ends,
+# stopped, and the cascade runs from rung 1 under a new one.
+_rr_run=$(cat "$(state_dir)/run" 2>/dev/null)
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --restart
+[ "$T_STATUS" = 3 ] && [ "$(cat "$(state_dir)/run" 2>/dev/null)" != "$_rr_run" ] &&
+	pass "--restart starts the cascade over from rung 1, under a new run" ||
+	fail "--restart exited $T_STATUS: $T_ERR"
+case "$T_ERR" in
+*"$_rr_run"*) pass "…said on stderr, naming the run it ended" ;;
+*) fail "--restart said nothing of the run it ended: $T_ERR" ;;
+esac
+t_exec trace_t runs
+expect_out_lacks "$_rr_run" "…and ends the staged rung's run: runs no longer lists it"
+cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep '"kind":"run.end"' | grep -q "$_rr_run.*stopped\|stopped.*$_rr_run" &&
+	pass "…recorded stopped" || fail "no stopped run.end for the restarted run"
+cascade_keep "$T_ORACLE" --restart --rung-done
+[ "$T_STATUS" = 2 ] && pass "--restart with --rung-done is exit 2: one starts over, the other judges" ||
+	fail "--restart --rung-done exited $T_STATUS"
+cascade_keep "$T_ORACLE" --restart --deliver
+[ "$T_STATUS" = 2 ] && pass "--restart with --deliver is exit 2" || fail "--restart --deliver exited $T_STATUS"
+t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --tier implementer --prompt x --restart
+[ "$T_STATUS" = 2 ] && pass "--restart outside a cascade is exit 2" || fail "--restart outside a cascade exited $T_STATUS"
+grep -q -- '--restart' "$ROOT/.agents/skills/implement/CASCADE.md" 2>/dev/null &&
+	pass "/implement's CASCADE.md names --restart as the explicit start-over" ||
+	fail "CASCADE.md does not name --restart"
+unset FIXTURE_ORACLE_GREEN
+write_policy 'stub:model-cheap'
+
 t_done "skill cascade"
