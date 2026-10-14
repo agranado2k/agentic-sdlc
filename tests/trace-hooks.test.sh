@@ -5063,7 +5063,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-banner "26. A failing version-manager shim first on PATH does not fail the hook legs"
+banner "55. A failing version-manager shim first on PATH does not fail the hook legs (#771)"
 # ---------------------------------------------------------------------------
 # The suite resolves a node that runs before it drives anything; a shim that
 # answers `command -v` and then errors must not become a leg's failure reason.
