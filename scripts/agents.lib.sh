@@ -10,6 +10,10 @@
 #   sh scripts/agents.lib.sh --ids
 #       -> every model id the policy maps, one per line, sorted, in --model's
 #          form — the one form a spawn records (scripts/trace.sh holds it)
+#   sh scripts/agents.lib.sh --session-cap <n>
+#       -> n, the session cap the host's subagent limit gave, held to the
+#          policy's AGENT_WINDOW_SESSIONS: the lower of the two, or n when
+#          the policy states no window (/to-tickets' hand-off)
 #   . scripts/agents.lib.sh; resolve_tier …    -> the same, as a shell function;
 #      set AGENTS_CONFIG=<file> or _agents_here=<dir> BEFORE sourcing, on its
 #      own line (bash and zsh drop a prefix assignment on `.`)
@@ -112,6 +116,45 @@ agents_usage() {
 	echo "  --harness  print the agent harness token instead, or nothing when the" >&2
 	echo "             tier is mapped to a bare model id — which means the caller's own." >&2
 	echo "  --ids      print every model id the policy maps, one per line, in --model's form." >&2
+	echo "       agents.lib.sh --session-cap <n>" >&2
+	echo "  --session-cap  print the lower of <n>, a whole number of at least one, and the" >&2
+	echo "             policy's AGENT_WINDOW_SESSIONS — <n> itself when the policy states none." >&2
+}
+
+# agents_session_cap <n> — a frontier's session cap, held to the usage window.
+# <n> is the cap the host's concurrent-subagent limit gave (/to-tickets'
+# hand-off divides it by the review's lenses); the policy's
+# AGENT_WINDOW_SESSIONS is the most review-bearing sessions one vendor usage
+# window carries before every one of them stops at once. The answer is the
+# lower of the two; a policy that states no window leaves <n> standing, the
+# unset-is-a-working-state contract every value here keeps. Both must be a
+# whole number of at least one: anything else is exit 2, nothing printed —
+# a misspelt window read as no window would be no bound, in silence. A named
+# policy that is missing is exit 2, as for a tier. The kit's ADR-0029.
+agents_session_cap() {
+	[ $# -eq 1 ] || {
+		agents_usage
+		return 2
+	}
+	case $1 in
+	'' | 0* | *[!0-9]*)
+		echo "x agents: --session-cap takes a whole number of at least one; got '$1'." >&2
+		return 2
+		;;
+	esac
+	(
+		agents_load_config >/dev/null
+		[ $? = 2 ] && exit 2
+		_sc_win=${AGENT_WINDOW_SESSIONS:-}
+		case $_sc_win in
+		'') printf '%s\n' "$1"; exit 0 ;;
+		0* | *[!0-9]*)
+			echo "x agents: AGENT_WINDOW_SESSIONS is '$_sc_win' — expected empty, or a whole number of at least one." >&2
+			exit 2
+			;;
+		esac
+		if [ "$_sc_win" -lt "$1" ]; then printf '%s\n' "$_sc_win"; else printf '%s\n' "$1"; fi
+	)
 }
 
 # agents_ids — every model id the policy maps, one per line, sorted, once
@@ -660,6 +703,11 @@ if [ "$_agents_sourced" = 0 ]; then
 		if [ "${1:-}" = --ids ]; then
 			shift
 			agents_ids "$@"
+			exit $?
+		fi
+		if [ "${1:-}" = --session-cap ]; then
+			shift
+			agents_session_cap "$@"
 			exit $?
 		fi
 		resolve_tier "$@"
