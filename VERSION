@@ -2872,7 +2872,29 @@
 # place for #769, and the root manual's trace row says a bare `end`
 # refuses.
 
-shared-layer: 0.75.0
+# 0.76.0 — a run opened before the open-run registry can be closed (ticket
+# #772). NO file joins and NO file leaves the shared layer. ONE shared file
+# changes content besides UPDATING.md: scripts/trace.sh gains `end
+# --unregistered <run> reason=<text>`, which appends one run.end for <run>,
+# outcome=stopped, the reason, the parent its run.start named and
+# data.via=unregistered — only while the log has the run's run.start and no
+# run.end, the registry has no entry for it, and no run stack keyed on a
+# checkout of this repository that still exists holds it. Any other run — a
+# registered one, one already ended, one never started, one on a live
+# stack — is exit 2 with nothing written, and so is a missing reason, any
+# outcome= and a stack, event file or worktree list that cannot be read.
+# Unconfigured it is the silent no-op. Every call valid at 0.75.0 behaves as
+# it did. Evidence: twelve runs begun 2026-09-28 to 2026-10-05 have no entry,
+# ten of them on stacks of removed worktrees, and every /retro counts them.
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none.
+# Kit-only, never shipped: ADR-0028 (a new record amending ADR-0024 clause
+# 5, which is at its amendment cap), its index row and its place on
+# bootstrap.sh's kit-own list; tests/trace.test.sh section 38; the root
+# manual's trace row names the form.
+
+shared-layer: 0.76.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

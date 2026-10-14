@@ -8,6 +8,7 @@
 #   sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
 #   sh scripts/trace.sh begin --detached <skill> [subject=<type:ref>] [<field>=<value> …]
 #   sh scripts/trace.sh end <run> [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
+#   sh scripts/trace.sh end --unregistered <run> reason=<text> [<field>=<value> …]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
 #   sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
 #   sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
@@ -137,7 +138,13 @@
 # A stack run reads `stale` once it is on no run stack, a detached one once
 # its process is gone from this host; a stale entry stays: only `end` removes
 # one. The registry answers "what is running now"; the
-# event log stays the durable record.
+# event log stays the durable record. A run begun BEFORE the registry existed
+# has no entry, and the checkout whose stack held it may be gone, so no `end
+# <run>` reaches it: `end --unregistered <run> reason=<text>` closes it,
+# outcome `stopped`, only while the log has its run.start and no run.end, the
+# registry has no entry for it, and no stack of a checkout that still exists
+# holds it — any other run is exit 2, nothing written (#772,
+# the kit's ADR-0028).
 #
 # A BLOB IS A PAYLOAD THAT DOES NOT FIT ON A LINE — a prompt, a tool result,
 # spike evidence. `--blob <file>` (or `--blob=<file>`, the same thing; or `-`
@@ -249,6 +256,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh begin <skill> [subject=<type:ref>] [<field>=<value> …]
        sh scripts/trace.sh begin --detached <skill> [subject=<type:ref>] [<field>=<value> …]
        sh scripts/trace.sh end <run> [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
+       sh scripts/trace.sh end --unregistered <run> reason=<text> [<field>=<value> …]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
        sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
        sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
@@ -1316,6 +1324,11 @@ trace_begin() {
 # refusal names the form, never the open run — a caller with no run of its
 # own would copy that id and close its parent's run all the same.
 trace_end() {
+	if [ "${1-}" = --unregistered ]; then
+		shift
+		trace_end_unregistered "$@"
+		return 0
+	fi
 	_en_want=
 	_en_named=
 	if [ $# -ge 1 ]; then
@@ -1377,6 +1390,129 @@ trace_end() {
 	fi
 	trace_pop
 	trace_unregister "$_en_run"
+}
+
+# trace_end_unregistered <run> reason=<text> [<field>=<value> …] — `end
+# --unregistered`: closes, with one run.end whose outcome is `stopped`, a run
+# no `end` can reach — one begun before the open-run registry existed, on the
+# stack of a checkout that has since been removed (#772, the kit's ADR-0028).
+# It closes <run> only when all four hold: the log has a run.start for it and
+# no run.end, the registry has no entry for it, and it is on no run stack of a
+# checkout of this repository that still exists — a stack whose checkout is
+# gone has no emitter left to read it. Any other run is exit 2 and nothing is
+# written, the stacks and the registry included: a registered run, and a run
+# on a live stack, are their owner's to end by name. The run.end carries the
+# parent its run.start named and data.via=unregistered, so a reader tells it
+# from an owner's end. The outcome is the form's own, so a caller's is
+# refused, and a reason is required: a run closed by somebody other than its
+# owner says why.
+trace_end_unregistered() {
+	[ $# -ge 1 ] || usage
+	_eu_run=$1
+	shift
+	case $_eu_run in -* | ?*=*) usage ;; esac
+	_eu_reason=
+	for _eu_a in "$@"; do
+		case $_eu_a in
+		outcome=*) die "end --unregistered sets outcome itself — it is always stopped — drop it" ;;
+		reason=*) _eu_reason=${_eu_a#reason=} ;;
+		esac
+	done
+	trace_reject_owned end "$@"
+	trace_arg_session "$@"
+	[ -n "$_eu_reason" ] || die "end --unregistered needs reason=<text> — why the run is closed by somebody other than its owner"
+	trace_matches "$_eu_run" "$TRACE_RUN_ID_ERE" || die "'$_eu_run' is not a run id — sh scripts/trace.sh end --unregistered <run> reason=<text>"
+	trace_dir || { trace_unconfigured_note; return 0; }
+	[ ! -e "$TRACE_ROOT_DIR/runs/$_eu_run" ] ||
+		die "$_eu_run is in the open-run registry — its owner ends it by name, sh scripts/trace.sh end $_eu_run; --unregistered closes only a run with no entry"
+	_eu_log=$(trace_run_ends "$_eu_run") || die "cannot read the event log under $TRACE_ROOT_DIR/events — no verdict on $_eu_run"
+	case $_eu_log in
+	*end*) die "$_eu_run already has a run.end — it is closed" ;;
+	start*) ;;
+	*) die "no run.start names $_eu_run — no run of that id was opened in this trace" ;;
+	esac
+	_eu_parent=${_eu_log#start}
+	_eu_parent=${_eu_parent# }
+	_eu_live=$(trace_live_stacks_holding "$_eu_run") ||
+		die "cannot tell whether $_eu_run is on a live run stack — a stack or the worktree list will not answer"
+	[ -z "$_eu_live" ] ||
+		die "$_eu_run is on a run stack of $_eu_live, a checkout that still exists — end it there by name, sh scripts/trace.sh end $_eu_run, with the session its stack is keyed on"
+	if [ -n "$_eu_parent" ]; then
+		trace_emit kind=run.end run="$_eu_run" parent="$_eu_parent" outcome=stopped "$@" data.via=unregistered
+	else
+		trace_emit kind=run.end run="$_eu_run" outcome=stopped "$@" data.via=unregistered
+	fi
+}
+
+# trace_run_ends <run> — what the log says of <run>'s two ends: `start
+# [<parent>]` when a run.start names it (the parent the first one carries),
+# with ` end` after it when a run.end names it too, `end` alone for a run.end
+# with no start, nothing for neither. Read over each line's ENVELOPE, as
+# `show` reads it, so no data value can answer. Non-zero when an event file
+# exists and cannot be read: no answer is not "no run.end".
+trace_run_ends() {
+	_re_files=$(trace_files) || return 1
+	_re_out=
+	while IFS= read -r _re_f; do
+		[ -n "$_re_f" ] || continue
+		[ -r "$_re_f" ] || return 1
+		_re_out=$_re_out$(awk -v run="$1" '
+		{
+			env = $0
+			d = index(env, ",\"data\":{")
+			if (d) env = substr(env, 1, d - 1)
+			if (!index(env, ",\"run\":\"" run "\"")) next
+			if (index(env, ",\"kind\":\"run.end\"")) print "E"
+			else if (index(env, ",\"kind\":\"run.start\"")) {
+				p = ""
+				if (match(env, /,"parent":"[^"]*"/)) p = substr(env, RSTART + 11, RLENGTH - 12)
+				print "S" p
+			}
+		}' "$_re_f" 2>/dev/null)$_trace_nl || return 1
+	done <<EOF
+$_re_files
+EOF
+	_re_start=$(printf '%s' "$_re_out" | sed -n 's/^S//p' | sed -n '1p')
+	_re_has_start=$(printf '%s' "$_re_out" | grep -c '^S')
+	_re_has_end=$(printf '%s' "$_re_out" | grep -c '^E')
+	_re_say=
+	[ "$_re_has_start" -gt 0 ] && _re_say="start${_re_start:+ $_re_start}"
+	[ "$_re_has_end" -gt 0 ] && _re_say="${_re_say:+$_re_say }end"
+	printf '%s' "$_re_say"
+}
+
+# trace_live_stacks_holding <run> — the checkout of every run stack that holds
+# <run> and is keyed on a checkout of this repository that still exists, one
+# per line; nothing when it is on none. A stack's key is its checkout's path
+# hashed as trace_key hashes it, so each existing worktree's toplevel is
+# hashed the same way to name the live keys. Non-zero when a stack, the stack
+# directory or the worktree list cannot be read: a partial answer would read
+# as "on no live stack".
+trace_live_stacks_holding() {
+	_ls_run=$1
+	_ls_dir="$TRACE_ROOT_DIR/current"
+	[ -d "$_ls_dir" ] || return 0
+	{ [ -r "$_ls_dir" ] && [ -x "$_ls_dir" ]; } || return 1
+	_ls_keys=
+	_ls_set=$-
+	set +f
+	set -- "$_ls_dir"/*.runs
+	case $_ls_set in *f*) set -f ;; esac
+	for _ls_stk in "$@"; do
+		[ -f "$_ls_stk" ] || continue
+		[ -r "$_ls_stk" ] || return 1
+		grep -qxF -- "$_ls_run" "$_ls_stk" 2>/dev/null || continue
+		_ls_b=${_ls_stk##*/}
+		_ls_keys="$_ls_keys ${_ls_b%%.*}"
+	done
+	[ -n "$_ls_keys" ] || return 0
+	_ls_list=$(trace_git worktree list --porcelain) || return 1
+	printf '%s\n' "$_ls_list" | sed -n 's/^worktree //p' | while IFS= read -r _ls_wt; do
+		[ -d "$_ls_wt" ] || continue
+		_ls_top=$(trace_git_at "$_ls_wt" rev-parse --show-toplevel) || continue
+		_ls_key=$(printf '%s' "$_ls_top" | trace_hash_stdin)
+		case " $_ls_keys " in *" $_ls_key "*) printf '%s\n' "$_ls_top" ;; esac
+	done
 }
 
 # trace_stack_of <dir> [session=<id>] — the run open in the checkout <dir> is
