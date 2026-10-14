@@ -1978,4 +1978,40 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "31. /pr-iterate's re-review begins and ends a review-pr run of its own, by id (#769)"
+# ---------------------------------------------------------------------------
+# PR #767: the re-reviewer /pr-iterate spawned on a pushed head ended its
+# parent's run with a bare `end` — the iteration's pr.iterate and two triages
+# afterwards carried no run, and the re-review's own run never closed. The
+# trace now refuses a bare `end` (exit 2); the skill's re-review text is held
+# here to the form that never needs one: the re-reviewer opens a review-pr run
+# of its own and closes it by the id its begin printed — that id, never the
+# `Trace-Run:` line's, and never a bare `end`.
+# rereview_run_missing <skill file> — one word per claim the stop conditions drop.
+rereview_run_missing() {
+	_rr_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
+	printf '%s\n' "$_rr_sc" | grep -qE 'again on (that|the new) head \(do NOT post[^`]*in a review-pr run of its own' || echo own-run
+	printf '%s\n' "$_rr_sc" | grep -qF '`sh scripts/trace.sh begin review-pr subject=pr:#<N> || :`' || echo begins-review-pr
+	printf '%s\n' "$_rr_sc" | grep -qE 'begin review-pr subject=pr:#<N> \|\| :`[^`]*`sh scripts/trace\.sh end <the run id your begin printed> [^`]*\|\| :`' || echo ends-by-id
+	printf '%s\n' "$_rr_sc" | grep -qF 'never the `Trace-Run:` line' || echo not-the-parents-id
+	printf '%s\n' "$_rr_sc" | grep -qF 'never a bare `end`' || echo no-bare-end
+}
+_rr=$(rereview_run_missing "$PI")
+[ -z "$_rr" ] && pass "/pr-iterate's re-review opens a review-pr run of its own and closes it by id, never a bare end" ||
+	fail "/pr-iterate's re-review drops: $(echo $_rr)"
+for b in \
+	's/in a review-pr run of its own/in this iteration'"'"'s run/' \
+	's/`sh scripts\/trace\.sh begin review-pr subject=pr:#<N> || :`/its run/' \
+	's/`sh scripts\/trace\.sh end <the run id your begin printed> outcome=ok/`sh scripts\/trace.sh end outcome=ok/' \
+	's/never the `Trace-Run:` line/or the `Trace-Run:` line/' \
+	's/never a bare `end`/or a bare `end`/'; do
+	sed "$b" "$PI" >"$SCRATCH/bait769.md"
+	if ! cmp -s "$SCRATCH/bait769.md" "$PI" && [ -n "$(rereview_run_missing "$SCRATCH/bait769.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
+
 t_done "trace skills contract"
