@@ -2003,7 +2003,7 @@ _rr=$(rereview_run_missing "$PI")
 for b in \
 	's/in a review-pr run of its own/in this iteration'"'"'s run/' \
 	's/`sh scripts\/trace\.sh begin review-pr subject=pr:#<N> || :`/its run/' \
-	's/`sh scripts\/trace\.sh end <the run id your begin printed> outcome=ok/`sh scripts\/trace.sh end outcome=ok/' \
+	's/`sh scripts\/trace\.sh end <the run id your begin printed> outcome=ok/`sh scripts\/trace.sh end "$TRACE_RUN" outcome=ok/' \
 	's/never the `Trace-Run:` line/or the `Trace-Run:` line/' \
 	's/never a bare `end`/or a bare `end`/'; do
 	sed "$b" "$PI" >"$SCRATCH/bait769.md"
