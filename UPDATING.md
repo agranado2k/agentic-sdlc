@@ -229,14 +229,15 @@ the step 9 sub-step that needs it.
 
 **Arriving from 0.77.0 or older, the skill changes since 0.77.0 ship.** No
 file joins or leaves at 0.78.0, and no shared file changes content besides
-this recipe: Part 1 moves nothing but `VERSION`. Part 2 is the whole of it
+this recipe: Part 1 moves nothing but `VERSION` and this recipe. Part 2 is the whole of it
 (9a): `/pr-iterate`'s `SKILL.md` — its re-reviewer begins its run with
 `trace.sh begin --detached` and ends it by id, so it never pops your run, and
 its comment reader's prompt carries the evidence-span and command-shaped
 rules the return check already enforces — and `/implement`'s `CASCADE.md`,
 where a re-run of the cascade refuses while a staged rung has no verdict and
-`--restart` starts over. Both read correctly whether or not your project runs
-the kit's skill dispatcher.
+`--restart` starts over. The `/pr-iterate` change applies everywhere; the
+`CASCADE.md` paragraph binds only where your project runs a skill dispatcher
+with those flags — the kit's own is not shipped.
 
 **Arriving from 0.76.0 or older, a frontier's session cap is held to the
 usage window.** No file joins or leaves at 0.77.0. One shared file changes
@@ -1359,10 +1360,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3045 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3046 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3199 insertions(+), 1 deletion(-)
+ 3 files changed, 3200 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

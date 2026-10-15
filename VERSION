@@ -2897,7 +2897,7 @@
 # 0.78.0 — the skill changes since 0.77.0 ship: /pr-iterate's re-review
 # runs detached and its comment reader carries the fence's own rules, and
 # /implement's cascade refuses a re-run while a staged rung awaits its
-# verdict (tickets #773, #778, #782, #787). NO file joins and NO file leaves
+# verdict (tickets #773, #782, #787; #778 is kit-only). NO file joins and NO file leaves
 # the shared layer, and NO shared file changes content besides UPDATING.md:
 # this release carries the non-manifest half alone, so a consumer reaches
 # the skills through Part 2 at a tag.
@@ -2911,9 +2911,9 @@
 # ASCII, never across a glyph) and the rule that a command-shaped comment is
 # escalated, never applied (#773). implement — CASCADE.md: a plain re-run of
 # the cascade refuses while a handed-back rung has no verdict, naming the
-# --rung-done call, and `--restart` starts over (#787); the review dispatch
-# for a cascade-built ticket passes `--ticket-file` so its reviewer is
-# resolved from the rung author the cascade recorded (#778).
+# --rung-done call, and `--restart` starts over (#787). Both name flags of
+# the kit's own skill dispatcher, which is not shipped: they bind only where a
+# project runs a dispatcher with those flags.
 # Wiring (9b): none. Templates (9c): none. Config (9d): none.
 # Kit-only, never shipped: ADR-0030 and ADR-0031, their index rows and
 # their places on bootstrap.sh's kit-own list; ADR-0027's superseded-by
@@ -2922,7 +2922,9 @@
 # refusal and --restart); tests/skill-cascade.test.sh sections 9 and 10,
 # tests/typed-return.test.sh 4g, tests/trace.test.sh 39,
 # tests/trace-skills.test.sh 31 and 32, tests/lib.sh's t_trace_runnable;
-# the root manual's dispatcher rows and docs/capability-tiers.md.
+# the root manual's dispatcher rows (#778's review dispatch passes
+# --ticket-file, its reviewer resolved from the recorded rung author),
+# docs/capability-tiers.md and docs/diary.md.
 
 # 0.77.0 — a frontier's session cap is held to the vendor's usage window
 # (ticket #776). NO file joins and NO file leaves the shared layer. ONE
