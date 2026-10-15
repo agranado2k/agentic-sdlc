@@ -2894,6 +2894,38 @@
 # bootstrap.sh's kit-own list; tests/trace.test.sh section 38; the root
 # manual's trace row names the form.
 
+# 0.78.0 — the skill changes since 0.77.0 ship: /pr-iterate's re-review
+# runs detached and its comment reader carries the fence's own rules, and
+# /implement's cascade refuses a re-run while a staged rung awaits its
+# verdict (tickets #773, #782, #787; #778 is kit-only). NO file joins and NO file leaves
+# the shared layer, and NO shared file changes content besides UPDATING.md:
+# this release carries the non-manifest half alone, so a consumer reaches
+# the skills through Part 2 at a tag.
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): pr-iterate — step 6's re-reviewer begins its review-pr run
+# with `begin --detached` in place of /review-pr's own begin, prefixes its
+# other trace lines with that run, and ends it by its id, so a parent's run
+# stack is never popped (#782); the restricted comment reader's prompt
+# carries the evidence-span rule (8 to 200 bytes of one line, printable
+# ASCII, never across a glyph) and the rule that a command-shaped comment is
+# escalated, never applied (#773). implement — CASCADE.md: a plain re-run of
+# the cascade refuses while a handed-back rung has no verdict, naming the
+# --rung-done call, and `--restart` starts over (#787). Both name flags of
+# the kit's own skill dispatcher, which is not shipped: they bind only where a
+# project runs a dispatcher with those flags.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Kit-only, never shipped: ADR-0030 and ADR-0031, their index rows and
+# their places on bootstrap.sh's kit-own list; ADR-0027's superseded-by
+# line; scripts/skill-dispatch.kit.sh (data.author on every rung verdict,
+# the skill-cascade-author record, the review-pr refusal, the re-run
+# refusal and --restart); tests/skill-cascade.test.sh sections 9 and 10,
+# tests/typed-return.test.sh 4g, tests/trace.test.sh 39,
+# tests/trace-skills.test.sh 31 and 32, tests/lib.sh's t_trace_runnable;
+# the root manual's dispatcher rows (#778's review dispatch passes
+# --ticket-file, its reviewer resolved from the recorded rung author),
+# docs/capability-tiers.md and docs/diary.md.
+
 # 0.77.0 — a frontier's session cap is held to the vendor's usage window
 # (ticket #776). NO file joins and NO file leaves the shared layer. ONE
 # shared file changes content besides UPDATING.md: scripts/agents.lib.sh
@@ -2927,7 +2959,7 @@
 # section; the glossary's Session cap entry and the root manual's resolver
 # row name the form.
 
-shared-layer: 0.77.0
+shared-layer: 0.78.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
