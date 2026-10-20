@@ -1,0 +1,11 @@
+# Factory project manifest. Read by `factory` and by agents working in this repo.
+id: agentic-sdlc
+name: agentic-sdlc
+repo: .
+execution_host: local
+agents:
+  default: claude-code
+stages:
+  discovery: [exploring, shaped, closed]
+  prd: [draft, review, approved]
+  ticket: [ready, build, review, qa, done]
