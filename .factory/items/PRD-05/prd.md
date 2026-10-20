@@ -80,7 +80,6 @@ process/R36. A PRD written before this change SHALL keep its walkthrough scenari
 - *Accept:*
   - Suites assert the template's use-case shape and the bracket form in `/to-prd`, and the
     reading rule in `/to-tickets`.
-  - The PRD format starter in `templates/` matches.
 
 ## 6. Non-goals (this PRD)
 
