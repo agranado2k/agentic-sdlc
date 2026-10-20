@@ -3,7 +3,7 @@ id: D-01
 type: discovery
 title: Proposals from the software factory
 parent: agentic-sdlc
-stage: exploring
+stage: shaped
 created: 2026-10-20
 updated: 2026-10-20
 ---
