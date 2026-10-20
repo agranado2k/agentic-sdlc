@@ -144,7 +144,7 @@ process/R28. A lens or skill edit that `/retro` proposes SHALL cite the trace ev
 ## 7. Technical constraints
 
 POSIX `sh` and the trace's existing reader. The trace stays append-only, and no field holds
-untrusted text. ADR-0008 holds: the trace is written by skills and read only by `/retro`.
+untrusted text. The kit's ADR-0008 holds: the trace is written by skills and read only by `/retro`.
 
 ## 8. Decisions recorded for this PRD
 
