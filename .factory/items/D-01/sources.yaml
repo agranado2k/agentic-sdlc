@@ -1,0 +1,9 @@
+sources:
+  - id: S-1
+    title: "software-factory-suite D-03 decisions, Q1 to Q20"
+    url: https://github.com/agranado2k/software-factory-suite/blob/main/.factory/items/D-03/decisions.md
+    claim: "Kit improvements go upstream (Q18); four proposals in order (Q19); /retro metrics (Q12, Q20); the before-and-after check (Q17); use-case scenarios (Q13)."
+  - id: S-2
+    title: "software-factory-suite D-03 research report"
+    url: https://github.com/agranado2k/software-factory-suite/blob/main/.factory/items/D-03/research.md
+    claim: "38 rows of ideas from 13 sources, each sorted adopt, adapt or reject against a CLI-first, files-as-tracker factory."
