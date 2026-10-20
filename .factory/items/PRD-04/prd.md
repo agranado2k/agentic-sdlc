@@ -42,7 +42,8 @@ Stories:
    quietly gives a subagent more than its spawner has.
 
 **UC1 — A skill states its powers.** Actor: the operator, reading `/explain-diff`.
-1. Its frontmatter reads `allowed-tools: Read, Grep, Glob, Bash, Write`.
+1. Its frontmatter reads, for example, `allowed-tools: Read, Grep, Glob, Bash, Write` (illustrative, not
+   checked against the skill).
 2. The operator sees it spawns nothing, since `Agent` is absent, and allows it.
 
 **UC2 — The gate catches a widening.** Actor: the maintainer, editing `/review-pr`.

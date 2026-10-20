@@ -52,12 +52,12 @@ Stories:
 **UC1 — Read the flow.** Actor: the operator, running `/retro` after a wave of five tickets.
 1. `/retro` reads the window.
 2. Its flow section prints, per landed ticket, the lead time from the first `ticket.start` to
-   `merge.land`, and the review wait from the last converged `pr.iterate` to `merge.land`.
+   `merge.land`, and the review wait from the last `pr.iterate outcome=green` to `merge.land`.
    Each column shows its median and its longest.
 3. It prints `toil: 2 of 5 landed` from `ticket.start`'s `data.class`.
 
 Extensions:
-- 2a. A PR never converged before its merge. Its review wait is reported as `n/a`, not as zero.
+- 2a. A PR had no green iteration before its merge. Its review wait is reported as `n/a`, not as zero.
 - 3a. No `ticket.start` in the window carries `data.class`. The line reads `toil: not recorded`.
 
 **UC2 — Check a lens edit.** Actor: the operator, two waves after merging T-61. T-61 tightened
@@ -82,7 +82,7 @@ Extensions:
 
 ## 3. Model
 
-- `run.start` gains `data.kit` (the `VERSION` file's shared-layer value), `model` and `harness`,
+- `run.start` gains `data.kit`, the `VERSION` file's `shared-layer:` value as written (`0.78.0`), `model` and `harness`,
   where the harness exposes them. `spawn` gains `data.tools`, the spawned agent type's tool list.
 - `ticket.start` accepts `data.class`. A consumer marks toil there, and the kit names no class
   of its own.
@@ -108,7 +108,7 @@ Deltas against `docs/specs/process.md`, numbered after PRD-02's process/R18 to R
 ### ADDED
 
 process/R22. `/retro` SHALL report, per landed ticket in the window, the lead time from its first `ticket.start` to its `merge.land`, with the window's median and longest. [UC1 2]
-process/R23. `/retro` SHALL report, per landed PR, the review wait from its last converged `pr.iterate` to its `merge.land`, and SHALL report `n/a` for a PR with no converged iteration. [UC1 2, 2a]
+process/R23. `/retro` SHALL report, per landed PR, the review wait from its last `pr.iterate outcome=green` to its `merge.land`, and SHALL report `n/a` for a PR with no green iteration. [UC1 2, 2a]
 process/R24. `/retro` SHALL report toil's share of landed tickets from `ticket.start`'s `data.class=toil`, and `not recorded` when no ticket in the window carries a class. [UC1 3, 3a]
 process/R25. WHEN a landed ticket carries a `Targets:` line, `/retro` SHALL report that query's count per landed PR in the window before its landing and in an equal window after. [UC2 2, 3]
 process/R26. IF the two windows of R25 differ in tier → model mapping or in kit version, THEN `/retro` SHALL report the comparison as inconclusive, and SHALL leave failed runs out of both counts. [UC2 3a, 3c]
@@ -150,7 +150,7 @@ untrusted text. The kit's ADR-0008 holds: the trace is written by skills and rea
 
 - The software factory's D-03 Q12, Q17 and its refinement, Q19 proposal 3, and Q20.
 - **Derived while writing:**
-  - Review wait is measured from the last converged iteration to the merge, because the merge
+  - Review wait is measured from the last green iteration to the merge, because the merge
     is the kit's human gate (shared invariant §7) and the trace records no human review.
   - Toil is a consumer's class on `ticket.start`, because the kit has no toil concept.
 
