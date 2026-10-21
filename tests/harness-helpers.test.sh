@@ -187,6 +187,14 @@ printf '# the kit traces through scripts/trace.kit.config.sh\n.trace/\n' >"$SCRA
 says "a .gitignore naming a kit-only file fails" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
 out=$(printed t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak")
 case $out in *".gitignore names scripts/trace.kit.config.sh"*) pass "the fail line names the ignore file and the name it carries" ;; *) fail "the ignore file's kit-only name is not named: $out" ;; esac
+mkdir -p "$KR_KIT/.factory/items/PRD-01"
+: >"$KR_KIT/.factory/items/PRD-01/prd.md"
+kr_tree
+mkdir -p "$SCRATCH/kr-tree/.factory/items/PRD-01"
+: >"$SCRATCH/kr-tree/.factory/items/PRD-01/prd.md"
+says "a kit factory item fails (#812)" FAIL t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak"
+out=$(printed t_assert_no_kit_residue "$KR_KIT" "$SCRATCH/kr-tree" "a leak")
+case $out in *".factory/items/PRD-01/prd.md"*) pass "the fail line names the factory item" ;; *) fail "the factory item is not named: $out" ;; esac
 
 # ---------------------------------------------------------------------------
 banner "6. t_assert_no_kit_record_cite — a kit record named as the project's fails (#564)"
