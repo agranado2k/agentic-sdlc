@@ -2901,7 +2901,8 @@
 # line, which inherits every tool (agent-type-tools-missing), and a skill
 # naming "the `<type>` agent type" whose `tools:` holds a tool outside the
 # skill's `allowed-tools`, named with the skill, the type and the tools
-# outside (spawn-widens-tools). NO file leaves. TWO shared files change
+# outside (spawn-widens-tools) — a scoped entry such as `Bash(git diff:*)`
+# covers only itself, never the unscoped tool. NO file leaves. TWO shared files change
 # content besides UPDATING.md: scripts/docs-conformance/runner.mjs registers
 # the validator, and scripts/check.sh carries its POSIX twin, which reads the
 # same policy block by text and prints the reduced form's advisories under the

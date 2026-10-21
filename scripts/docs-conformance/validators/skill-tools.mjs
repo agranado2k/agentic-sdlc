@@ -20,9 +20,11 @@
 // `tools:` line the second's: neither is also read as a widening.
 //
 // A tool list is the frontmatter value — comma- or space-separated, a flow
-// list `[A, B]`, or a block list of `- A` lines — with each tool's
-// parenthesised scope dropped (`Bash(git diff:*)` grants `Bash`). An empty
-// value declares nothing.
+// list `[A, B]`, or a block list of `- A` lines — each entry kept as written,
+// its parenthesised scope included. An empty value declares nothing. A bare
+// name in allowed-tools covers its tool at every scope; a scoped entry
+// (`Bash(git diff:*)`) covers only the same entry, never the unscoped tool,
+// so a skill allowed one git command cannot spawn a type holding all of Bash.
 //
 // The policy is data in config.mjs's `skillTools` block: the directories the
 // agent types live in (`*` a single path segment), and the severity of the
@@ -64,12 +66,13 @@ export function declaredTools(raw, key) {
     if (!item) break;
     parts.push(item[1]);
   }
-  const tools = parts
-    .join(" ")
-    .replace(/\([^)]*\)/g, "")
-    .split(/[\s,[\]"']+/)
-    .filter(Boolean);
+  const tools = parts.join(" ").match(/[^\s,[\]"'()]+(?:\([^)]*\))?/g) ?? [];
   return tools.length ? [...new Set(tools)] : null;
+}
+
+/** Whether allowed-tools covers one tool a type declares: the same entry, or its bare name. */
+function covers(allowed, tool) {
+  return allowed.includes(tool) || allowed.includes(tool.replace(/\(.*$/, ""));
 }
 
 /** The frontmatter `name:`, else the file's base name. */
@@ -144,7 +147,7 @@ export function run(ctx) {
         const body = stripFences(ctx.read(docFile) ?? "");
         for (const m of body.matchAll(/`([A-Za-z0-9_-]+)`\s+agent type/g)) {
           for (const { tools } of types.get(m[1]) ?? []) {
-            const outside = (tools ?? []).filter((t) => !allowed.includes(t));
+            const outside = (tools ?? []).filter((t) => !covers(allowed, t));
             if (!outside.length) continue;
             const message = `${skill} spawns ${m[1]}, whose tools (${outside.join(", ")}) are outside its allowed-tools`;
             if (reported.has(message)) continue;

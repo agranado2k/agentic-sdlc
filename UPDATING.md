@@ -236,7 +236,9 @@ read a policy block your `scripts/docs-conformance/config.mjs` does not have
 yet (9d): MERGE the kit's `skillTools` block in and add it to the export, or
 the rules stay silent. With it, an agent type with no `tools:` line fails
 (it inherits every tool), and so does a skill naming "the `<type>` agent
-type" whose `tools:` holds a tool outside the skill's `allowed-tools`; a
+type" whose `tools:` holds a tool outside the skill's `allowed-tools` — a
+bare name there covers every scope of its tool, while a scoped entry such as
+`Bash(git diff:*)` covers only itself, never the unscoped tool; a
 `SKILL.md` with no `allowed-tools` is an advisory while the block's
 `missingAllowedTools` is `"warning"`, which is how it ships — no shipped
 skill declares its tools yet. A skill or agent type of your own is held to

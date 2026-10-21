@@ -67,7 +67,7 @@ advisory_header="WARN  docs conformance"
 # set inside it is lost when the loop ends. The file is the one channel that
 # survives; "any finding at all" is then the file's size (see posix_failed).
 vfile=$(mktemp) || exit 2
-trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited" "$vfile.body" "$vfile.seen" "$vfile.types" "$vfile.warn"' EXIT INT TERM HUP
+trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited" "$vfile.body" "$vfile.seen" "$vfile.types" "$vfile.allowed" "$vfile.warn"' EXIT INT TERM HUP
 
 # report <rule> <file> <message> <hint>
 report() {
@@ -470,16 +470,20 @@ if [ "$engine" = "fallback" ]; then
 			st_sev=$(printf '%s\n' "$st_block" | sed -n 's/^[[:space:]]*missingAllowedTools:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
 			st_dir=$(sed -n 's/^[[:space:]]*skillsDir:[[:space:]]*"\([^"]*\)".*/\1/p' "$ls_cfg" | head -1)
 			# st_tools <file> <key> — the tools one frontmatter key declares,
-			# one per line, each scope dropped; exit 3 when the key is absent.
+			# one per line, each kept as written, its scope included
+			# (`Bash(git diff:*)`, spaces and all); exit 3 when the key is absent.
 			st_tools() {
 				awk -v k="$2:" 'NR == 1 { if ($0 ~ /^---[ \t\r]*$/) { fm = 1; next } exit }
 					/^---[ \t\r]*$/ { exit }
 					inlist { if ($0 ~ /^[ \t]+-/) { sub(/^[ \t]+-[ \t]*/, ""); print; next } inlist = 0 }
 					!found && index($0, k) == 1 { found = 1; inlist = 1; print substr($0, length(k) + 1) }
 					END { if (!found) exit 3 }' "$1" |
-					sed 's/([^)]*)//g; s/[][,"'"'"']/ /g' | tr -s ' \t\r' '\n\n\n' | grep -v '^$' | awk '!seen[$0]++'
+					awk 'BEGIN { re = "[^][ \t\r,\"\047()]+([(][^)]*[)])?" }
+						{ s = $0; while (match(s, re)) { print substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH) } }' |
+					awk '!seen[$0]++'
 			}
-			# The agent types: `<name>\t<file>\t<tools, space-joined>` per line.
+			# The agent types: `<name>\t<file>\t<tool>`, one line per tool
+			# declared — a scope may hold a space, so tools are never joined.
 			: >"$vfile.types"
 			for st_d in $st_dirs; do
 				for st_f in $st_d/*.md; do
@@ -488,8 +492,10 @@ if [ "$engine" = "fallback" ]; then
 						/^---[ \t\r]*$/ { exit }
 						/^name:/ { sub(/^name:[ \t]*["'"'"']?/, ""); sub(/["'"'"' \t\r].*$/, ""); print; exit }' "$st_f")
 					[ -n "$st_name" ] || st_name=$(basename "$st_f" .md)
-					st_t=$(st_tools "$st_f" tools | tr '\n' ' ')
-					printf '%s\t%s\t%s\n' "$st_name" "$st_f" "$st_t" >>"$vfile.types"
+					st_t=$(st_tools "$st_f" tools)
+					[ -n "$st_t" ] && printf '%s\n' "$st_t" | while IFS= read -r st_tool; do
+						printf '%s\t%s\t%s\n' "$st_name" "$st_f" "$st_tool"
+					done >>"$vfile.types"
 					[ -n "$st_t" ] && continue
 					report "agent-type-tools-missing" "$st_f" \
 						"$st_name has no tools line, so it inherits every tool" \
@@ -506,6 +512,7 @@ if [ "$engine" = "fallback" ]; then
 				grep -qxF -- "$st_name" "$vfile.seen" && continue
 				printf '%s\n' "$st_name" >>"$vfile.seen"
 				st_allowed=$(st_tools "$skill" allowed-tools)
+				printf '%s\n' "$st_allowed" >"$vfile.allowed"
 				if [ -z "$st_allowed" ]; then
 					# An advisory names every such skill on one line; a
 					# violation, one finding per skill — the harness's split.
@@ -522,15 +529,18 @@ if [ "$engine" = "fallback" ]; then
 					[ -f "$st_doc" ] || continue
 					fence_strip "$st_doc" | tr '\n' ' ' | grep -oE '`[A-Za-z0-9_-]+`[[:space:]]+agent type' |
 						sed 's/^`\([^`]*\)`.*/\1/' | while IFS= read -r st_type; do
-						awk -F '\t' -v n="$st_type" '$1 == n { print $3 }' "$vfile.types" | while IFS= read -r st_tt; do
-							st_out=""
-							for st_tool in $st_tt; do
-								printf '%s\n' "$st_allowed" | grep -qxF -- "$st_tool" && continue
-								st_out="${st_out:+$st_out, }$st_tool"
-							done
-							[ -n "$st_out" ] || continue
-							printf '%s\n' "$st_name spawns $st_type, whose tools ($st_out) are outside its allowed-tools"
-						done
+						# Per type file, the tools allowed-tools does not cover:
+						# a tool is covered by the same entry or by its bare
+						# name, so a scoped entry never covers the unscoped tool.
+						awk -F '\t' -v n="$st_type" -v sk="$st_name" '
+							NR == FNR { allow[$0] = 1; next }
+							$1 == n {
+								bare = $3; sub(/[(].*$/, "", bare)
+								if (($3 in allow) || (bare in allow)) next
+								if (!($2 in had)) { had[$2] = 1; order[++k] = $2; out[$2] = $3 } else out[$2] = out[$2] ", " $3
+							}
+							END { for (i = 1; i <= k; i++) printf "%s spawns %s, whose tools (%s) are outside its allowed-tools\n", sk, n, out[order[i]] }' \
+							"$vfile.allowed" "$vfile.types"
 					done | awk '!seen[$0]++' | while IFS= read -r st_msg; do
 						report "spawn-widens-tools" "$st_doc" "$st_msg" \
 							"Spawn a type whose tools are within the skill's allowed-tools, or widen the skill's allowed-tools in the open — a spawned subagent may only narrow what its spawner may do."

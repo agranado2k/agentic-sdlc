@@ -156,15 +156,34 @@ test("R32: a spawn type within the skill's tools passes", () => {
   cleanup(ctx);
 });
 
-test("R32: a scoped tool in allowed-tools grants its tool's name", () => {
-  const ctx = ctxFor({
-    ...TYPES,
-    ".agents/skills/review-pr/SKILL.md": REVIEW_PR("implementer").replace(
-      "allowed-tools: Read, Grep, Glob, Bash, Skill",
-      "allowed-tools: Read Grep Glob Bash(git:*) Skill Edit Write Agent",
-    ),
+const WIDE = (allowed) =>
+  REVIEW_PR("implementer").replace("allowed-tools: Read, Grep, Glob, Bash, Skill", `allowed-tools: ${allowed}`);
+
+test("R32: a scoped entry in allowed-tools does not cover the type's unscoped tool", () => {
+  const ctx = ctxFor({ ...TYPES, ".agents/skills/review-pr/SKILL.md": WIDE("Read Grep Glob Bash(git diff:*) Skill Edit Write Agent") });
+  const out = run(ctx);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].rule, "spawn-widens-tools");
+  assert.equal(out[0].message, "review-pr spawns implementer, whose tools (Bash) are outside its allowed-tools");
+  cleanup(ctx);
+});
+
+test("R32: a bare name covers every scope of its tool, and a scoped entry covers only its own spelling", () => {
+  const SCOUT = { ".claude/agents/scout.md": "---\nname: scout\ntools: Read, Bash(git diff:*)\n---\n" };
+  const spawns = (allowed) => ({
+    ...SCOUT,
+    ".agents/skills/look/SKILL.md": `---\nname: look\ndescription: looks.\nallowed-tools: ${allowed}\n---\n\nSpawn the \`scout\` agent type.\n`,
   });
-  assert.deepEqual(run(ctx), []);
+  for (const allowed of ["Read, Bash", "Read, Bash(git diff:*)"]) {
+    const ctx = ctxFor(spawns(allowed));
+    assert.deepEqual(run(ctx), [], allowed);
+    cleanup(ctx);
+  }
+  const ctx = ctxFor(spawns("Read, Bash(git log:*)"));
+  assert.deepEqual(
+    run(ctx).map((f) => f.message),
+    ["look spawns scout, whose tools (Bash(git diff:*)) are outside its allowed-tools"],
+  );
   cleanup(ctx);
 });
 
@@ -267,6 +286,28 @@ for (const node of [true, false]) {
     assert.match(res.stderr, /agent-type-tools-missing/);
     assert.match(res.stderr, /\.claude\/agents\/reviewer\.md/);
     assert.match(res.stderr, /reviewer has no tools line, so it inherits every tool/);
+  });
+
+  test(`${engine}: R32 — a scoped entry covers only its own spelling, never the unscoped tool`, () => {
+    const scoped = project(
+      { ...TYPES, ".agents/skills/review-pr/SKILL.md": WIDE("Read, Grep, Glob, Bash(git diff:*), Skill, Edit, Write, Agent") },
+      { node },
+    );
+    assert.equal(scoped.status, 1, `${scoped.stdout}${scoped.stderr}`);
+    assert.match(scoped.stderr, /review-pr spawns implementer, whose tools \(Bash\) are outside its allowed-tools/);
+    const scout = (allowed) =>
+      project(
+        {
+          ".claude/agents/scout.md": "---\nname: scout\ntools: Read, Bash(git diff:*)\n---\n",
+          ".agents/skills/look/SKILL.md": `---\nname: look\ndescription: looks.\nallowed-tools: ${allowed}\n---\n\nSpawn the \`scout\` agent type.\n`,
+        },
+        { node },
+      );
+    const same = scout("Read, Bash(git diff:*)");
+    assert.equal(same.status, 0, `${same.stdout}${same.stderr}`);
+    const other = scout("Read, Bash(git log:*)");
+    assert.equal(other.status, 1, `${other.stdout}${other.stderr}`);
+    assert.match(other.stderr, /look spawns scout, whose tools \(Bash\(git diff:\*\)\) are outside its allowed-tools/);
   });
 
   test(`${engine}: a skill with no allowed-tools warns under the shipped policy and fails under a strict one`, () => {

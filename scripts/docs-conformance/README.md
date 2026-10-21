@@ -95,7 +95,9 @@ what its spawner may do. It fails an agent type — every `*.md` under the
 frontmatter, since that type inherits every tool; and a skill that names a
 spawn type ("the `reviewer` agent type", in any top-level Markdown file of the
 skill, fences skipped) whose `tools:` holds a tool absent from the skill's
-`allowed-tools`, naming the skill, the type and the tools outside. A
+`allowed-tools`, naming the skill, the type and the tools outside. A bare
+name in `allowed-tools` covers its tool at every scope; a scoped entry such as
+`Bash(git diff:*)` covers only that same entry, never the unscoped tool. A
 `SKILL.md` with no `allowed-tools` in its frontmatter is a third finding, a
 violation or — while `missingAllowedTools` is `"warning"`, as it ships — one
 advisory naming every such skill. Rules it reports: `agent-type-tools-missing`,
