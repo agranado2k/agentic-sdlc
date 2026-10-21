@@ -69,6 +69,25 @@ expect_out_lacks "0c7d31f2" "a trace run id's hex tail is not in the signature"
 [ "$(printf '%s\n' "$one" | wc -l | tr -d ' ')" = 1 ] &&
 	pass "a signature is one line" || fail "a signature spans lines: '$one'"
 
+banner "sign: each normalisation rule, and its edge, exactly"
+
+# sign_line <line> <expected tail> <label> — the line as the whole log, read
+# from stdin; the signature must be `j`, a tab, and exactly the tail.
+sign_line() {
+	t_exec sh -c "printf '%s\\n' \"\$1\" | sh '$SIG' sign j" sign_line "$1"
+	expect_resolved "j${TAB}$2" "$3"
+}
+sign_line 'error on 2026-10-21 in job' 'error on <time> in job' "a bare date is <time>"
+sign_line 'error at 10:41:40 now' 'error at <time> now' "a bare time is <time>"
+sign_line 'error at 10:41:40.123 now' 'error at <time> now' "a time with a fraction is one <time>"
+sign_line 'error at 2026-10-21 10:41:40 now' 'error at <time> now' "a date and a time apart by a space are one <time>"
+sign_line 'error stamp 20261021T104216Z end' 'error stamp <time> end' "a bare compact stamp is <time>"
+sign_line 'error pid 12345 kept' 'error pid 12345 kept' "5 digits are kept: below the run-id length"
+sign_line 'error pid 123456 gone' 'error pid <id> gone' "6 digits are <id>"
+sign_line 'error sha abc123 kept' 'error sha abc123 kept' "6 hex characters are kept: below the hex-id length"
+sign_line 'error sha abc1234 gone' 'error sha <id> gone' "7 hex characters with a digit and a letter are <id>"
+sign_line 'error word deadbeef kept' 'error word deadbeef kept' "a hex-letter word with no digit is kept"
+
 banner "sign: two logs that differ in the error are two signatures"
 
 log "$SCRATCH/run3" \
@@ -92,6 +111,17 @@ t_exec sh "$SIG" sign 'job' "$SCRATCH/noerr"
 expect_resolved "job${TAB}the runner was killed" "no error line: the first non-blank line, trimmed"
 t_exec sh -c "printf 'not ok 3 - refuses a long line\r\n' | sh '$SIG' sign 'tap'"
 expect_resolved "tap${TAB}not ok 3 - refuses a long line" "the log is read from stdin with no file, a CR dropped"
+# Each match term alone, behind a non-blank line the fallback would take:
+# the term, not the fallback, picked the line.
+log "$SCRATCH/expected" "building" "want 3 but expected 2"
+t_exec sh "$SIG" sign 'job' "$SCRATCH/expected"
+expect_resolved "job${TAB}want 3 but expected 2" "'expected' alone marks the error line"
+log "$SCRATCH/assert" "building" "Assert x == y"
+t_exec sh "$SIG" sign 'job' "$SCRATCH/assert"
+expect_resolved "job${TAB}Assert x == y" "'assert' alone marks the error line, case aside"
+log "$SCRATCH/notok" "1..3" "not ok 2 - the stamp"
+t_exec sh "$SIG" sign 'job' "$SCRATCH/notok"
+expect_resolved "job${TAB}not ok 2 - the stamp" "'not ok' alone marks the error line"
 t_exec sh -c "printf 'assertion failed: x == y\n' | sh '$SIG' sign 'tap' -"
 expect_resolved "tap${TAB}assertion failed: x == y" "'-' reads stdin too"
 : >"$SCRATCH/empty"
@@ -100,7 +130,8 @@ expect_resolved "job${TAB}" "an empty log signs as the name alone"
 long=$(awk 'BEGIN { for (i = 0; i < 400; i++) printf "x"; printf "\n" }')
 log "$SCRATCH/long" "error: $long"
 t_exec sh "$SIG" sign 'job' "$SCRATCH/long"
-[ "${#T_OUT}" -le 244 ] && pass "a long error line is cut to its first 240 bytes" ||
+# `job`, a tab, then exactly 240 bytes of the line: the cut, not a bound.
+[ "${#T_OUT}" -eq 244 ] && pass "a long error line is cut to exactly its first 240 bytes" ||
 	fail "a long error line was not cut: ${#T_OUT} bytes"
 
 banner "sign: caller errors are exit 2, nothing on stdout"
