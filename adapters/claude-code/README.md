@@ -108,7 +108,9 @@ Two consequences worth knowing before you wire them:
   `reviewer`-type spawns, handed the diff as files to read.
 - **A tool list is the whole list.** A type with no `tools:` line inherits
   every tool, which is the catch-all again; and a tool server's tools are only
-  reachable when listed by name, which is why none of these lists one.
+  reachable when listed by name, which is why none of these lists one. The docs gate
+  fails a type with no `tools:` line, and a skill that names a type whose
+  tools reach past the skill's own `allowed-tools`.
 
 ## Filling in `scripts/agents.config.sh`
 

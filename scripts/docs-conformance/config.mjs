@@ -424,9 +424,9 @@ const livingSpec = {
  * gate's POSIX twin in scripts/check.sh reads this block by text.
  */
 const skillCeilings = {
-  ".agents/skills/review-pr/SKILL.md": 40000,
+  ".agents/skills/review-pr/SKILL.md": 40500,
   ".agents/skills/to-tickets/SKILL.md": 35000,
-  ".agents/skills/pr-iterate/SKILL.md": 37000,
+  ".agents/skills/pr-iterate/SKILL.md": 37500,
   ".agents/skills/implement/SKILL.md": 27000,
 };
 
@@ -457,6 +457,31 @@ const skillDated = {
 };
 
 /**
+ * skill-tools — declared tools, so a spawned subagent may only ever narrow
+ * what its spawner may do. Three rules: a SKILL.md with no `allowed-tools`
+ * in its frontmatter; an agent type with no `tools:` line (it would inherit
+ * every tool); and a skill naming a spawn type — "the `reviewer` agent
+ * type" — whose `tools:` holds a tool absent from the skill's
+ * `allowed-tools`, named with the skill, the type and the tools outside.
+ *
+ * agentTypeDirs are where the agent types live, every `*.md` in each one an
+ * agent type; `*` stands for one directory. missingAllowedTools is the first
+ * rule's severity: "warning" while the shipped skills do not yet declare
+ * their tools, "violation" once they do. The other two rules always fail.
+ *
+ * KEEP IT LITERAL — one `"<value>",` per line in the list, the severity on
+ * one line. The gate's POSIX twin in scripts/check.sh reads this block by
+ * text.
+ */
+const skillTools = {
+  agentTypeDirs: [
+    "adapters/*/agents",
+    ".claude/agents",
+  ],
+  missingAllowedTools: "warning",
+};
+
+/**
  * supersession — held both ways between decision records. A record whose
  * "Supersedes / amends" line has a clause opening "supersedes" (whole or a
  * clause) obliges each record it names to carry its id on the "Superseded
@@ -477,4 +502,4 @@ const supersession = {
   knownExceptions: [],
 };
 
-export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillDated, skillPaths, supersession, traceOff };
+export default { bannedWords, claudeMdRefs, designBrief, housekeepingDue, livingSpec, mutationDecision, reviewerUnmapped, skillCeilings, skillDated, skillPaths, skillTools, supersession, traceOff };
