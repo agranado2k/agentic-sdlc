@@ -20,7 +20,7 @@ Part of PRD-02. Objective: a loop that is not converging stops at the first clea
 
 A failure signature is a check's or test's name plus the first error line of its log, with digits that are only run ids or timestamps removed. `/pr-iterate` that sees the same signature on 3 consecutive iterations pushes no further fix and escalates, naming the check, the count and the quoted error line; a different signature restarts the count. `/implement` whose full-suite run fails with the same signature 3 consecutive times stops editing and reports the test, the assertion and each attempt, without pushing. Either stop is traced on the loop's existing kind (`pr.iterate`, or `note` for `/implement`) with `data.stop=repeated-failure` and the check or test name, never the log text. The 5-iteration cap stays as the backstop.
 
-Shared layer: if the signature is computed by a helper script that ships to consumers, the helper joins the shared-layer manifest and this ticket carries the minor bump, its update-recipe entry and the re-captured pinned transcripts (hard rule 3, ADR-0025).
+Shared layer: if the signature is computed by a helper script that ships to consumers, the helper joins the shared-layer manifest and this ticket carries the minor bump, its update-recipe entry and the re-captured pinned transcripts (hard rule 3, the kit's ADR-0025).
 
 ## Acceptance
 

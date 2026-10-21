@@ -20,7 +20,7 @@ Part of PRD-04, slice 1. Objective: a spawned subagent can only ever narrow what
 
 Three gate rules, policy as data in the gate's config: a `SKILL.md` with no `allowed-tools` in its frontmatter fails; an agent type under the adapter with no `tools:` line fails (it would inherit every tool); a skill that names a spawn type whose `tools:` holds a tool absent from the skill's `allowed-tools` fails, naming the skill, the type and the tools outside. A spawn type is a type token named in a spawn sentence, matched against the adapter's type names (MVP). The POSIX fallback twin moves with the config list. Because no kit skill declares `allowed-tools` yet, the kit's own gate runs the first rule as an advisory until the sweep ticket turns it to failing; the gate stays green on main.
 
-Shared layer: a new validator joins the manifest, so this ticket carries the minor bump, its update-recipe entry and the re-captured pinned transcripts, and lands tagged (hard rule 3, ADR-0025).
+Shared layer: a new validator joins the manifest, so this ticket carries the minor bump, its update-recipe entry and the re-captured pinned transcripts, and lands tagged (hard rule 3, the kit's ADR-0025).
 
 ## Acceptance
 
