@@ -99,6 +99,23 @@ TRACE_NUMBERED_TYPES=''
 TRACE_TOOLS=''
 
 # ---------------------------------------------------------------------------
+# TRACE_AGENT_TYPES_DIR — where your agent harness keeps its agent types, so a
+# recorded `spawn` can carry data.tools, the tool list of the type it ran as
+# (runtime/R30). A path under your repository root, or an absolute one:
+#
+#   ''               no directory (the shipped default): every spawn records
+#                    data.tools=undeclared — the agent harness's catch-all type
+#   '.claude/agents' the Claude Code adapter's agent types, once you have
+#                    linked them in (adapters/claude-code/README.md)
+#
+# A spawn's type is its data.agent_type when the caller names one, else its
+# tier — the adapter's types are named for the tiers. The list is the
+# `tools:` line of <dir>/<type>.md's frontmatter; a type with no file there,
+# or no such line, is `undeclared`, never a guessed list. A spawn dispatched to
+# another agent harness is `undeclared` too. Only this file sets it.
+TRACE_AGENT_TYPES_DIR=''
+
+# ---------------------------------------------------------------------------
 # TRACE_AGENT_WAIT_MS — how long, in milliseconds, a subagent-stop hook may wait
 # for the subagent's transcript to hold its final message before reading what
 # that subagent spent. Two honest values:

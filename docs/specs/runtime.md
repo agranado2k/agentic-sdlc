@@ -44,3 +44,6 @@ R24. WHEN `expect_said` or `expect_unsaid` runs, the test harness SHALL match th
 R25. Every `expect_*` assertion SHALL be driven red by a suite.
 R26. No file under `tests/` other than the test harness SHALL define a function that carries the name of one of the test harness's assertions.
 R27. No file under `tests/` SHALL define or call `t_run`, `t_run_split`, the `assert_status` / `assert_out_*` family, the `s_assert_*` family, `LAST_OUT` or `S_OUT`, and a suite SHALL fail when one does.
+R28. WHEN `trace.sh begin` opens a run, its `run.start` SHALL carry `data.kit`, read from `VERSION`.
+R29. WHEN the harness exposes the session's model or its own name, `run.start` SHALL carry `model` and `harness`, and SHALL leave out a value the harness does not expose, never guessing it.
+R30. WHEN a spawn is recorded, its `spawn` event SHALL carry `data.tools`, the tool list of the agent type it spawned as.

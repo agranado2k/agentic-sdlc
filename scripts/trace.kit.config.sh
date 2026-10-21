@@ -32,6 +32,10 @@ TRACE_NUMBERED_TYPES='ticket pr prd'
 # way TRACE_DIR is turned off.
 TRACE_TOOLS=1
 
+# The kit links the Claude Code adapter's four agent types in here (#588), so
+# a spawn's data.tools is read from them (#798).
+TRACE_AGENT_TYPES_DIR='.claude/agents'
+
 # THE SUBAGENT-STOP WAIT, measured (retro of 2026-10-02T08:07Z, finding F4;
 # ticket #479). Over that window 235 of 453 agent.stop events (52 %) gave up at
 # the old 1000 ms bound and carry no tokens, so every spend figure the trace

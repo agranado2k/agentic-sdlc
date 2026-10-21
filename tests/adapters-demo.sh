@@ -479,8 +479,9 @@ cp -R "$KIT/." "$PROJ/"
 rm -rf "$PROJ/.git"
 cd "$PROJ" || exit 2
 # A project's own agent type, beside the kit's links: bootstrap strips the
-# kit's four and must leave this one (B2, PR #618 review M-3).
-printf -- '---\nname: own\n---\n' >.claude/agents/own.md
+# kit's four and must leave this one (B2, PR #618 review M-3). It names its
+# tools, as the gate holds every agent type to (process/R31).
+printf -- '---\nname: own\ntools: Read\n---\n' >.claude/agents/own.md
 
 git init -q -b main
 git config user.name "Adapters Demo"

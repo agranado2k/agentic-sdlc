@@ -2,7 +2,7 @@
 
 The kit's living spec for the **process** area: the chain's skills and the
 checks that hold them — what `/to-prd`, `/to-tickets`, `/implement`,
-`/review-pr`, the coverage check and the docs gate's living-spec rule do
+`/review-pr`, `/pr-iterate`, the coverage check and the docs gate's living-spec rule do
 today. ADR-0012 is the contract; the file's format is the starter a consumer
 gets, `templates/docs/specs/README.md`.
 
@@ -26,6 +26,16 @@ R11. WHEN a ticket covers a requirement of an area, `/implement` SHALL apply it 
 R12. IF a requirement in `docs/specs/*.md` is named, as `<area>/R<n>`, by no file the docs gate's `livingSpec.testGlobs` match, THEN the docs gate SHALL fail in both its engines, naming the file and the id.
 R13. WHILE no living spec exists, no `docs/specs/` directory or no file in it with a requirement line, the gate's living-spec check SHALL pass.
 R14. Bootstrap SHALL give a consumer the coverage check, the gate's living-spec check in both engines and the `docs/specs/README.md` starter, and SHALL give it no living spec of the kit's.
+R15. WHERE every lens slice is empty, `/review-pr` SHALL run the single-reviewer pass over the whole diff, and SHALL NOT record a verdict before that pass returns.
+R16. IF no Axis-1 lens returned a report and no single-reviewer pass returned, THEN `/review-pr` SHALL record `review.verdict outcome=blocked data.lenses=0` with the reason `no lens ran`, and its Verdict line SHALL say that no lens ran.
+R17. WHEN `/pr-iterate`'s review records a verdict blocked because no lens ran, `/pr-iterate` SHALL NOT report the PR as converged, and SHALL escalate it at the top of its report.
+R18. WHEN `/pr-iterate` sees a failure with the same signature on 3 consecutive iterations, it SHALL push no further fix, and SHALL escalate naming the check, the count and the quoted error line.
+R19. WHEN a failure's signature differs from the previous iteration's, `/pr-iterate` SHALL restart that count.
+R20. WHEN `/implement`'s full-suite run fails with the same signature 3 consecutive times, it SHALL stop editing and report the test, the assertion and each attempt, without pushing.
+R21. WHEN either skill stops under R18 or R20, it SHALL record the stop in the trace with `data.stop=repeated-failure` and the signature's check or test name, never the log text.
+R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
+R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.
+R32. WHERE a skill names a spawn type, the docs gate SHALL fail it when that type's `tools:` holds a tool absent from the skill's `allowed-tools`.
 R33. `/to-prd`'s template SHALL write each scenario as a use case: `UC<n>`, a name, an actor, a goal, a numbered main flow, and extensions numbered from the step they branch from (`2a`).
 R34. `/to-prd` SHALL end each requirement a step checks with the steps it checks in brackets, as in `[UC1 3a]`, and MAY leave the brackets off a requirement no step reaches.
 R35. `/to-tickets` SHALL read each use case's main flow as a candidate tracer bullet.
