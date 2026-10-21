@@ -3,9 +3,11 @@ id: PRD-05
 type: prd
 title: PRD scenarios as use cases
 parent: D-01
-stage: draft
+stage: approved
 created: 2026-10-20
-updated: 2026-10-20
+updated: 2026-10-21
+approved_by: "agranado"
+approved_at: 2026-10-21
 ---
 
 # PRD-05 · PRD scenarios as use cases
