@@ -36,3 +36,7 @@ R21. WHEN either skill stops under R18 or R20, it SHALL record the stop in the t
 R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
 R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.
 R32. WHERE a skill names a spawn type, the docs gate SHALL fail it when that type's `tools:` holds a tool absent from the skill's `allowed-tools`.
+R33. `/to-prd`'s template SHALL write each scenario as a use case: `UC<n>`, a name, an actor, a goal, a numbered main flow, and extensions numbered from the step they branch from (`2a`).
+R34. `/to-prd` SHALL end each requirement a step checks with the steps it checks in brackets, as in `[UC1 3a]`, and MAY leave the brackets off a requirement no step reaches.
+R35. `/to-tickets` SHALL read each use case's main flow as a candidate tracer bullet.
+R36. A PRD written before this change SHALL keep its walkthrough scenarios, and no check SHALL refuse them.

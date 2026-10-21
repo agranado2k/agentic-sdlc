@@ -4,8 +4,9 @@
 # The two skills are documents an agent obeys, and what makes them a pipeline
 # rather than two prompts is machine-checkable: the PRD template's sections,
 # in the order a fresh session reads them; the phrases that carry each rule
-# the design-doc lessons added (a one-sentence objective, scenarios as demo
-# scripts, numbered EARS-lite requirements and goal-sized stories — each
+# the design-doc lessons added (a one-sentence objective, scenarios as use cases
+# with main flows and extensions, numbered EARS-lite requirements ending
+# in the steps they check, and goal-sized stories — each
 # assertion naming the PRD #527 requirement it holds — the
 # penalty-for-being-wrong filter, later/never on every non-goal,
 # open issues with a next step, the stranger reread before publishing); the
@@ -165,6 +166,28 @@ printf '%s\n' "$scen" | sed -n '/<scenario-example>/,/<\/scenario-example>/p' | 
 	fail "the scenario example carries a <placeholder> — the rule it illustrates forbids exactly that" ||
 	pass "the scenario example uses concrete names, as its rule demands"
 
+# Each scenario is a use case (process/R33): an id, a name, an actor, a goal,
+# a numbered main flow, and extensions numbered from the step they branch
+# from. The example shows every part, so a session copies the shape whole.
+t_text_has "$scen" "use case" "process/R33: a scenario is written as a use case"
+t_text_has "$scen" '`UC<n> — <name>`' "process/R33: the use case's id and name"
+t_text_has "$scen" '`Actor:`' "process/R33: the use case names its actor"
+t_text_has "$scen" '`Goal:`' "process/R33: the use case names its goal"
+t_text_has "$scen" "main flow" "process/R33: the numbered main flow"
+t_text_has "$scen" '`Extensions:`' "process/R33: the branches have their own heading"
+t_text_has "$scen" "numbered from the step it branches from" "process/R33: an extension's number is its step's"
+t_text_has "$scen" '`2a`' "process/R33: the extension numbering is shown by example"
+uc_ex=$(printf '%s\n' "$scen" | sed -n '/<scenario-example>/,/<\/scenario-example>/p')
+printf '%s\n' "$uc_ex" | grep -Eq '^\*\*UC1 — [^*]+\*\* Actor: [^.]+\. Goal: ' &&
+	pass "process/R33: the example opens 'UC1 — <name>', its actor and its goal" ||
+	fail "process/R33: the scenario example has no '**UC1 — …** Actor: … Goal: …' line"
+printf '%s\n' "$uc_ex" | grep -Eq '^1\. ' && printf '%s\n' "$uc_ex" | grep -Eq '^2\. ' &&
+	pass "process/R33: the example carries a numbered main flow" ||
+	fail "process/R33: the scenario example has no numbered main flow (1. and 2.)"
+printf '%s\n' "$uc_ex" | grep -Eq '^Extensions:$' && printf '%s\n' "$uc_ex" | grep -Eq '^- 2a\. ' &&
+	pass "process/R33: the example carries an Extensions: list with a 2a branch" ||
+	fail "process/R33: the scenario example has no 'Extensions:' list with a '- 2a.' line"
+
 # The user stories are the why, not the exhaustive list: the requirements are
 # that list now (process/R2, ADR-0012 clause 2).
 stories=$(section_of "$PRD_ABS" "User Stories")
@@ -202,6 +225,19 @@ done
 printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq '^R1\. ' &&
 	pass "process/R1: the requirement example opens at R1, as its rule demands" ||
 	fail "process/R1: the requirement example carries no line opening 'R1. ' — the example contradicts its numbering rule"
+
+# A requirement a step checks ends with those steps in brackets; one no step
+# reaches carries none (process/R34). The example's unwanted case cites the
+# extension it handles, and the brackets are never part of the id.
+t_text_has "$req" "**A requirement a step checks ends with those steps in brackets**" "process/R34: the bracket rule has its own bold lead"
+t_text_has "$req" '`[UC1 2a]`' "process/R34: the bracket form, one step"
+t_text_has "$req" '`[UC1 1, 2]`' "process/R34: the bracket form, more than one step"
+t_text_has "$req" "no step reaches" "process/R34: a requirement no step reaches …"
+t_text_has "$req" "carries no brackets" "process/R34: … carries none, and that is allowed"
+t_text_has "$req" "never part of the id" "process/R34: the coverage check reads the id alone"
+printf '%s\n' "$req" | sed -n '/<requirement-example>/,/<\/requirement-example>/p' | grep -Eq '^R3\. IF .* SHALL .* \[UC1 2a\]$' &&
+	pass "process/R34: the example's unwanted case ends '[UC1 2a]', the extension it handles" ||
+	fail "process/R34: the requirement example's R3 is no IF … SHALL … line ending '[UC1 2a]'"
 
 # Where a living spec exists for the PRD's area, the requirements are deltas
 # against it (process/R10, ADR-0012 clause 8): three headings, each with its
@@ -331,6 +367,10 @@ t_text_has "$order" "stubbed" "stubbed data is allowed on the way to feedback"
 
 step1=$(awk '/^## Procedure/ { on = 1; next } on && /^1\. / { print; exit }' "$TIX_ABS")
 t_text_has "$step1" "Scenarios are the candidate demos" "step 1 reads the PRD's scenarios as the first draft"
+t_text_has "$step1" "each use case's main flow is a candidate tracer bullet" "process/R35: a use case's main flow is the candidate slice"
+t_text_has "$step1" "the slice that builds that step, or a later one" "process/R35: an extension's requirements land with or after its step"
+t_text_has "$step1" "whose brackets name" "process/R35: the brackets are how an extension's requirements are found"
+t_text_has "$step1" "walkthrough scenario" "process/R36: a PRD written before use cases is still read, scenario by scenario"
 t_text_has "$step1" "rule 12" "step 1 also lists the open issues the gate turns into tickets"
 quiz=$(awk '/^## Procedure/ { on = 1; next } on && /^3\. / { print; exit }' "$TIX_ABS")
 t_text_has "$quiz" "the order you chose" "the decomposer's own ordering choice is put up for challenge"
