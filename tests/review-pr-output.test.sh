@@ -79,6 +79,14 @@
 #      with an orchestrator on the reviewer's own model: a diff authored on
 #      another model resolves the reviewer with no warning, one authored on the
 #      reviewer's model warns. The pre-#730 span is the bait: it warns falsely.
+#  20. A review in which no lens ran is a block (process/R15–R17): a diff
+#      whose every lens slice is empty takes the single-reviewer pass over
+#      the whole diff, with no verdict before it returns; a review in which no
+#      lens and no pass returned records review.verdict outcome=blocked
+#      data.lenses=0, reason 'no lens ran', and says so on its Verdict line;
+#      /pr-iterate never converges on it and escalates it at the top. Each
+#      rule proved by a bait, and the all-empty case shown on a real slicer
+#      run over a new top-level directory.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -1404,5 +1412,154 @@ for b in \
 		fail "bait: §5 without the '${b%%|*}' question was not caught — or the bait planted nothing"
 done
 rm -f "$SCRATCH/774-skill.md"
+
+# ---------------------------------------------------------------------------
+banner "20. A review in which no lens ran is a block, and /pr-iterate does not converge on it (process/R15, process/R16, process/R17)"
+# ---------------------------------------------------------------------------
+# An empty slice is "not counted as a clean audit" — for one lens. Nothing
+# said what a review in which NO lens ran records: a diff whose every slice is
+# empty, or whose every spawn failed, could still record an Axis-1 `pass`
+# nobody audited. The rule is held where it is read: a pointer in /review-pr
+# §3's slice paragraph and beside §5's verdict emit, the branch itself in
+# NO-LENS.md beside the skill, and /pr-iterate's stop condition pointing at its
+# own NO-LENS.md, which recognises the review's Verdict line byte for byte.
+# (The slice paragraph sits under §3's "Agents 1–6" heading.)
+# nolens_missing <skills dir> — the rules the tree under <skills dir> has
+# lost, one name per line.
+nolens_missing() {
+	_nl_r3=$(region '^### 3\. ' '^#### Agents 1–6 ' "$1/review-pr/SKILL.md" | tr '\n' ' ' | tr -s ' ')
+	_nl_rs=$(region '^#### Agents 1–6 ' '^#### Agent 7 ' "$1/review-pr/SKILL.md" | tr '\n' ' ' | tr -s ' ')
+	_nl_r5=$(region '^### 5\. ' '^### 5b\. ' "$1/review-pr/SKILL.md" | tr '\n' ' ' | tr -s ' ')
+	_nl_rn=$(tr '\n' ' ' <"$1/review-pr/NO-LENS.md" 2>/dev/null | tr -s ' ')
+	_nl_i6=$(region '^### 6 — Stop conditions' '^## Output format' "$1/pr-iterate/SKILL.md" | tr '\n' ' ' | tr -s ' ')
+	_nl_in=$(tr '\n' ' ' <"$1/pr-iterate/NO-LENS.md" 2>/dev/null | tr -s ' ')
+	# The trigger is step 6's to state; the branch says it once, not twice.
+	_nl_n1="count=$(grep -o 'with the reason `no lens ran`' "$1/pr-iterate/NO-LENS.md" 2>/dev/null | grep -c '');"
+	for _nl_r in \
+		'R15: §3 points at the branch|rs|When every count is 0, open [`NO-LENS.md`](NO-LENS.md) beside this file: that diff still gets a review.' \
+		'R15: §3 allows the pass on an all-empty diff|r3|the host offers it no subagent tool, refused the spawns, or every lens slice was empty ([`NO-LENS.md`](NO-LENS.md))' \
+		'R15: the pass is one §3 allows|rn|no lens agent can run when there is no slice to hand one' \
+		'R17: the trigger is stated once|n1|count=1;' \
+		'R15: the pass runs over the whole diff|rn|**A diff whose every lens slice is empty still gets a review: run the single-reviewer pass over the whole diff, `behavior.diff`, and record no Axis-1 verdict before that pass returns.**' \
+		'R16: §5 points at the branch|r5|A review in which no lens ran records `blocked`, never `pass`: [`NO-LENS.md`](NO-LENS.md).' \
+		'R16: no lens and no pass is a block|rn|**When no Axis-1 lens returned a report and no single-reviewer pass returned, the review records `blocked` and says that no lens ran.**' \
+		'R16: the verdict line recorded|rn|sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=blocked data.axis=1 data.lenses=0 data.roster=<count> reason='"'"'no lens ran'"'"' || :' \
+		'R16: the Verdict line says so|rn|**Verdict:** BLOCKED — no lens ran; this is not a review' \
+		'R16: some lenses ran is unchanged|rn|A review in which some lenses ran is unchanged' \
+		'R17: step 6 points at the branch|i6|- The review recorded Axis 1 `blocked` with the reason `no lens ran` → 🟡 escalate, never ✅ converged: open [`NO-LENS.md`](NO-LENS.md) beside this file' \
+		'R17: not converged|in|**A review whose Axis-1 verdict is `blocked` with the reason `no lens ran` is no verdict for step 6'"'"'s converged condition: the PR is not converged, whatever its checks and threads say.**' \
+		'R17: escalated at the top|in|Escalate it at the top of the report, above the ⚠️ block, as its first line:' \
+		'R17: recognised by the review'"'"'s own Verdict line|in|Its report'"'"'s Verdict line reads `BLOCKED — no lens ran; this is not a review`'; do
+		_nl_name=${_nl_r%%|*}
+		_nl_rest=${_nl_r#*|}
+		_nl_where=${_nl_rest%%|*}
+		_nl_want=${_nl_rest#*|}
+		case $_nl_where in
+		r3) _nl_text=$_nl_r3 ;;
+		rs) _nl_text=$_nl_rs ;;
+		n1) _nl_text=$_nl_n1 ;;
+		r5) _nl_text=$_nl_r5 ;;
+		rn) _nl_text=$_nl_rn ;;
+		i6) _nl_text=$_nl_i6 ;;
+		in) _nl_text=$_nl_in ;;
+		esac
+		case "$_nl_text" in *"$_nl_want"*) ;; *) printf '%s\n' "$_nl_name" ;; esac
+	done
+}
+SKILLS_DIR="$ROOT/.agents/skills"
+miss=$(nolens_missing "$SKILLS_DIR" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "process/R15, process/R16, process/R17: an all-empty diff takes the single-reviewer pass, a review in which no lens ran records blocked and says so, and /pr-iterate escalates it, never converged" ||
+	fail "the no-lens rules are missing: $miss — an empty review would stand in for a review"
+# Baits: each rule cut from a copy of the four files is named.
+mkdir -p "$SCRATCH/796/review-pr" "$SCRATCH/796/pr-iterate"
+bait796() { # <rule name> <file under the skills dir> <sed script>
+	for _b_f in review-pr/SKILL.md review-pr/NO-LENS.md pr-iterate/SKILL.md pr-iterate/NO-LENS.md; do
+		cp "$SKILLS_DIR/$_b_f" "$SCRATCH/796/$_b_f" 2>/dev/null || : >"$SCRATCH/796/$_b_f"
+	done
+	sed "$3" "$SKILLS_DIR/$2" >"$SCRATCH/796/$2"
+	! cmp -s "$SCRATCH/796/$2" "$SKILLS_DIR/$2" && nolens_missing "$SCRATCH/796" | grep -qxF -- "$1"
+}
+for b in \
+	'R15: §3 points at the branch|review-pr/SKILL.md|s/When every count is 0, open/When a count is 0, skip/' \
+	'R15: §3 allows the pass on an all-empty diff|review-pr/SKILL.md|s/, or every lens slice was empty//' \
+	'R15: the pass is one §3 allows|review-pr/NO-LENS.md|s/no lens agent can run when there is no slice to hand one/it runs even when the host could spawn the lens agents/' \
+	'R17: the trigger is stated once|pr-iterate/NO-LENS.md|s#^Opened from `/pr-iterate` step 6#& when the review recorded Axis 1 `blocked` with the reason `no lens ran`#' \
+	'R15: the pass runs over the whole diff|review-pr/NO-LENS.md|s/record no Axis-1 verdict before that pass returns/record the verdict at once/' \
+	'R16: §5 points at the branch|review-pr/SKILL.md|s/records `blocked`, never `pass`/records `pass`/' \
+	'R16: no lens and no pass is a block|review-pr/NO-LENS.md|s/the review records `blocked` and says that no lens ran/the review records `pass`/' \
+	'R16: the verdict line recorded|review-pr/NO-LENS.md|s/outcome=blocked data.axis=1 data.lenses=0/outcome=pass data.axis=1 data.lenses=0/' \
+	'R16: the Verdict line says so|review-pr/NO-LENS.md|s/BLOCKED — no lens ran; this is not a review/no findings/g' \
+	'R16: some lenses ran is unchanged|review-pr/NO-LENS.md|s/some lenses ran is unchanged/one lens ran is blocked too/' \
+	'R17: step 6 points at the branch|pr-iterate/SKILL.md|s/→ 🟡 escalate, never ✅ converged/→ ✅ converged/' \
+	'R17: not converged|pr-iterate/NO-LENS.md|s/the PR is not converged/the PR may converge/' \
+	'R17: escalated at the top|pr-iterate/NO-LENS.md|s/at the top of the report, above the ⚠️ block/at the end of the report/' \
+	"R17: recognised by the review's own Verdict line|pr-iterate/NO-LENS.md|s/this is not a review/no review/g"; do
+	_b_rest=${b#*|}
+	bait796 "${b%%|*}" "${_b_rest%%|*}" "${_b_rest#*|}" && pass "bait: without '${b%%|*}' goes red" ||
+		fail "bait: without '${b%%|*}' was not caught — or the bait planted nothing"
+done
+rm -rf "$SCRATCH/796"
+
+# The fixture review: a diff no lens rule selects reaches §3's trigger. The
+# slicer is run as the review runs it, on a real throwaway repository: every
+# lens prints a count of 0 and behavior.diff still carries the change, so the
+# branch NO-LENS.md opens on — the single-reviewer pass over behavior.diff —
+# is the path this review takes. Two policies: a consumer's whose every rule
+# is anchored to a directory the diff does not touch, over a new top-level
+# directory; and the kit's shipped one, over a change only fixtures carry.
+# nolens_counts <slicer stdout> — "all-empty" when every lens counts 0 and
+# behavior counts at least 1; otherwise the counts as read.
+nolens_counts() {
+	printf '%s\n' "$1" | awk '
+		$1 == "behavior" { b = $2; next }
+		NF >= 2 { n++; if ($2 != 0) hit = 1 }
+		END { if (n == 6 && !hit && b > 0) print "all-empty"; else print "lenses=" n " nonzero=" hit+0 " behavior=" b+0 }'
+}
+t_repo
+t_write "$REPO" scripts/tool.sh 'echo one
+'
+t_write "$REPO" tests/tool.test.sh 'sh scripts/tool.sh
+'
+t_commit "$REPO" "chore: base" >/dev/null
+git -C "$REPO" checkout -q -b feat/new-tool
+t_write "$REPO" setup/new-tool/run.sh 'echo new
+'
+t_commit "$REPO" "feat: a new top-level directory" >/dev/null
+cat >"$SCRATCH/796-policy.sh" <<'POLICY'
+LENS_SLICE_RULES='security     ^scripts/
+api-crud     ^scripts/
+test-hygiene ^tests/
+pattern      ^(scripts|tests)/
+simplicity   ^(scripts|tests)/
+reuse-dry    ^(scripts|tests)/'
+POLICY
+t_exec sh -c 'cd "$1" && LENS_SLICE_CONFIG="$2" sh "$3" main "$4"' _ "$REPO" "$SCRATCH/796-policy.sh" "$ROOT/scripts/lens-slice.sh" "$SCRATCH/796-out1"
+got=$(nolens_counts "$T_OUT")
+[ "$T_STATUS" = 0 ] && [ "$got" = all-empty ] && grep -qF 'b/setup/new-tool/run.sh' "$SCRATCH/796-out1/behavior.diff" &&
+	pass "process/R15: a new top-level directory no rule selects slices to six empty lenses and a whole behavior.diff — the single-reviewer path" ||
+	fail "process/R15: the new-top-level-directory fixture did not reach the single-reviewer path: exit $T_STATUS, $got"
+FIXTURE_REPO=$REPO
+t_repo
+t_write "$REPO" scripts/tool.sh 'echo one
+'
+t_commit "$REPO" "chore: base" >/dev/null
+git -C "$REPO" checkout -q -b test/fixtures-only
+t_write "$REPO" setup/new-tool/fixtures/case.jsonl '{"a":1}
+'
+t_commit "$REPO" "test: fixtures only" >/dev/null
+t_exec sh -c 'cd "$1" && sh "$2" main "$3"' _ "$REPO" "$ROOT/scripts/lens-slice.sh" "$SCRATCH/796-out2"
+got=$(nolens_counts "$T_OUT")
+[ "$T_STATUS" = 0 ] && [ "$got" = all-empty ] &&
+	pass "process/R15: under the kit's shipped policy, a fixtures-only diff slices to six empty lenses — the single-reviewer path" ||
+	fail "process/R15: the shipped-policy fixtures-only diff did not reach the single-reviewer path: exit $T_STATUS, $got"
+# The bait: a diff one lens does select is not the all-empty case.
+REPO=$FIXTURE_REPO
+t_write "$REPO" scripts/tool.sh 'echo two
+'
+t_commit "$REPO" "feat: a lens's lane" >/dev/null
+t_exec sh -c 'cd "$1" && LENS_SLICE_CONFIG="$2" sh "$3" main "$4"' _ "$REPO" "$SCRATCH/796-policy.sh" "$ROOT/scripts/lens-slice.sh" "$SCRATCH/796-out3"
+[ "$(nolens_counts "$T_OUT")" != all-empty ] && pass "bait: a diff a lens selects is not read as all-empty" ||
+	fail "bait: a diff a lens selects was read as all-empty — the fixture check cannot fail"
+rm -rf "$SCRATCH/796-out1" "$SCRATCH/796-out2" "$SCRATCH/796-out3" "$SCRATCH/796-policy.sh"
 
 t_done "/review-pr output contract"

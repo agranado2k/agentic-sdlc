@@ -3051,7 +3051,30 @@
 # PRD-04's messages; scripts/docs-conformance/test/skill-tools.test.mjs, the
 # fixture trees (the test directory is a consumer's own to extend).
 
-shared-layer: 0.81.0
+# 0.82.0 — a review in which no lens ran is blocked (ticket #796). NO file
+# joins the shared layer and none leaves. No shared file changes content but
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): review-pr — NO-LENS.md is new beside SKILL.md, opened from §3
+# when every lens slice counts 0 and from §5 when no Axis-1 lens returned: a
+# diff whose every slice is empty still gets the single-reviewer pass over
+# the whole diff, behavior.diff, before any verdict, and §3 now names that
+# case among the ones the pass is allowed for; a review in which no lens and
+# no pass returned records review.verdict outcome=blocked data.lenses=0 with
+# the reason `no lens ran`, and its Verdict line reads `BLOCKED — no lens
+# ran; this is not a review`. pr-iterate — NO-LENS.md is new beside
+# SKILL.md, opened from step 6's new bullet: a review blocked because no lens
+# ran is never converged, and the iteration escalates it at the top of its
+# report, records itself stopped and ends `Next: stop — escalation`. Take
+# both skill directories whole.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/docs-conformance/config.mjs's skillCeilings raise
+# review-pr's SKILL.md to 40500 and pr-iterate's to 37500 — MERGE the two
+# numbers in where you kept the kit's ceilings, or the gate fails the skills.
+# Kit-only, never shipped: docs/specs/process.md gains process/R15 to R17;
+# tests/review-pr-output.test.sh section 20 drives both skills' prose.
+
+shared-layer: 0.82.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
