@@ -33,6 +33,9 @@ R18. WHEN `/pr-iterate` sees a failure with the same signature on 3 consecutive 
 R19. WHEN a failure's signature differs from the previous iteration's, `/pr-iterate` SHALL restart that count.
 R20. WHEN `/implement`'s full-suite run fails with the same signature 3 consecutive times, it SHALL stop editing and report the test, the assertion and each attempt, without pushing.
 R21. WHEN either skill stops under R18 or R20, it SHALL record the stop in the trace with `data.stop=repeated-failure` and the signature's check or test name, never the log text.
+R22. `/retro` SHALL report, per landed ticket in the window, the lead time from its first `ticket.start` to its `merge.land`, with the window's median and longest.
+R23. `/retro` SHALL report, per landed PR, the review wait from its last `pr.iterate outcome=green` to its `merge.land`, and SHALL report `n/a` for a PR with no green iteration.
+R24. `/retro` SHALL report toil's share of landed tickets from `ticket.start`'s `data.class=toil`, and `not recorded` when no ticket in the window carries a class.
 R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
 R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.
 R32. WHERE a skill names a spawn type, the docs gate SHALL fail it when that type's `tools:` holds a tool absent from the skill's `allowed-tools`.
