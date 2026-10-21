@@ -2959,7 +2959,36 @@
 # section; the glossary's Session cap entry and the root manual's resolver
 # row name the form.
 
-shared-layer: 0.78.0
+# 0.79.0 — runs record their context: the kit's version, the model and
+# agent harness where exposed, and a spawn's tools (ticket #798). NO file
+# joins and NO file leaves the shared layer. ONE shared file changes content
+# besides UPDATING.md: scripts/trace.sh. `begin`'s run.start carries
+# data.kit, VERSION's shared-layer value (none when there is no VERSION to
+# read), and a caller's data.kit on begin is exit 2; it carries `model` and
+# `harness` from TRACE_MODEL and TRACE_HARNESS when the environment sets
+# them and the caller named none, leaving out an unset one and one that is
+# not a plain id. A `spawn` carries data.tools: the `tools:` line of the
+# agent type it ran as — data.agent_type, else its tier — under the new
+# policy directory TRACE_AGENT_TYPES_DIR, and `undeclared` when there is no
+# definition there or the spawn carries a `harness`; a data.agent_type that
+# is not [a-z][a-z0-9-]* is exit 2. Every other call valid at 0.78.0 behaves
+# as it did. Evidence: PRD-03's like-with-like comparison needs both windows'
+# kit and model, and `begin` recorded neither.
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): implement — step 9(b)'s reviewer spawn line carries
+# `data.agent_type=planner` when the spawn took that agent type.
+# Wiring (9b): the Claude Code adapter's session-start hook exports
+# TRACE_HARNESS='claude-code' and, when the payload names a plain-id model,
+# TRACE_MODEL through the env file, and its session.start carries the model —
+# re-copy the hook where you wired the adapter. Templates (9c): none.
+# Config (9d): scripts/trace.config.sh gains TRACE_AGENT_TYPES_DIR='',
+# documented — MERGE the block in; empty records data.tools=undeclared.
+# Kit-only, never shipped: scripts/trace.kit.config.sh names
+# TRACE_AGENT_TYPES_DIR='.claude/agents'; tests/trace.test.sh section 40 and
+# tests/trace-hooks.test.sh section 56; docs/specs/runtime.md R28 to R30.
+
+shared-layer: 0.79.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

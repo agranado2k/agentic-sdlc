@@ -3298,4 +3298,208 @@ expect_status 0 "the parent then ends its own runs by id, top first"
 t_exec sr_run end "$SR_PARENT" outcome=ok
 expect_status 0 "down to the outermost"
 
+# ---------------------------------------------------------------------------
+banner "40. A run records its context: the kit, the model and harness, a spawn's tools (ticket #798)"
+# ---------------------------------------------------------------------------
+# runtime/R28, runtime/R29 and runtime/R30. A comparison across time compares
+# like with like only when each run says what it ran under: the shared-layer
+# version from VERSION, the session's model and its agent harness where the
+# harness exposes them — never guessed — and, on a spawn, the tool list of the
+# agent type the subagent ran as, read from that type's own definition.
+t_repo
+RC_REPO=$REPO
+mkdir -p "$RC_REPO/scripts" "$RC_REPO/agent-types"
+cp "$TRACE" "$RC_REPO/scripts/trace.sh"
+printf '# a manifest\nshared-layer: 9.8.7\n\nfiles:\n  scripts/trace.sh\n' >"$RC_REPO/VERSION"
+printf -- '---\nname: reviewer\ndescription: reads\ntools: Read, Grep, Glob\n---\nbody\ntools: Bash\n' >"$RC_REPO/agent-types/reviewer.md"
+printf -- '---\nname: planner\ntools: Read, Bash, Agent\n---\n' >"$RC_REPO/agent-types/planner.md"
+t_commit "$RC_REPO" "chore: carry the trace script" >/dev/null
+RC="$SCRATCH/context-798"
+printf "TRACE_DIR='%s'\nTRACE_AGENT_TYPES_DIR='agent-types'\n" "$RC" >"$SCRATCH/policy.context-798.sh"
+RCON="$SCRATCH/policy.context-798.sh"
+# rc_run [NAME=value …] <trace.sh args…> — the fixture checkout, its policy,
+# no model or harness in the environment unless a leading assignment sets one.
+rc_run() {
+	(
+		cd "$RC_REPO" || exit 2
+		unset TRACE_RUN TRACE_PARENT TRACE_MODEL TRACE_HARNESS
+		export TRACE_CONFIG="$RCON" TRACE_SESSION=rc-one
+		while case ${1:-} in [A-Z]*=*) true ;; *) false ;; esac; do
+			export "$1"
+			shift
+		done
+		exec sh scripts/trace.sh "$@"
+	)
+}
+rc_start() { grep -F '"kind":"run.start"' "$RC/events/$TODAY.jsonl" | grep -F "\"run\":\"$1\""; }
+# rc_opened <run> <when> — a "left out" assertion proves nothing about a run
+# that never opened, so each one first proves its run.start is there.
+rc_opened() {
+	[ -n "$1" ] && [ "$(rc_start "$1" | grep -c '')" = 1 ] &&
+		pass "the run $2 opened, one run.start" || fail "the run $2 never opened: '$1'"
+}
+
+# runtime/R28 — data.kit, read from VERSION.
+RC_A=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
+rc_start "$RC_A" | grep -qF '"kit":"9.8.7"' &&
+	pass "run.start carries data.kit, the shared-layer version VERSION names (runtime/R28)" ||
+	fail "run.start carries no data.kit of 9.8.7: $(rc_start "$RC_A")"
+rc_run end "$RC_A" outcome=ok 2>/dev/null
+t_exec rc_run begin implement subject=ticket:#1 data.kit=0.0.1
+expect_status 2 "a caller cannot set data.kit — begin reads it from VERSION (runtime/R28)"
+expect_said "data.kit"
+mv "$RC_REPO/VERSION" "$RC_REPO/VERSION.away"
+RC_B=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
+rc_opened "$RC_B" "with no VERSION"
+rc_start "$RC_B" | grep -qF '"kit":' &&
+	fail "with no VERSION, run.start still carries a kit: $(rc_start "$RC_B")" ||
+	pass "with no VERSION to read, run.start carries no kit — never a guess (runtime/R28)"
+rc_run end "$RC_B" outcome=ok 2>/dev/null
+mv "$RC_REPO/VERSION.away" "$RC_REPO/VERSION"
+
+# runtime/R29 — model and harness, where the harness exposes them.
+RC_C=$(rc_run TRACE_MODEL=claude-opus-5-5 TRACE_HARNESS=claude-code begin implement subject=ticket:#1 2>/dev/null)
+rc_start "$RC_C" | grep -F '"model":"claude-opus-5-5"' | grep -qF '"harness":"claude-code"' &&
+	pass "with the harness variables set, run.start carries model and harness (runtime/R29)" ||
+	fail "run.start does not carry the exposed model and harness: $(rc_start "$RC_C")"
+rc_run end "$RC_C" outcome=ok 2>/dev/null
+RC_D=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
+rc_opened "$RC_D" "with no harness variable"
+rc_start "$RC_D" | grep -qF '"model":' && fail "with no harness variable, run.start carries a model: $(rc_start "$RC_D")" ||
+	pass "with no harness variable set, run.start carries no model (runtime/R29)"
+rc_start "$RC_D" | grep -qF '"harness":' && fail "with no harness variable, run.start carries a harness: $(rc_start "$RC_D")" ||
+	pass "and no harness (runtime/R29)"
+rc_run end "$RC_D" outcome=ok 2>/dev/null
+RC_E=$(rc_run TRACE_HARNESS=claude-code begin implement subject=ticket:#1 2>/dev/null)
+rc_start "$RC_E" | grep -qF '"harness":"claude-code"' && ! rc_start "$RC_E" | grep -qF '"model":' &&
+	pass "a harness that exposes its name and not the model records the one it exposes (runtime/R29)" ||
+	fail "a harness-only environment recorded: $(rc_start "$RC_E")"
+rc_run end "$RC_E" outcome=ok 2>/dev/null
+t_exec rc_run "TRACE_MODEL=opus; touch x" begin implement subject=ticket:#1
+expect_status 0 "a model variable that is not a plain id still opens the run"
+RC_F=$T_OUT
+rc_opened "$RC_F" "under a malformed model variable"
+rc_start "$RC_F" | grep -qF '"model":' && fail "a malformed model variable was recorded: $(rc_start "$RC_F")" ||
+	pass "and the malformed value is left out, never recorded (runtime/R29)"
+rc_run end "$RC_F" outcome=ok 2>/dev/null
+RC_G=$(rc_run TRACE_MODEL=claude-opus-5-5 begin implement subject=ticket:#1 model=claude-sonnet-5-5 2>/dev/null)
+rc_start "$RC_G" | grep -qF '"model":"claude-sonnet-5-5"' &&
+	pass "a model the caller names on begin stands over the environment's" ||
+	fail "the caller's model did not stand: $(rc_start "$RC_G")"
+rc_run end "$RC_G" outcome=ok 2>/dev/null
+
+# runtime/R30 — a spawn carries the tool list of the agent type it ran as.
+rc_spawn() { grep -F '"kind":"spawn"' "$RC/events/$TODAY.jsonl" | grep -F "\"reason\":\"$1\""; }
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer outcome=in-session reason=by-tier 2>/dev/null
+rc_spawn by-tier | grep -qF '"tools":"Read,Grep,Glob"' &&
+	pass "a spawn carries data.tools, its tier's agent type's tool list from the frontmatter alone (runtime/R30)" ||
+	fail "the spawn carries no data.tools of Read,Grep,Glob: $(rc_spawn by-tier)"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=planner outcome=in-session reason=by-type 2>/dev/null
+rc_spawn by-type | grep -qF '"tools":"Read,Bash,Agent"' &&
+	pass "data.agent_type names the type the spawn took when it is not the tier's (runtime/R30)" ||
+	fail "the agent type's tools were not read: $(rc_spawn by-type)"
+rc_run emit kind=spawn subject=pr:#1 tier=mechanical outcome=in-session reason=no-type 2>/dev/null
+rc_spawn no-type | grep -qF '"tools":"undeclared"' &&
+	pass "a type with no definition records data.tools=undeclared — the harness's catch-all, never a guessed list (runtime/R30)" ||
+	fail "an undefined type recorded: $(rc_spawn no-type)"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer harness=codex outcome=dispatched reason=elsewhere 2>/dev/null
+rc_spawn elsewhere | grep -qF '"tools":"undeclared"' &&
+	pass "a spawn dispatched to another agent harness records undeclared — this harness's agent types are not that one's (runtime/R30)" ||
+	fail "a dispatched spawn recorded: $(rc_spawn elsewhere)"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.tools=Read outcome=in-session reason=given 2>/dev/null
+[ "$(rc_spawn given | grep -o '"tools":"[^"]*"')" = '"tools":"Read"' ] &&
+	pass "a data.tools the caller passes stands, once" ||
+	fail "the caller's data.tools did not stand alone: $(rc_spawn given)"
+# Each branch that turns a definition into `undeclared`, and the one that
+# reads the directory from an absolute path (review of PR #809, M-3).
+printf "TRACE_DIR='%s'\n" "$RC" >"$SCRATCH/policy.context-798-nodir.sh"
+# A definition where an empty directory would resolve to, so only the
+# unset-directory branch keeps it from being read.
+printf -- '---\nname: reviewer\ntools: Bash\n---\n' >"$RC_REPO/reviewer.md"
+rc_run TRACE_CONFIG="$SCRATCH/policy.context-798-nodir.sh" emit kind=spawn subject=pr:#1 tier=reviewer outcome=in-session reason=no-dir 2>/dev/null
+rc_spawn no-dir | grep -qF '"tools":"undeclared"' &&
+	pass "with the agent-types directory unset, as shipped, a defined type is still undeclared (runtime/R30)" ||
+	fail "an unset directory recorded: $(rc_spawn no-dir)"
+rm -f "$RC_REPO/reviewer.md"
+printf "TRACE_DIR='%s'\nTRACE_AGENT_TYPES_DIR='%s'\n" "$RC" "$RC_REPO/agent-types" >"$SCRATCH/policy.context-798-abs.sh"
+rc_run TRACE_CONFIG="$SCRATCH/policy.context-798-abs.sh" emit kind=spawn subject=pr:#1 tier=reviewer outcome=in-session reason=abs-dir 2>/dev/null
+rc_spawn abs-dir | grep -qF '"tools":"Read,Grep,Glob"' &&
+	pass "an absolute agent-types directory is read as given (runtime/R30)" ||
+	fail "an absolute directory recorded: $(rc_spawn abs-dir)"
+printf -- '---\nname: notools\ndescription: none\n---\ntools: Bash\n' >"$RC_REPO/agent-types/notools.md"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=notools outcome=in-session reason=no-tools-line 2>/dev/null
+rc_spawn no-tools-line | grep -qF '"tools":"undeclared"' &&
+	pass "a definition whose frontmatter has no tools: line is undeclared, never the body's (runtime/R30)" ||
+	fail "a definition with no tools: line recorded: $(rc_spawn no-tools-line)"
+printf -- '---\nname: odd\ntools: Read; rm -rf x, Grep\n---\n' >"$RC_REPO/agent-types/odd.md"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=odd outcome=in-session reason=odd-tools 2>/dev/null
+rc_spawn odd-tools | grep -qF '"tools":"undeclared"' &&
+	pass "a tools: line with a character no tool list carries is undeclared, never recorded (runtime/R30)" ||
+	fail "an odd tools: line recorded: $(rc_spawn odd-tools)"
+printf -- '---\nname: paren\ntools: Read, Bash(git:*), Grep\n---\n' >"$RC_REPO/agent-types/paren.md"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=paren outcome=in-session reason=paren-tools 2>/dev/null
+rc_spawn paren-tools | grep -qF '"tools":"Read,Bash(git:*),Grep"' &&
+	pass "a tool with a parenthesised scope is recorded as written (runtime/R30)" ||
+	fail "a scoped tool list recorded: $(rc_spawn paren-tools)"
+RC_NL_MODEL="claude-opus-5-5
+touch x"
+t_exec rc_run "TRACE_MODEL=$RC_NL_MODEL" begin implement subject=ticket:#1
+RC_H=$T_OUT
+rc_opened "$RC_H" "under a two-line model variable"
+rc_start "$RC_H" | grep -qF '"model":' && fail "a model variable of two lines was recorded: $(rc_start "$RC_H")" ||
+	pass "a model variable whose first line alone is a plain id is left out (runtime/R29)"
+expect_said "not a plain id"
+rc_run end "$RC_H" outcome=ok 2>/dev/null
+# The other shapes a plain id excludes (review of PR #809, M-6): a harness
+# that is not one, a model one character past the 128 cap, and one that
+# opens with a dash — each left out, with the run still opened.
+RC_LONG=$(printf 'm%0128d' 0)
+for RC_BAD in "TRACE_HARNESS=claude code" "TRACE_MODEL=$RC_LONG" "TRACE_MODEL=-opus"; do
+	RC_I=$(rc_run "$RC_BAD" begin implement subject=ticket:#1 2>/dev/null)
+	rc_opened "$RC_I" "under $(printf "%.24s" "$RC_BAD")…"
+	rc_start "$RC_I" | grep -qE '"(model|harness)":' &&
+		fail "$(printf "%.24s" "$RC_BAD")… was recorded: $(rc_start "$RC_I")" ||
+		pass "$(printf "%.24s" "$RC_BAD")… is not a plain id, and is left out (runtime/R29)"
+	rc_run end "$RC_I" outcome=ok 2>/dev/null
+done
+RC_MAX=$(printf 'm%0127d' 0)
+RC_J=$(rc_run "TRACE_MODEL=$RC_MAX" begin implement subject=ticket:#1 2>/dev/null)
+rc_start "$RC_J" | grep -qF "\"model\":\"$RC_MAX\"" &&
+	pass "a model of exactly 128 characters is still a plain id, and recorded (runtime/R29)" ||
+	fail "a 128-character model was not recorded: $(rc_start "$RC_J")"
+rc_run end "$RC_J" outcome=ok 2>/dev/null
+cp "$RC_REPO/VERSION" "$RC_REPO/VERSION.keep"
+printf '# a manifest\n\nfiles:\n  scripts/trace.sh\n' >"$RC_REPO/VERSION"
+RC_K=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
+rc_opened "$RC_K" "with a VERSION that names no shared layer"
+rc_start "$RC_K" | grep -qF '"kit":' &&
+	fail "a VERSION with no shared-layer: line still gave a kit: $(rc_start "$RC_K")" ||
+	pass "a VERSION with no shared-layer: line gives no kit — never a guess (runtime/R28)"
+rc_run end "$RC_K" outcome=ok 2>/dev/null
+mv "$RC_REPO/VERSION.keep" "$RC_REPO/VERSION"
+# The filters' own text is held to POSIX: a backslash inside a bracket
+# expression is undefined there, whatever the shell running this suite does.
+RC_TOOLS_FN=$(sed -n '/^trace_agent_type_ok()/,/^}/p;/^trace_agent_tools()/,/^}/p' "$TRACE")
+printf '%s\n' "$RC_TOOLS_FN" | grep -q 'case \$1 in' && printf '%s\n' "$RC_TOOLS_FN" | grep -q 'undeclared' ||
+	fail "found no agent-type filter to hold to POSIX: the check below would pass on nothing"
+printf '%s\n' "$RC_TOOLS_FN" | grep -q '\[![^]]*\\' &&
+	fail "the agent-type filters escape inside a bracket expression, undefined in POSIX" ||
+	pass "the agent-type filters' bracket expressions carry no backslash — portable POSIX"
+t_exec rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=../x outcome=in-session reason=bad
+expect_status 2 "an agent type that is not a [a-z][a-z0-9-]* token is refused before a path is built from it"
+# A tier that is not a token names no agent type, so it is the catch-all's,
+# undeclared — and never a path: a decoy where ../x.md would resolve to
+# proves the reader's own guard is what keeps it out (review of PR #809, H-1).
+printf -- '---\nname: x\ntools: Bash\n---\n' >"$RC_REPO/x.md"
+rc_run emit kind=spawn subject=pr:#1 tier=../x outcome=in-session reason=dotdot-tier 2>/dev/null
+rc_spawn dotdot-tier | grep -qF '"tools":"undeclared"' &&
+	pass "a tier of ../x builds no path from it — the decoy it would reach is not read (runtime/R30)" ||
+	fail "a tier of ../x recorded: $(rc_spawn dotdot-tier)"
+rm -f "$RC_REPO/x.md"
+rc_run emit kind=note subject=pr:#1 tier=reviewer reason=a-note 2>/dev/null
+grep -qF '"reason":"a-note"' "$RC/events/$TODAY.jsonl" &&
+	pass "a note under a tier is recorded" || fail "the note was not recorded at all"
+grep -F '"reason":"a-note"' "$RC/events/$TODAY.jsonl" | grep -qF '"tools":' &&
+	fail "a kind other than spawn gained data.tools" || pass "and no other kind gains one"
+
 t_done "trace script"
