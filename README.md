@@ -92,6 +92,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/tdd-pairing-guard.sh` | The TDD pairing rule: source changes must carry test changes. One implementation, called by the hook and by CI. |
 | `scripts/tdd-pairing-guard-ci.sh` | The CI caller of that rule — merge-base range, `tdd-exempt` label hatch. |
 | `scripts/behavior-delta.sh` | Inventories the branch's deltas in your contract artifacts, plus a per-commit `refactor:`-that-is-not check. |
+| `scripts/failure-signature.sh` | The failure signature — a check's or test's name and the first error line of its log, run ids and timestamps written out — and the count of runs running each one came back. `/pr-iterate` and `/implement` stop on the third identical failure. Shared layer. |
 | `scripts/lens-slice.sh` | Cuts the branch's diff into the slice each `/review-pr` standards lens reads, and the whole diff for the behavior axis. |
 | `scripts/lens-slice.config.sh` | **Yours.** Which changed paths each lens reads. Ships filled for a kit-shaped layout; retune it to yours. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
@@ -671,6 +672,15 @@ skeleton (K0).
   C.UTF-8, so the script's own locale pin is what decides it — a NUL,
   markdown-wrapped lines, and a foreign clone's checker under the caller's
   cwd.
+- `sh tests/failure-signature.test.sh` holds `scripts/failure-signature.sh`
+  and the stop it drives (process/R18 to R21): two logs that differ only in a
+  run id or a timestamp sign the same, two that differ in the error do not;
+  the counter reaches 3 on three identical runs, restarts on a different
+  signature and forgets one a green run left out; caller errors are exit 2
+  with nothing on stdout. `/pr-iterate`'s own fence is lifted and run for
+  three iterations in a throwaway checkout, and both skills' sentences —
+  push no further fix, stop editing, the trace line's name and never the log
+  text — are asserted where an agent reads them.
 - `sh tests/coverage.test.sh` holds `scripts/coverage.sh`, the coverage check
   `/to-tickets` runs before its quiz (PRD #527, ADR-0012 clause 4): a PRD body
   and one file per drafted ticket in, every requirement no ticket's
@@ -985,6 +995,7 @@ sh tests/typed-return.test.sh                          # /pr-iterate refuses an 
 sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses
 sh tests/prescreen-return.test.sh                      # /to-tickets and /dogfood pre-screen their untrusted text as a checked typed return
 sh tests/trace-hooks.test.sh                           # the Claude Code adapter's session hooks and usage extractor
+sh tests/failure-signature.test.sh                     # a loop stops on the third identical failure
 sh tests/root-guard.test.sh                            # the root checkout refuses an agent's edit and an agent's commit
 sh tests/trace-prices.test.sh                          # the price table's staleness advisory and its kit-only refresh
 sh tests/trace-skills.test.sh                          # every chain skill emits at its decision points, and none reads the trace
