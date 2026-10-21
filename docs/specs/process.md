@@ -29,3 +29,10 @@ R14. Bootstrap SHALL give a consumer the coverage check, the gate's living-spec 
 R15. WHERE every lens slice is empty, `/review-pr` SHALL run the single-reviewer pass over the whole diff, and SHALL NOT record a verdict before that pass returns.
 R16. IF no Axis-1 lens returned a report and no single-reviewer pass returned, THEN `/review-pr` SHALL record `review.verdict outcome=blocked data.lenses=0` with the reason `no lens ran`, and its Verdict line SHALL say that no lens ran.
 R17. WHEN `/pr-iterate`'s review records a verdict blocked because no lens ran, `/pr-iterate` SHALL NOT report the PR as converged, and SHALL escalate it at the top of its report.
+R18. WHEN `/pr-iterate` sees a failure with the same signature on 3 consecutive iterations, it SHALL push no further fix, and SHALL escalate naming the check, the count and the quoted error line.
+R19. WHEN a failure's signature differs from the previous iteration's, `/pr-iterate` SHALL restart that count.
+R20. WHEN `/implement`'s full-suite run fails with the same signature 3 consecutive times, it SHALL stop editing and report the test, the assertion and each attempt, without pushing.
+R21. WHEN either skill stops under R18 or R20, it SHALL record the stop in the trace with `data.stop=repeated-failure` and the signature's check or test name, never the log text.
+R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
+R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.
+R32. WHERE a skill names a spawn type, the docs gate SHALL fail it when that type's `tools:` holds a tool absent from the skill's `allowed-tools`.

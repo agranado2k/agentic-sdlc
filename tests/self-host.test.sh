@@ -159,6 +159,80 @@ else
 	fi
 fi
 
+# process/R30, process/R31, process/R32: declared tools, in both engines. A
+# project carrying the kit's gate, its harness and its config.mjs — the first
+# rule turned to a violation, as the sweep that declares every skill's tools
+# will turn it — and the Claude Code adapter's agent types. Each rule is
+# driven RED by one edit, with the message PRD-04 gives, and green without it.
+TOOLS="$SCRATCH/tools"
+mkdir -p "$TOOLS/scripts" "$TOOLS/.agents/skills/review-pr" "$TOOLS/.claude/agents"
+cp -R "$KIT/scripts/docs-conformance" "$TOOLS/scripts/"
+cp "$KIT/scripts/check.sh" "$KIT/scripts/manifest.lib.sh" "$KIT/scripts/requirement.lib.sh" "$TOOLS/scripts/"
+sed 's/missingAllowedTools: "warning"/missingAllowedTools: "violation"/' "$KIT/scripts/docs-conformance/config.mjs" >"$TOOLS/scripts/docs-conformance/config.mjs"
+printf '# Manual\n' >"$TOOLS/AGENTS.md"
+for shim in CLAUDE.md GEMINI.md; do cp "$KIT/$shim" "$TOOLS/$shim"; done
+printf 'shared-layer: 0.0.0\n' >"$TOOLS/VERSION"
+for t in reviewer implementer; do cp "$KIT/adapters/claude-code/agents/$t.md" "$TOOLS/.claude/agents/$t.md"; done
+# tools_skill <spawn type> [<allowed-tools value>] — /review-pr, spawning its
+# lenses as that type; an empty value leaves the key out.
+tools_skill() {
+	{
+		echo '---'
+		echo 'name: review-pr'
+		echo 'description: reviews.'
+		[ "${2-x}" = "" ] || echo "allowed-tools: ${2:-Read, Grep, Glob, Bash, Skill}"
+		echo '---'
+		echo ''
+		printf 'Spawn each lens as the `%s` agent type.\n' "$1"
+	} >"$TOOLS/.agents/skills/review-pr/SKILL.md"
+}
+# tools_check <status> <message or empty> <engine env…> — the gate's verdict on the tree.
+tools_check() {
+	_tc_status=$1 _tc_msg=$2
+	shift 2
+	t_exec env GIT_CEILING_DIRECTORIES="$SCRATCH" "$@" sh -c 'cd "$1" && sh scripts/check.sh' sh "$TOOLS"
+	[ "$T_STATUS" = "$_tc_status" ] && { [ -z "$_tc_msg" ] || printf '%s\n' "$T_ERR" | grep -qF -- "$_tc_msg"; } && return 0
+	printf '%s\n%s\n' "$T_OUT" "$T_ERR" | sed 's/^/        | /'
+	return 1
+}
+tools_engines="DOCS_CHECK_NO_NODE=1"
+command -v node >/dev/null 2>&1 && tools_engines="$tools_engines DOCS_CHECK_NO_NODE=" ||
+	skip "process/R30-R32: node is not on PATH — the docs harness engine is not run here"
+for tools_env in $tools_engines; do
+	tools_engine="without node"
+	[ "$tools_env" = "DOCS_CHECK_NO_NODE=" ] && tools_engine="with the docs harness"
+	tools_skill reviewer
+	tools_check 0 "" "$tools_env" &&
+		pass "process/R30-R32 ($tools_engine): a skill declaring its tools, spawning a type within them, beside typed agents, passes" ||
+		fail "process/R30-R32 ($tools_engine): the declared-tools tree did not pass (exit $T_STATUS)"
+	tools_skill reviewer ""
+	tools_check 1 "review-pr has no allowed-tools in its frontmatter" "$tools_env" &&
+		pass "process/R30 ($tools_engine): a SKILL.md with no allowed-tools fails the gate" ||
+		fail "process/R30 ($tools_engine): a SKILL.md with no allowed-tools did not fail as named (exit $T_STATUS)"
+	tools_skill reviewer
+	cp "$TOOLS/.claude/agents/reviewer.md" "$SCRATCH/reviewer.kept"
+	sed '/^tools:/d' "$SCRATCH/reviewer.kept" >"$TOOLS/.claude/agents/reviewer.md"
+	tools_check 1 "reviewer has no tools line, so it inherits every tool" "$tools_env" &&
+		pass "process/R31 ($tools_engine): an agent type with no tools line fails the gate — UC2 2a" ||
+		fail "process/R31 ($tools_engine): an agent type with no tools line did not fail as named (exit $T_STATUS)"
+	cp "$SCRATCH/reviewer.kept" "$TOOLS/.claude/agents/reviewer.md"
+	tools_skill implementer
+	tools_check 1 "review-pr spawns implementer, whose tools (Edit, Write, Agent) are outside its allowed-tools" "$tools_env" &&
+		pass "process/R32 ($tools_engine): a skill spawning a type with tools outside its own fails the gate — UC2" ||
+		fail "process/R32 ($tools_engine): a widening spawn did not fail as named (exit $T_STATUS)"
+	# A scoped entry covers only its own spelling, never the unscoped tool.
+	tools_skill implementer "Read, Grep, Glob, Bash(git diff:*), Skill, Edit, Write, Agent"
+	tools_check 1 "review-pr spawns implementer, whose tools (Bash) are outside its allowed-tools" "$tools_env" &&
+		pass "process/R32 ($tools_engine): a scoped allowed-tools entry does not cover a type's unscoped tool" ||
+		fail "process/R32 ($tools_engine): a scoped entry covered the unscoped tool (exit $T_STATUS)"
+	printf -- '---\nname: scout\ntools: Read, Bash(git diff:*)\n---\n' >"$TOOLS/.claude/agents/scout.md"
+	tools_skill scout "Read, Bash(git diff:*)"
+	tools_check 0 "" "$tools_env" &&
+		pass "process/R32 ($tools_engine): the exact scoped entry covers a type holding that scope" ||
+		fail "process/R32 ($tools_engine): the exact scoped entry did not cover its own spelling (exit $T_STATUS)"
+	rm -f "$TOOLS/.claude/agents/scout.md"
+done
+
 # The reduced form must SAY what it cannot check, and every scan the harness
 # runs is one it cannot: the NOTICE's "NOT checked" list has to name each
 # validator the runner registers, by id. Held to the runner itself — a
@@ -419,7 +493,7 @@ banner "D. The stamped result is byte-identical to a kit without kit-own files"
 BASE="$SCRATCH/baseline"
 t_kit_copy "$BASE"
 for f in $KIT_OWN; do rm -rf "${BASE:?}/$f"; done
-rm -rf "$BASE/docs"
+rm -rf "$BASE/docs" "$BASE/.factory"
 expect_exit 0 "bootstrap runs on a tree with the kit-own files pre-removed" -- \
 	sh -c "cd '$BASE' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 
@@ -499,6 +573,21 @@ assert_file_has "$ADRS/docs/adr/0003-draft.md" "Still a draft" \
 [ -e "$ADRS/docs/adr/0001-the-kit-self-hosts-its-own-constitution.md" ] &&
 	fail "the kit's own ADR survived beside the consumer's" ||
 	pass "the kit's own ADR was stripped from beside the consumer's"
+
+# --- E2b: a factory the consumer started before bootstrapping (#812) -------
+# The kit's own .factory/ goes, but only the kit's: the strip reads the
+# project manifest's id, and a factory that names another project is the
+# consumer's, not the kit's to delete.
+FACT="$SCRATCH/consumer-factory"
+consumer_repo "$FACT"
+rm -rf "$FACT/.factory"
+mkdir -p "$FACT/.factory/items/PRD-01"
+printf 'id: their-shop\nname: their-shop\n' >"$FACT/.factory/project.yaml"
+printf '# Their first PRD\n' >"$FACT/.factory/items/PRD-01/prd.md"
+expect_exit 0 "bootstrap runs on a tree holding the consumer's own factory" -- \
+	sh -c "cd '$FACT' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$FACT/.factory/items/PRD-01/prd.md" "Their first PRD" \
+	"a consumer's own factory is not the kit's to delete (#812)"
 
 # --- E3: the kit's manual, personalized in place ----------------------------
 # An edit leaves the sentinel comment intact — it says so itself — so condition
