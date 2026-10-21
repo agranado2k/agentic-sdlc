@@ -5122,12 +5122,20 @@ banner "56. SessionStart exports the harness and, where the payload carries it, 
 # exposes them — the harness's own name always, the model only when the
 # payload names one, and never a value that is not a plain id, because the
 # env file is sourced as shell.
-new_trace
 CTXF="$SCRATCH/context-env.sh"
-: >"$CTXF"
-sed 's|^{$|{\n  "model": "claude-opus-5-5",|' "$SCRATCH/start.json" >"$SCRATCH/start-model.json"
-grep -q '"model": "claude-opus-5-5"' "$SCRATCH/start-model.json" || fail "the fixture edit put no model in the payload"
-t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-model.json"
+# start_with_model <model> — a fresh trace and env file, then the hook run on
+# the start payload with "model" set to <model>, written as given. A fixture
+# that carried no model would prove nothing about the filter, so the payload
+# is checked to carry it before the hook reads it.
+start_with_model() {
+	new_trace
+	: >"$CTXF"
+	sed 's|^{$|{\n  "model": "'"$(printf '%s' "$1" | sed 's/[|&\\]/\\&/g')"'",|' "$SCRATCH/start.json" >"$SCRATCH/start-model.json"
+	grep -qF "\"model\": \"$1\"" "$SCRATCH/start-model.json" ||
+		fail "the fixture edit put no model of $1 in the payload"
+	t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-model.json"
+}
+start_with_model claude-opus-5-5
 [ "$T_STATUS" = 0 ] && pass "the hook exits 0 with a model in the payload" || fail "the hook exited $T_STATUS: $T_ERR"
 grep -qx "export TRACE_MODEL='claude-opus-5-5'" "$CTXF" &&
 	pass "the payload's model is exported as TRACE_MODEL, single-quoted (runtime/R29)" ||
@@ -5154,11 +5162,8 @@ grep -q 'TRACE_MODEL' "$CTXF" &&
 grep -qx "export TRACE_HARNESS='claude-code'" "$CTXF" &&
 	pass "and still exports the harness" || fail "no TRACE_HARNESS export: $(cat "$CTXF")"
 
-new_trace
-: >"$CTXF"
 rm -f "$SCRATCH/PWNED-798"
-sed 's|^{$|{\n  "model": "opus'"'"'; touch '"$SCRATCH"'/PWNED-798; '"'"'",|' "$SCRATCH/start.json" >"$SCRATCH/start-evil-model.json"
-t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-evil-model.json"
+start_with_model "opus'; touch $SCRATCH/PWNED-798; '"
 [ "$T_STATUS" = 0 ] && pass "a hostile model still exits 0" || fail "the hook exited $T_STATUS"
 sh -c ". '$CTXF'" >/dev/null 2>&1 || :
 [ -e "$SCRATCH/PWNED-798" ] && fail "sourcing the env file executed the payload's model" ||
@@ -5177,22 +5182,22 @@ printf '%s\n' "$MFILTER" | grep -q '\[[^]]*\\' &&
 	fail "the model filter escapes inside a bracket expression, undefined in POSIX: $MFILTER" ||
 	pass "the model filter's bracket expressions carry no backslash — portable POSIX"
 # And every hostile shape a plain id excludes stays out of the sourced file.
-for HOSTILE in 'opus`touch PWNED`' 'opus$(touch PWNED)' 'opus\\x' 'opus]'"'"'x' 'opus;x' '-opus' '[opus'; do
-	new_trace
-	: >"$CTXF"
-	sed 's|^{$|{\n  "model": "'"$(printf '%s' "$HOSTILE" | sed 's/[|&\\]/\\&/g')"'",|' "$SCRATCH/start.json" >"$SCRATCH/start-hostile.json"
-	t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-hostile.json"
-	grep -q 'TRACE_MODEL' "$CTXF" && fail "the hostile model $HOSTILE was exported: $(cat "$CTXF")" ||
-		pass "a model of $HOSTILE is not exported"
+# One past the 128 the trace's own plain-id rule allows is out too (review of
+# PR #809, M-1): the two filters keep the same ids.
+for HOSTILE in 'opus`touch PWNED`' 'opus$(touch PWNED)' 'opus\\x' 'opus]'"'"'x' 'opus;x' '-opus' '[opus' "$(printf 'm%0128d' 0)"; do
+	start_with_model "$HOSTILE"
+	grep -q 'TRACE_MODEL' "$CTXF" && fail "the hostile model $(printf "%.24s" "$HOSTILE") was exported: $(cat "$CTXF")" ||
+		pass "a model of $(printf "%.24s" "$HOSTILE") is not exported"
 done
 # The portable spelling keeps what the old one kept: a bracketed suffix is a plain id.
-new_trace
-: >"$CTXF"
-sed 's|^{$|{\n  "model": "claude-opus-4-6[1m]",|' "$SCRATCH/start.json" >"$SCRATCH/start-bracket.json"
-t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-bracket.json"
+start_with_model 'claude-opus-4-6[1m]'
 grep -qx "export TRACE_MODEL='claude-opus-4-6\[1m\]'" "$CTXF" &&
 	pass "a model with a bracketed suffix is still a plain id, and exported" ||
 	fail "the bracketed model was not exported: $(cat "$CTXF")"
+start_with_model "$(printf 'm%0127d' 0)"
+grep -qx "export TRACE_MODEL='$(printf 'm%0127d' 0)'" "$CTXF" &&
+	pass "a model of exactly 128 characters is still a plain id, and exported" ||
+	fail "the 128-character model was not exported: $(cat "$CTXF")"
 
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s case(s) skipped above — this host proved less than one with node and a millisecond clock would\n' "$SKIPPED"

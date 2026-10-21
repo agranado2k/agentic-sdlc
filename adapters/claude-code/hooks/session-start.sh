@@ -46,9 +46,11 @@ src=$(hook_field source)
 # when it is a plain id, since it is exported into a file the agent harness
 # sources as shell; anything else is no model, never a guess. The class is
 # spelled the portable way, `]` first and `-` last: a backslash inside a
-# bracket expression is undefined in POSIX.
+# bracket expression is undefined in POSIX. At most 128 characters, the
+# trace's own plain-id rule (TRACE_CONTEXT_ERE), so the two keep the same ids.
 model=$(hook_field model)
 case $model in '' | [!A-Za-z0-9]* | *[!]A-Za-z0-9._:/@+[-]*) model= ;; esac
+[ "${#model}" -le 128 ] || model=
 cwd=$(hook_field cwd)
 transcript=$(hook_expand "$(hook_field transcript_path)")
 
