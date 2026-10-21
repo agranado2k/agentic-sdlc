@@ -26,3 +26,6 @@ R11. WHEN a ticket covers a requirement of an area, `/implement` SHALL apply it 
 R12. IF a requirement in `docs/specs/*.md` is named, as `<area>/R<n>`, by no file the docs gate's `livingSpec.testGlobs` match, THEN the docs gate SHALL fail in both its engines, naming the file and the id.
 R13. WHILE no living spec exists, no `docs/specs/` directory or no file in it with a requirement line, the gate's living-spec check SHALL pass.
 R14. Bootstrap SHALL give a consumer the coverage check, the gate's living-spec check in both engines and the `docs/specs/README.md` starter, and SHALL give it no living spec of the kit's.
+R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
+R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.
+R32. WHERE a skill names a spawn type, the docs gate SHALL fail it when that type's `tools:` holds a tool absent from the skill's `allowed-tools`.

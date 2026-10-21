@@ -67,7 +67,7 @@ advisory_header="WARN  docs conformance"
 # set inside it is lost when the loop ends. The file is the one channel that
 # survives; "any finding at all" is then the file's size (see posix_failed).
 vfile=$(mktemp) || exit 2
-trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited" "$vfile.body" "$vfile.seen"' EXIT INT TERM HUP
+trap 'rm -f "$vfile" "$vfile.specs" "$vfile.cited" "$vfile.body" "$vfile.seen" "$vfile.types" "$vfile.warn"' EXIT INT TERM HUP
 
 # report <rule> <file> <message> <hint>
 report() {
@@ -454,6 +454,94 @@ if [ "$engine" = "fallback" ]; then
 			done
 		fi
 	fi
+
+	# The skill-tools rules' POSIX twin (validators/skill-tools.mjs, #800): an
+	# agent type with no `tools:` line, a SKILL.md with no `allowed-tools`
+	# (an advisory while the block's missingAllowedTools is "warning"), and a
+	# skill naming "the `<type>` agent type" whose tools hold one outside its
+	# allowed-tools. Every skill home, once per skill name, as skill-dated
+	# reads them. The block is read BY TEXT from config.mjs's `skillTools`
+	# block; no block is no rule — the harness's answer too.
+	if [ -f "$ls_cfg" ] && command -v fence_strip >/dev/null 2>&1; then
+		st_block=$(awk '/^const skillTools = \{/ { on = 1; next } on && /^\};/ { exit } on { print }' "$ls_cfg")
+		if [ -n "$st_block" ]; then
+			st_dirs=$(printf '%s\n' "$st_block" | awk '/^[[:space:]]*agentTypeDirs:[[:space:]]*\[/ { on = 1; next } on && /^[[:space:]]*\]/ { exit } on { print }' |
+				sed -n 's/^[[:space:]]*"\(.*\)",\{0,1\}[[:space:]]*$/\1/p')
+			st_sev=$(printf '%s\n' "$st_block" | sed -n 's/^[[:space:]]*missingAllowedTools:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+			st_dir=$(sed -n 's/^[[:space:]]*skillsDir:[[:space:]]*"\([^"]*\)".*/\1/p' "$ls_cfg" | head -1)
+			# st_tools <file> <key> — the tools one frontmatter key declares,
+			# one per line, each scope dropped; exit 3 when the key is absent.
+			st_tools() {
+				awk -v k="$2:" 'NR == 1 { if ($0 ~ /^---[ \t\r]*$/) { fm = 1; next } exit }
+					/^---[ \t\r]*$/ { exit }
+					inlist { if ($0 ~ /^[ \t]+-/) { sub(/^[ \t]+-[ \t]*/, ""); print; next } inlist = 0 }
+					!found && index($0, k) == 1 { found = 1; inlist = 1; print substr($0, length(k) + 1) }
+					END { if (!found) exit 3 }' "$1" |
+					sed 's/([^)]*)//g; s/[][,"'"'"']/ /g' | tr -s ' \t\r' '\n\n\n' | grep -v '^$' | awk '!seen[$0]++'
+			}
+			# The agent types: `<name>\t<file>\t<tools, space-joined>` per line.
+			: >"$vfile.types"
+			for st_d in $st_dirs; do
+				for st_f in $st_d/*.md; do
+					[ -f "$st_f" ] || continue
+					st_name=$(awk 'NR == 1 { if ($0 ~ /^---[ \t\r]*$/) { fm = 1; next } exit }
+						/^---[ \t\r]*$/ { exit }
+						/^name:/ { sub(/^name:[ \t]*["'"'"']?/, ""); sub(/["'"'"' \t\r].*$/, ""); print; exit }' "$st_f")
+					[ -n "$st_name" ] || st_name=$(basename "$st_f" .md)
+					st_t=$(st_tools "$st_f" tools | tr '\n' ' ')
+					printf '%s\t%s\t%s\n' "$st_name" "$st_f" "$st_t" >>"$vfile.types"
+					[ -n "$st_t" ] && continue
+					report "agent-type-tools-missing" "$st_f" \
+						"$st_name has no tools line, so it inherits every tool" \
+						"Give the type a \`tools:\` line in its frontmatter naming the tools it needs, and nothing more."
+				done
+			done
+			: >"$vfile.seen"
+			st_undeclared=""
+			st_hint="Declare \`allowed-tools:\` in the SKILL.md frontmatter: the tools the skill's own session uses, every tool of every agent type it spawns among them."
+			for skill in "${st_dir:-.agents/skills}"/*/SKILL.md .agents/skills/*/SKILL.md .claude/skills/*/SKILL.md; do
+				[ -f "$skill" ] || continue
+				st_skdir=${skill%/SKILL.md}
+				st_name=${st_skdir##*/}
+				grep -qxF -- "$st_name" "$vfile.seen" && continue
+				printf '%s\n' "$st_name" >>"$vfile.seen"
+				st_allowed=$(st_tools "$skill" allowed-tools)
+				if [ -z "$st_allowed" ]; then
+					# An advisory names every such skill on one line; a
+					# violation, one finding per skill — the harness's split.
+					if [ "$st_sev" = "warning" ]; then
+						st_undeclared="${st_undeclared:+$st_undeclared, }$st_name"
+					else
+						report "skill-allowed-tools-missing" "$skill" \
+							"$st_name has no allowed-tools in its frontmatter, so nothing states the tools it uses" \
+							"$st_hint"
+					fi
+					continue
+				fi
+				for st_doc in "$st_skdir"/*.md; do
+					[ -f "$st_doc" ] || continue
+					fence_strip "$st_doc" | tr '\n' ' ' | grep -oE '`[A-Za-z0-9_-]+`[[:space:]]+agent type' |
+						sed 's/^`\([^`]*\)`.*/\1/' | while IFS= read -r st_type; do
+						awk -F '\t' -v n="$st_type" '$1 == n { print $3 }' "$vfile.types" | while IFS= read -r st_tt; do
+							st_out=""
+							for st_tool in $st_tt; do
+								printf '%s\n' "$st_allowed" | grep -qxF -- "$st_tool" && continue
+								st_out="${st_out:+$st_out, }$st_tool"
+							done
+							[ -n "$st_out" ] || continue
+							printf '%s\n' "$st_name spawns $st_type, whose tools ($st_out) are outside its allowed-tools"
+						done
+					done | awk '!seen[$0]++' | while IFS= read -r st_msg; do
+						report "spawn-widens-tools" "$st_doc" "$st_msg" \
+							"Spawn a type whose tools are within the skill's allowed-tools, or widen the skill's allowed-tools in the open — a spawned subagent may only narrow what its spawner may do."
+					done
+				done
+			done
+			[ -n "$st_undeclared" ] &&
+				printf '  [skill-tools] ! %s [skill-allowed-tools-missing] — no allowed-tools in the frontmatter of %s, so nothing states the tools they use\n      -> %s\n' \
+					"${st_dir:-.agents/skills}" "$st_undeclared" "$st_hint" >>"$vfile.warn"
+		fi
+	fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -465,7 +553,8 @@ if [ "$engine" = "fallback" ]; then
 	echo "        living specs against the test globs (the living-spec rule, its POSIX twin)," >&2
 	echo "        skill byte ceilings (the skill-ceiling rule, its POSIX twin)," >&2
 	echo "        dated kit evidence in skill bodies (the skill-dated rule, its POSIX twin)," >&2
-	echo "        and supersession held both ways between decision records (the supersession rule, its POSIX twin)." >&2
+	echo "        supersession held both ways between decision records (the supersession rule, its POSIX twin)," >&2
+	echo "        and declared tools — allowed-tools, agent types' tools lines, spawns that only narrow (the skill-tools rules, their POSIX twin)." >&2
 	echo "        NOT checked: slash-command resolution, article reachability, nested manuals," >&2
 	echo "        package-relative paths, shim integrity (CLAUDE.md / GEMINI.md) and the" >&2
 	echo "        portability deny-list on the shared article — the claude-md-refs rules" >&2
@@ -485,6 +574,18 @@ fi
 
 posix_failed=0
 [ -s "$vfile" ] && posix_failed=1
+
+# The reduced form's advisories (a skill with no allowed-tools while the
+# policy holds that rule at a warning), under the harness's own header: they
+# are printed whatever the verdict and never move the exit code.
+if [ -s "$vfile.warn" ]; then
+	{
+		echo "$advisory_header: advisories (gate stays green)"
+		echo ""
+		cat "$vfile.warn"
+		echo ""
+	} >&2
+fi
 
 if [ "$posix_failed" = 0 ] && [ "$harness_status" = 0 ]; then
 	# A green harness may still carry ADVISORIES — findings on the warning
