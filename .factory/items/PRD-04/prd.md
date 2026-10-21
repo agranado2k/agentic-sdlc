@@ -3,9 +3,11 @@ id: PRD-04
 type: prd
 title: Skills declare their powers, and a subagent's only narrow
 parent: D-01
-stage: draft
+stage: approved
 created: 2026-10-20
-updated: 2026-10-20
+updated: 2026-10-21
+approved_by: "agranado"
+approved_at: 2026-10-21
 ---
 
 # PRD-04 · Skills declare their powers, and a subagent's only narrow

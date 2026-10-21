@@ -3,9 +3,11 @@ id: PRD-03
 type: prd
 title: Runs record their context, and /retro measures flow and checks learning-loop edits
 parent: D-01
-stage: draft
+stage: approved
 created: 2026-10-20
-updated: 2026-10-20
+updated: 2026-10-21
+approved_by: "agranado"
+approved_at: 2026-10-21
 ---
 
 # PRD-03 · Runs record their context, and /retro measures flow and checks learning-loop edits
