@@ -1337,10 +1337,14 @@ trace_agent_tools() {
 		/^---[[:space:]]*$/ { exit }
 		/^tools:/ { sub(/^tools:/, ""); gsub(/[[:space:]]/, ""); print; exit }
 	' "$_at_dir/$1.md" 2>/dev/null)
-	case $_at_list in
-	'' | *[!A-Za-z0-9_,*:.\(\)-]*) echo undeclared ;;
-	*) printf '%s\n' "$_at_list" ;;
-	esac
+	# One line (awk printed one), held by an ERE: a bracket expression with a
+	# backslash in it is undefined in a POSIX pattern, and a parenthesis in a
+	# case pattern is not a character every shell will take literally.
+	if [ -n "$_at_list" ] && printf '%s\n' "$_at_list" | grep -Eqx '[A-Za-z0-9_,*:.()-]+'; then
+		printf '%s\n' "$_at_list"
+	else
+		echo undeclared
+	fi
 }
 
 # ---------------------------------------------------------------------------

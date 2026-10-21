@@ -3410,6 +3410,51 @@ rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.tools=Read outcome=in-se
 [ "$(rc_spawn given | grep -o '"tools":"[^"]*"')" = '"tools":"Read"' ] &&
 	pass "a data.tools the caller passes stands, once" ||
 	fail "the caller's data.tools did not stand alone: $(rc_spawn given)"
+# Each branch that turns a definition into `undeclared`, and the one that
+# reads the directory from an absolute path (review of PR #809, M-3).
+printf "TRACE_DIR='%s'\n" "$RC" >"$SCRATCH/policy.context-798-nodir.sh"
+# A definition where an empty directory would resolve to, so only the
+# unset-directory branch keeps it from being read.
+printf -- '---\nname: reviewer\ntools: Bash\n---\n' >"$RC_REPO/reviewer.md"
+rc_run TRACE_CONFIG="$SCRATCH/policy.context-798-nodir.sh" emit kind=spawn subject=pr:#1 tier=reviewer outcome=in-session reason=no-dir 2>/dev/null
+rc_spawn no-dir | grep -qF '"tools":"undeclared"' &&
+	pass "with the agent-types directory unset, as shipped, a defined type is still undeclared (runtime/R30)" ||
+	fail "an unset directory recorded: $(rc_spawn no-dir)"
+rm -f "$RC_REPO/reviewer.md"
+printf "TRACE_DIR='%s'\nTRACE_AGENT_TYPES_DIR='%s'\n" "$RC" "$RC_REPO/agent-types" >"$SCRATCH/policy.context-798-abs.sh"
+rc_run TRACE_CONFIG="$SCRATCH/policy.context-798-abs.sh" emit kind=spawn subject=pr:#1 tier=reviewer outcome=in-session reason=abs-dir 2>/dev/null
+rc_spawn abs-dir | grep -qF '"tools":"Read,Grep,Glob"' &&
+	pass "an absolute agent-types directory is read as given (runtime/R30)" ||
+	fail "an absolute directory recorded: $(rc_spawn abs-dir)"
+printf -- '---\nname: notools\ndescription: none\n---\ntools: Bash\n' >"$RC_REPO/agent-types/notools.md"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=notools outcome=in-session reason=no-tools-line 2>/dev/null
+rc_spawn no-tools-line | grep -qF '"tools":"undeclared"' &&
+	pass "a definition whose frontmatter has no tools: line is undeclared, never the body's (runtime/R30)" ||
+	fail "a definition with no tools: line recorded: $(rc_spawn no-tools-line)"
+printf -- '---\nname: odd\ntools: Read; rm -rf x, Grep\n---\n' >"$RC_REPO/agent-types/odd.md"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=odd outcome=in-session reason=odd-tools 2>/dev/null
+rc_spawn odd-tools | grep -qF '"tools":"undeclared"' &&
+	pass "a tools: line with a character no tool list carries is undeclared, never recorded (runtime/R30)" ||
+	fail "an odd tools: line recorded: $(rc_spawn odd-tools)"
+printf -- '---\nname: paren\ntools: Read, Bash(git:*), Grep\n---\n' >"$RC_REPO/agent-types/paren.md"
+rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=paren outcome=in-session reason=paren-tools 2>/dev/null
+rc_spawn paren-tools | grep -qF '"tools":"Read,Bash(git:*),Grep"' &&
+	pass "a tool with a parenthesised scope is recorded as written (runtime/R30)" ||
+	fail "a scoped tool list recorded: $(rc_spawn paren-tools)"
+RC_NL_MODEL="claude-opus-5-5
+touch x"
+t_exec rc_run "TRACE_MODEL=$RC_NL_MODEL" begin implement subject=ticket:#1
+RC_H=$T_OUT
+rc_opened "$RC_H" "under a two-line model variable"
+rc_start "$RC_H" | grep -qF '"model":' && fail "a model variable of two lines was recorded: $(rc_start "$RC_H")" ||
+	pass "a model variable whose first line alone is a plain id is left out (runtime/R29)"
+expect_said "not a plain id"
+rc_run end "$RC_H" outcome=ok 2>/dev/null
+# The filters' own text is held to POSIX: a backslash inside a bracket
+# expression is undefined there, whatever the shell running this suite does.
+sed -n '/^trace_agent_tools()/,/^}/p' "$TRACE" | grep -q '\[![^]]*\\' &&
+	fail "trace_agent_tools escapes inside a bracket expression, undefined in POSIX" ||
+	pass "trace_agent_tools' bracket expressions carry no backslash — portable POSIX"
 t_exec rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=../x outcome=in-session reason=bad
 expect_status 2 "an agent type that is not a [a-z][a-z0-9-]* token is refused before a path is built from it"
 rc_run emit kind=note subject=pr:#1 tier=reviewer reason=a-note 2>/dev/null
