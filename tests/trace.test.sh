@@ -3450,13 +3450,52 @@ rc_start "$RC_H" | grep -qF '"model":' && fail "a model variable of two lines wa
 	pass "a model variable whose first line alone is a plain id is left out (runtime/R29)"
 expect_said "not a plain id"
 rc_run end "$RC_H" outcome=ok 2>/dev/null
+# The other shapes a plain id excludes (review of PR #809, M-6): a harness
+# that is not one, a model one character past the 128 cap, and one that
+# opens with a dash — each left out, with the run still opened.
+RC_LONG=$(printf 'm%0128d' 0)
+for RC_BAD in "TRACE_HARNESS=claude code" "TRACE_MODEL=$RC_LONG" "TRACE_MODEL=-opus"; do
+	RC_I=$(rc_run "$RC_BAD" begin implement subject=ticket:#1 2>/dev/null)
+	rc_opened "$RC_I" "under $(printf "%.24s" "$RC_BAD")…"
+	rc_start "$RC_I" | grep -qE '"(model|harness)":' &&
+		fail "$(printf "%.24s" "$RC_BAD")… was recorded: $(rc_start "$RC_I")" ||
+		pass "$(printf "%.24s" "$RC_BAD")… is not a plain id, and is left out (runtime/R29)"
+	rc_run end "$RC_I" outcome=ok 2>/dev/null
+done
+RC_MAX=$(printf 'm%0127d' 0)
+RC_J=$(rc_run "TRACE_MODEL=$RC_MAX" begin implement subject=ticket:#1 2>/dev/null)
+rc_start "$RC_J" | grep -qF "\"model\":\"$RC_MAX\"" &&
+	pass "a model of exactly 128 characters is still a plain id, and recorded (runtime/R29)" ||
+	fail "a 128-character model was not recorded: $(rc_start "$RC_J")"
+rc_run end "$RC_J" outcome=ok 2>/dev/null
+cp "$RC_REPO/VERSION" "$RC_REPO/VERSION.keep"
+printf '# a manifest\n\nfiles:\n  scripts/trace.sh\n' >"$RC_REPO/VERSION"
+RC_K=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
+rc_opened "$RC_K" "with a VERSION that names no shared layer"
+rc_start "$RC_K" | grep -qF '"kit":' &&
+	fail "a VERSION with no shared-layer: line still gave a kit: $(rc_start "$RC_K")" ||
+	pass "a VERSION with no shared-layer: line gives no kit — never a guess (runtime/R28)"
+rc_run end "$RC_K" outcome=ok 2>/dev/null
+mv "$RC_REPO/VERSION.keep" "$RC_REPO/VERSION"
 # The filters' own text is held to POSIX: a backslash inside a bracket
 # expression is undefined there, whatever the shell running this suite does.
-sed -n '/^trace_agent_tools()/,/^}/p' "$TRACE" | grep -q '\[![^]]*\\' &&
+RC_TOOLS_FN=$(sed -n '/^trace_agent_tools()/,/^}/p' "$TRACE")
+printf '%s\n' "$RC_TOOLS_FN" | grep -q 'undeclared' ||
+	fail "found no trace_agent_tools body to hold to POSIX: the check below would pass on nothing"
+printf '%s\n' "$RC_TOOLS_FN" | grep -q '\[![^]]*\\' &&
 	fail "trace_agent_tools escapes inside a bracket expression, undefined in POSIX" ||
 	pass "trace_agent_tools' bracket expressions carry no backslash — portable POSIX"
 t_exec rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=../x outcome=in-session reason=bad
 expect_status 2 "an agent type that is not a [a-z][a-z0-9-]* token is refused before a path is built from it"
+# A tier that is not a token names no agent type, so it is the catch-all's,
+# undeclared — and never a path: a decoy where ../x.md would resolve to
+# proves the reader's own guard is what keeps it out (review of PR #809, H-1).
+printf -- '---\nname: x\ntools: Bash\n---\n' >"$RC_REPO/x.md"
+rc_run emit kind=spawn subject=pr:#1 tier=../x outcome=in-session reason=dotdot-tier 2>/dev/null
+rc_spawn dotdot-tier | grep -qF '"tools":"undeclared"' &&
+	pass "a tier of ../x builds no path from it — the decoy it would reach is not read (runtime/R30)" ||
+	fail "a tier of ../x recorded: $(rc_spawn dotdot-tier)"
+rm -f "$RC_REPO/x.md"
 rc_run emit kind=note subject=pr:#1 tier=reviewer reason=a-note 2>/dev/null
 grep -qF '"reason":"a-note"' "$RC/events/$TODAY.jsonl" &&
 	pass "a note under a tier is recorded" || fail "the note was not recorded at all"
