@@ -3332,6 +3332,12 @@ rc_run() {
 	)
 }
 rc_start() { grep -F '"kind":"run.start"' "$RC/events/$TODAY.jsonl" | grep -F "\"run\":\"$1\""; }
+# rc_opened <run> <when> — a "left out" assertion proves nothing about a run
+# that never opened, so each one first proves its run.start is there.
+rc_opened() {
+	[ -n "$1" ] && [ "$(rc_start "$1" | grep -c '')" = 1 ] &&
+		pass "the run $2 opened, one run.start" || fail "the run $2 never opened: '$1'"
+}
 
 # runtime/R28 — data.kit, read from VERSION.
 RC_A=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
@@ -3344,6 +3350,7 @@ expect_status 2 "a caller cannot set data.kit — begin reads it from VERSION (r
 expect_said "data.kit"
 mv "$RC_REPO/VERSION" "$RC_REPO/VERSION.away"
 RC_B=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
+rc_opened "$RC_B" "with no VERSION"
 rc_start "$RC_B" | grep -qF '"kit":' &&
 	fail "with no VERSION, run.start still carries a kit: $(rc_start "$RC_B")" ||
 	pass "with no VERSION to read, run.start carries no kit — never a guess (runtime/R28)"
@@ -3357,6 +3364,7 @@ rc_start "$RC_C" | grep -F '"model":"claude-opus-5-5"' | grep -qF '"harness":"cl
 	fail "run.start does not carry the exposed model and harness: $(rc_start "$RC_C")"
 rc_run end "$RC_C" outcome=ok 2>/dev/null
 RC_D=$(rc_run begin implement subject=ticket:#1 2>/dev/null)
+rc_opened "$RC_D" "with no harness variable"
 rc_start "$RC_D" | grep -qF '"model":' && fail "with no harness variable, run.start carries a model: $(rc_start "$RC_D")" ||
 	pass "with no harness variable set, run.start carries no model (runtime/R29)"
 rc_start "$RC_D" | grep -qF '"harness":' && fail "with no harness variable, run.start carries a harness: $(rc_start "$RC_D")" ||
@@ -3370,6 +3378,7 @@ rc_run end "$RC_E" outcome=ok 2>/dev/null
 t_exec rc_run "TRACE_MODEL=opus; touch x" begin implement subject=ticket:#1
 expect_status 0 "a model variable that is not a plain id still opens the run"
 RC_F=$T_OUT
+rc_opened "$RC_F" "under a malformed model variable"
 rc_start "$RC_F" | grep -qF '"model":' && fail "a malformed model variable was recorded: $(rc_start "$RC_F")" ||
 	pass "and the malformed value is left out, never recorded (runtime/R29)"
 rc_run end "$RC_F" outcome=ok 2>/dev/null
@@ -3404,6 +3413,8 @@ rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.tools=Read outcome=in-se
 t_exec rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=../x outcome=in-session reason=bad
 expect_status 2 "an agent type that is not a [a-z][a-z0-9-]* token is refused before a path is built from it"
 rc_run emit kind=note subject=pr:#1 tier=reviewer reason=a-note 2>/dev/null
+grep -qF '"reason":"a-note"' "$RC/events/$TODAY.jsonl" &&
+	pass "a note under a tier is recorded" || fail "the note was not recorded at all"
 grep -F '"reason":"a-note"' "$RC/events/$TODAY.jsonl" | grep -qF '"tools":' &&
 	fail "a kind other than spawn gained data.tools" || pass "and no other kind gains one"
 
