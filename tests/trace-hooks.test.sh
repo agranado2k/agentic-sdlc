@@ -5114,6 +5114,58 @@ else
 	echo "  skip  node is not on PATH — the shim leg needs a node to resolve"
 fi
 
+# ---------------------------------------------------------------------------
+banner "56. SessionStart exports the harness and, where the payload carries it, the model (ticket #798)"
+# ---------------------------------------------------------------------------
+# runtime/R29. The trace's begin records model and harness only where the
+# agent harness exposes them; under Claude Code the session hook is what
+# exposes them — the harness's own name always, the model only when the
+# payload names one, and never a value that is not a plain id, because the
+# env file is sourced as shell.
+new_trace
+CTXF="$SCRATCH/context-env.sh"
+: >"$CTXF"
+sed 's|^{$|{\n  "model": "claude-opus-5-5",|' "$SCRATCH/start.json" >"$SCRATCH/start-model.json"
+grep -q '"model": "claude-opus-5-5"' "$SCRATCH/start-model.json" || fail "the fixture edit put no model in the payload"
+t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-model.json"
+[ "$T_STATUS" = 0 ] && pass "the hook exits 0 with a model in the payload" || fail "the hook exited $T_STATUS: $T_ERR"
+grep -qx "export TRACE_MODEL='claude-opus-5-5'" "$CTXF" &&
+	pass "the payload's model is exported as TRACE_MODEL, single-quoted (runtime/R29)" ||
+	fail "no export of TRACE_MODEL in $CTXF: $(cat "$CTXF")"
+grep -qx "export TRACE_HARNESS='claude-code'" "$CTXF" &&
+	pass "and the harness's own name as TRACE_HARNESS (runtime/R29)" ||
+	fail "no export of TRACE_HARNESS in $CTXF: $(cat "$CTXF")"
+[ "$(str "$(ev_of session.start | sed -n '1p')" model)" = claude-opus-5-5 ] &&
+	pass "and session.start records the model the payload named" ||
+	fail "session.start carries no model: $(ev_of session.start)"
+# The coupling: a begin under that environment records both.
+t_exec sh -c ". '$CTXF' && TRACE_DIR='$TDIR' TRACE_CONFIG='$KIT/scripts/trace.config.sh' TRACE_SESSION=ctx-798 sh '$TRACE' begin implement subject=ticket:#1"
+RS=$(ev_of run.start | sed -n '1p')
+[ "$(str "$RS" model)" = claude-opus-5-5 ] && [ "$(str "$RS" harness)" = claude-code ] &&
+	pass "a begin in a shell that sourced the env file records the model and the harness (runtime/R29)" ||
+	fail "run.start under the sourced env file: $RS"
+
+new_trace
+: >"$CTXF"
+t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start.json"
+grep -q 'TRACE_MODEL' "$CTXF" &&
+	fail "a payload with no model exported one: $(cat "$CTXF")" ||
+	pass "a payload with no model exports none — never guessed (runtime/R29)"
+grep -qx "export TRACE_HARNESS='claude-code'" "$CTXF" &&
+	pass "and still exports the harness" || fail "no TRACE_HARNESS export: $(cat "$CTXF")"
+
+new_trace
+: >"$CTXF"
+rm -f "$SCRATCH/PWNED-798"
+sed 's|^{$|{\n  "model": "opus'"'"'; touch '"$SCRATCH"'/PWNED-798; '"'"'",|' "$SCRATCH/start.json" >"$SCRATCH/start-evil-model.json"
+t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-evil-model.json"
+[ "$T_STATUS" = 0 ] && pass "a hostile model still exits 0" || fail "the hook exited $T_STATUS"
+sh -c ". '$CTXF'" >/dev/null 2>&1 || :
+[ -e "$SCRATCH/PWNED-798" ] && fail "sourcing the env file executed the payload's model" ||
+	pass "a model that is not a plain id is never written to the sourced file"
+grep -q 'TRACE_MODEL' "$CTXF" && fail "the hostile model was exported: $(cat "$CTXF")" ||
+	pass "and no TRACE_MODEL is exported for it"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s case(s) skipped above — this host proved less than one with node and a millisecond clock would\n' "$SKIPPED"
 fi

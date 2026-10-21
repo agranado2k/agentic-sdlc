@@ -979,6 +979,7 @@ trace_emit() {
 	_em_blob_src=
 	_em_outcome=
 	_em_model=
+	_em_tier=
 	_em_on=0
 	TRACE_BLOB=
 	TRACE_BLOB_BYTES=
@@ -1038,6 +1039,7 @@ trace_emit() {
 					eval "_em_v_$_em_key=\$_em_esc"
 					[ "$_em_key" = outcome ] && _em_outcome=$_em_val
 					[ "$_em_key" = model ] && _em_model=$_em_val
+					[ "$_em_key" = tier ] && _em_tier=$_em_val
 					;;
 				*)
 					case " $TRACE_TOKEN_FIELDS " in
@@ -1063,6 +1065,24 @@ trace_emit() {
 	trace_check_shapes "$_em_kind" "$_em_outcome" "$_em_dlines" || die "$TRACE_SHAPE_WHY"
 	if [ "$_em_kind" = spawn ] && [ -n "$_em_model" ]; then
 		trace_check_spawn_model "$_em_model" || die "$TRACE_MODEL_WHY"
+	fi
+	# runtime/R30: a spawn carries the tool list of the agent type it ran as.
+	if [ "$_em_kind" = spawn ]; then
+		_em_type=$(printf '%s\n' "$_em_dlines" | sed -n 's/^agent_type=//p' | sed -n '$p')
+		if [ -n "$_em_type" ]; then
+			case $_em_type in [!a-z]* | *[!a-z0-9-]*) die "data.agent_type '$_em_type' is not [a-z][a-z0-9-]*" ;; esac
+		else
+			_em_type=$_em_tier
+		fi
+		# A spawn on another agent harness ran as no type of this one's.
+		[ -z "$_em_v_harness" ] || _em_type=
+		case $_trace_nl$_em_dlines in
+		*"${_trace_nl}tools="*) ;;
+		*)
+			_em_tools=$(trace_agent_tools "$_em_type")
+			_em_data="${_em_data:+$_em_data,}\"tools\":\"$_em_tools\""
+			;;
+		esac
 	fi
 
 	# The directory first: identity's fallbacks and the blob store both live in
@@ -1250,6 +1270,80 @@ trace_runs() {
 }
 
 # ---------------------------------------------------------------------------
+# A run's context (ticket #798): what it ran under, so a comparison across
+# time compares like with like.
+#
+# THE KIT. `begin` reads the `shared-layer:` value of the VERSION file at this
+# file's repository root, as written, into run.start's data.kit — the manifest
+# a consumer copies wholesale, so it names the release the run's scripts came
+# from. No file, or no such line, is no field: never a guess. A caller cannot
+# pass data.kit; begin owns it like it owns kind.
+#
+# THE MODEL AND THE HARNESS. An agent harness that exposes them puts them in
+# the environment as TRACE_MODEL and TRACE_HARNESS — the Claude Code adapter's
+# session-start hook exports both through the env file its agent harness sources,
+# the model only when the hook payload carries one. `begin` copies each one
+# that is set into run.start's `model` and `harness`, and leaves out one that
+# is not: an unexposed value is never guessed. A value that is not a plain id
+# (TRACE_CONTEXT_ERE) is left out too, with one note on stderr — the variable
+# is the agent harness's text, and the trace records only what it can check. A
+# `model=` or `harness=` the caller passes on begin stands over the
+# environment. The model is the SESSION's: a subagent shares its session's
+# environment, so its own run.start names the session's model, and the spawn
+# line that started it names the model it ran on.
+#
+# THE TOOLS. A `spawn` carries data.tools, the tool list of the agent type it
+# spawned as: data.agent_type when the caller names one, else its tier, since
+# an agent harness's tier agent types are named for the tiers. The list is the
+# `tools:` line of the type's frontmatter, its spaces dropped, read from
+# <TRACE_AGENT_TYPES_DIR>/<type>.md under this file's repository root. The
+# directory is policy, empty as shipped: where an agent harness keeps its
+# agent types is its own, and this script names none. No directory, no
+# definition, or a definition with no `tools:` line is data.tools=undeclared
+# — the spawn ran as the agent harness's catch-all type, whatever that carries, and
+# the line says so rather than guessing a list. So is a spawn that carries a
+# `harness`: it was dispatched to another agent harness's CLI, which runs as
+# none of this agent harness's types. A data.tools the caller passes
+# stands. An agent type that is not a [a-z][a-z0-9-]* token is exit 2,
+# before a path is built from it.
+TRACE_AGENT_TYPES_DIR=''
+TRACE_CONTEXT_ERE='^[A-Za-z0-9][][A-Za-z0-9._:/@+-]{0,127}$'
+
+# trace_kit_version — prints VERSION's shared-layer value, or nothing.
+trace_kit_version() {
+	_kv_file="$_trace_here/../VERSION"
+	[ -f "$_kv_file" ] || return 0
+	sed -n 's/^shared-layer:[[:space:]]*\([0-9][0-9.]*[0-9]\)[[:space:]]*$/\1/p' "$_kv_file" 2>/dev/null | sed -n '1p'
+}
+
+# trace_context_ok <value> — a model or agent harness name the environment gave.
+trace_context_ok() {
+	printf '%s\n' "$1" | grep -Eq "$TRACE_CONTEXT_ERE" && [ "$(printf '%s' "$1" | wc -l | tr -d ' ')" = 0 ]
+}
+
+# trace_agent_tools <type> — prints the type's tool list, or `undeclared`.
+trace_agent_tools() {
+	case $1 in '' | [!a-z]* | *[!a-z0-9-]*)
+		echo undeclared
+		return 0
+		;;
+	esac
+	_at_dir=${TRACE_AGENT_TYPES_DIR:-}
+	[ -n "$_at_dir" ] || { echo undeclared; return 0; }
+	case $_at_dir in /*) ;; *) _at_dir="$_trace_here/../$_at_dir" ;; esac
+	_at_list=
+	[ -f "$_at_dir/$1.md" ] && _at_list=$(awk '
+		NR == 1 { if ($0 != "---") exit; next }
+		/^---[[:space:]]*$/ { exit }
+		/^tools:/ { sub(/^tools:/, ""); gsub(/[[:space:]]/, ""); print; exit }
+	' "$_at_dir/$1.md" 2>/dev/null)
+	case $_at_list in
+	'' | *[!A-Za-z0-9_,*:.\(\)-]*) echo undeclared ;;
+	*) printf '%s\n' "$_at_list" ;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
 # begin / end — the two ends of a run.
 
 # trace_reject_owned <subcommand> <argument…> — begin and end own kind, run and
@@ -1262,6 +1356,7 @@ trace_reject_owned() {
 	for _ro_a in "$@"; do
 		case $_ro_a in
 		kind=* | run=* | parent=*) die "$_ro_cmd sets ${_ro_a%%=*} itself — drop it" ;;
+		data.kit=*) [ "$_ro_cmd" = begin ] && die "begin sets data.kit itself, from VERSION — drop it" ;;
 		skill=*)
 			# begin's skill is its positional argument; a trailing skill= used
 			# to win silently, which relabels the run the caller asked to open.
@@ -1296,6 +1391,24 @@ trace_begin() {
 	fi
 	trace_key || die "cannot name this working tree's run stack: git could not hash its path"
 	_bg_run=$(trace_id)
+	# Its context (runtime/R28, R29): the kit, then the model and the agent harness
+	# where the agent harness exposed them and the caller named none.
+	_bg_kit=$(trace_kit_version)
+	[ -z "$_bg_kit" ] || set -- "$@" "data.kit=$_bg_kit"
+	_bg_named=
+	for _bg_a in "$@"; do
+		case $_bg_a in model=* | harness=*) _bg_named="$_bg_named ${_bg_a%%=*}" ;; esac
+	done
+	for _bg_f in model harness; do
+		case "$_bg_named " in *" $_bg_f "*) continue ;; esac
+		[ "$_bg_f" = model ] && _bg_v=${TRACE_MODEL:-} || _bg_v=${TRACE_HARNESS:-}
+		[ -n "$_bg_v" ] || continue
+		if trace_context_ok "$_bg_v"; then
+			set -- "$@" "$_bg_f=$_bg_v"
+		else
+			[ "${TRACE_QUIET:-}" = 1 ] || echo "!  trace: the environment's $_bg_f is not a plain id, so run.start leaves it out" >&2
+		fi
+	done
 	# The run that is current NOW is the one this one nests inside.
 	trace_identity
 	if [ -n "$_id_run" ]; then
