@@ -1574,4 +1574,97 @@ for needle in 'per tier' 'per cascade rung' 'unattributed' 'order of magnitude' 
 	sec_of 5 | flat | grep -qiF "$needle" && pass "question 5 names: $needle" || fail "question 5 does not name '$needle' (spend/R22)"
 done
 
+# ---------------------------------------------------------------------------
+banner "17. The flow section: lead time, review wait and toil's share (process/R22-R24, #799)"
+# ---------------------------------------------------------------------------
+# /retro reported iterations and cost, never how long a ticket takes from
+# start to land, how long a green PR waits for its human, or how much of the
+# landed work is toil. The flow section is its own, beside the eight
+# questions and never a ninth, and its span RUNS here over a fixture trace of
+# five landed tickets: one with two green iterations (the last counts), one
+# resumed (the first start counts), one with no green iteration (`n/a`, never
+# zero), one whose landing names no ticket (joined through its pr.open), and a
+# landing before the window and a stopped one that never count. The toil line
+# reads `ticket.start`'s `data.class`, a class the consumer names.
+flow_sec() { awk '/^## Flow/ { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+flspan=$(flow_sec | grep -o '`sh scripts/trace\.sh export | awk[^`]*`' | tr -d '`' | head -1)
+[ -n "$flspan" ] && pass "QUESTIONS.md's flow section carries a span over the export" ||
+	fail "QUESTIONS.md has no '## Flow' section carrying a \`sh scripts/trace.sh export | awk …\` span (process/R22)"
+# fl_ev <dir> <ts> <kind> <subject> <outcome> [related] [class] — one raw
+# event line in its day file: a fixture's times are the point, and emit
+# stamps the clock's.
+fl_ev() {
+	_fl_day=${2%%T*}
+	mkdir -p "$1/events"
+	printf '{"v":1,"ts":"%s","id":"%s-1-0000abcd","kind":"%s","subject":"%s"%s,"outcome":"%s","reason":"fixture"%s}\n' \
+		"$2" "$(printf '%s' "$2" | tr -d ':-')" "$3" "$4" "${6:+,\"related\":\"$6\"}" "$5" "${7:+,\"data\":{\"class\":\"$7\"\}}" >>"$1/events/$_fl_day.jsonl"
+}
+# fl_fixture <dir> <classes, yes|no>
+fl_fixture() {
+	c() { [ "$2" = yes ] && printf '%s' "$1"; }
+	fl_ev "$1" 2025-12-31T09:00:00Z ticket.start 'ticket:#9' read '' "$(c toil "$2")"
+	fl_ev "$1" 2025-12-31T10:00:00Z merge.land 'pr:#10' landed 'ticket:#9'
+	fl_ev "$1" 2026-10-01T09:00:00Z ticket.start 'ticket:#1' read '' "$(c toil "$2")"
+	fl_ev "$1" 2026-10-01T09:30:00Z pr.open 'pr:#11' opened 'ticket:#1 branch:feat/one'
+	fl_ev "$1" 2026-10-01T11:00:00Z pr.iterate 'pr:#11' green
+	fl_ev "$1" 2026-10-01T12:00:00Z pr.iterate 'pr:#11' green
+	fl_ev "$1" 2026-10-01T12:30:00Z merge.land 'pr:#11' landed 'ticket:#1'
+	fl_ev "$1" 2026-10-02T08:00:00Z ticket.start 'ticket:#2' read '' "$(c feature "$2")"
+	fl_ev "$1" 2026-10-02T10:00:00Z ticket.start 'ticket:#2' resumed '' "$(c feature "$2")"
+	fl_ev "$1" 2026-10-02T14:00:00Z pr.iterate 'pr:#12' green
+	fl_ev "$1" 2026-10-02T15:00:00Z merge.land 'pr:#12' landed 'ticket:#2'
+	fl_ev "$1" 2026-10-03T09:00:00Z ticket.start 'ticket:#3' read '' "$(c toil "$2")"
+	fl_ev "$1" 2026-10-03T10:00:00Z pr.iterate 'pr:#13' red
+	fl_ev "$1" 2026-10-03T10:15:00Z merge.land 'pr:#13' landed 'ticket:#3'
+	fl_ev "$1" 2026-10-04T09:00:00Z ticket.start 'ticket:#4' read
+	fl_ev "$1" 2026-10-04T09:30:00Z pr.open 'pr:#14' opened 'ticket:#4 branch:feat/four'
+	fl_ev "$1" 2026-10-05T09:00:00Z pr.iterate 'pr:#14' green
+	fl_ev "$1" 2026-10-05T11:00:00Z merge.land 'pr:#14' landed
+	fl_ev "$1" 2026-10-06T09:00:00Z ticket.start 'ticket:#5' read '' "$(c feature "$2")"
+	fl_ev "$1" 2026-10-06T09:10:00Z pr.iterate 'pr:#15' green
+	fl_ev "$1" 2026-10-06T09:20:00Z merge.land 'pr:#15' landed 'ticket:#5'
+	fl_ev "$1" 2026-10-06T10:00:00Z ticket.start 'ticket:#6' read '' "$(c toil "$2")"
+	fl_ev "$1" 2026-10-06T11:00:00Z merge.land 'pr:#16' stopped 'ticket:#6'
+}
+fl_run() { ( cd "$ROOT" && TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$flspan")" 2>/dev/null ); }
+fl_class="$SCRATCH/flow-class.retro"
+fl_none="$SCRATCH/flow-none.retro"
+fl_fixture "$fl_class" yes
+fl_fixture "$fl_none" no
+( cd "$ROOT" && TRACE_DIR="$fl_class" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the flow fixture is a trace verify accepts" ||
+	fail "the flow fixture does not verify — the span would be read over a damaged trace"
+if [ -n "$flspan" ]; then
+	fout=$(fl_run "$fl_class")
+	for row in 'landing pr:#11 ticket:#1 lead 3h30m wait 0h30m' 'landing pr:#12 ticket:#2 lead 7h00m wait 1h00m' \
+		'landing pr:#13 ticket:#3 lead 1h15m wait n/a' 'landing pr:#14 ticket:#4 lead 26h00m wait 2h00m' \
+		'landing pr:#15 ticket:#5 lead 0h20m wait 0h10m'; do
+		printf '%s\n' "$fout" | grep -qxF "$row" && pass "process/R22, process/R23: the flow span prints '$row'" ||
+			fail "process/R22, process/R23: the flow span did not print '$row'; it printed: $(printf '%s' "$fout" | tr '\n' ';')"
+	done
+	printf '%s\n' "$fout" | grep -qxF 'median lead 3h30m wait 0h30m' && pass "process/R22, process/R23: each column's median, n/a left out of it" ||
+		fail "process/R22, process/R23: no 'median lead 3h30m wait 0h30m' row; it printed: $(printf '%s' "$fout" | tr '\n' ';')"
+	printf '%s\n' "$fout" | grep -qxF 'longest lead 26h00m wait 2h00m' && pass "process/R22, process/R23: each column's longest" ||
+		fail "process/R22, process/R23: no 'longest lead 26h00m wait 2h00m' row; it printed: $(printf '%s' "$fout" | tr '\n' ';')"
+	printf '%s\n' "$fout" | grep -qxF 'toil: 2 of 5 landed' && pass "process/R24: toil's share of the landed tickets, from ticket.start's data.class" ||
+		fail "process/R24: no 'toil: 2 of 5 landed' line; it printed: $(printf '%s' "$fout" | tr '\n' ';')"
+	printf '%s\n' "$fout" | grep -qE 'pr:#1[06]' && fail "the flow span counts a landing before the window or a stopped one" ||
+		pass "…and counts no landing before the window and no stopped landing"
+	printf '%s\n' "$(fl_run "$fl_none")" | grep -qxF 'toil: not recorded' && pass "process/R24: a window whose tickets carry no class prints 'toil: not recorded'" ||
+		fail "process/R24: over a window with no class the flow span printed: $(fl_run "$fl_none" | tr '\n' ';')"
+fi
+# R24's other half: ticket.start takes the consumer's class, and the kit
+# names none of its own.
+fe="$SCRATCH/flow-emit.retro"
+( cd "$ROOT" && TRACE_DIR="$fe" TRACE_QUIET=1 sh "$TRACE" emit kind=ticket.start 'subject=ticket:#1' tier=implementer outcome=read data.class=toil reason=fixture ) &&
+	( cd "$ROOT" && TRACE_DIR="$fe" TRACE_QUIET=1 sh "$TRACE" export ) | grep -qF '"data":{"class":"toil"}' &&
+	pass "process/R24: ticket.start accepts a consumer's data.class" || fail "process/R24: ticket.start refused or dropped data.class=toil"
+fprose=$(flow_sec | flat)
+for needle in 'lead time' 'review wait' '`n/a`' 'never zero' 'median' 'longest' '`toil: <n> of <m> landed`' '`toil: not recorded`' 'names no class of its own'; do
+	case "$fprose" in *"$needle"*) pass "the flow section says: $needle" ;; *) fail "the flow section does not say: $needle" ;; esac
+done
+case "$(sed -n '/^## Procedure/,/^## Routing/p' "$SKILL_ABS" | flat)" in
+*'the flow section'*) pass "SKILL.md's report carries the flow section" ;;
+*) fail "SKILL.md's procedure does not put the flow section in the report" ;;
+esac
+
 t_done "/retro contract"

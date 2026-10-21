@@ -490,3 +490,44 @@ Route: `/to-tickets` — the confidence rule or a rubric line there, a severity
 band's definition in `/review-pr`, and any label row with a rate that is a
 finding to rules 4 and 14 in `/to-tickets` — the autonomy-label rule and the
 confidence beside it.
+
+## Flow — lead time, review wait and toil's share
+
+*Not a ninth question: three measures of where the window's tickets waited,
+reported in a section of their own after the eight. Reads: `ticket.start`
+(its `ts`, and `data.class`), `pr.open` (the ticket in its `related`),
+`pr.iterate` (`outcome=green`, its `ts`) and `merge.land` (`outcome=landed`,
+its `ts`, and the ticket in its `related`) — events the trace already
+records.*
+
+- **Lead time**, per landed ticket: from its first `ticket.start` — a
+  `resumed` start is a second start, never the first — to its `merge.land`.
+- **Review wait**, per landed PR: from its last `pr.iterate outcome=green`
+  to its `merge.land` — the time a green PR waited on the human gate. A PR
+  with no green iteration before its landing reads `n/a`, never zero: zero
+  would claim a wait nobody measured.
+- **Toil's share**: the landed tickets whose `ticket.start` carries
+  `data.class=toil`, as `toil: <n> of <m> landed`. The class is the
+  consumer's — a project that sorts its tickets adds `data.class=<its class>`
+  to `/implement`'s `ticket.start` line — and the kit names no class of its own. A
+  window where no landed ticket carries a class prints `toil: not recorded`,
+  never `toil: 0`.
+
+One span answers all three. It reads the **whole** export, not the window's,
+because a ticket landed in the window may have started before it; the
+landings it counts are those at or after the window's start:
+`sh scripts/trace.sh export | awk -v since=<YYYY-MM-DD> 'function v(k, s) { return match(s, "\"" k "\":\"[^\"]*") ? substr(s, RSTART + length(k) + 4, RLENGTH - length(k) - 4) : "" } function t(s, y, m, d, a) { y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0; a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3; return (d + int((153 * m + 2) / 5) + 365 * y + int(y / 4) - int(y / 100) + int(y / 400)) * 86400 + substr(s, 12, 2) * 3600 + substr(s, 15, 2) * 60 + substr(s, 18, 2) } function h(x) { return x == "" ? "n/a" : sprintf("%dh%02dm", int(x / 3600), int((x % 3600) / 60)) } function sum(a, w, n, i, j, x) { n = 0; for (i in a) if (a[i] != "") { n++; s[n] = a[i] } for (i = 2; i in s; i++) { x = s[i]; for (j = i - 1; j && s[j] > x; j--) s[j + 1] = s[j]; s[j + 1] = x } x = n ? h(s[int((n + 1) / 2)]) : "n/a"; w = n ? h(s[n]) : "n/a"; split("", s); return x " " w } { e = v("kind", $0); u = v("subject", $0); ts = v("ts", $0); q = v("related", $0); r = match(q, "ticket:#[0-9]+") ? substr(q, RSTART, RLENGTH) : "" } e == "ticket.start" { if (!(u in st)) st[u] = t(ts); c = match($0, /"data":\{.*/) ? v("class", substr($0, RSTART)) : ""; if (c != "") cl[u] = c } e == "pr.open" && r != "" { tk[u] = r } e == "pr.iterate" && v("outcome", $0) == "green" { gr[u] = t(ts) } e == "merge.land" && v("outcome", $0) == "landed" && ts >= since { if (r != "") tk[u] = r; ld[u] = t(ts); gw[u] = gr[u] } END { for (p in ld) { k = tk[p]; lt[p] = k != "" && k in st ? ld[p] - st[k] : ""; wt[p] = gw[p] != "" ? ld[p] - gw[p] : ""; printf "landing %s %s lead %s wait %s\n", p, k != "" ? k : "-", h(lt[p]), h(wt[p]) | "sort -t# -k2n"; if (k != "" && !(k in seen)) { seen[k] = 1; m++; if (k in cl) { any = 1; if (cl[k] == "toil") n++ } } } close("sort -t# -k2n"); split(sum(lt), a, " "); split(sum(wt), b, " "); printf "median lead %s wait %s\nlongest lead %s wait %s\n", a[1], b[1], a[2], b[2]; print any ? "toil: " n + 0 " of " m " landed" : "toil: not recorded" }'`
+prints a `landing <pr> <ticket> lead <time> wait <time>` row per landed PR
+(`-` for a PR no ticket joins, through its `merge.land` or its `pr.open`, and
+then its lead time is `n/a`), then each column's `median` and `longest` row —
+`n/a` left out of both — then the toil line. A median over an even count is
+the lower middle. Put the rows in the report as a table.
+
+What counts as a finding: a review wait whose median or longest dwarfs the
+lead time spent before the PR went green says the tickets wait on the human
+gate, not on the work; a lead time far out of line names its ticket for
+question 1's sizing read. A window with landings and no green iteration at
+all is question 6's — a missing `pr.iterate` emit, never a fast review.
+
+Route: `/to-tickets` — a sizing finding for the next decomposition, or, for
+a wait on the human gate, the landing cadence in `/merge-train`.

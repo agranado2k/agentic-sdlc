@@ -26,3 +26,6 @@ R11. WHEN a ticket covers a requirement of an area, `/implement` SHALL apply it 
 R12. IF a requirement in `docs/specs/*.md` is named, as `<area>/R<n>`, by no file the docs gate's `livingSpec.testGlobs` match, THEN the docs gate SHALL fail in both its engines, naming the file and the id.
 R13. WHILE no living spec exists, no `docs/specs/` directory or no file in it with a requirement line, the gate's living-spec check SHALL pass.
 R14. Bootstrap SHALL give a consumer the coverage check, the gate's living-spec check in both engines and the `docs/specs/README.md` starter, and SHALL give it no living spec of the kit's.
+R22. `/retro` SHALL report, per landed ticket in the window, the lead time from its first `ticket.start` to its `merge.land`, with the window's median and longest.
+R23. `/retro` SHALL report, per landed PR, the review wait from its last `pr.iterate outcome=green` to its `merge.land`, and SHALL report `n/a` for a PR with no green iteration.
+R24. `/retro` SHALL report toil's share of landed tickets from `ticket.start`'s `data.class=toil`, and `not recorded` when no ticket in the window carries a class.
