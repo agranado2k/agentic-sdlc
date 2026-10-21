@@ -53,16 +53,18 @@ A story is kept as the *why* — who wants this and what it buys them — not as
 
 ## Scenarios
 
-A numbered walkthrough of the finished system in use — actor, action, what they see — step by step, with concrete names rather than placeholders. One per major story, and always where the story is abstract.
+Each scenario is a **use case**: `UC<n> — <name>`, numbered from 1 within the PRD, then `Actor:` — who drives it — and `Goal:` — what they have when it ends; a numbered **main flow**, the walkthrough of the finished system in use — actor, action, what they see — step by step, with concrete names rather than placeholders; and `Extensions:`, each one numbered from the step it branches from — `2a` is the first branch off step 2, `2b` the second — holding the refusal, the missing input, the second path a main flow walks past. One per major story, and always where the story is abstract.
 
 <scenario-example>
-1. Ana saves a filtered view of the orders table and names it "late this week".
-2. Ana copies the view's link from the toolbar and pastes it into the team channel.
-3. Bo opens the link and sees Ana's filters applied, with a banner naming the view.
-4. Bo changes a filter; Ana's saved view is unchanged when she reloads it.
+**UC1 — Check a balance after a transfer.** Actor: Ana, who holds a current and a savings account. Goal: know what she can spend today.
+1. Ana opens the account screen and sees the balance of both her accounts.
+2. Ana's transfer of 200 to Bo settles, and the screen shows her new balance.
+
+Extensions:
+- 2a. The balance service does not answer: the screen shows the last balance it read, and when.
 </scenario-example>
 
-Each scenario is a walkthrough a session can replay: `/to-tickets` reads them as the candidate tracer bullets, so a scenario that cannot be walked through is a story the PRD has not finished thinking about.
+Each main flow is a walkthrough a session can replay: `/to-tickets` reads each use case's main flow as a candidate tracer bullet, and an extension's requirements go to the slice that builds its step — so a use case that cannot be walked through is a story the PRD has not finished thinking about. A PRD written before use cases keeps its walkthrough scenarios as written; nothing rewrites or refuses them.
 
 ## Requirements
 
@@ -75,12 +77,15 @@ The exhaustive list of what the finished feature does: one observable behavior p
 - `WHERE <feature>, the <system> SHALL <behavior>` — an optional feature present.
 
 <requirement-example>
-R1. The account screen SHALL show the balance of every account the customer holds.
-R2. WHEN a transfer settles, the account screen SHALL show the new balance within 5 seconds.
-R3. IF the balance service does not answer, THEN the account screen SHALL show the last known balance with the time it was read.
+R1. The account screen SHALL show the balance of every account the customer holds. [UC1 1]
+R2. WHEN a transfer settles, the account screen SHALL show the new balance within 5 seconds. [UC1 2]
+R3. IF the balance service does not answer, THEN the account screen SHALL show the last known balance with the time it was read. [UC1 2a]
+R4. The account screen SHALL show a balance to two decimal places.
 </requirement-example>
 
 A line that bundles two behaviors is two requirements; a line no test could fail — "the screen SHALL be intuitive" — is a quality word, and the Testing Decisions rule applies to it: a number, or dropped.
+
+**A requirement a step checks ends with those steps in brackets**, the use case and its step: `[UC1 2a]`, or `[UC1 1, 2]` for more than one — so each requirement traces to the flow that needs it, and an unwanted case no extension holds is a branch the scenarios missed. A requirement no step reaches — a format, a limit, a schema rule — carries no brackets, and that is allowed. The brackets are never part of the id: the coverage check reads the id alone.
 
 **Where a living spec exists for the area** — `docs/specs/<area>.md`, the area's current requirements — **write the requirements as deltas against it** (the kit's ADR-0012 clause 8), each line spelled with its area-qualified id, `<area>/R<n>.`, so that the PRD, a ticket's `Covers:` line and the test that holds the requirement all cite the same string:
 
@@ -154,4 +159,4 @@ A PRD that spans more than one context window goes through `/to-tickets` before 
 
 ---
 
-*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism. The Objective, Scenarios, Alternatives Considered and Open Issues sections and the penalty-for-being-wrong filter follow Michael Lynch's [How to Write an Effective Software Design Document](https://refactoringenglish.com/excerpts/write-an-effective-design-doc); the stranger reread and the later/never split are the kit's own extension of it.*
+*Adapted from `engineering/to-prd` in [mattpocock/skills](https://github.com/mattpocock/skills) — MIT, see `.agents/skills/LICENSE-mattpocock-skills.md`. Upstream expects a separate setup skill to have supplied the tracker and label vocabulary; here that vocabulary is the kit's own autonomy-label mechanism. The Objective, Scenarios, Alternatives Considered and Open Issues sections and the penalty-for-being-wrong filter follow Michael Lynch's [How to Write an Effective Software Design Document](https://refactoringenglish.com/excerpts/write-an-effective-design-doc); the stranger reread and the later/never split are the kit's own extension of it. The Scenarios' use-case shape — an actor, a goal, a main flow and extensions numbered from their step — follows Alistair Cockburn's *Writing Effective Use Cases*.*

@@ -26,3 +26,7 @@ R11. WHEN a ticket covers a requirement of an area, `/implement` SHALL apply it 
 R12. IF a requirement in `docs/specs/*.md` is named, as `<area>/R<n>`, by no file the docs gate's `livingSpec.testGlobs` match, THEN the docs gate SHALL fail in both its engines, naming the file and the id.
 R13. WHILE no living spec exists, no `docs/specs/` directory or no file in it with a requirement line, the gate's living-spec check SHALL pass.
 R14. Bootstrap SHALL give a consumer the coverage check, the gate's living-spec check in both engines and the `docs/specs/README.md` starter, and SHALL give it no living spec of the kit's.
+R33. `/to-prd`'s template SHALL write each scenario as a use case: `UC<n>`, a name, an actor, a goal, a numbered main flow, and extensions numbered from the step they branch from (`2a`).
+R34. `/to-prd` SHALL end each requirement a step checks with the steps it checks in brackets, as in `[UC1 3a]`, and MAY leave the brackets off a requirement no step reaches.
+R35. `/to-tickets` SHALL read each use case's main flow as a candidate tracer bullet.
+R36. A PRD written before this change SHALL keep its walkthrough scenarios, and no check SHALL refuse them.
