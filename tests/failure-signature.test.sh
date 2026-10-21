@@ -111,6 +111,14 @@ expect_exit 2 "an empty name" -- sh "$SIG" sign '' "$SCRATCH/plain"
 expect_exit 2 "a name with a tab" -- sh "$SIG" sign "a${TAB}b" "$SCRATCH/plain"
 expect_exit 2 "an unreadable log" -- sh "$SIG" sign 'job' "$SCRATCH/absent"
 expect_err_has "absent" "the unreadable log is named"
+
+# A name is the forge's text: a backslash in it is two characters, never an
+# escape. awk's -v would turn a literal `\t` into a tab and `\n` into a
+# newline, past the refusal above, and split the signature it opens.
+t_exec sh "$SIG" sign 'a\tb' "$SCRATCH/plain"
+expect_resolved "a\\tb${TAB}Error: cannot open fixture.json" "a literal backslash-t in a name stays two characters, one tab in the signature"
+t_exec sh "$SIG" sign 'a\nb' "$SCRATCH/plain"
+expect_resolved "a\\nb${TAB}Error: cannot open fixture.json" "a literal backslash-n in a name stays two characters, one line"
 expect_exit 2 "an unknown verb" -- sh "$SIG" sing 'job'
 expect_exit 2 "no verb" -- sh "$SIG"
 
@@ -150,6 +158,13 @@ streak "$b
 $b
 "
 expect_resolved "2${TAB}$b" "a signature repeated within one run counts once"
+
+# The state file's path is the caller's: a backslash in it is a character,
+# so the counts are written to that file and no other.
+bstate="$SCRATCH/state/pr\\t820.streak"
+t_exec sh -c "printf '%s\n' \"\$1\" | sh '$SIG' streak \"\$2\"" streak "$a" "$bstate"
+t_exec sh -c "printf '%s\n' \"\$1\" | sh '$SIG' streak \"\$2\"" streak "$a" "$bstate"
+expect_resolved "2${TAB}$a" "a backslash in the state file's path is kept: the second run counts 2"
 
 banner "streak: caller errors are exit 2"
 

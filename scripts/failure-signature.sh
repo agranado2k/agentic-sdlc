@@ -94,7 +94,10 @@ sign() {
 	if [ "$log" != - ]; then
 		[ -f "$log" ] && [ -r "$log" ] || die "cannot read the log: $log"
 	fi
-	awk -v name="$name" "$SIG_AWK"'
+	# Values reach awk through the environment, never -v: -v processes
+	# backslash escapes, and a name or a path is the caller's text.
+	FS_SIGN_NAME=$name awk "$SIG_AWK"'
+		BEGIN { name = ENVIRON["FS_SIGN_NAME"] }
 		first == "" && tolower($0) ~ /error|fail|expected|assert|not ok/ { first = $0 }
 		blank == "" && $0 !~ /^[ \t\r]*$/ { blank = $0 }
 		END {
@@ -114,7 +117,8 @@ streak() {
 	tmp=$(mktemp "$state.XXXXXX") || die "cannot write beside the state file: $state"
 	# shellcheck disable=SC2064
 	trap "rm -f '$tmp'" EXIT HUP INT TERM
-	awk -v out="$tmp" '
+	FS_STREAK_OUT=$tmp awk '
+		BEGIN { out = ENVIRON["FS_STREAK_OUT"] }
 		phase != 2 {
 			t = index($0, "\t")
 			if (t > 0) count[substr($0, t + 1)] = substr($0, 1, t - 1) + 0
