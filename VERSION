@@ -2959,7 +2959,122 @@
 # section; the glossary's Session cap entry and the root manual's resolver
 # row name the form.
 
-shared-layer: 0.78.0
+# 0.79.0 — runs record their context: the kit's version, the model and
+# agent harness where exposed, and a spawn's tools (ticket #798). NO file
+# joins and NO file leaves the shared layer. ONE shared file changes content
+# besides UPDATING.md: scripts/trace.sh. `begin`'s run.start carries
+# data.kit, VERSION's shared-layer value (none when there is no VERSION to
+# read), and a caller's data.kit on begin is exit 2; it carries `model` and
+# `harness` from TRACE_MODEL and TRACE_HARNESS when the environment sets
+# them and the caller named none, leaving out an unset one and one that is
+# not a plain id. A `spawn` carries data.tools: the `tools:` line of the
+# agent type it ran as — data.agent_type, else its tier — under the new
+# policy directory TRACE_AGENT_TYPES_DIR, and `undeclared` when there is no
+# definition there or the spawn carries a `harness`; a data.agent_type that
+# is not [a-z][a-z0-9-]* is exit 2. Every other call valid at 0.78.0 behaves
+# as it did. Evidence: PRD-03's like-with-like comparison needs both windows'
+# kit and model, and `begin` recorded neither.
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): implement — step 9(b)'s reviewer spawn line carries
+# `data.agent_type=planner` when the spawn took that agent type.
+# Wiring (9b): the Claude Code adapter's session-start hook exports
+# TRACE_HARNESS='claude-code' and, when the payload names a plain-id model,
+# TRACE_MODEL through the env file, and its session.start carries the model —
+# re-copy the hook where you wired the adapter. Templates (9c): none.
+# Config (9d): scripts/trace.config.sh gains TRACE_AGENT_TYPES_DIR='',
+# documented — MERGE the block in; empty records data.tools=undeclared.
+# Kit-only, never shipped: scripts/trace.kit.config.sh names
+# TRACE_AGENT_TYPES_DIR='.claude/agents'; tests/trace.test.sh section 40 and
+# tests/trace-hooks.test.sh section 56; docs/specs/runtime.md R28 to R30.
+
+# 0.80.0 — a loop stops on the third identical failure (ticket #797, PRD-02
+# of the software factory's D-01). ONE file JOINS the shared layer:
+# scripts/failure-signature.sh. `sign <name> [<log>|-]` prints a failure
+# signature — the check's or test's name, a tab, and the first error line of
+# its log, with dates, times and runs of 6 or more digits (or 7 or more hex
+# characters holding a digit and a letter) written as <time> and <id>, cut to
+# 240 bytes; `streak <state-file>` reads one run's signatures on stdin and
+# prints each one's count of consecutive runs, keeping the counts in the
+# state file, a signature absent from a run forgotten. Exit 2 a caller error,
+# nothing on stdout. None leaves. No other shared file changes content but
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): pr-iterate — REPEATED-FAILURE.md is new beside SKILL.md, and
+# step 3 opens it on every iteration: each triaged red's own log is signed
+# and counted in the checkout's git directory, and a count of 3 pushes no
+# further fix, escalates `repeated identical failure: <check>, <count>
+# iterations` with the error line quoted, and records pr.iterate stopped with
+# data.stop=repeated-failure and the check's name, never the log text; the
+# 5-iteration cap stays; step 3's release-bound paragraph drops the rationale
+# RELEASE-BOUND.md already carries. implement — REPEATED-FAILURE.md is new
+# beside SKILL.md, opened from step 4 once the full suite has failed: the
+# third identical failure stops the editing, records a note with
+# data.stop=repeated-failure and the test's name, ends the run stopped, and
+# reports the test, the assertion and each attempt without pushing. Take
+# both skill directories whole.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Kit-only, never shipped: tests/failure-signature.test.sh (new) and its
+# place on bootstrap.sh's kit-only list; docs/specs/process.md gains
+# process/R18 to R21; README.md's script table and suite list, and the root
+# manual's quick-reference row, name the helper.
+
+# 0.81.0 — the docs gate checks declared tools (ticket #800, PRD-04 slice 1).
+# ONE file joins the shared layer: scripts/docs-conformance/validators/
+# skill-tools.mjs, three rules — a SKILL.md with no `allowed-tools` in its
+# frontmatter (skill-allowed-tools-missing), an agent type with no `tools:`
+# line, which inherits every tool (agent-type-tools-missing), and a skill
+# naming "the `<type>` agent type" whose `tools:` holds a tool outside the
+# skill's `allowed-tools`, named with the skill, the type and the tools
+# outside (spawn-widens-tools) — a scoped entry such as `Bash(git diff:*)`
+# covers only itself, never the unscoped tool. NO file leaves. TWO shared files change
+# content besides UPDATING.md: scripts/docs-conformance/runner.mjs registers
+# the validator, and scripts/check.sh carries its POSIX twin, which reads the
+# same policy block by text and prints the reduced form's advisories under the
+# harness's own header. The first rule is a WARNING while the policy says so,
+# one advisory naming every skill that declares no tools:
+# no shipped skill declares its tools yet, and a later release's sweep turns
+# it to failing. The other two fail now; every shipped agent type names its
+# tools, and no shipped skill names a spawn type outside its own.
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/docs-conformance/config.mjs gains the `skillTools`
+# block — agentTypeDirs `adapters/*/agents` and `.claude/agents`, and
+# missingAllowedTools "warning" — and exports it. MERGE the block in; without
+# it the three rules are silent, in both engines.
+# Adapters (9e): adapters/claude-code/README.md says the gate now holds a
+# type's `tools:` line and a skill's spawns to its `allowed-tools`. The
+# harness's own scripts/docs-conformance/README.md describes the rule.
+# Kit-only, never shipped: docs/specs/process.md gains process/R30 to R32;
+# tests/self-host.test.sh section B drives each rule red in both engines with
+# PRD-04's messages; scripts/docs-conformance/test/skill-tools.test.mjs, the
+# fixture trees (the test directory is a consumer's own to extend).
+
+# 0.82.0 — a review in which no lens ran is blocked (ticket #796). NO file
+# joins the shared layer and none leaves. No shared file changes content but
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): review-pr — NO-LENS.md is new beside SKILL.md, opened from §3
+# when every lens slice counts 0 and from §5 when no Axis-1 lens returned: a
+# diff whose every slice is empty still gets the single-reviewer pass over
+# the whole diff, behavior.diff, before any verdict, and §3 now names that
+# case among the ones the pass is allowed for; a review in which no lens and
+# no pass returned records review.verdict outcome=blocked data.lenses=0 with
+# the reason `no lens ran`, and its Verdict line reads `BLOCKED — no lens
+# ran; this is not a review`. pr-iterate — NO-LENS.md is new beside
+# SKILL.md, opened from step 6's new bullet: a review blocked because no lens
+# ran is never converged, and the iteration escalates it at the top of its
+# report, records itself stopped and ends `Next: stop — escalation`. Take
+# both skill directories whole.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/docs-conformance/config.mjs's skillCeilings raise
+# review-pr's SKILL.md to 40500 and pr-iterate's to 37500 — MERGE the two
+# numbers in where you kept the kit's ceilings, or the gate fails the skills.
+# Kit-only, never shipped: docs/specs/process.md gains process/R15 to R17;
+# tests/review-pr-output.test.sh section 20 drives both skills' prose.
+
+shared-layer: 0.82.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -2986,6 +3101,7 @@ files:
   scripts/vocab.sh
   scripts/stamp.sh
   scripts/coverage.sh
+  scripts/failure-signature.sh
   scripts/requirement.lib.sh
   scripts/trace.sh
   scripts/tdd-pairing-guard.sh
@@ -3010,6 +3126,7 @@ files:
   scripts/docs-conformance/validators/supersession.mjs
   scripts/docs-conformance/validators/trace-off.mjs
   scripts/docs-conformance/validators/reviewer-unmapped.mjs
+  scripts/docs-conformance/validators/skill-tools.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap

@@ -46,7 +46,7 @@ the *reference* checks:
 | | Engine | Covers |
 | --- | --- | --- |
 | node on PATH | this harness | layered manuals, slash-command resolution, article reachability, package-relative paths, portability deny-list |
-| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec`, `skill-ceiling`, `skill-dated` and `supersession` rules' twins — and it prints a NOTICE listing what it is *not* checking |
+| no node | POSIX fallback in `check.sh` | repo paths in code spans of the root manual and the articles, and the `living-spec`, `skill-ceiling`, `skill-dated`, `skill-tools` and `supersession` rules' twins — and it prints a NOTICE listing what it is *not* checking |
 
 Set `DOCS_CHECK_NO_NODE=1` to force the fallback. The two share one policy in
 two places (`config.mjs`'s `pathRoots` and `check.sh`'s `path_roots`); that
@@ -88,6 +88,21 @@ supporting files are not read. The patterns and the known exceptions (`<skill>|<
 today's sites, which a sweep removes) are `skillDated` in `config.mjs`. Rule it
 reports: `skill-dated-evidence`, a violation. Its POSIX twin in `check.sh`
 reads `skillDated` by text, one `"<value>",` per line.
+
+`skill-tools` holds declared tools, so a spawned subagent can only narrow
+what its spawner may do. It fails an agent type — every `*.md` under the
+`agentTypeDirs` of `skillTools` in `config.mjs` — with no `tools:` line in its
+frontmatter, since that type inherits every tool; and a skill that names a
+spawn type ("the `reviewer` agent type", in any top-level Markdown file of the
+skill, fences skipped) whose `tools:` holds a tool absent from the skill's
+`allowed-tools`, naming the skill, the type and the tools outside. A bare
+name in `allowed-tools` covers its tool at every scope; a scoped entry such as
+`Bash(git diff:*)` covers only that same entry, never the unscoped tool. A
+`SKILL.md` with no `allowed-tools` in its frontmatter is a third finding, a
+violation or — while `missingAllowedTools` is `"warning"`, as it ships — one
+advisory naming every such skill. Rules it reports: `agent-type-tools-missing`,
+`spawn-widens-tools` and `skill-allowed-tools-missing`. Its POSIX twin in
+`check.sh` reads `skillTools` by text, one `"<value>",` per line.
 
 `supersession` holds supersession both ways between decision records. A
 record (`NNNN-*.md` under the records directory) whose "Supersedes / amends"
