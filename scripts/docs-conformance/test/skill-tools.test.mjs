@@ -310,12 +310,12 @@ for (const node of [true, false]) {
     assert.match(other.stderr, /look spawns scout, whose tools \(Bash\(git diff:\*\)\) are outside its allowed-tools/);
   });
 
-  test(`${engine}: a skill with no allowed-tools warns under the shipped policy and fails under a strict one`, () => {
-    const files = { ".agents/skills/demo/SKILL.md": skill("") };
+  test(`${engine}: R30 — a skill with no allowed-tools warns under the shipped policy and fails under a strict one`, () => {
+    const files = { ".agents/skills/demo/SKILL.md": skill(""), ".agents/skills/other/SKILL.md": skill("") };
     const warned = project(files, { node });
     assert.equal(warned.status, 0, `${warned.stdout}${warned.stderr}`);
-    assert.match(warned.stderr, /skill-allowed-tools-missing/);
-    assert.match(warned.stderr, /no allowed-tools in the frontmatter of demo, so nothing states the tools they use/);
+    assert.equal(warned.stderr.match(/skill-allowed-tools-missing/g)?.length, 1, `one advisory line: ${warned.stderr}`);
+    assert.match(warned.stderr, /no allowed-tools in the frontmatter of demo, other, so nothing states the tools they use/);
     const failed = project(files, { node, strict: true });
     assert.equal(failed.status, 1, `${failed.stdout}${failed.stderr}`);
     assert.match(failed.stderr, /demo has no allowed-tools in its frontmatter/);
