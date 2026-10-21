@@ -188,7 +188,6 @@ printf '%s\n' "$uc_ex" | grep -Eq '^Extensions:$' && printf '%s\n' "$uc_ex" | gr
 	pass "process/R33: the example carries an Extensions: list with a 2a branch" ||
 	fail "process/R33: the scenario example has no 'Extensions:' list with a '- 2a.' line"
 
-
 # The user stories are the why, not the exhaustive list: the requirements are
 # that list now (process/R2, ADR-0012 clause 2).
 stories=$(section_of "$PRD_ABS" "User Stories")
