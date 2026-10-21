@@ -173,13 +173,14 @@ printf '# Manual\n' >"$TOOLS/AGENTS.md"
 for shim in CLAUDE.md GEMINI.md; do cp "$KIT/$shim" "$TOOLS/$shim"; done
 printf 'shared-layer: 0.0.0\n' >"$TOOLS/VERSION"
 for t in reviewer implementer; do cp "$KIT/adapters/claude-code/agents/$t.md" "$TOOLS/.claude/agents/$t.md"; done
-# tools_skill <spawn type> [<allowed-tools line>] — /review-pr, spawning its lenses as that type.
+# tools_skill <spawn type> [<allowed-tools value>] — /review-pr, spawning its
+# lenses as that type; an empty value leaves the key out.
 tools_skill() {
 	{
 		echo '---'
 		echo 'name: review-pr'
 		echo 'description: reviews.'
-		[ "${2-x}" = "" ] || echo 'allowed-tools: Read, Grep, Glob, Bash, Skill'
+		[ "${2-x}" = "" ] || echo "allowed-tools: ${2:-Read, Grep, Glob, Bash, Skill}"
 		echo '---'
 		echo ''
 		printf 'Spawn each lens as the `%s` agent type.\n' "$1"
@@ -219,6 +220,17 @@ for tools_env in $tools_engines; do
 	tools_check 1 "review-pr spawns implementer, whose tools (Edit, Write, Agent) are outside its allowed-tools" "$tools_env" &&
 		pass "process/R32 ($tools_engine): a skill spawning a type with tools outside its own fails the gate — UC2" ||
 		fail "process/R32 ($tools_engine): a widening spawn did not fail as named (exit $T_STATUS)"
+	# A scoped entry covers only its own spelling, never the unscoped tool.
+	tools_skill implementer "Read, Grep, Glob, Bash(git diff:*), Skill, Edit, Write, Agent"
+	tools_check 1 "review-pr spawns implementer, whose tools (Bash) are outside its allowed-tools" "$tools_env" &&
+		pass "process/R32 ($tools_engine): a scoped allowed-tools entry does not cover a type's unscoped tool" ||
+		fail "process/R32 ($tools_engine): a scoped entry covered the unscoped tool (exit $T_STATUS)"
+	printf -- '---\nname: scout\ntools: Read, Bash(git diff:*)\n---\n' >"$TOOLS/.claude/agents/scout.md"
+	tools_skill scout "Read, Bash(git diff:*)"
+	tools_check 0 "" "$tools_env" &&
+		pass "process/R32 ($tools_engine): the exact scoped entry covers a type holding that scope" ||
+		fail "process/R32 ($tools_engine): the exact scoped entry did not cover its own spelling (exit $T_STATUS)"
+	rm -f "$TOOLS/.claude/agents/scout.md"
 done
 
 # The reduced form must SAY what it cannot check, and every scan the harness
