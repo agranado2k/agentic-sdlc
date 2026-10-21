@@ -44,9 +44,11 @@ sid=$(hook_field session_id)
 src=$(hook_field source)
 # The model the payload names, where it names one (runtime/R29) — kept only
 # when it is a plain id, since it is exported into a file the agent harness
-# sources as shell; anything else is no model, never a guess.
+# sources as shell; anything else is no model, never a guess. The class is
+# spelled the portable way, `]` first and `-` last: a backslash inside a
+# bracket expression is undefined in POSIX.
 model=$(hook_field model)
-case $model in '' | [!A-Za-z0-9]* | *[!A-Za-z0-9._:/@+\[\]-]*) model= ;; esac
+case $model in '' | [!A-Za-z0-9]* | *[!]A-Za-z0-9._:/@+[-]*) model= ;; esac
 cwd=$(hook_field cwd)
 transcript=$(hook_expand "$(hook_field transcript_path)")
 

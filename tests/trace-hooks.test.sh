@@ -5166,6 +5166,34 @@ sh -c ". '$CTXF'" >/dev/null 2>&1 || :
 grep -q 'TRACE_MODEL' "$CTXF" && fail "the hostile model was exported: $(cat "$CTXF")" ||
 	pass "and no TRACE_MODEL is exported for it"
 
+# The filter's own text is held to POSIX, not to the shell that runs it here:
+# a backslash inside a bracket expression is undefined in a POSIX pattern, so
+# a shell that reads `\]` as the bracket's end widens the class to whatever
+# follows — and the class is all that stands between a payload and the env
+# file. `]` first and `-` last is the portable spelling.
+MFILTER=$(grep -n 'case \$model in' "$HOOKS/session-start.sh")
+[ -n "$MFILTER" ] || fail "no model filter found in session-start.sh"
+printf '%s\n' "$MFILTER" | grep -q '\[[^]]*\\' &&
+	fail "the model filter escapes inside a bracket expression, undefined in POSIX: $MFILTER" ||
+	pass "the model filter's bracket expressions carry no backslash — portable POSIX"
+# And every hostile shape a plain id excludes stays out of the sourced file.
+for HOSTILE in 'opus`touch PWNED`' 'opus$(touch PWNED)' 'opus\\x' 'opus]'"'"'x' 'opus;x' '-opus' '[opus'; do
+	new_trace
+	: >"$CTXF"
+	sed 's|^{$|{\n  "model": "'"$(printf '%s' "$HOSTILE" | sed 's/[|&\\]/\\&/g')"'",|' "$SCRATCH/start.json" >"$SCRATCH/start-hostile.json"
+	t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-hostile.json"
+	grep -q 'TRACE_MODEL' "$CTXF" && fail "the hostile model $HOSTILE was exported: $(cat "$CTXF")" ||
+		pass "a model of $HOSTILE is not exported"
+done
+# The portable spelling keeps what the old one kept: a bracketed suffix is a plain id.
+new_trace
+: >"$CTXF"
+sed 's|^{$|{\n  "model": "claude-opus-4-6[1m]",|' "$SCRATCH/start.json" >"$SCRATCH/start-bracket.json"
+t_exec env TRACE_DIR="$TDIR" CLAUDE_ENV_FILE="$CTXF" sh "$HOOKS/session-start.sh" <"$SCRATCH/start-bracket.json"
+grep -qx "export TRACE_MODEL='claude-opus-4-6\[1m\]'" "$CTXF" &&
+	pass "a model with a bracketed suffix is still a plain id, and exported" ||
+	fail "the bracketed model was not exported: $(cat "$CTXF")"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s case(s) skipped above — this host proved less than one with node and a millisecond clock would\n' "$SKIPPED"
 fi
