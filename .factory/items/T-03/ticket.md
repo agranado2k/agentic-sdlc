@@ -3,7 +3,7 @@ id: T-03
 type: ticket
 title: "Runs record their context: kit version, model, harness and a spawn's tools"
 parent: PRD-03
-stage: ready
+stage: done
 created: 2026-10-21
 updated: 2026-10-21
 deps: []

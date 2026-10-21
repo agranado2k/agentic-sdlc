@@ -3,7 +3,7 @@ id: T-01
 type: ticket
 title: A review in which no lens ran records blocked, and /pr-iterate does not converge on it
 parent: PRD-01
-stage: ready
+stage: done
 created: 2026-10-21
 updated: 2026-10-21
 deps: []

@@ -3,7 +3,7 @@ id: T-02
 type: ticket
 title: Stop after three identical failures in /pr-iterate and /implement
 parent: PRD-02
-stage: ready
+stage: done
 created: 2026-10-21
 updated: 2026-10-21
 deps: []

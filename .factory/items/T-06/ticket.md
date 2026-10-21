@@ -3,7 +3,7 @@ id: T-06
 type: ticket
 title: "The docs gate checks declared tools: a skill's allowed-tools, an agent type's tools line, and spawns that only narrow"
 parent: PRD-04
-stage: ready
+stage: done
 created: 2026-10-21
 updated: 2026-10-21
 deps: []
