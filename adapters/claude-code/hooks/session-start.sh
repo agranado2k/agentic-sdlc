@@ -42,6 +42,15 @@ root=$(hook_root) && behind=$(hook_behind "$root") || behind=
 
 sid=$(hook_field session_id)
 src=$(hook_field source)
+# The model the payload names, where it names one (runtime/R29) — kept only
+# when it is a plain id, since it is exported into a file the agent harness
+# sources as shell; anything else is no model, never a guess. The class is
+# spelled the portable way, `]` first and `-` last: a backslash inside a
+# bracket expression is undefined in POSIX. At most 128 characters, the
+# trace's own plain-id rule (TRACE_CONTEXT_ERE), so the two keep the same ids.
+model=$(hook_field model)
+case $model in '' | [!A-Za-z0-9]* | *[!]A-Za-z0-9._:/@+[-]*) model= ;; esac
+[ "${#model}" -le 128 ] || model=
 cwd=$(hook_field cwd)
 transcript=$(hook_expand "$(hook_field transcript_path)")
 
@@ -105,7 +114,7 @@ fi
 # see session-end.sh for the two-sessions-in-one-checkout case that matters.
 if [ -n "$tdir" ]; then
 	hook_trace emit kind=session.start subject="session:$sid" session="$sid" \
-		harness=claude-code data.source="$src" data.cwd="$cwd" data.transcript="$transcript" \
+		harness=claude-code ${model:+"model=$model"} data.source="$src" data.cwd="$cwd" data.transcript="$transcript" \
 		${behind:+"data.behind=$behind"} ${behind:+"data.behind_of=root"}
 	hook_point_at "$tdir" "$sid"
 fi
@@ -113,7 +122,13 @@ fi
 # Single-quoted, though hook_id_ok has already forbidden everything that would
 # need quoting: the guard is the rule and this is the belt beside it.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-	printf "export TRACE_SESSION='%s'\n" "$sid" >>"$CLAUDE_ENV_FILE" 2>/dev/null || :
+	{
+		printf "export TRACE_SESSION='%s'\n" "$sid"
+		# What the trace's begin records as the run's context (runtime/R29):
+		# this agent harness's name, and the model where the payload named one.
+		printf "export TRACE_HARNESS='claude-code'\n"
+		[ -z "$model" ] || printf "export TRACE_MODEL='%s'\n" "$model"
+	} >>"$CLAUDE_ENV_FILE" 2>/dev/null || :
 fi
 
 exit 0

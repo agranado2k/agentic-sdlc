@@ -493,7 +493,7 @@ banner "D. The stamped result is byte-identical to a kit without kit-own files"
 BASE="$SCRATCH/baseline"
 t_kit_copy "$BASE"
 for f in $KIT_OWN; do rm -rf "${BASE:?}/$f"; done
-rm -rf "$BASE/docs"
+rm -rf "$BASE/docs" "$BASE/.factory"
 expect_exit 0 "bootstrap runs on a tree with the kit-own files pre-removed" -- \
 	sh -c "cd '$BASE' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
 
@@ -573,6 +573,21 @@ assert_file_has "$ADRS/docs/adr/0003-draft.md" "Still a draft" \
 [ -e "$ADRS/docs/adr/0001-the-kit-self-hosts-its-own-constitution.md" ] &&
 	fail "the kit's own ADR survived beside the consumer's" ||
 	pass "the kit's own ADR was stripped from beside the consumer's"
+
+# --- E2b: a factory the consumer started before bootstrapping (#812) -------
+# The kit's own .factory/ goes, but only the kit's: the strip reads the
+# project manifest's id, and a factory that names another project is the
+# consumer's, not the kit's to delete.
+FACT="$SCRATCH/consumer-factory"
+consumer_repo "$FACT"
+rm -rf "$FACT/.factory"
+mkdir -p "$FACT/.factory/items/PRD-01"
+printf 'id: their-shop\nname: their-shop\n' >"$FACT/.factory/project.yaml"
+printf '# Their first PRD\n' >"$FACT/.factory/items/PRD-01/prd.md"
+expect_exit 0 "bootstrap runs on a tree holding the consumer's own factory" -- \
+	sh -c "cd '$FACT' && sh bootstrap.sh --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+assert_file_has "$FACT/.factory/items/PRD-01/prd.md" "Their first PRD" \
+	"a consumer's own factory is not the kit's to delete (#812)"
 
 # --- E3: the kit's manual, personalized in place ----------------------------
 # An edit leaves the sentinel comment intact — it says so itself — so condition

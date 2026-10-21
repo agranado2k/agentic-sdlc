@@ -451,6 +451,14 @@ jobs:
       - name: Coverage check suite
         run: sh tests/coverage.test.sh
 
+  failure-signature:
+    name: A loop stops on the third identical failure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Failure signature suite
+        run: sh tests/failure-signature.test.sh
+
   trace-skills:
     name: Every chain skill emits, and none reads the trace
     runs-on: ubuntu-latest
