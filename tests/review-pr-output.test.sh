@@ -1433,10 +1433,13 @@ nolens_missing() {
 	_nl_rn=$(tr '\n' ' ' <"$1/review-pr/NO-LENS.md" 2>/dev/null | tr -s ' ')
 	_nl_i6=$(region '^### 6 — Stop conditions' '^## Output format' "$1/pr-iterate/SKILL.md" | tr '\n' ' ' | tr -s ' ')
 	_nl_in=$(tr '\n' ' ' <"$1/pr-iterate/NO-LENS.md" 2>/dev/null | tr -s ' ')
+	# The trigger is step 6's to state; the branch says it once, not twice.
+	_nl_n1="count=$(grep -o 'with the reason `no lens ran`' "$1/pr-iterate/NO-LENS.md" 2>/dev/null | grep -c '');"
 	for _nl_r in \
 		'R15: §3 points at the branch|rs|When every count is 0, open [`NO-LENS.md`](NO-LENS.md) beside this file: that diff still gets a review.' \
 		'R15: §3 allows the pass on an all-empty diff|r3|the host offers it no subagent tool, refused the spawns, or every lens slice was empty ([`NO-LENS.md`](NO-LENS.md))' \
 		'R15: the pass is one §3 allows|rn|no lens agent can run when there is no slice to hand one' \
+		'R17: the trigger is stated once|n1|count=1;' \
 		'R15: the pass runs over the whole diff|rn|**A diff whose every lens slice is empty still gets a review: run the single-reviewer pass over the whole diff, `behavior.diff`, and record no Axis-1 verdict before that pass returns.**' \
 		'R16: §5 points at the branch|r5|A review in which no lens ran records `blocked`, never `pass`: [`NO-LENS.md`](NO-LENS.md).' \
 		'R16: no lens and no pass is a block|rn|**When no Axis-1 lens returned a report and no single-reviewer pass returned, the review records `blocked` and says that no lens ran.**' \
@@ -1454,6 +1457,7 @@ nolens_missing() {
 		case $_nl_where in
 		r3) _nl_text=$_nl_r3 ;;
 		rs) _nl_text=$_nl_rs ;;
+		n1) _nl_text=$_nl_n1 ;;
 		r5) _nl_text=$_nl_r5 ;;
 		rn) _nl_text=$_nl_rn ;;
 		i6) _nl_text=$_nl_i6 ;;
@@ -1479,6 +1483,7 @@ for b in \
 	'R15: §3 points at the branch|review-pr/SKILL.md|s/When every count is 0, open/When a count is 0, skip/' \
 	'R15: §3 allows the pass on an all-empty diff|review-pr/SKILL.md|s/, or every lens slice was empty//' \
 	'R15: the pass is one §3 allows|review-pr/NO-LENS.md|s/no lens agent can run when there is no slice to hand one/it runs even when the host could spawn the lens agents/' \
+	'R17: the trigger is stated once|pr-iterate/NO-LENS.md|s#^Opened from `/pr-iterate` step 6#& when the review recorded Axis 1 `blocked` with the reason `no lens ran`#' \
 	'R15: the pass runs over the whole diff|review-pr/NO-LENS.md|s/record no Axis-1 verdict before that pass returns/record the verdict at once/' \
 	'R16: §5 points at the branch|review-pr/SKILL.md|s/records `blocked`, never `pass`/records `pass`/' \
 	'R16: no lens and no pass is a block|review-pr/NO-LENS.md|s/the review records `blocked` and says that no lens ran/the review records `pass`/' \
