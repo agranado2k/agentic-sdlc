@@ -3019,7 +3019,39 @@
 # process/R18 to R21; README.md's script table and suite list, and the root
 # manual's quick-reference row, name the helper.
 
-shared-layer: 0.80.0
+# 0.81.0 — the docs gate checks declared tools (ticket #800, PRD-04 slice 1).
+# ONE file joins the shared layer: scripts/docs-conformance/validators/
+# skill-tools.mjs, three rules — a SKILL.md with no `allowed-tools` in its
+# frontmatter (skill-allowed-tools-missing), an agent type with no `tools:`
+# line, which inherits every tool (agent-type-tools-missing), and a skill
+# naming "the `<type>` agent type" whose `tools:` holds a tool outside the
+# skill's `allowed-tools`, named with the skill, the type and the tools
+# outside (spawn-widens-tools) — a scoped entry such as `Bash(git diff:*)`
+# covers only itself, never the unscoped tool. NO file leaves. TWO shared files change
+# content besides UPDATING.md: scripts/docs-conformance/runner.mjs registers
+# the validator, and scripts/check.sh carries its POSIX twin, which reads the
+# same policy block by text and prints the reduced form's advisories under the
+# harness's own header. The first rule is a WARNING while the policy says so,
+# one advisory naming every skill that declares no tools:
+# no shipped skill declares its tools yet, and a later release's sweep turns
+# it to failing. The other two fail now; every shipped agent type names its
+# tools, and no shipped skill names a spawn type outside its own.
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/docs-conformance/config.mjs gains the `skillTools`
+# block — agentTypeDirs `adapters/*/agents` and `.claude/agents`, and
+# missingAllowedTools "warning" — and exports it. MERGE the block in; without
+# it the three rules are silent, in both engines.
+# Adapters (9e): adapters/claude-code/README.md says the gate now holds a
+# type's `tools:` line and a skill's spawns to its `allowed-tools`. The
+# harness's own scripts/docs-conformance/README.md describes the rule.
+# Kit-only, never shipped: docs/specs/process.md gains process/R30 to R32;
+# tests/self-host.test.sh section B drives each rule red in both engines with
+# PRD-04's messages; scripts/docs-conformance/test/skill-tools.test.mjs, the
+# fixture trees (the test directory is a consumer's own to extend).
+
+shared-layer: 0.81.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -3071,6 +3103,7 @@ files:
   scripts/docs-conformance/validators/supersession.mjs
   scripts/docs-conformance/validators/trace-off.mjs
   scripts/docs-conformance/validators/reviewer-unmapped.mjs
+  scripts/docs-conformance/validators/skill-tools.mjs
 
 # The SKILLS the release ships — a NAME-LEVEL manifest, deliberately not part
 # of files: above. A skill's prose is yours to adapt from the moment bootstrap
