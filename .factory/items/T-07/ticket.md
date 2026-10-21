@@ -1,0 +1,31 @@
+---
+id: T-07
+type: ticket
+title: Every skill declares its powers in allowed-tools
+parent: PRD-04
+stage: ready
+created: 2026-10-21
+updated: 2026-10-21
+deps: [T-06]
+priority: 3
+---
+
+# T-07 · Every skill declares its powers in allowed-tools
+
+GitHub issue: #803
+
+## Behaviour
+
+Part of PRD-04, slice 2. Objective: an operator can judge a skill from its frontmatter.
+
+Every `SKILL.md` the kit ships declares `allowed-tools`: the tools its own session uses, read from its steps (a skill that spawns nothing omits `Agent`). Each spawn type a skill names must fit within its list. Then the kit's gate runs the missing-`allowed-tools` rule as failing, not advisory. In Claude Code `allowed-tools` pre-approves the tools it names, so each list is the smallest the skill's steps need.
+
+## Acceptance
+
+- The oracle: `sh scripts/check.sh` passes on the kit with all three rules failing, not advisory.
+- The living process spec gains process/R29.
+
+Covers: process/R29
+Tier: implementer
+Confidence: medium
+Label: none
