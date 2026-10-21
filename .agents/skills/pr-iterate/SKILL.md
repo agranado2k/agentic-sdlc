@@ -237,7 +237,7 @@ gh run list --workflow=<workflow-file> --branch="$PR_BRANCH" --limit 1 --json da
 gh run view <run-id> --log-failed   # cheapest — only the failing step's output
 ```
 
-**A release-bound red is set aside before it is classified.** Some reds cannot pass on a branch by decision: a check that waits on a release goes green when the release merges and on no commit of this PR. What marks one is the check's **own output** — a failing line carrying `release-bound:` — never its name. Save each failing check's **own** log, per job, to `$scratch/checks/<i>` (`gh run view <run-id> --job <job-id> --log-failed`, the job id read from the check's link in `gh pr checks`, the names one per line in `$scratch/checks/list`). When any of those logs carries the marker, open [`RELEASE-BOUND.md`](RELEASE-BOUND.md) beside this file and split the reds with its `triage_reds` fence; a set-aside red is never fixed, never triaged and never re-run. With no marker in any log, every red is triaged below.
+**A release-bound red is set aside before it is classified.** What marks one is the check's **own output** — a failing line carrying `release-bound:` — never its name. Save each failing check's **own** log, per job, to `$scratch/checks/<i>` (`gh run view <run-id> --job <job-id> --log-failed`, the job id read from the check's link in `gh pr checks`, the names one per line in `$scratch/checks/list`). When any of those logs carries the marker, open [`RELEASE-BOUND.md`](RELEASE-BOUND.md) beside this file and split the reds with its `triage_reds` fence; a set-aside red is never fixed, never triaged and never re-run. With no marker in any log, every red is triaged below.
 
 Classify the failure:
 
