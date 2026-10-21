@@ -3479,12 +3479,12 @@ rc_run end "$RC_K" outcome=ok 2>/dev/null
 mv "$RC_REPO/VERSION.keep" "$RC_REPO/VERSION"
 # The filters' own text is held to POSIX: a backslash inside a bracket
 # expression is undefined there, whatever the shell running this suite does.
-RC_TOOLS_FN=$(sed -n '/^trace_agent_tools()/,/^}/p' "$TRACE")
-printf '%s\n' "$RC_TOOLS_FN" | grep -q 'undeclared' ||
-	fail "found no trace_agent_tools body to hold to POSIX: the check below would pass on nothing"
+RC_TOOLS_FN=$(sed -n '/^trace_agent_type_ok()/,/^}/p;/^trace_agent_tools()/,/^}/p' "$TRACE")
+printf '%s\n' "$RC_TOOLS_FN" | grep -q 'case \$1 in' && printf '%s\n' "$RC_TOOLS_FN" | grep -q 'undeclared' ||
+	fail "found no agent-type filter to hold to POSIX: the check below would pass on nothing"
 printf '%s\n' "$RC_TOOLS_FN" | grep -q '\[![^]]*\\' &&
-	fail "trace_agent_tools escapes inside a bracket expression, undefined in POSIX" ||
-	pass "trace_agent_tools' bracket expressions carry no backslash — portable POSIX"
+	fail "the agent-type filters escape inside a bracket expression, undefined in POSIX" ||
+	pass "the agent-type filters' bracket expressions carry no backslash — portable POSIX"
 t_exec rc_run emit kind=spawn subject=pr:#1 tier=reviewer data.agent_type=../x outcome=in-session reason=bad
 expect_status 2 "an agent type that is not a [a-z][a-z0-9-]* token is refused before a path is built from it"
 # A tier that is not a token names no agent type, so it is the catch-all's,

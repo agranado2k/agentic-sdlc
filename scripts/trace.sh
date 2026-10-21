@@ -1070,7 +1070,7 @@ trace_emit() {
 	if [ "$_em_kind" = spawn ]; then
 		_em_type=$(printf '%s\n' "$_em_dlines" | sed -n 's/^agent_type=//p' | sed -n '$p')
 		if [ -n "$_em_type" ]; then
-			case $_em_type in [!a-z]* | *[!a-z0-9-]*) die "data.agent_type '$_em_type' is not [a-z][a-z0-9-]*" ;; esac
+			trace_agent_type_ok "$_em_type" || die "data.agent_type '$_em_type' is not [a-z][a-z0-9-]*"
 		else
 			_em_type=$_em_tier
 		fi
@@ -1321,13 +1321,16 @@ trace_context_ok() {
 	printf '%s\n' "$1" | grep -Eq "$TRACE_CONTEXT_ERE" && [ "$(printf '%s' "$1" | wc -l | tr -d ' ')" = 0 ]
 }
 
+# trace_agent_type_ok <type> — is it a [a-z][a-z0-9-]* token, safe to build
+# a path from? emit refuses a data.agent_type that is not; a tier that is not
+# names no agent type, so trace_agent_tools answers `undeclared` for it.
+trace_agent_type_ok() {
+	case $1 in '' | [!a-z]* | *[!a-z0-9-]*) return 1 ;; esac
+}
+
 # trace_agent_tools <type> — prints the type's tool list, or `undeclared`.
 trace_agent_tools() {
-	case $1 in '' | [!a-z]* | *[!a-z0-9-]*)
-		echo undeclared
-		return 0
-		;;
-	esac
+	trace_agent_type_ok "$1" || { echo undeclared; return 0; }
 	_at_dir=${TRACE_AGENT_TYPES_DIR:-}
 	[ -n "$_at_dir" ] || { echo undeclared; return 0; }
 	case $_at_dir in /*) ;; *) _at_dir="$_trace_here/../$_at_dir" ;; esac
