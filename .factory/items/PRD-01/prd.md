@@ -3,9 +3,11 @@ id: PRD-01
 type: prd
 title: A review in which no lens ran is a block
 parent: D-01
-stage: review
+stage: approved
 created: 2026-10-20
 updated: 2026-10-21
+approved_by: "Arthur Granado"
+approved_at: 2026-10-21
 ---
 
 # PRD-01 · A review in which no lens ran is a block
