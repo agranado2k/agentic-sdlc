@@ -424,9 +424,9 @@ const livingSpec = {
  * gate's POSIX twin in scripts/check.sh reads this block by text.
  */
 const skillCeilings = {
-  ".agents/skills/review-pr/SKILL.md": 40000,
+  ".agents/skills/review-pr/SKILL.md": 40500,
   ".agents/skills/to-tickets/SKILL.md": 35000,
-  ".agents/skills/pr-iterate/SKILL.md": 37000,
+  ".agents/skills/pr-iterate/SKILL.md": 37500,
   ".agents/skills/implement/SKILL.md": 27000,
 };
 

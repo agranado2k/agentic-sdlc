@@ -2,7 +2,7 @@
 
 The kit's living spec for the **process** area: the chain's skills and the
 checks that hold them — what `/to-prd`, `/to-tickets`, `/implement`,
-`/review-pr`, the coverage check and the docs gate's living-spec rule do
+`/review-pr`, `/pr-iterate`, the coverage check and the docs gate's living-spec rule do
 today. ADR-0012 is the contract; the file's format is the starter a consumer
 gets, `templates/docs/specs/README.md`.
 
@@ -26,3 +26,6 @@ R11. WHEN a ticket covers a requirement of an area, `/implement` SHALL apply it 
 R12. IF a requirement in `docs/specs/*.md` is named, as `<area>/R<n>`, by no file the docs gate's `livingSpec.testGlobs` match, THEN the docs gate SHALL fail in both its engines, naming the file and the id.
 R13. WHILE no living spec exists, no `docs/specs/` directory or no file in it with a requirement line, the gate's living-spec check SHALL pass.
 R14. Bootstrap SHALL give a consumer the coverage check, the gate's living-spec check in both engines and the `docs/specs/README.md` starter, and SHALL give it no living spec of the kit's.
+R15. WHERE every lens slice is empty, `/review-pr` SHALL run the single-reviewer pass over the whole diff, and SHALL NOT record a verdict before that pass returns.
+R16. IF no Axis-1 lens returned a report and no single-reviewer pass returned, THEN `/review-pr` SHALL record `review.verdict outcome=blocked data.lenses=0` with the reason `no lens ran`, and its Verdict line SHALL say that no lens ran.
+R17. WHEN `/pr-iterate`'s review records a verdict blocked because no lens ran, `/pr-iterate` SHALL NOT report the PR as converged, and SHALL escalate it at the top of its report.
