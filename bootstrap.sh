@@ -1207,6 +1207,14 @@ if [ -f "$TEMPLATE" ] && [ -f "$MANUAL" ] && grep -q "$KIT_OWN_SENTINEL" "$MANUA
 			echo "  removed $f (the kit's own; yours is stamped below)"
 		fi
 	done
+	# The kit's own software-factory tree (#812). A directory, unlike every
+	# KIT_OWN entry, so it is named by identity instead: only a .factory/ whose
+	# project manifest carries the kit's id goes, and one a consumer started
+	# names its own project and stays.
+	if grep -qx 'id: agentic-sdlc' .factory/project.yaml 2>/dev/null; then
+		rm -rf .factory
+		echo "  removed .factory/ (the kit's own software-factory items)"
+	fi
 	# Only if now empty. K4 re-creates all three (docs/specs/ with its
 	# starter), and a directory still holding something is holding a
 	# consumer's file — `rmdir` refuses, which is the behavior we want and

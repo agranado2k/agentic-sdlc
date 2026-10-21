@@ -227,8 +227,8 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
-**Arriving from 0.78.0 or older, a loop stops on the third identical
-failure.** One file joins at 0.79.0, `scripts/failure-signature.sh`; none
+**Arriving from 0.79.0 or older, a loop stops on the third identical
+failure.** One file joins at 0.80.0, `scripts/failure-signature.sh`; none
 leaves, and no other shared file changes content besides this recipe. Part 1
 copies it like any joining file. It prints a failure signature — a check's or
 test's name and the first error line of its log, run ids and timestamps
@@ -237,6 +237,23 @@ Part 2 brings the skills that do (9a): `/pr-iterate` and `/implement` each
 gain a `REPEATED-FAILURE.md` beside their `SKILL.md`, which stops the loop on
 the third identical failure, and the two `SKILL.md` files point at it. Take
 both skill directories whole.
+
+**Arriving from 0.78.0 or older, runs record their context.** No file joins
+or leaves at 0.79.0. One shared file changes content besides this recipe:
+`scripts/trace.sh`. A `begin`'s `run.start` carries `data.kit`, your
+`VERSION`'s shared-layer value, and `model` and `harness` from
+`TRACE_MODEL` and `TRACE_HARNESS` when your agent harness sets them —
+never a guessed value. A `spawn` carries `data.tools`, the `tools:` line of
+the agent type it ran as (its `data.agent_type`, else its tier), or
+`undeclared`. A `data.kit` passed to `begin`, or a `data.agent_type` that is
+not a `[a-z][a-z0-9-]*` token, is exit 2; every other call valid at 0.78.0
+behaves as it did. Part 2: `scripts/trace.config.sh` gains
+`TRACE_AGENT_TYPES_DIR=''` with its comment block (9d, MERGE) — set it to
+where your agent harness keeps its agent types, `.claude/agents` for the
+Claude Code adapter's, or every spawn records `undeclared`. The adapter's
+`session-start.sh` exports both variables (9b: re-copy it where you wired
+the adapter), and `/implement`'s `SKILL.md` names `data.agent_type=planner`
+on its reviewer spawn line (9a).
 
 **Arriving from 0.77.0 or older, the skill changes since 0.77.0 ship.** No
 file joins or leaves at 0.78.0, and no shared file changes content besides
@@ -1372,10 +1389,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3062 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3063 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3216 insertions(+), 1 deletion(-)
+ 3 files changed, 3217 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

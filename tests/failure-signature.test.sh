@@ -230,7 +230,7 @@ else
 		if [ $# -ge 2 ]; then printf 'docs-demo\n' >>"$scratch/checks/list" && printf '%s\n' "$2" >"$scratch/checks/2"; fi
 		t_exec env scratch="$scratch" sh -c 'cd "$1" && . "$2"' fence "$repo" "$SCRATCH/fence.sh"
 	}
-	rb='FAIL release-bound: the pinned transcript waits on v0.79.0'
+	rb='FAIL release-bound: the pinned transcript waits on v0.80.0'
 	iteration 'FAIL line 212: expected 3, got 2 (run 18234567890)' "$rb"
 	expect_resolved "1${TAB}test (ubuntu)${TAB}FAIL line 212: expected 3, got 2 (run <id>)" "iteration 1: count 1, the release-bound red not counted"
 	iteration 'FAIL line 212: expected 3, got 2 (run 18299999991)' "$rb"
