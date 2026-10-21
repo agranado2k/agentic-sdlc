@@ -2988,7 +2988,38 @@
 # TRACE_AGENT_TYPES_DIR='.claude/agents'; tests/trace.test.sh section 40 and
 # tests/trace-hooks.test.sh section 56; docs/specs/runtime.md R28 to R30.
 
-shared-layer: 0.79.0
+# 0.80.0 — a loop stops on the third identical failure (ticket #797, PRD-02
+# of the software factory's D-01). ONE file JOINS the shared layer:
+# scripts/failure-signature.sh. `sign <name> [<log>|-]` prints a failure
+# signature — the check's or test's name, a tab, and the first error line of
+# its log, with dates, times and runs of 6 or more digits (or 7 or more hex
+# characters holding a digit and a letter) written as <time> and <id>, cut to
+# 240 bytes; `streak <state-file>` reads one run's signatures on stdin and
+# prints each one's count of consecutive runs, keeping the counts in the
+# state file, a signature absent from a run forgotten. Exit 2 a caller error,
+# nothing on stdout. None leaves. No other shared file changes content but
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): pr-iterate — REPEATED-FAILURE.md is new beside SKILL.md, and
+# step 3 opens it on every iteration: each triaged red's own log is signed
+# and counted in the checkout's git directory, and a count of 3 pushes no
+# further fix, escalates `repeated identical failure: <check>, <count>
+# iterations` with the error line quoted, and records pr.iterate stopped with
+# data.stop=repeated-failure and the check's name, never the log text; the
+# 5-iteration cap stays; step 3's release-bound paragraph drops the rationale
+# RELEASE-BOUND.md already carries. implement — REPEATED-FAILURE.md is new
+# beside SKILL.md, opened from step 4 once the full suite has failed: the
+# third identical failure stops the editing, records a note with
+# data.stop=repeated-failure and the test's name, ends the run stopped, and
+# reports the test, the assertion and each attempt without pushing. Take
+# both skill directories whole.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Kit-only, never shipped: tests/failure-signature.test.sh (new) and its
+# place on bootstrap.sh's kit-only list; docs/specs/process.md gains
+# process/R18 to R21; README.md's script table and suite list, and the root
+# manual's quick-reference row, name the helper.
+
+shared-layer: 0.80.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -3015,6 +3046,7 @@ files:
   scripts/vocab.sh
   scripts/stamp.sh
   scripts/coverage.sh
+  scripts/failure-signature.sh
   scripts/requirement.lib.sh
   scripts/trace.sh
   scripts/tdd-pairing-guard.sh
