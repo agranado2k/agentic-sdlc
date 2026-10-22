@@ -3082,12 +3082,18 @@
 # its built-in defaults declare `targets` one; scripts/stamp.sh lifts a
 # `Targets:` line beside Tier:, Confidence: and Domain:, checked the same way.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
-# Skills (9a): retro — SKILL.md gains the before-and-after section and the
+# Skills (9a): /retro — SKILL.md gains the before-and-after section and the
 # rule that a lens or skill edit it proposes cites its trace events by run id
 # and carries its Targets: line, or is not filed; QUESTIONS.md gains the
-# "Before and after" section with its two spans. to-tickets — SKILL.md checks
-# a Targets: line at the quiz and writes one on a lens or skill edit. Take the
-# retro directory whole, and to-tickets' SKILL.md.
+# "Before and after" section with its two spans — and, landed since v0.82.0
+# (#807), the flow section: lead time, review wait and toil's share.
+# /to-tickets — SKILL.md checks a Targets: line at the quiz and writes one on
+# a lens or skill edit, and (#806) reads each use case's main flow as a
+# candidate tracer bullet. /to-prd — SKILL.md (#806) writes each scenario as a
+# use case, UC<n> with a numbered main flow and extensions, and ends a
+# requirement with the steps it checks in brackets; a PRD written before
+# keeps its walkthrough scenarios. Take the retro directory whole, and the
+# to-tickets and to-prd SKILL.md files.
 # Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/vocab.config.sh adds `targets` to VOCAB_FIELDS and
 # declares VOCAB_QUERY='targets' — MERGE the two lines in, or a Targets: line
