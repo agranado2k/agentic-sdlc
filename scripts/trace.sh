@@ -504,7 +504,7 @@ trace_check_severity() {
 			return 1
 			;;
 		esac
-		_sv_why=$(sh "$_trace_here/vocab.sh" "Severity: ${_sv_l#severity=}" 2>&1 >/dev/null) && continue
+		_sv_why=$(trace_severity_refusal "${_sv_l#severity=}") && continue
 		TRACE_SHAPE_WHY="finding.raise: data.severity — ${_sv_why#x vocab: }"
 		return 1
 	done <<EOF
@@ -512,6 +512,12 @@ $1
 EOF
 	return 0
 }
+
+# trace_severity_refusal <value> — asks the checker of one word, one line:
+# exit 0 when it is a severity word, else 1 with the checker's refusal on
+# stdout. The positional form the checker's audit exempts (#337): one
+# argument, one line, a value the emit already held to one word.
+trace_severity_refusal() { sh "$_trace_here/vocab.sh" "Severity: $1" 2>&1 >/dev/null; }
 
 # trace_severity_words — the words verify holds a written raise's severity to:
 # the checker's `fields` line for severity, space-padded, or nothing when no
