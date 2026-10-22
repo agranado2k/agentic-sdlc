@@ -439,8 +439,8 @@ banner "A8. The chain's spawns take their tier's agent type (spend/R6, spend/R7)
 # model beside it (none: the spawn inherits); the dispatcher's dry run says it
 # too (tests/skill-phase.test.sh, 4e). A harness that offers no such type
 # spawns as before, which is why each sentence is conditioned on the offer.
-# The one spawn not on its tier's type, the review coordinator, is the
-# adapter README's "One spawn is not on its tier's type".
+# The review coordinator, stamped planner since #834, is the
+# adapter README's "Every spawn is on its tier's type" (ADR-0035).
 flat() { tr '\n' ' ' <"$KIT/.agents/skills/$1/SKILL.md" | tr -s ' '; }
 for spec in \
 	'implement|as the agent type named for its tier' \

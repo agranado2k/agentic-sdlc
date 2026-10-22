@@ -23,6 +23,10 @@
 # for the line to attribute a stop in. A payload with no prompt it can read
 # passes too — a guard that cannot read is not a guard that refuses.
 #
+# A REVIEWER SPAWN ON ANOTHER TYPE is refused too (#834), where the project
+# wires a reviewer agent type: 66 of 177 reviewer-tier stops ran on wider
+# types, whose Bash, Edit and Agent undo the offline reviewer contract.
+#
 # THE RECORD. One `note` with outcome=denied on the session, naming the rule
 # and the call — the kill guard's shape (tool-pre-guard.sh). Exit 2, the agent
 # harness's block status, is the only non-zero exit; its stderr goes back to
@@ -49,7 +53,22 @@ p=${hook_json#*'"prompt":"'}
 [ "$p" != "$hook_json" ] || exit 0
 p=$(printf '%s\n' "$p" | sed -n '1p' | cut -b "1-$hook_prompt_bytes")
 
-hook_spawn_in "$p" && exit 0
+if hook_spawn_in "$p"; then
+	# A reviewer-tier spawn runs on the reviewer agent type (#834): a judging
+	# context holds Read, Grep and Glob, and its parent emits the raise lines
+	# it returns. Held only where the project wires that type — one that does
+	# not exist is not one a session can be refused for missing. The type is
+	# the payload's own key: every quote inside the prompt is escaped, so the
+	# prompt cannot name it.
+	[ "$hook_spawn_tier" = reviewer ] || exit 0
+	[ -f "$hook_repo/.claude/agents/reviewer.md" ] || exit 0
+	t=$(hook_field subagent_type)
+	[ "$t" = reviewer ] && exit 0
+	case $t in '' | [!a-z]* | *[!a-z0-9-]*) set -- ;; *) set -- data.agent_type="$t" ;; esac
+	hook_deny spawn-guard "spawn-guard refused a tier=reviewer spawn on another agent type than reviewer" "$@"
+	echo "spawn-guard: refused — a tier=reviewer spawn runs on the reviewer agent type (Read, Grep, Glob), and this one asked for '${t:-the default}'. Spawn it as the reviewer agent type, handing it its inputs as files to read; it returns its findings as raise lines and you emit them (/review-pr's LENS-RETURN.md). Work that runs a skill or spawns — the review coordinator — is planner work: stamp it tier=planner." >&2
+	exit 2
+fi
 
 hook_deny spawn-guard "spawn-guard refused a spawn whose prompt carries no well-formed Trace-Spawn line"
 

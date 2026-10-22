@@ -420,6 +420,21 @@ case "$(printf '%s\n' "$p" | sed -n 3,4p)" in
 esac
 case "$p" in *'<!--'*) fail "…but the contract's editor header was sent with them" ;;
 *) pass "…and the contract's editor header is still stripped" ;; esac
+# The spawn guard admits what the dispatcher hands out (#834, review of #844):
+# the review worker's two lines, spawned on the agent type the dry run names,
+# pass the kit's own wired guard — and the same lines on a wider type are
+# refused, so the pass is the reviewer type's, not a guard that read nothing.
+_sg834_type=$(printf '%s\n' "$T_ERR" | sed -n "s/^skill-dispatch: agent type '\([a-z-]*\)'.*/\1/p")
+_sg834_lines=$(printf '%s\n' "$p" | sed -n 1,2p | awk '{ printf "%s\\n", $0 }')
+for _sg834 in "$_sg834_type:0" general-purpose:2; do
+	printf '{"session_id":"s-834","transcript_path":"/nowhere.jsonl","cwd":"/tmp/x","hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"description":"d","prompt":"%sReview it.","subagent_type":"%s"},"tool_use_id":"u-834"}' \
+		"$_sg834_lines" "${_sg834%:*}" >"$SCRATCH/sg-834.json"
+	rm -rf "$SCRATCH/sg-834-trace"
+	t_exec env TRACE_DIR="$SCRATCH/sg-834-trace" sh "$ROOT/adapters/claude-code/hooks/spawn-guard.sh" <"$SCRATCH/sg-834.json"
+	[ -n "$_sg834_type" ] && [ "$T_STATUS" = "${_sg834#*:}" ] &&
+		pass "the review worker's lines on the '${_sg834%:*}' agent type: the wired spawn guard exits ${_sg834#*:}" ||
+		fail "the review worker's lines on the '${_sg834%:*}' agent type (dry run named '$_sg834_type'): the spawn guard exited $T_STATUS: $T_ERR"
+done
 
 spawn_dispatch TRACE_RUN= sh scripts/skill-dispatch.kit.sh /tdd --ticket 587 --prompt 'build it' --dry-run
 p=$(dry_prompt)
