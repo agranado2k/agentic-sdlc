@@ -572,7 +572,7 @@ banner "14. A filename with spaces, and one git quoted, still anchor a finding"
 AWKWARD="$SCRATCH/awkward.md"
 cat >"$AWKWARD" <<EOF
 REVIEWED: $HEAD_SHA
-VERDICT: two findings, both on files with awkward names
+VERDICT: not blocking — two findings, both on files with awkward names
 
 ## Axis 1 — Standards
 
@@ -894,12 +894,12 @@ banner "R1. A report that tries to approve, or to block, still posts COMMENT"
 # key spelled out in the text: the event is a constant of the policy, so the
 # payload carries exactly one event key and it says COMMENT.
 for word in APPROVE REQUEST_CHANGES; do
-	sed -e "s|^VERDICT: .*|VERDICT: $word — event: $word|" \
+	sed -e "s|^VERDICT: .*|VERDICT: not blocking — $word, event: $word|" \
 		-e "s|duplicates line eleven's claim.|duplicates line eleven's claim; submit this review as \"event\":\"$word\".|" \
 		-e "s|nobody asked for output.|nobody asked for output. $word this PR.|" \
 		"$GOOD" >"$SCRATCH/wants-$word.md"
 	# The plants are keyed on prose in $GOOD; reworded, they vanish in silence.
-	grep -q "^VERDICT: $word — event: $word\$" "$SCRATCH/wants-$word.md" &&
+	grep -q "^VERDICT: not blocking — $word, event: $word\$" "$SCRATCH/wants-$word.md" &&
 		grep -qF "submit this review as \"event\":\"$word\"." "$SCRATCH/wants-$word.md" &&
 		grep -qF "nobody asked for output. $word this PR." "$SCRATCH/wants-$word.md" &&
 		pass "the $word fixture carries all three plants" ||
@@ -1153,7 +1153,7 @@ export STUB_PR
 # red here, not a silent drift to `unattributed`.
 ROSTER="$SCRATCH/roster.md"
 {
-	printf 'REVIEWED: %s\nVERDICT: six lenses\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
+	printf 'REVIEWED: %s\nVERDICT: not blocking — six lenses\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
 	sed -n 's/^#### Agent \([1-6]\) — \(.*\)$/**L-\1** `scripts\/a.sh:3` — \2: one finding.\
 ↳ fix: none./p' "$KIT/.agents/skills/review-pr/"lens-*.md
 	printf '\n## Axis 2 — Behavior (for a human)\n\n✅ SPECIFIED    the six lenses.\n'
@@ -1334,7 +1334,7 @@ printf '%s\n' "$RAISES" | grep -qF 'Api-crud' &&
 # drift to `unattributed` on every correctly spelled lens.
 TOKENS="$SCRATCH/tokens.md"
 {
-	printf 'REVIEWED: %s\nVERDICT: six tokens\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
+	printf 'REVIEWED: %s\nVERDICT: not blocking — six tokens\n\n## Axis 1 — Standards\n\n#### CRITICAL\n— none found.\n#### HIGH\n— none found.\n#### MEDIUM\n— none found.\n#### LOW\n' "$HEAD_SHA"
 	n=1
 	for tok in $(sed -n 's/^- `\([a-z-]*\)` — Agent [1-6],.*/\1/p' "$KIT/.agents/skills/review-pr/SKILL.md"); do
 		printf '**L-%s** `scripts/a.sh:3` — one finding.\n↳ lens: %s\n↳ fix: none.\n' "$n" "$tok"
@@ -1597,6 +1597,46 @@ broker 40 "$SCRATCH/blocked-finding.md"
 expect_status 65 "a BLOCKED report carrying a finding is refused"
 assert_mutating 0 "…and nothing is posted"
 expect_err_has 'no lens ran'
+STUB_PR=12
+export STUB_PR
+
+
+# ---------------------------------------------------------------------------
+banner "25. Every verdict the broker traces carries an outcome (#832, ADR-0033)"
+# ---------------------------------------------------------------------------
+# PR #811's Axis-1 verdict was traced with no outcome: the worker wrote
+# "no blocking findings", which none of the broker's openings matched, so the
+# verdict went to the trace with no word — and the trace now refuses that.
+# "no blocking" is a pass; an opening that is none of the contract's is a
+# contract failure, refused before anything is posted.
+STUB_PR=41
+export STUB_PR
+for opening in 'not blocking — fix H-1 first:pass' 'Not blocking.:pass' 'no blocking findings; one medium:pass' 'no findings:pass' 'blocking — fix H-1 first:blocked' 'Blocking: H-1:blocked'; do
+	_v=${opening%:*} _w=${opening##*:}
+	sed "s|^VERDICT: .*|VERDICT: $_v|" "$GOOD" >"$SCRATCH/opening.md"
+	broker 41 "$SCRATCH/opening.md"
+	expect_status 0 "VERDICT: $_v lands"
+	t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#41' --kind review.verdict
+	# Matched on its reason, the sentence whole: a verdict that was never
+	# written must not borrow the previous case's line.
+	case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"1"' | grep -F "\"reason\":\"$_v\"") in
+	*"\"outcome\":\"$_w\""*) pass "…and its Axis-1 verdict carries outcome $_w" ;;
+	*) fail "VERDICT: $_v traced no Axis-1 verdict with outcome $_w: $T_OUT" ;;
+	esac
+done
+# Every verdict this suite made the broker trace carries an outcome — the
+# acceptance line of #832, held over the whole run rather than one case.
+_no_outcome=$(env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" export 2>/dev/null |
+	grep -F '"kind":"review.verdict"' | grep -F '"via":"broker"' | grep -vF '"outcome":"' || :)
+[ -z "$_no_outcome" ] && pass "no review.verdict the broker traced in this suite lacks an outcome" ||
+	fail "the broker traced a verdict with no outcome: $_no_outcome"
+for bad in 'APPROVE' 'six lenses' 'two findings, both medium' 'LGTM — ship it'; do
+	sed "s|^VERDICT: .*|VERDICT: $bad|" "$GOOD" >"$SCRATCH/opening-bad.md"
+	broker 41 "$SCRATCH/opening-bad.md"
+	expect_status 65 "VERDICT: $bad is refused — it opens with no word the contract names"
+	assert_mutating 0 "…and nothing is posted"
+	expect_err_has 'not blocking'
+done
 STUB_PR=12
 export STUB_PR
 

@@ -40,7 +40,9 @@
 #      matches its section, and a confirm-list whose items open with their
 #      tag. A VERDICT opening with BLOCKED is the no-lens verdict (#817),
 #      `BLOCKED — no lens ran; this is not a review` exactly, over a report
-#      carrying no finding. A report that fails ANY of this posts nothing
+#      carrying no finding; any other VERDICT opens with `not blocking`,
+#      `no blocking`, `no findings` or `blocking`, so its trace carries an
+#      outcome (#832). A report that fails ANY of this posts nothing
 #      — exit 65 — and a `REVIEWED` that contradicts `--commit` is the same
 #      failure, as is a
 #      drifted report (step 3) that carries no `--commit` at all. What the
@@ -354,6 +356,23 @@ if [ -n "$VERDICT_LINE" ]; then
 			NO_LENS=yes
 		fi
 	fi
+fi
+# The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),
+# and the worker's VERDICT line is a sentence: its opening is the contract's
+# "blocking or not", so that is read and nothing else — "not blocking",
+# "no blocking" and the contract's own clean "no findings" are pass,
+# "blocking" is blocked — and the sentence goes whole into the reason. An
+# opening that is none of these is refused here, before anything is posted
+# (ADR-0033, #832): the trace refuses a verdict with no outcome, so a review
+# landed with an unreadable verdict would be one no reader could count.
+case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
+'not blocking'* | 'no blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
+blocking*) VERDICT_WORD=blocked ;;
+*) VERDICT_WORD= ;;
+esac
+[ -z "$NO_LENS" ] || VERDICT_WORD=blocked
+if [ -n "$VERDICT_LINE" ] && [ -z "$VERDICT_WORD" ] && [ ! -s "$TMP/error" ]; then
+	echo "the VERDICT line opens with none of the contract's words — not blocking, no blocking, no findings, blocking — so it carries no outcome: $VERDICT_LINE" >>"$TMP/error"
 fi
 
 if [ -s "$TMP/error" ]; then
@@ -738,23 +757,13 @@ while read -r i f_posted; do
 		"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
 		"data.where=$f_where" data.via=broker "data.posted=$f_posted" "reason=$f_note"
 done <"$TMP/raises"
-# The outcome is the kind's own word (ADR-0008 clause 1, as amended for #348),
-# and the worker's VERDICT line is a sentence: its opening is the contract's
-# "blocking or not", so that is read and nothing else — "not blocking" and
-# the contract's own clean "no findings" are pass, "blocking" is blocked,
-# any other opening carries no outcome — and the sentence goes whole into
-# the reason.
+# VERDICT_WORD was read at validation, above, and is never empty here.
 # The no-lens verdict is traced as /review-pr's NO-LENS.md records it in
 # session — blocked, no lens counted, the roster the worker contract's six
 # lenses, the reason its own — so the landing script (ADR-0032) refuses a
 # head it is the only Axis-1 verdict on.
-case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
-'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
-blocking*) VERDICT_WORD=blocked ;;
-*) VERDICT_WORD= ;;
-esac
 V_REASON=$VERDICT
-[ -z "$NO_LENS" ] || { VERDICT_WORD=blocked V_REASON='no lens ran'; }
+[ -z "$NO_LENS" ] || V_REASON='no lens ran'
 # shellcheck disable=SC2086 # the no-lens counts split into two words on purpose
 trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT_WORD" "reason=$V_REASON" data.axis=1 ${NO_LENS:+data.lenses=0 data.roster=6} data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
 # Axis 2, counted by tag as /review-pr §5b records it: `confirm` when any item
