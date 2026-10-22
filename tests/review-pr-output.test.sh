@@ -848,6 +848,15 @@ lens_rules_missing() {
 		grep -qF 're-resolve' || _lr_out="$_lr_out re-resolve-past-the-model-it-spawned-on"
 	printf '%s\n' "$_lr_sen" | grep -F 'in this context instead' | grep -qF 'its record stands' ||
 		_lr_out="$_lr_out audited-here:record-stands"
+	# ADR-0035 clause 2 (review of #844, M-2): a spent walk names the lens
+	# under `Lenses not run:`, and only a context with no subagent tool
+	# audits in place — no sentence of §3 sends a spent walk to this context.
+	printf '%s\n' "$_lr_sen" | grep -F 'the walk is spent' | grep -qF '`Lenses not run:`' ||
+		_lr_out="$_lr_out spent-walk:named-under-lenses-not-run"
+	printf '%s\n' "$_lr_sen" | grep -F 'the walk is spent' | grep -qF 'in this context instead' &&
+		_lr_out="$_lr_out spent-walk:audited-here"
+	printf '%s\n' "$_lr_sen" | grep -F 'in this context instead' | grep -F 'its record stands' |
+		grep -qF 'no subagent tool' || _lr_out="$_lr_out audited-here:only-with-no-subagent-tool"
 	_lr_line=$(region '^### Review Summary$' '^| | Severity | Count |$' "$1" | grep '^Lenses not run: ')
 	for _lr_p in 'refused' 'ended in fail' 'in this context instead'; do
 		printf '%s\n' "$_lr_line" | grep -qF -- "$_lr_p" || _lr_out="$_lr_out summary-line:'$_lr_p'"
