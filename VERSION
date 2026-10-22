@@ -3074,7 +3074,28 @@
 # Kit-only, never shipped: docs/specs/process.md gains process/R15 to R17;
 # tests/review-pr-output.test.sh section 20 drives both skills' prose.
 
-shared-layer: 0.82.0
+# 0.83.0 — a lens or skill edit is checked before and after, by its Targets:
+# query (ticket #802). NO file joins the shared layer and none leaves. Two
+# shared files change content besides UPDATING.md: scripts/vocab.sh gains
+# QUERY fields (VOCAB_QUERY) — a value held to a trace-filter grammar, one to
+# eight <key>=<value> terms with exactly one kind=, instead of to tokens — and
+# its built-in defaults declare `targets` one; scripts/stamp.sh lifts a
+# `Targets:` line beside Tier:, Confidence: and Domain:, checked the same way.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): retro — SKILL.md gains the before-and-after section and the
+# rule that a lens or skill edit it proposes cites its trace events by run id
+# and carries its Targets: line, or is not filed; QUESTIONS.md gains the
+# "Before and after" section with its two spans. to-tickets — SKILL.md checks
+# a Targets: line at the quiz and writes one on a lens or skill edit. Take the
+# retro directory whole, and to-tickets' SKILL.md.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/vocab.config.sh adds `targets` to VOCAB_FIELDS and
+# declares VOCAB_QUERY='targets' — MERGE the two lines in, or a Targets: line
+# is a field your policy does not declare, and scripts/stamp.sh drops it.
+# Kit-only, never shipped: docs/specs/process.md gains process/R25 to R28;
+# tests/retro-skill.test.sh section 18 runs both spans over fixture traces.
+
+shared-layer: 0.83.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
