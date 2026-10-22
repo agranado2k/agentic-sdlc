@@ -103,6 +103,18 @@ expect_status 2 "a Targets: line outside its grammar is refused, nothing printed
 expect_err_has "the targets line is refused"
 no_pwn "refused Targets: line"
 
+# A Class: line (#819) is a stamp line too: /implement records it as
+# ticket.start's data.class, so it leaves only once the checker passed it.
+body 'Tier: implementer\nClass: toil\n'
+stamp 819
+expect_resolved "$(printf 'Tier: implementer\nClass: toil')" \
+	"a Class: line is lifted and checked like any stamp line"
+body "Tier: implementer\nClass: toil';touch PWN;'\n"
+stamp 819
+expect_status 2 "a Class: line outside its vocabulary is refused, nothing printed"
+expect_err_has "the class line is refused"
+no_pwn "refused Class: line"
+
 body 'Tier: implementer\r\nConfidence: high\r\n'
 stamp 331
 expect_resolved "$(printf 'Tier: implementer\nConfidence: high')" \

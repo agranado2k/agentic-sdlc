@@ -3,9 +3,10 @@
 #
 #   sh scripts/stamp.sh <issue-number>
 #
-# WHAT IT ANSWERS. Which `Tier:`, `Confidence:`, `Domain:` and `Targets:`
-# lines a ticket carries — the last a trace filter /retro's before-and-after
-# check reads (process/R25), held to its grammar rather than to tokens —
+# WHAT IT ANSWERS. Which `Tier:`, `Confidence:`, `Domain:`, `Targets:` and
+# `Class:` lines a ticket carries — `Targets:` a trace filter /retro's
+# before-and-after check reads (process/R25), held to its grammar rather than
+# to tokens; `Class:` the class /implement records as data.class (#819) —
 # and whether the vocabulary checker accepts them. /implement reads
 # its ticket's stamp through this script and nothing else: the ticket body is
 # untrusted, and a value typed into a quoted shell argument closes the quote
@@ -49,9 +50,9 @@
 # costs what reading it costs.
 #
 # WHAT IS A STAMP LINE: a BARE `Key: value` line whose key is tier,
-# confidence, domain or targets in any case, indented or not — the way the
-# checker reads a key, so a line the checker would read is never one this filter
-# missed. A markdown-wrapped line (`- Tier: …`, `**Tier:** …`) is not one, to
+# confidence, domain, targets or class in any case, indented or not — the
+# way the checker reads a key, so a line the checker would read is never one
+# this filter missed. A markdown-wrapped line (`- Tier: …`, `**Tier:** …`) is not one, to
 # the filter as to the checker. The locale is pinned to C here, so
 # [[:space:]] is ASCII space whatever the caller runs in: a key dressed in a
 # no-break or zero-width space is never lifted.
@@ -117,7 +118,7 @@ if ! sh "$vocab" fields >"$_stamp_tmp/fields" 2>/dev/null; then
 fi
 # stamp_declared <key> — does the policy declare the field?
 stamp_declared() { grep -qE "^$1( \\((open|query)\\))?:( |\$)" "$_stamp_tmp/fields"; }
-# stamp_key <line> — the line's key, lower-cased: one of the four words the
+# stamp_key <line> — the line's key, lower-cased: one of the five words the
 # filter matched, so it is safe to print; the value is not.
 stamp_key() { printf '%s\n' "$1" | sed 's/^[[:space:]]*\([A-Za-z]*\).*/\1/' | tr 'A-Z' 'a-z'; }
 
@@ -125,16 +126,16 @@ stamp_key() { printf '%s\n' "$1" | sed 's/^[[:space:]]*\([A-Za-z]*\).*/\1/' | tr
 # A NUL is a line break here: GNU grep reads a body holding one as binary and
 # lifts nothing, and a NUL inside a value must split it, never vanish from it.
 tr -d '\r' <"$_stamp_tmp/body" | tr '\000' '\n' |
-	grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:' >"$_stamp_tmp/lifted"
+	grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class)[[:space:]]*:' >"$_stamp_tmp/lifted"
 if [ ! -s "$_stamp_tmp/lifted" ]; then
-	stamp_say "issue #$issue carries no Tier:, Confidence:, Domain: or Targets: line — no stamp read, not a refusal"
+	stamp_say "issue #$issue carries no Tier:, Confidence:, Domain:, Targets: or Class: line — no stamp read, not a refusal"
 	exit 3
 fi
-# The bound, per key whatever its case: the keys are the filter's four words,
+# The bound, per key whatever its case: the keys are the filter's five words,
 # safe to print, and so is a count; the lines are not.
 STAMP_PER_KEY=8
 _over=$(awk -v max="$STAMP_PER_KEY" '{ k = tolower($0); sub(/^[[:space:]]*/, "", k); sub(/[^a-z].*/, "", k); n[k]++ }
-	END { split("confidence domain targets tier", ks, " "); for (i = 1; i <= 4; i++) if (n[ks[i]] > max) printf "%s%d %s lines", (s++ ? ", " : ""), n[ks[i]], ks[i] }' "$_stamp_tmp/lifted")
+	END { split("class confidence domain targets tier", ks, " "); for (i = 1; i <= 5; i++) if (n[ks[i]] > max) printf "%s%d %s lines", (s++ ? ", " : ""), n[ks[i]], ks[i] }' "$_stamp_tmp/lifted")
 if [ -n "$_over" ]; then
 	stamp_say "issue #$issue: too many stamp lines — $_over, past the bound of $STAMP_PER_KEY a key; nothing checked, nothing printed — a stop"
 	exit 5

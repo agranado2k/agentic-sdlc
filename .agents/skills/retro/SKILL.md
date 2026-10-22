@@ -109,7 +109,7 @@ the window's tickets waited. Per landed ticket, the **lead time** from its
 first `ticket.start` to its `merge.land`; per landed PR, the **review wait**
 from its last green `pr.iterate` to its `merge.land`, `n/a` for a PR with no
 green iteration; each column's median and longest; and **toil's share**, read
-from the class a project puts on `ticket.start`. One span answers it all —
+from the `data.class` `/implement` records on `ticket.start` from a `Class:` stamp. One span answers it all —
 `QUESTIONS.md`'s "Flow" section holds it, and what counts as a finding.
 
 ## The before-and-after section

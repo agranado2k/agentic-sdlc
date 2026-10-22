@@ -63,7 +63,7 @@
 # rather than to tokens: such a field declares no VOCAB_<FIELD> and no rule
 # reads it.
 
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets'
+VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class'
 VOCAB_OPEN='domain'
 VOCAB_QUERY='targets'
 
@@ -127,6 +127,12 @@ VOCAB_AUTHOR_KIND='bot human'
 # /retro's before-and-after check (process/R25): `kind=<kind>` and up to seven
 # more `<field>=<value>` or `data.<key>=<value>` terms, all of which an event
 # must match. Its grammar is the checker's (vocab_query_ok); no tokens here.
+
+# class — the ticket's class, stamped as `Class:` when a ticket declares one
+# and recorded by /implement as ticket.start's data.class, only from a line
+# scripts/stamp.sh printed; /retro's flow section counts toil's share by it.
+# CLOSED: a class it cannot count is refused, never recorded.
+VOCAB_CLASS='feature fix toil'
 
 # ---------------------------------------------------------------------------
 # THE RULES. One per line: `<field>=<value> => <field>=<value>` demands the

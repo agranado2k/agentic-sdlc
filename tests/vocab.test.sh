@@ -266,8 +266,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # its lift is bounded like every other site here.
 LIFTED=$(
 	cat <<'EOLIFT'
-scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
-scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
+scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class)[[:space:]]*:'
+scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class)[[:space:]]*:'
 .agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
@@ -1104,5 +1104,19 @@ expect_status 2 "nine terms are refused — the filter is bounded"
 expect_err_has "targets: more than 8 terms"
 vocab 'Targets: kind=finding.raise data.agent=$(id)'
 expect_status 2 "a value shaped like a command is refused"
+
+# ---------------------------------------------------------------------------
+banner "Class: — the ticket's class, a closed token set /retro counts toil by (#819)"
+# ---------------------------------------------------------------------------
+# /retro's flow section reads toil's share from ticket.start's data.class,
+# and /implement records one only from a `Class:` stamp line this checker
+# passed — so the field is declared, closed, and an undeclared class refused.
+vocab fields
+expect_out_has "class: feature fix toil" "the class field is declared, closed, with its three tokens"
+vocab 'Class: toil'
+expect_resolved "" "a Class: toil line is accepted"
+vocab 'Class: chore'
+expect_status 2 "an undeclared class is refused"
+expect_err_has "class"
 
 t_done "vocab"
