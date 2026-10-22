@@ -14,11 +14,12 @@ const KIT = join(here, "..", "..", "..");
 
 // Declared tools: a skill's `allowed-tools`, an agent type's `tools:` line,
 // and a spawn that may only narrow. One fixture tree per rule, each failing
-// and passing; the shipped policy holds the first rule at a warning until
-// every kit skill declares its tools, so the failing arm runs under a policy
-// that turns it to a violation.
+// and passing; the shipped policy holds the first rule at a violation, since
+// every kit skill declares its tools (#803), and a project still sweeping its
+// own may turn it to one advisory.
 
 const STRICT = { ...defaultConfig, skillTools: { ...defaultConfig.skillTools, missingAllowedTools: "violation" } };
+const LENIENT = { ...defaultConfig, skillTools: { ...defaultConfig.skillTools, missingAllowedTools: "warning" } };
 
 const TYPES = {
   "adapters/claude-code/agents/reviewer.md": "---\nname: reviewer\ndescription: reads.\ntools: Read, Grep, Glob\n---\nBody.\n",
@@ -67,13 +68,16 @@ test("R30: an empty allowed-tools declares nothing, and a key in the body is not
   }
 });
 
-test("R30: the shipped policy holds the missing-allowed-tools rule at a warning", () => {
-  assert.equal(defaultConfig.skillTools.missingAllowedTools, "warning");
-  const ctx = ctxFor({
-    ".agents/skills/demo/SKILL.md": skill(""),
-    ".agents/skills/other/SKILL.md": skill(""),
-    ".agents/skills/typed/SKILL.md": skill("allowed-tools: Read\n"),
-  });
+test("R30: the shipped policy fails a skill with no allowed-tools; a warning policy turns it to one advisory", () => {
+  assert.equal(defaultConfig.skillTools.missingAllowedTools, "violation");
+  const ctx = ctxFor(
+    {
+      ".agents/skills/demo/SKILL.md": skill(""),
+      ".agents/skills/other/SKILL.md": skill(""),
+      ".agents/skills/typed/SKILL.md": skill("allowed-tools: Read\n"),
+    },
+    LENIENT,
+  );
   const out = run(ctx);
   assert.equal(out.length, 1, "one advisory names every undeclared skill");
   assert.equal(out[0].severity, "warning");
@@ -237,9 +241,9 @@ test("the kit's own tree: every agent type names its tools, and no skill widens"
 // A project carrying the gate, its harness and the kit's config.mjs, and the
 // fixture files — not a copy of the kit, whose tree would bring every other
 // rule's findings with it.
-function project(files, { node, strict = false }) {
+function project(files, { node, lenient = false }) {
   let cfg = readFileSync(join(KIT, "scripts/docs-conformance/config.mjs"), "utf8");
-  if (strict) cfg = cfg.replace('missingAllowedTools: "warning"', 'missingAllowedTools: "violation"');
+  if (lenient) cfg = cfg.replace('missingAllowedTools: "violation"', 'missingAllowedTools: "warning"');
   const shim = readFileSync(join(KIT, "CLAUDE.md"), "utf8");
   const root = makeFixture({
     "AGENTS.md": "# Manual\n",
@@ -310,16 +314,16 @@ for (const node of [true, false]) {
     assert.match(other.stderr, /look spawns scout, whose tools \(Bash\(git diff:\*\)\) are outside its allowed-tools/);
   });
 
-  test(`${engine}: R30 — a skill with no allowed-tools warns under the shipped policy and fails under a strict one`, () => {
+  test(`${engine}: R30 — a skill with no allowed-tools fails under the shipped policy and warns under a lenient one`, () => {
     const files = { ".agents/skills/demo/SKILL.md": skill(""), ".agents/skills/other/SKILL.md": skill("") };
-    const warned = project(files, { node });
+    const failed = project(files, { node });
+    assert.equal(failed.status, 1, `${failed.stdout}${failed.stderr}`);
+    assert.match(failed.stderr, /demo has no allowed-tools in its frontmatter/);
+    const warned = project(files, { node, lenient: true });
     assert.equal(warned.status, 0, `${warned.stdout}${warned.stderr}`);
     assert.equal(warned.stderr.match(/skill-allowed-tools-missing/g)?.length, 1, `one advisory line: ${warned.stderr}`);
     assert.match(warned.stderr, /no allowed-tools in the frontmatter of demo, other, so nothing states the tools they use/);
-    const failed = project(files, { node, strict: true });
-    assert.equal(failed.status, 1, `${failed.stdout}${failed.stderr}`);
-    assert.match(failed.stderr, /demo has no allowed-tools in its frontmatter/);
-    const declared = project({ ".agents/skills/demo/SKILL.md": skill("allowed-tools: Read\n") }, { node, strict: true });
+    const declared = project({ ".agents/skills/demo/SKILL.md": skill("allowed-tools: Read\n") }, { node });
     assert.equal(declared.status, 0, `${declared.stdout}${declared.stderr}`);
     assert.doesNotMatch(declared.stderr, /skill-allowed-tools-missing/);
   });

@@ -87,17 +87,8 @@ banner "3. A tree with nothing to advise prints no advisory block — the relay 
 printf '\n**Paradigm**: functional — pure domain, classes only at the adapters.\n' >>constitution/local-engineering.md
 sed -i.bak "s/^TRACE_DIR=''/TRACE_DIR='.trace'/" scripts/trace.config.sh && rm scripts/trace.config.sh.bak
 sed -i.bak "s/^AGENT_TIER_REVIEWER=''/AGENT_TIER_REVIEWER='a-second-model'/" scripts/agents.config.sh && rm scripts/agents.config.sh.bak
-# Every skill declares its tools — every tool the adapter's types hold, so no
-# spawn widens — and the skill-tools advisory has nothing to say. The line
-# takes the largest skills past their byte ceilings, so this project raises
-# each by 1000: a consumer's own policy edit, here only so the tree is clean.
-for f in .agents/skills/*/SKILL.md; do
-	awk 'NR == 1 { print; print "allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Skill, Agent"; next } { print }' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
-done
-awk '/^const skillCeilings = \{/ { on = 1 } on && /^\};/ { on = 0 }
-	on && match($0, /: [0-9]+,/) { $0 = substr($0, 1, RSTART + 1) (substr($0, RSTART + 2, RLENGTH - 3) + 1000) "," substr($0, RSTART + RLENGTH) }
-	{ print }' scripts/docs-conformance/config.mjs >scripts/docs-conformance/config.mjs.tmp &&
-	mv scripts/docs-conformance/config.mjs.tmp scripts/docs-conformance/config.mjs
+# Every skill the kit ships declares its tools (process/R29), so the
+# skill-tools rule has nothing to say here either.
 expect_exit 0 "the gate is green once one anchor is filled" -- sh scripts/check.sh
 expect_unsaid "design-brief-missing"
 expect_unsaid "trace-off"

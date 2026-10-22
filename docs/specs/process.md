@@ -36,6 +36,7 @@ R21. WHEN either skill stops under R18 or R20, it SHALL record the stop in the t
 R22. `/retro` SHALL report, per landed ticket in the window, the lead time from its first `ticket.start` to its `merge.land`, with the window's median and longest.
 R23. `/retro` SHALL report, per landed PR, the review wait from its last `pr.iterate outcome=green` to its `merge.land`, and SHALL report `n/a` for a PR with no green iteration.
 R24. `/retro` SHALL report toil's share of landed tickets from `ticket.start`'s `data.class=toil`, and `not recorded` when no ticket in the window carries a class.
+R29. Every `SKILL.md` the kit ships SHALL declare `allowed-tools` in its frontmatter.
 R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
 R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.
 R32. WHERE a skill names a spawn type, the docs gate SHALL fail it when that type's `tools:` holds a tool absent from the skill's `allowed-tools`.

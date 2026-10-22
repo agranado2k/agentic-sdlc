@@ -1,6 +1,7 @@
 ---
 name: improve-codebase-architecture
 description: Find deepening opportunities in a codebase — refactors that turn shallow modules into deep ones — informed by the project's domain language and its binding decision records, then grill through whichever one the human picks. Use when an area has become hard to change or hard to test, or when the user asks to improve architecture, consolidate tightly-coupled modules, or make a codebase more navigable.
+allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Skill, Agent
 metadata:
   phase: planner
 ---

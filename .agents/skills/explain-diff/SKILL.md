@@ -1,6 +1,7 @@
 ---
 name: explain-diff
 description: Produce a rich, interactive, self-contained HTML explanation of a code change — background, intuition with diagrams, a code walkthrough, and a comprehension quiz. Use when the user asks to explain a diff, branch, commit range, or PR, wants to understand a change before reviewing or merging it, or wants to pay down cognitive debt on code an agent wrote.
+allowed-tools: Read, Grep, Glob, Bash, Write
 metadata:
   phase: implementer
 ---

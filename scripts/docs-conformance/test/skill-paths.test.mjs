@@ -136,7 +136,7 @@ test("a directory that is not a skill (no SKILL.md) is not scanned", () => {
 test("end to end: a dead skill path warns on stderr and the gate still exits 0", () => {
   const root = makeFixture({
     ".agents/skills/worktree-cleanup/SKILL.md":
-      "# worktree-cleanup\nWraps `scripts/no-such-script.sh`.\n",
+      "---\nallowed-tools: Read\n---\n# worktree-cleanup\nWraps `scripts/no-such-script.sh`.\n",
   });
   const res = spawnSync(process.execPath, [join(here, "..", "index.mjs"), root], {
     encoding: "utf8",
