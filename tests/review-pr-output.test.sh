@@ -1684,7 +1684,11 @@ TD834="$SCRATCH/834-trace"
 lr() { # <return file> <agent> <posted> — the fence, run from the kit root
 	( cd "$ROOT" && . "$SCRATCH/834-fn.sh" && TRACE_DIR="$TD834" TRACE_QUIET=1 lens_raise 12 "$2" "$3" "$1" "$SCRATCH/834-tally" )
 }
-printf '%s\n' '### Review' '**H-1** `a.sh:3` — x' 'Raise: H-1 scripts/a.sh:3' 'Raise: L-1 scripts/b.sh:9' 'Raise: H-2 bad$(x)path:1' 'Raises: 3' >"$SCRATCH/834-sec"
+# A planted command (review of #844, M-3): were any line of a return run, the
+# touch would leave its file behind, so the absence below can fail.
+rm -f "$SCRATCH/834-planted"
+printf '%s\n' '### Review' '**H-1** `a.sh:3` — x' 'Raise: H-1 scripts/a.sh:3' 'Raise: L-1 scripts/b.sh:9' \
+	"Raise: H-2 bad\$(touch\${IFS}$SCRATCH/834-planted)path:1" 'Raises: 3' >"$SCRATCH/834-sec"
 printf '%s\n' 'Raise: H-1 scripts/c.sh:4' 'Raises: 1' >"$SCRATCH/834-pat"
 printf '%s\n' 'all clean' 'Raises: 0' >"$SCRATCH/834-clean"
 rm -rf "$TD834" "$SCRATCH/834-tally"
@@ -1704,7 +1708,9 @@ printf '%s\n' "$raises" | grep -F '"id":"L-1"' | grep -F '"severity":"low"' | gr
 	pass "a LOW is recorded as not posted, whatever the path's answer" || fail "the LOW's raise: $raises"
 printf '%s\n' "$raises" | grep -F '"id":"H-2"' | grep -qF '"where":"unsafe-path"' &&
 	pass "a place off the plain set is recorded as unsafe-path, never typed" || fail "the unsafe place: $raises"
-[ ! -e "$ROOT/x" ] && pass "and nothing in a return was executed" || fail "a return's text was executed"
+grep -qF '$(touch${IFS}' "$SCRATCH/834-sec" && [ ! -e "$SCRATCH/834-planted" ] &&
+	pass "and nothing in a return was executed: the planted touch left no file" || fail "a return's text was executed, or no command was planted"
+rm -f "$SCRATCH/834-planted"
 for bad834 in \
 	'no count|Raise: H-1 a.sh:1' \
 	'count disagrees|Raise: H-1 a.sh:1\nRaises: 2' \
