@@ -368,6 +368,28 @@ run "$(T new-area)"
 expect_status 1 "… and the same ticket spelled <area>/R<n> leaves the new area's requirements uncovered"
 
 # ---------------------------------------------------------------------------
+banner "7e. Walkthrough scenarios and use cases: the check is unchanged (process/R36 process/R34)"
+# ---------------------------------------------------------------------------
+# A PRD written before /to-prd wrote use cases keeps its walkthrough
+# scenarios, and nothing refuses it: the check reads requirement lines, and a
+# scenario is none. A use-case PRD's requirements end with the steps they
+# check, `[UC1 2a]`, and the brackets are never part of the id — a covered
+# line passes, an uncovered one is named by its id alone, and a step number
+# inside the brackets is never read as a requirement.
+prd '## Scenarios\n\n1. Ana saves a filtered view and names it "late this week".\n2. Bo opens the link and sees her filters.\n\n## Requirements\n\nR1. The orders table SHALL save a filtered view under a name.\nR2. WHEN a saved view link is opened, the orders table SHALL apply its filters.\n'
+fresh
+ticket 1 'Covers: R1, R2\n'
+run "$(T 1)"
+expect_resolved "" "process/R36: a walkthrough-shaped PRD and its covering ticket pass — exit 0, nothing printed"
+prd '## Scenarios\n\n**UC1 — Share a saved view.** Actor: Ana. Goal: Bo sees her filters.\n1. Ana copies the link.\n2. Bo opens it.\n\nExtensions:\n- 2a. The link has expired.\n\n## Requirements\n\nR1. The toolbar SHALL copy a saved view link. [UC1 1]\nR2. IF the link has expired, THEN the orders table SHALL say so. [UC1 2a]\nR3. The view name SHALL be at most 40 characters.\n'
+run "$(T 1)"
+expect_status 1 "process/R34: a use-case PRD's bracketed requirements are read by id — R3 is still owed"
+expect_out_is "uncovered: R3" "process/R34: … and only the id is named, never the brackets or a step"
+ticket 1 'Covers: R1, R2, R3\n'
+run "$(T 1)"
+expect_resolved "" "process/R34: with every id covered, the bracketed PRD passes — exit 0, nothing printed"
+
+# ---------------------------------------------------------------------------
 banner "8. Usage and unreadable input: exit 2, nothing on stdout"
 # ---------------------------------------------------------------------------
 t_exec sh "$COVERAGE"
