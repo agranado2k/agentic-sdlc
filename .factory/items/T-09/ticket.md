@@ -3,11 +3,22 @@ id: T-09
 type: ticket
 title: Release the D-01 wave
 parent: PRD-05
-stage: ready
+stage: done
 created: 2026-10-21
-updated: 2026-10-21
+updated: 2026-10-22
 deps: [T-01, T-02, T-03, T-04, T-05, T-06, T-07, T-08]
 priority: 3
+links:
+  pr: "#830"
+review:
+  outcome: approved
+  commit: "c4f4ec3"
+  by: "review-pr (sonnet) on #830"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#830 landed, suite green)"
+  at: 2026-10-22
 ---
 
 # T-09 · Release the D-01 wave

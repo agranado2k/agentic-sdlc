@@ -3,11 +3,22 @@ id: T-05
 type: ticket
 title: "/retro checks a lens or skill edit before and after, by its Targets: query"
 parent: PRD-03
-stage: ready
+stage: done
 created: 2026-10-21
-updated: 2026-10-21
+updated: 2026-10-22
 deps: [T-03, T-04]
 priority: 3
+links:
+  pr: "#823"
+review:
+  outcome: approved
+  commit: "062d3ca"
+  by: "review-pr (sonnet) on #823"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#823 landed, suite green)"
+  at: 2026-10-22
 ---
 
 # T-05 · /retro checks a lens or skill edit before and after, by its Targets: query
