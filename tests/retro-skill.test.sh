@@ -1783,6 +1783,29 @@ esac
 for needle in '`Targets:`' 'scripts/stamp.sh' 'equal window' 'per landed PR' 'inconclusive' 'stopped' '— no drop' 'names the ticket'; do
 	case "$baprose" in *"$needle"*) pass "the before-and-after section says: $needle" ;; *) fail "the before-and-after section does not say: $needle" ;; esac
 done
+# R28, RUN: the filing check over a fixture report. Three lens or skill
+# edits — one with its run ids and its Targets: line, one with no run id, one
+# with no Targets: line — and a finding that edits nothing, which the check
+# leaves alone.
+r28span=$(sed -n '/^## Procedure/,/^## Routing/p' "$SKILL_ABS" | grep -o "\`awk 'BEGIN { RS = \"\" }[^\`]*\`" | tr -d '\`' | head -1)
+[ -n "$r28span" ] && pass "process/R28: SKILL.md carries the filing check as a span" ||
+	fail "process/R28: SKILL.md's procedure carries no \`awk 'BEGIN { RS = \"\" } …' <the report>\` filing check"
+if [ -n "$r28span" ]; then
+	r28rep="$SCRATCH/r28-report.md"
+	printf '%s\n' '# retro' '' \
+		'Finding: the security lens misses unsafe-path findings' 'Edits: lens security' \
+		'Runs: 20261011T000000Z-2-0000dead 20261012T000000Z-3-0000beef' 'Targets: kind=finding.raise data.agent=security' '' \
+		'Finding: the pattern lens repeats itself' 'Edits: lens pattern' 'Targets: kind=finding.raise data.agent=pattern' '' \
+		'Finding: /diagnose guesses first' 'Edits: skill diagnose' 'Runs: 20261013T000000Z-4-0000cafe' '' \
+		'Finding: the price table is stale' 'Route: to-tickets' >"$r28rep"
+	r28out=$(sh -c "$(printf '%s\n' "$r28span" | sed "s|<the report>|$r28rep|")" 2>&1)
+	for row in 'file: the security lens misses unsafe-path findings' 'not filed: the pattern lens repeats itself' 'not filed: /diagnose guesses first'; do
+		printf '%s\n' "$r28out" | grep -qxF "$row" && pass "process/R28: the filing check prints '$row'" ||
+			fail "process/R28: the filing check did not print '$row'; it printed: $(printf '%s' "$r28out" | tr '\n' ';')"
+	done
+	printf '%s\n' "$r28out" | grep -qF 'price table' && fail "process/R28: the filing check judged a finding that edits no lens or skill" ||
+		pass "process/R28: …and leaves a finding that edits nothing alone"
+fi
 # R28: a lens or skill edit this pass proposes cites its evidence by run id
 # and carries its Targets: line, or is not filed.
 r28=$(sed -n '/^## Procedure/,/^## Anti-patterns/p' "$SKILL_ABS" | flat)
