@@ -1002,6 +1002,43 @@ banner "6. Every repo path both skills name is real, templated, or installed"
 # ---------------------------------------------------------------------------
 t_assert_skill_paths 3 "the pair should name the glossary, the decision records and the tier policy file" "$PRD_ABS" "$TIX_ABS"
 
+# ---------------------------------------------------------------------------
+banner "The class stamp: /to-tickets writes the Class: line /implement records and /retro counts (#828)"
+# ---------------------------------------------------------------------------
+# #819 made `Class:` an open stamp field that scripts/stamp.sh lifts and
+# /implement records as ticket.start's data.class; /retro's toil share reads
+# it. This holds the writer's half: the rubric, the quiz check and
+# confirmation, the body line and the ticket.write field — and that the line
+# the rubric shows passes the stamp checker, read back through stamp.sh.
+cls=$(section_of "$TIX_ABS" "The class rubric")
+[ -n "$cls" ] && pass "/to-tickets carries a class rubric" ||
+	fail "/to-tickets has no '## The class rubric' section — nothing says when a Class: line is stamped"
+t_text_has "$cls" "toil" "the one class the kit reads is named: /retro counts toil" "the class rubric"
+t_text_has "$cls" "leave the line off" "no class applies is the ordinary case: the line is left off" "the class rubric"
+t_text_has "$cls" "names no class of its own" "the vocabulary stays the consumer's (PRD-03)" "the class rubric"
+t_text_has "$quiz" "'Class: <token>'" "a stamped class goes to the checker before the quiz"
+in_order "$quiz" "the class is checked before the list is presented" \
+	"sh scripts/vocab.sh 'Tier: <tier>'" "'Class: <token>'" "fix what it refuses" "present the draft"
+t_text_has "$quiz" "Show any \`Class:\`" "the quiz shows the class for the human to confirm, like the domain"
+in_order "$publish" "the body's class line follows the domain line" \
+	'`Domain: <token>`' '`Class: <token>`'
+in_order "$publish" "ticket.write records the class beside the domain" \
+	"kind=ticket.write" "[domain=<token>]" "[data.class=<token>]"
+ex=$(printf '%s\n' "$cls" | sed -n '/^```$/,/^```$/p' | grep '^Class: ' | head -1)
+if [ -z "$ex" ]; then
+	fail "the class rubric shows no fenced 'Class: <token>' example line"
+else
+	(cd "$ROOT" && unset VOCAB_CONFIG && sh scripts/vocab.sh "$ex" >/dev/null 2>&1) &&
+		pass "the rubric's example line ('$ex') passes the vocabulary checker" ||
+		fail "the rubric's example line '$ex' is refused by scripts/vocab.sh"
+	printf 'Tier: implementer\nConfidence: medium\n%s\n' "$ex" >"$SCRATCH/class-draft"
+	t_stub_gh "$SCRATCH/class-bin" "$SCRATCH/class-draft"
+	got=$(cd "$ROOT" && unset VOCAB_CONFIG && PATH="$SCRATCH/class-bin:$PATH" sh scripts/stamp.sh 828 2>/dev/null); rc=$?
+	[ "$rc" -eq 0 ] && printf '%s\n' "$got" | grep -qxF "$ex" &&
+		pass "a drafted ticket's Class: line is lifted and passed by scripts/stamp.sh" ||
+		fail "scripts/stamp.sh did not pass the drafted Class: line (exit $rc, printed '$got')"
+fi
+
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
 t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"
 
