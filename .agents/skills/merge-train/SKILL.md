@@ -1,6 +1,7 @@
 ---
 name: merge-train
 description: Serially land a batch of green PRs through the forge's own merge API — migration-aware ordering, update-branch for stale PRs, wait for the post-merge workflows between merges, then run /worktree-cleanup. Invoke as `/merge-train` (discover all green PRs) or `/merge-train <PR#> [<PR#>…]` (explicit batch). Operator-invoked only; complements /pr-iterate, which never merges.
+allowed-tools: Read, Grep, Glob, Bash, Skill
 metadata:
   phase: mechanical
 ---

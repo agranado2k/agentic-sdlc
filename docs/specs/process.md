@@ -40,6 +40,7 @@ R25. WHEN a landed ticket carries a `Targets:` line, `/retro` SHALL report that 
 R26. IF the two windows of R25 differ in tier → model mapping or in kit version, THEN `/retro` SHALL report the comparison as inconclusive, and SHALL leave failed runs out of both counts.
 R27. IF R25's after-rate is not below its before-rate, THEN `/retro` SHALL file a finding naming the ticket.
 R28. A lens or skill edit that `/retro` proposes SHALL cite the trace events behind it by run id and carry its `Targets:` line, and SHALL NOT be filed without them.
+R29. Every `SKILL.md` the kit ships SHALL declare `allowed-tools` in its frontmatter.
 R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
 R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.
 R32. WHERE a skill names a spawn type, the docs gate SHALL fail it when that type's `tools:` holds a tool absent from the skill's `allowed-tools`.

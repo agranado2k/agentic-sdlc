@@ -117,7 +117,9 @@ test("warnings and violations together: both blocks print and the gate still fai
 
 test("end to end: a dangling reference warns on stderr and the gate still exits 0", () => {
   const { [".agents/skills/explain-diff/SKILL.md"]: _gone, ...half } = WEB;
-  const root = makeFixture(half);
+  // Each skill declares its tools, so the shipped skill-tools rule stays quiet.
+  const declared = Object.fromEntries(Object.entries(half).map(([f, body]) => [f, `---\nallowed-tools: Read\n---\n${body}`]));
+  const root = makeFixture(declared);
   const res = spawnSync(process.execPath, [join(here, "..", "index.mjs"), root], {
     encoding: "utf8",
   });
