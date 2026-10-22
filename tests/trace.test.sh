@@ -1308,7 +1308,7 @@ t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr
 [ "$T_STATUS" = 2 ] && pass "review.verdict outcome='not blocking' is exit 2 — a sentence is not a verdict" || fail "a sentence in review.verdict's outcome exited $T_STATUS, not 2: $T_ERR"
 case $T_ERR in *review.verdict*"'not blocking'"*"pass blocked confirm"*) pass "and the refusal names the kind, the value and the vocabulary, the checker's shape" ;; *) fail "the refusal did not name kind, value and vocabulary: $T_ERR" ;; esac
 [ ! -e "$OV/events/$TODAY.jsonl" ] && pass "and wrote nothing" || fail "a refused outcome was written: $(cat "$OV/events/$TODAY.jsonl")"
-t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=pass
+t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=pass data.axis=1
 [ "$T_STATUS" = 0 ] && grep -q '"outcome":"pass"' "$OV/events/$TODAY.jsonl" 2>/dev/null &&
 	pass "outcome=pass is written" || fail "review.verdict outcome=pass was not written (exit $T_STATUS): $T_ERR"
 
@@ -1327,7 +1327,22 @@ _ov_table=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d' | awk '{ print $1 }' | sort)
 # so this check asks about the outcome word and nothing else.
 # Read from the table's `!` rows, never copied, so a new required row moves
 # this with it.
-ov_held() { sed -n "s/^TRACE_SHAPES='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1/[^=]*=\([a-z_]*\)!:.*|data.\1=0|p" | sort -u; }
+# TRACE_REQUIRED's data keys come too (#832), each with a value its own
+# rule accepts; a required key with no fixture value here is a FAIL, never a
+# silent pass. ov_outcome_required <kind> says whether the kind's outcome is
+# required, so "no outcome writes" becomes "no outcome is refused" for it.
+ov_held() {
+	sed -n "s/^TRACE_SHAPES='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1/[^=]*=\([a-z_]*\)!:.*|data.\1=0|p" | sort -u
+	for _oh_k in $(sed -n "s/^TRACE_REQUIRED='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1=data\.||p"); do
+		case $_oh_k in
+		id) echo data.id=H-1 ;;
+		severity) echo data.severity=low ;;
+		axis) echo data.axis=1 ;;
+		*) echo "data.$_oh_k=no-fixture-value-for-a-required-key" ;;
+		esac
+	done
+}
+ov_outcome_required() { sed -n "s/^TRACE_REQUIRED='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | grep -qx "$1=outcome"; }
 _ov_bad=
 _ov_rows=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d')
 _ov_ifs=$IFS
@@ -1340,7 +1355,12 @@ for _ov_row in $_ov_rows; do
 	set +f
 	_ov_k=$1
 	shift
-	env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k with no outcome refused]"
+	# shellcheck disable=SC2046 # one data argument per line
+	if ov_outcome_required "$_ov_k"; then
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" $(ov_held "$_ov_k") >/dev/null 2>&1 && _ov_bad="$_ov_bad [$_ov_k requires an outcome, none accepted]"
+	else
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k with no outcome refused]"
+	fi
 	case $1 in
 	-)
 		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome=ok >/dev/null 2>&1 && _ov_bad="$_ov_bad [$_ov_k carries no outcome, ok accepted]"
@@ -1418,7 +1438,7 @@ IFS=$_ov_ifs
 # line, never a change to the exit code. The lines are shaped as the emitter
 # wrote them before the rule, from the kit's own trace.
 OVV="$SCRATCH/outcome-verify"; OVVON=$(policy "$OVV")
-TRACE_CONFIG=$OVVON sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=blocked reason=clean
+TRACE_CONFIG=$OVVON sh "$TRACE" emit kind=review.verdict subject='pr:#1' outcome=blocked data.axis=1 reason=clean
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o1","kind":"review.verdict","subject":"pr:#320","outcome":"not blocking \\u2014 fix M-1 first"}\n' >>"$OVV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o2","kind":"run.end","outcome":"delivered"}\n' >>"$OVV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-09-30T00:00:00Z","id":"o3","kind":"note","reason":"decoy","data":{"outcome":"a data key is not the outcome"}}\n' >>"$OVV/events/$TODAY.jsonl"
@@ -2187,8 +2207,8 @@ banner "30. A finding raise's id is the review's severity id, held at emit (tick
 # same shape, read from where the report contract numbers its findings
 # (/review-pr's C-/H-/M-/L- ids, the worker contract's "C-1, H-1, M-1, L-1",
 # the broker's **[CHML]-[0-9]+** lift). A confirm-list item is never raised,
-# so A2-N, legal on the triage side, is refused here. A present id is held;
-# a missing one stays legal, as every shape row's key is (ADR-0008 #466).
+# so A2-N, legal on the triage side, is refused here. A present id is held,
+# and since #832 a missing one is refused too (ADR-0034, section 41).
 RI="$SCRATCH/raise-id"; RION=$(policy "$RI")
 # ri_emit <emit args…> — runs the emit and sets RI_GREW to the lines it added.
 ri_emit() {
@@ -2218,8 +2238,8 @@ for _ri_ok in H-3 C-1 M-12 L-7; do
 		fail "finding.raise data.id=$_ri_ok was refused or not written (exit $T_STATUS): $T_ERR"
 done
 ri_emit $R
-[ "$T_STATUS" = 0 ] && [ "$RI_GREW" = 1 ] && pass "a raise with no data.id still writes — a missing key is no violation" ||
-	fail "a raise with no data.id was refused (exit $T_STATUS): $T_ERR"
+[ "$T_STATUS" = 2 ] && [ "$RI_GREW" = 0 ] && pass "a raise with no data.id is refused since #832 — the id is required" ||
+	fail "a raise with no data.id was written (exit $T_STATUS): $T_ERR"
 }
 grep -F '"kind":"finding.raise"' "$RI/events/$TODAY.jsonl" 2>/dev/null | grep -qF '"id":"H-3"' &&
 	pass "and H-3 is in the trace as given" || fail "the raise H-3 is not in the trace as given"
@@ -2235,7 +2255,7 @@ _ri_join=no
 # verify: a raise already written with a malformed id is history — an advisory
 # on stderr naming file, line and value, never a bad line, never the verdict.
 RIV="$SCRATCH/raise-verify"; RIVON=$(policy "$RIV")
-TRACE_CONFIG=$RIVON sh "$TRACE" emit kind=finding.raise subject='pr:#1' outcome=raised data.id=H-1 reason=clean
+TRACE_CONFIG=$RIVON sh "$TRACE" emit kind=finding.raise subject='pr:#1' outcome=raised data.id=H-1 data.severity=high reason=clean
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r1","kind":"finding.raise","subject":"pr:#535","outcome":"raised","data":{"id":"INITIAL-1","severity":"low"}}\n' >>"$RIV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r2","kind":"finding.triage","subject":"pr:#535","outcome":"answered","data":{"source":"human","id":"INITIAL-1"}}\n' >>"$RIV/events/$TODAY.jsonl"
 printf '{"v":1,"ts":"2026-10-05T00:00:00Z","id":"r3","kind":"finding.raise","subject":"pr:#541","outcome":"raised","data":{"severity":"low","thread_id":"x","id":"M-2"}}\n' >>"$RIV/events/$TODAY.jsonl"
@@ -2248,7 +2268,8 @@ case $T_ERR in *"$TODAY.jsonl:2:"*finding.raise*INITIAL-1*"[CHML]-[0-9]+"*adviso
 case $T_ERR in *"$TODAY.jsonl:5:"*INITIAL-2*) pass "and the second raise too, its id after another key" ;; *) fail "stderr did not name $TODAY.jsonl:5 INITIAL-2: $T_ERR" ;; esac
 case $T_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:4:"*) fail "verify advised on a raise whose id is a severity id: $T_ERR" ;; *) pass "and leaves a severity id alone, beside a key ending in id" ;; esac
 case $T_ERR in *"$TODAY.jsonl:3:"*) fail "verify held another kind's data.id to the raise shape: $T_ERR" ;; *) pass "and holds no other kind's id to it" ;; esac
-case $T_ERR in *"$TODAY.jsonl:6:"*) fail "verify advised on a raise with no id: $T_ERR" ;; *) pass "and a raise with no id is no advisory" ;; esac
+case $T_ERR in *"$TODAY.jsonl:6:"*"is not "*) fail "verify held a raise with no id to the shape: $T_ERR" ;; *) pass "and a raise with no id draws no shape advisory" ;; esac
+case $T_ERR in *"$TODAY.jsonl:6: finding.raise data.id is missing"*) pass "…only the missing-key one, since #832" ;; *) fail "verify did not say $TODAY.jsonl:6's raise is missing its id: $T_ERR" ;; esac
 # summary and export say the count once, as they do for the older advisories,
 # and repeat none of verify's per-line notes (review of PR #605, M-1).
 for _ri_cmd in summary export; do
@@ -3282,7 +3303,7 @@ SR_CHILD=$T_OUT
 SR_ABOVE=$(sr_run begin pr-iterate subject=pr:#1 2>/dev/null)
 [ "$(sr_run current)" = "$SR_ABOVE $SR_PARENT" ] &&
 	pass "the parent's stack holds only the parent's runs" || fail "the parent's stack: $(sr_run current)"
-sr_run TRACE_RUN="$SR_CHILD" emit kind=review.verdict subject=pr:#1 outcome=pass data.lenses=1 2>/dev/null
+sr_run TRACE_RUN="$SR_CHILD" emit kind=review.verdict subject=pr:#1 outcome=pass data.axis=1 data.lenses=1 2>/dev/null
 grep -F '"kind":"review.verdict"' "$SR/events/$TODAY.jsonl" | grep -qF "\"run\":\"$SR_CHILD\"" &&
 	pass "the child's emit carries its own run through TRACE_RUN" || fail "the child's verdict does not carry $SR_CHILD"
 t_exec sr_run end "$SR_CHILD" outcome=ok reason=pass
@@ -3501,5 +3522,141 @@ grep -qF '"reason":"a-note"' "$RC/events/$TODAY.jsonl" &&
 	pass "a note under a tier is recorded" || fail "the note was not recorded at all"
 grep -F '"reason":"a-note"' "$RC/events/$TODAY.jsonl" | grep -qF '"tools":' &&
 	fail "a kind other than spawn gained data.tools" || pass "and no other kind gains one"
+
+
+# ---------------------------------------------------------------------------
+banner "41. A review event carries its join keys: a raise its id and severity, a verdict its outcome and axis (ticket #832)"
+# ---------------------------------------------------------------------------
+# The retrospective of 2026-10-22 (F1, questions 3 and 6) found review events
+# the readers could not join: three raises with no data.severity, one with no
+# data.id and one with severity LOW in upper case; two verdicts with no
+# data.axis and one, written through the broker, with no outcome. Each was
+# legal at emit, because a shape row held a present key and no key was
+# required. A raise without its id joins no triage, one without its severity
+# drops out of every per-severity count, and a verdict without its axis or
+# its outcome is no verdict the landing script or /retro can read. The
+# severity words are the vocabulary checker's, never a copy (ADR-0034).
+MK="$SCRATCH/mandatory-keys"; MKON=$(policy "$MK")
+# mk_emit <emit args…> — runs the emit and sets MK_GREW to the lines it added.
+mk_emit() {
+	_mk_n=$(cat "$MK/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ')
+	t_exec env TRACE_CONFIG="$MKON" sh "$TRACE" emit "$@"
+	MK_GREW=$(($(cat "$MK/events/$TODAY.jsonl" 2>/dev/null | wc -l | tr -d ' ') - _mk_n))
+}
+# mk_refused <label> <stderr fragment> <emit args…> — exit 2, nothing written,
+# the refusal naming what is wrong.
+mk_refused() {
+	_mk_l=$1 _mk_w=$2
+	shift 2
+	mk_emit "$@"
+	case $T_STATUS:$MK_GREW:$T_ERR in
+	2:0:*"$_mk_w"*) pass "$_mk_l is exit 2, says '$_mk_w', and writes nothing" ;;
+	*) fail "$_mk_l was not refused (exit $T_STATUS, $MK_GREW line(s) written): $T_ERR" ;;
+	esac
+}
+mk_writes() {
+	_mk_l=$1
+	shift
+	mk_emit "$@"
+	[ "$T_STATUS" = 0 ] && [ "$MK_GREW" = 1 ] && pass "$_mk_l writes" ||
+		fail "$_mk_l was refused or not written (exit $T_STATUS, $MK_GREW line(s)): $T_ERR"
+}
+RH='kind=finding.raise subject=pr:#832 outcome=raised data.agent=simplicity data.where=a.sh:1'
+VH='kind=review.verdict subject=pr:#832'
+# shellcheck disable=SC2086 # $RH and $VH are the emits' fixed heads, split on purpose
+{
+mk_writes "a raise with its id and a declared severity" $RH data.id=H-1 data.severity=high
+mk_refused "a raise with no data.id (pr:#826)" "finding.raise: data.id is missing" $RH data.severity=low
+mk_refused "a raise with no data.severity (pr:#788, pr:#821)" "finding.raise: data.severity is missing" $RH data.id=M-1
+mk_refused "a raise with data.severity=LOW (pr:#826)" "severity: 'LOW' is not one of critical high medium low" $RH data.id=L-1 data.severity=LOW
+mk_refused "a raise with data.severity=blocker" "'blocker'" $RH data.id=L-1 data.severity=blocker
+mk_refused "a raise with an empty data.severity" "finding.raise: data.severity" $RH data.id=L-1 data.severity=
+mk_refused "a raise with data.severity='low|high', the skill's alternation" "finding.raise: data.severity" $RH data.id=L-1 'data.severity=low|high'
+mk_refused "a raise with data.severity=' low', which the checker would trim" "is not one word" $RH data.id=L-1 'data.severity= low'
+mk_refused "a raise whose second data.severity is off the words" "'LOW'" $RH data.id=L-1 data.severity=low data.severity=LOW
+mk_refused "a --dry-run raise with no severity" "finding.raise: data.severity is missing" $RH data.id=L-1 --dry-run
+for _mk_s in critical high medium low; do
+	mk_writes "a raise with data.severity=$_mk_s" $RH data.id=L-2 "data.severity=$_mk_s"
+done
+mk_writes "an axis-1 verdict with its outcome and axis" $VH outcome=pass data.axis=1 data.lenses=6 data.roster=6
+mk_writes "an axis-2 verdict with its outcome and axis" $VH outcome=confirm data.axis=2
+mk_refused "a verdict with no outcome (pr:#811)" "review.verdict: outcome is missing" $VH data.axis=1
+mk_refused "a verdict with an empty outcome, the broker's old shape" "review.verdict: outcome is missing" $VH outcome= data.axis=1
+mk_refused "a verdict with no data.axis (pr:#806, pr:#810)" "review.verdict: data.axis is missing" $VH outcome=pass
+mk_refused "a verdict with data.axis=3" "review.verdict: data.axis '3' is not 1|2" $VH outcome=pass data.axis=3
+mk_writes "a note with no outcome — the rule is the two review kinds', no other's" kind=note subject=pr:#832
+}
+
+# The words are the vocabulary checker's, read through it: a project whose
+# policy names other severity words is held to its own, never the kit's.
+MKV="$SCRATCH/mk-vocab.config.sh"
+sed "s/^VOCAB_SEVERITY=.*/VOCAB_SEVERITY='blocker minor'/" "$KIT/scripts/vocab.config.sh" >"$MKV"
+grep -q "^VOCAB_SEVERITY='blocker minor'" "$MKV" && pass "bait: a vocabulary policy whose severity words are blocker and minor" ||
+	fail "the fixture vocabulary policy did not take the new severity words"
+# shellcheck disable=SC2086
+{
+_mk_ok=$(env TRACE_CONFIG="$MKON" VOCAB_CONFIG="$MKV" sh "$TRACE" emit $RH data.id=H-1 data.severity=blocker --dry-run 2>&1) &&
+	pass "under VOCAB_CONFIG naming blocker, a raise with data.severity=blocker writes" ||
+	fail "the emit did not read the severity words through vocab.sh's policy: $_mk_ok"
+_mk_no=$(env TRACE_CONFIG="$MKON" VOCAB_CONFIG="$MKV" sh "$TRACE" emit $RH data.id=H-1 data.severity=high --dry-run 2>&1) &&
+	fail "under VOCAB_CONFIG naming blocker and minor, data.severity=high was accepted" ||
+	pass "and data.severity=high is refused there — the kit's words are not hard-coded"
+}
+
+# A copy of the script with no vocabulary checker beside it judges no word —
+# there is none to hold it to — but still requires the key.
+MKX="$SCRATCH/mk-alone"; mkdir -p "$MKX"
+cp "$TRACE" "$MKX/trace.sh"
+# shellcheck disable=SC2086
+{
+t_exec env TRACE_CONFIG="$MKON" sh "$MKX/trace.sh" emit $RH data.id=H-1 data.severity=anything --dry-run
+[ "$T_STATUS" = 0 ] && pass "with no vocab.sh beside it, the script holds a present severity to no words" ||
+	fail "a lone trace.sh refused a severity it has no words for (exit $T_STATUS): $T_ERR"
+t_exec env TRACE_CONFIG="$MKON" sh "$MKX/trace.sh" emit $RH data.id=H-1 --dry-run
+case $T_STATUS:$T_ERR in 2:*"data.severity is missing"*) pass "and still refuses a raise with none" ;; *) fail "a lone trace.sh wrote a raise with no severity (exit $T_STATUS): $T_ERR" ;; esac
+}
+
+# verify: the shapes already in the trace are history — one advisory each on
+# stderr, naming the file, the line and what is missing or off, never a bad
+# line, never the verdict. summary and export say the count once.
+MKH="$SCRATCH/mandatory-history"; MKHON=$(policy "$MKH")
+TRACE_CONFIG=$MKHON sh "$TRACE" emit kind=finding.raise subject='pr:#1' outcome=raised data.id=H-1 data.severity=high reason=clean
+for _mk_line in \
+	'"kind":"finding.raise","subject":"pr:#788","outcome":"raised","data":{"id":"M-1","agent":"simplicity"}' \
+	'"kind":"finding.raise","subject":"pr:#826","outcome":"raised","data":{"severity":"LOW","agent":"simplicity"}' \
+	'"kind":"review.verdict","subject":"pr:#806","outcome":"pass","data":{"lenses":"6"}' \
+	'"kind":"review.verdict","subject":"pr:#811","data":{"axis":"1","via":"broker"}' \
+	'"kind":"review.verdict","subject":"pr:#1","outcome":"pass","data":{"axis":"2"}' \
+	'"kind":"finding.triage","subject":"pr:#1","outcome":"accepted","data":{"source":"local","id":"H-1"}'; do
+	printf '{"v":1,"ts":"2026-10-20T00:00:00Z","id":"h",%s}\n' "$_mk_line" >>"$MKH/events/$TODAY.jsonl"
+done
+t_exec env TRACE_CONFIG="$MKHON" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && pass "verify over review events missing their keys exits 0 — an advisory is not a verdict" ||
+	fail "verify exited $T_STATUS over history: $T_OUT"
+[ -z "$T_OUT" ] && pass "and prints nothing on stdout" || fail "verify printed on stdout: $T_OUT"
+for _mk_want in \
+	"$TODAY.jsonl:2:*finding.raise*data.severity*missing" \
+	"$TODAY.jsonl:3:*finding.raise*data.id*missing" \
+	"$TODAY.jsonl:3:*finding.raise*data.severity*LOW*critical high medium low" \
+	"$TODAY.jsonl:4:*review.verdict*data.axis*missing" \
+	"$TODAY.jsonl:5:*review.verdict*outcome*missing"; do
+	# shellcheck disable=SC2254 # the pattern is the point
+	case $T_ERR in *$_mk_want*advisory*) pass "verify advises: $_mk_want" ;; *) fail "verify did not advise '$_mk_want': $T_ERR" ;; esac
+done
+case $T_ERR in *"$TODAY.jsonl:1:"* | *"$TODAY.jsonl:6:"* | *"$TODAY.jsonl:7:"*) fail "verify advised on a whole review event or another kind: $T_ERR" ;;
+*) pass "and leaves a whole raise, a whole verdict and a triage alone" ;; esac
+for _mk_cmd in summary export; do
+	t_exec env TRACE_CONFIG="$MKHON" sh "$TRACE" $_mk_cmd
+	[ "$T_STATUS" = 0 ] && pass "$_mk_cmd over that history still exits 0" || fail "$_mk_cmd exited $T_STATUS: $T_ERR"
+	case $T_ERR in *"5 event key(s)"*verify*) pass "and $_mk_cmd says the count, 5, once, pointing at verify" ;;
+	*) fail "$_mk_cmd did not say '5 event key(s)' pointing at verify: $T_ERR" ;; esac
+	case $T_ERR in *"$TODAY.jsonl:"*) fail "$_mk_cmd repeated verify's per-line advisories: $T_ERR" ;; *) pass "and repeats none of verify's per-line advisories" ;; esac
+done
+
+# The decision is recorded where decisions live.
+_mk_adr=$(ls "$KIT"/docs/adr/0034-*.md 2>/dev/null | head -1)
+[ -n "$_mk_adr" ] && grep -qF 'ADR-0024 clause 1' "$_mk_adr" && grep -qF 'data.severity' "$_mk_adr" && grep -qF 'data.axis' "$_mk_adr" &&
+	pass "ADR-0034 records the rule as an amendment of ADR-0024 clause 1" ||
+	fail "no docs/adr/0034-*.md naming ADR-0024 clause 1, data.severity and data.axis"
 
 t_done "trace script"
