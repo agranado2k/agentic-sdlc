@@ -342,10 +342,11 @@ END {
 # raised: a finding beside it contradicts it.
 NO_LENS_VERDICT='BLOCKED — no lens ran; this is not a review'
 NO_LENS=
-if [ -s "$TMP/verdict" ]; then
-	_v=$(head -n 1 "$TMP/verdict" | sed -e 's/^VERDICT:[ 	]*//' -e 's/[ 	]*$//')
-	if printf '%s\n' "$_v" | LC_ALL=C grep -qi '^blocked\([^A-Za-z]\|$\)'; then
-		if [ "$_v" != "$NO_LENS_VERDICT" ]; then
+VERDICT_LINE=$(head -n 1 "$TMP/verdict" 2>/dev/null)
+VERDICT=$(printf '%s' "$VERDICT_LINE" | sed -e 's/^VERDICT:[ 	]*//' -e 's/[ 	]*$//')
+if [ -n "$VERDICT_LINE" ]; then
+	if printf '%s\n' "$VERDICT" | LC_ALL=C grep -qi '^blocked\([^A-Za-z]\|$\)'; then
+		if [ "$VERDICT" != "$NO_LENS_VERDICT" ]; then
 			echo "a VERDICT opening with BLOCKED is the no-lens verdict, and its one shape is: VERDICT: $NO_LENS_VERDICT" >>"$TMP/error"
 		elif [ "$(cat "$TMP/count" 2>/dev/null)" != 0 ]; then
 			echo "the verdict says no lens ran, yet the report carries a finding — no lens ran means no lens raised one" >>"$TMP/error"
@@ -361,8 +362,6 @@ if [ -s "$TMP/error" ]; then
 	exit "$EX_DATAERR"
 fi
 REVIEWED=$(cat "$TMP/reviewed")
-VERDICT_LINE=$(head -n 1 "$TMP/verdict")
-VERDICT=$(printf '%s' "$VERDICT_LINE" | sed 's/^VERDICT:[ 	]*//')
 COUNT=$(cat "$TMP/count")
 
 # --commit may be abbreviated; the report's REVIEWED sha is full, so agreement
