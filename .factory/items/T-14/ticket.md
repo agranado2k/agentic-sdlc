@@ -4,11 +4,24 @@ type: ticket
 title: /pr-iterate emits every iteration and triages every re-review raise
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: done
 created: 2026-10-22
 updated: 2026-10-22
 deps: []
 priority: 3
+links:
+  pr: "#839"
+approved_by: "agranado"
+approved_at: 2026-10-22
+review:
+  outcome: approved
+  commit: "5820562"
+  by: "review-pr (sonnet) on #839"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#839 landed, workflows green)"
+  at: 2026-10-22
 ---
 
 # T-14 · /pr-iterate emits every iteration and triages every re-review raise
