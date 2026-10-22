@@ -3163,7 +3163,24 @@
 # Kit-only, never shipped: tests/vocab.test.sh, tests/stamp.test.sh and
 # tests/trace-skills.test.sh hold the field, its bound, the lift and the line.
 
-shared-layer: 0.85.0
+# 0.86.0 — /to-tickets stamps an optional Class: line (ticket #804, releasing
+# #828's skill change, the last of the D-01 wave). NO file joins the shared
+# layer and none leaves. No shared file changes content but UPDATING.md: the
+# arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — SKILL.md gains a class rubric (stamp a `Class:`
+# line only when the PRD or the operator names one; `toil` is the one class
+# /retro reads, and the kit names no class of its own), checks
+# 'Class: <token>' with the other stamps at the quiz, shows it for
+# confirmation, writes the line after Domain: and records data.class on
+# ticket.write. Take the to-tickets SKILL.md.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none — the `class`
+# field 0.85.0 added to scripts/vocab.config.sh is the one the stamp is
+# checked against.
+# Kit-only, never shipped: tests/spec-skills.test.sh asserts each clause and
+# runs the rubric's example line through vocab.sh and stamp.sh.
+
+shared-layer: 0.86.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
