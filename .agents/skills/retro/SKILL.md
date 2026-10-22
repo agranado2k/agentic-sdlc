@@ -1,6 +1,7 @@
 ---
 name: retro
 description: Run the retrospective over a window of the decision trace — answer eight fixed questions (tier calibration, review signal per sub-agent, recurring failures, diagnosis calibration, spend, chain health, aim calibration, stamp calibration) and turn what recurs into candidate tickets. It is the one skill that reads the trace, and it reads after the fact; it never fixes what it finds and never edits a skill. Use after a wave lands, before a release, or when a wave felt more expensive or more iterative than it should have.
+allowed-tools: Read, Grep, Glob, Bash, Write
 metadata:
   phase: planner
 ---

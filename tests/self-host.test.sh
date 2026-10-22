@@ -161,14 +161,12 @@ fi
 
 # process/R30, process/R31, process/R32: declared tools, in both engines. A
 # project carrying the kit's gate, its harness and its config.mjs — the first
-# rule turned to a violation, as the sweep that declares every skill's tools
-# will turn it — and the Claude Code adapter's agent types. Each rule is
+# rule a violation, as it ships — and the Claude Code adapter's agent types. Each rule is
 # driven RED by one edit, with the message PRD-04 gives, and green without it.
 TOOLS="$SCRATCH/tools"
 mkdir -p "$TOOLS/scripts" "$TOOLS/.agents/skills/review-pr" "$TOOLS/.claude/agents"
 cp -R "$KIT/scripts/docs-conformance" "$TOOLS/scripts/"
 cp "$KIT/scripts/check.sh" "$KIT/scripts/manifest.lib.sh" "$KIT/scripts/requirement.lib.sh" "$TOOLS/scripts/"
-sed 's/missingAllowedTools: "warning"/missingAllowedTools: "violation"/' "$KIT/scripts/docs-conformance/config.mjs" >"$TOOLS/scripts/docs-conformance/config.mjs"
 printf '# Manual\n' >"$TOOLS/AGENTS.md"
 for shim in CLAUDE.md GEMINI.md; do cp "$KIT/$shim" "$TOOLS/$shim"; done
 printf 'shared-layer: 0.0.0\n' >"$TOOLS/VERSION"
@@ -232,6 +230,18 @@ for tools_env in $tools_engines; do
 		fail "process/R32 ($tools_engine): the exact scoped entry did not cover its own spelling (exit $T_STATUS)"
 	rm -f "$TOOLS/.claude/agents/scout.md"
 done
+
+# process/R29: every SKILL.md the kit ships declares allowed-tools — read by
+# the gate's own reader, the POSIX twin here, so no second reader can drift
+# from it — and the kit's own gate holds it: the first rule a violation,
+# never the advisory.
+t_exec env GIT_CEILING_DIRECTORIES="$SCRATCH" DOCS_CHECK_NO_NODE=1 sh -c 'cd "$1" && sh scripts/check.sh' sh "$KIT"
+printf '%s\n%s\n' "$T_OUT" "$T_ERR" | grep -q 'skill-allowed-tools-missing' &&
+	fail "process/R29: the kit's gate names a shipped skill with no allowed-tools" ||
+	pass "process/R29: every SKILL.md the kit ships declares allowed-tools in its frontmatter"
+grep -q '^  missingAllowedTools: "violation",$' "$KIT/scripts/docs-conformance/config.mjs" &&
+	pass "process/R30: the kit's gate fails a SKILL.md with no allowed-tools — a violation, not an advisory" ||
+	fail "process/R30: the kit's config.mjs still runs the missing-allowed-tools rule as an advisory"
 
 # The reduced form must SAY what it cannot check, and every scan the harness
 # runs is one it cannot: the NOTICE's "NOT checked" list has to name each

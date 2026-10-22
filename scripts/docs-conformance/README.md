@@ -99,8 +99,8 @@ skill, fences skipped) whose `tools:` holds a tool absent from the skill's
 name in `allowed-tools` covers its tool at every scope; a scoped entry such as
 `Bash(git diff:*)` covers only that same entry, never the unscoped tool. A
 `SKILL.md` with no `allowed-tools` in its frontmatter is a third finding, a
-violation or — while `missingAllowedTools` is `"warning"`, as it ships — one
-advisory naming every such skill. Rules it reports: `agent-type-tools-missing`,
+violation as it ships, or — with `missingAllowedTools` set to `"warning"` for a
+project still sweeping its own skills — one advisory naming every such skill. Rules it reports: `agent-type-tools-missing`,
 `spawn-widens-tools` and `skill-allowed-tools-missing`. Its POSIX twin in
 `check.sh` reads `skillTools` by text, one `"<value>",` per line.
 

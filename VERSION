@@ -3101,7 +3101,33 @@
 # Kit-only, never shipped: docs/specs/process.md gains process/R25 to R28;
 # tests/retro-skill.test.sh section 18 runs both spans over fixture traces.
 
-shared-layer: 0.83.0
+# 0.84.0 — every skill declares its powers in allowed-tools (ticket #803,
+# PRD-04 slice 2). NO file joins the shared layer and none leaves. No shared
+# file changes content but UPDATING.md: the arriving-from paragraph, and both
+# worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): every SKILL.md gains one `allowed-tools:` line in its
+# frontmatter, before `metadata:`, naming the tools its own session uses and
+# every tool of each agent type it spawns (a skill spawning a tier-named type
+# lists that type's whole tools line): /design-brief, /diagnose,
+# the dogfood skill, /explain-diff, /grill-me, /grill-with-docs,
+# /housekeeping, /implement, /improve-codebase-architecture, /merge-train,
+# /pr-iterate, /prototype, /retro, /review-pr, /tdd, /to-prd, /to-tickets and
+# /worktree-cleanup. Take the line into each skill you kept; a skill you
+# adapted keeps its own list, held by the gate to the types it names.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/docs-conformance/config.mjs's skillTools block sets
+# missingAllowedTools to "violation" — the gate's missing-allowed-tools rule
+# now FAILS a SKILL.md with no allowed-tools, in both engines. MERGE the value
+# once every skill of yours declares its tools; until then keep "warning",
+# one advisory naming each undeclared skill.
+# Kit-only, never shipped: docs/specs/process.md gains process/R29, held by
+# tests/self-host.test.sh through the gate's own reader; bootstrap.sh's adopt
+# arm stamps the rule as "warning" when the adopted tree holds a skill of its
+# own with no allowed-tools, naming each — tests/adopt-demo.sh and
+# tests/kit-demo.sh hold both arms.
+
+shared-layer: 0.84.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

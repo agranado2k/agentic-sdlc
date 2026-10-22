@@ -579,6 +579,10 @@ banner "12b. RED then GREEN — a living requirement no test names (process/R14)
 # requirement the project writes is held to its suite from that moment: the
 # full gate runs the harness's validator, the forced fallback its twin.
 assert_file "docs/specs/README.md"
+# A fresh project holds only the kit's skills, each declaring its tools, so the
+# stamped policy keeps the missing-allowed-tools rule failing (process/R30).
+assert_file_has scripts/docs-conformance/config.mjs '  missingAllowedTools: "violation",' \
+	"a new project gets the missing-allowed-tools rule failing, not advisory"
 for w in '### ADDED' '### MODIFIED' '### REMOVED' '~~R<n>.~~ Removed by #<PRD>: <why>' 'docs/specs/<area>.md' '<area>/R<n>'; do
 	assert_file_has docs/specs/README.md "$w" "the starter explains the living spec (#533)"
 done

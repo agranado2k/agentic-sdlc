@@ -466,8 +466,9 @@ const skillDated = {
  *
  * agentTypeDirs are where the agent types live, every `*.md` in each one an
  * agent type; `*` stands for one directory. missingAllowedTools is the first
- * rule's severity: "warning" while the shipped skills do not yet declare
- * their tools, "violation" once they do. The other two rules always fail.
+ * rule's severity: "violation", since every skill the kit ships declares its
+ * tools (#803); "warning" turns it to one advisory for a project still
+ * sweeping its own skills. The other two rules always fail.
  *
  * KEEP IT LITERAL — one `"<value>",` per line in the list, the severity on
  * one line. The gate's POSIX twin in scripts/check.sh reads this block by
@@ -478,7 +479,7 @@ const skillTools = {
     "adapters/*/agents",
     ".claude/agents",
   ],
-  missingAllowedTools: "warning",
+  missingAllowedTools: "violation",
 };
 
 /**

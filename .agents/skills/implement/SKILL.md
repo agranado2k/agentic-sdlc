@@ -1,6 +1,7 @@
 ---
 name: implement
 description: Implement exactly one ticket (or one small spec) in a fresh context — restate it, drive /tdd through the agreed seams, verify, self-review, commit, then deliver: push, open the PR, request an independent review, and stop one click short of the merge. Use for a ticket produced by /to-tickets, or a small spec that needs no decomposition. Not for unwritten requirements (use /grill-me → /to-prd first).
+allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Skill, Agent
 metadata:
   phase: implementer
 ---
