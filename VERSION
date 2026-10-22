@@ -3127,7 +3127,18 @@
 # own with no allowed-tools, naming each — tests/adopt-demo.sh and
 # tests/kit-demo.sh hold both arms.
 
-shared-layer: 0.84.0
+# 0.84.1 — a relative path holding `=` is read as a file (ticket #818), a
+# patch. NO file joins the shared layer and none leaves. One shared file
+# changes behaviour besides UPDATING.md: scripts/failure-signature.sh passes a
+# relative log or state file to awk as `./<path>`, since awk reads a bare
+# `name=value` operand as a variable assignment, not a file — `sign` signed an
+# empty log and `streak` forgot its counts for a path such as `logs/a=b.txt`.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none. Config (9d):
+# none. Kit-only, never shipped: tests/failure-signature.test.sh pins both
+# verbs on a relative path holding `=`.
+
+shared-layer: 0.84.1
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

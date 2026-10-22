@@ -55,6 +55,16 @@ die() {
 
 usage='usage: failure-signature.sh sign <name> [<log>|-] | streak <state-file>'
 
+# as_file <path> — sets $file to the path as an awk file operand: a relative
+# one gains a `./`, since awk reads a bare `name=value` operand as a variable
+# assignment, not a file (#818). `-` and an absolute path stay as they are.
+as_file() {
+	case $1 in
+	- | /*) file=$1 ;;
+	*) file=./$1 ;;
+	esac
+}
+
 # The awk program both verbs share: sig(line) normalises one log line.
 # Intervals are spelled out, not written {n}: an awk older than POSIX's
 # intervals reads a brace as a literal.
@@ -94,6 +104,7 @@ sign() {
 	if [ "$log" != - ]; then
 		[ -f "$log" ] && [ -r "$log" ] || die "cannot read the log: $log"
 	fi
+	as_file "$log"
 	# Values reach awk through the environment, never -v: -v processes
 	# backslash escapes, and a name or a path is the caller's text.
 	FS_SIGN_NAME=$name awk "$SIG_AWK"'
@@ -104,7 +115,7 @@ sign() {
 			line = (first != "") ? first : blank
 			printf "%s\t%s\n", name, (line == "" ? "" : sig(line))
 		}
-	' "$log"
+	' "$file"
 }
 
 streak() {
@@ -114,6 +125,7 @@ streak() {
 	[ -d "$dir" ] && [ -w "$dir" ] || die "cannot write the state file's directory: $dir"
 	prev=$state
 	[ -f "$state" ] || prev=/dev/null
+	as_file "$prev"
 	tmp=$(mktemp "$state.XXXXXX") || die "cannot write beside the state file: $state"
 	# shellcheck disable=SC2064
 	trap "rm -f '$tmp'" EXIT HUP INT TERM
@@ -131,7 +143,7 @@ streak() {
 			printf "%d\t%s\n", n, $0
 			printf "%d\t%s\n", n, $0 >out
 		}
-	' "$prev" phase=2 - >"$tmp.out" || {
+	' "$file" phase=2 - >"$tmp.out" || {
 		rm -f "$tmp.out"
 		die "cannot read the state file: $state"
 	}

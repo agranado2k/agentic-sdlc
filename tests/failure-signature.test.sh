@@ -124,6 +124,16 @@ t_exec sh "$SIG" sign 'job' "$SCRATCH/notok"
 expect_resolved "job${TAB}not ok 2 - the stamp" "'not ok' alone marks the error line"
 t_exec sh -c "printf 'assertion failed: x == y\n' | sh '$SIG' sign 'tap' -"
 expect_resolved "tap${TAB}assertion failed: x == y" "'-' reads stdin too"
+# awk reads a bare operand shaped `name=value` as an assignment, not a file:
+# a relative log path holding `=` must still be read as the log (#818).
+mkdir -p "$SCRATCH/eq"
+log "$SCRATCH/eq/plain.txt" "building" "error: the fixture is missing"
+cp "$SCRATCH/eq/plain.txt" "$SCRATCH/eq/a=b.txt"
+t_exec sh -c "cd '$SCRATCH/eq' && sh '$SIG' sign job plain.txt"
+plain_sig=$T_OUT
+t_exec sh -c "cd '$SCRATCH/eq' && sh '$SIG' sign job a=b.txt"
+expect_resolved "$plain_sig" "a relative log path holding '=' is read as a file: the same signature as a plain path"
+expect_resolved "job${TAB}error: the fixture is missing" "the '=' path's signature is the log's error line, not the empty log's"
 : >"$SCRATCH/empty"
 t_exec sh "$SIG" sign 'job' "$SCRATCH/empty"
 expect_resolved "job${TAB}" "an empty log signs as the name alone"
@@ -196,6 +206,12 @@ bstate="$SCRATCH/state/pr\\t820.streak"
 t_exec sh -c "printf '%s\n' \"\$1\" | sh '$SIG' streak \"\$2\"" streak "$a" "$bstate"
 t_exec sh -c "printf '%s\n' \"\$1\" | sh '$SIG' streak \"\$2\"" streak "$a" "$bstate"
 expect_resolved "2${TAB}$a" "a backslash in the state file's path is kept: the second run counts 2"
+
+# A relative state file path holding `=` is read as the file, never as an
+# awk assignment that would forget the count (#818).
+t_exec sh -c "cd '$SCRATCH/state' && printf '%s\n' \"\$1\" | sh '$SIG' streak pr=820.streak" streak "$a"
+t_exec sh -c "cd '$SCRATCH/state' && printf '%s\n' \"\$1\" | sh '$SIG' streak pr=820.streak" streak "$a"
+expect_resolved "2${TAB}$a" "a relative state file path holding '=' is read as a file: the second run counts 2"
 
 banner "streak: caller errors are exit 2"
 
