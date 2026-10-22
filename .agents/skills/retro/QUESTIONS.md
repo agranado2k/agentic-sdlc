@@ -543,8 +543,9 @@ proposed. Reads: `merge.land` (`outcome=landed`, its `ts`, the ticket in its
 
 A ticket that edits a review lens or a skill may carry a **`Targets:`** stamp
 line — a trace filter, `kind=<kind>` and up to seven more `<field>=<value>`
-or `data.<key>=<value>` terms, every one of which an event must match, as in
-`Targets: kind=finding.raise data.agent=security data.severity=high`. It is
+or `data.<key>=<value>` terms, every one of which an event must match — for
+the security lens's high findings, the kind `finding.raise` with
+`data.agent=security data.severity=high`. It is
 fixed when the edit is proposed, so whoever proposes it cannot move the bar
 it is judged by. It is a stamp line, so it is read the way `/implement` reads
 a tier: through `scripts/stamp.sh`, which prints it only once

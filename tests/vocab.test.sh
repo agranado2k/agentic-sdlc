@@ -266,8 +266,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # its lift is bounded like every other site here.
 LIFTED=$(
 	cat <<'EOLIFT'
-scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
-scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
+scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
+scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
 .agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
