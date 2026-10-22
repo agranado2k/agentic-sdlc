@@ -748,16 +748,15 @@ done <"$TMP/raises"
 # session — blocked, no lens counted, the roster the worker contract's six
 # lenses, the reason its own — so the landing script (ADR-0032) refuses a
 # head it is the only Axis-1 verdict on.
-if [ -n "$NO_LENS" ]; then
-	trace loud kind=review.verdict "subject=pr:#$PR" outcome=blocked "reason=no lens ran" data.axis=1 data.lenses=0 data.roster=6 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
-else
-	case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
-	'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
-	blocking*) VERDICT_WORD=blocked ;;
-	*) VERDICT_WORD= ;;
-	esac
-	trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT_WORD" "reason=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
-fi
+case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
+'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
+blocking*) VERDICT_WORD=blocked ;;
+*) VERDICT_WORD= ;;
+esac
+V_REASON=$VERDICT
+[ -z "$NO_LENS" ] || { VERDICT_WORD=blocked V_REASON='no lens ran'; }
+# shellcheck disable=SC2086 # the no-lens counts split into two words on purpose
+trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT_WORD" "reason=$V_REASON" data.axis=1 ${NO_LENS:+data.lenses=0 data.roster=6} data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
 # Axis 2, counted by tag as /review-pr §5b records it: `confirm` when any item
 # needs the human, `pass` when none does.
 tagcount() { LC_ALL=C grep -c "^[^A-Za-z0-9]*$1" "$TMP/behavior" || :; }
