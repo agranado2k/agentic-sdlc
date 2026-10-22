@@ -2072,6 +2072,47 @@ for b in \
 done
 
 # ---------------------------------------------------------------------------
+banner "33. /pr-iterate emits every iteration and triages every re-review raise (#835)"
+# ---------------------------------------------------------------------------
+# Retro 2026-10-22 (F4): pr.iterate's iteration numbers skipped with no emit
+# between them (#808 1→7, #809 1→4) — step 5 is where most iterations end, and
+# its return never reached step 6's line. And #809's re-review raised eleven
+# findings, one high, none triaged, yet the PR was recorded green: only a
+# finding "to act on" sent the iteration red, so the rest went unread. The
+# rules: an iteration that ends at step 5 still records its pr.iterate; every
+# iteration records exactly one, numbered without a gap; and every raise of a
+# re-review carries its local finding.triage before the iteration records green.
+# iteration_emit_missing <skill file> — one word per claim the skill drops.
+iteration_emit_missing() {
+	_ie_w=$(awk '/^### 5 — Wait/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
+	_ie_sc=$(awk '/^### 6 — Stop conditions/ { on = 1; next } on && /^#/ { exit } on' "$1" | tr '\n' ' ' | tr -s ' ')
+	printf '%s\n' "$_ie_w" | grep -qF 'an iteration ending here still records its `pr.iterate` and closes its run' || echo step5-emits
+	printf '%s\n' "$_ie_sc" | grep -qF 'every iteration records exactly one `pr.iterate`, however it ends' || echo every-iteration
+	printf '%s\n' "$_ie_sc" | grep -qF 'however it ends, numbered without a gap' || echo no-gap
+	printf '%s\n' "$_ie_sc" | grep -qF 'Green waits until every raise of that re-review' || echo before-green
+	printf '%s\n' "$_ie_sc" | grep -qF 'every raise of that re-review, LOWs too, carries a local `finding.triage`' || echo every-raise-triaged
+	printf '%s\n' "$_ie_sc" | grep -qF 'an untriaged raise is not converged' || echo untriaged-not-green
+}
+_ie=$(iteration_emit_missing "$PI")
+[ -z "$_ie" ] && pass "/pr-iterate records one pr.iterate per iteration, step 5's return included, and triages every re-review raise before green" ||
+	fail "/pr-iterate drops: $(echo $_ie)"
+for b in \
+	's/an iteration ending here still records its `pr\.iterate` and closes its run/an iteration ending here returns/' \
+	's/every iteration records exactly one `pr\.iterate`, however it ends/an iteration that reaches this step records its `pr.iterate`/' \
+	's/, numbered without a gap//' \
+	's/Green waits until every raise/Green comes, and every raise/' \
+	's/, LOWs too, carries a local/carries a local/' \
+	's/every raise of that re-review, LOWs too/a finding to act on/' \
+	's/an untriaged raise is not converged/an untriaged raise is fine/'; do
+	sed "$b" "$PI" >"$SCRATCH/bait835.md"
+	if ! cmp -s "$SCRATCH/bait835.md" "$PI" && [ -n "$(iteration_emit_missing "$SCRATCH/bait835.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
+
+# ---------------------------------------------------------------------------
 banner "/implement records a ticket's class on ticket.start, from its stamp alone (#819)"
 # ---------------------------------------------------------------------------
 # /retro's flow section counts toil's share from ticket.start's data.class

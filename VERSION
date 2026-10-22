@@ -3180,7 +3180,60 @@
 # Kit-only, never shipped: tests/spec-skills.test.sh asserts each clause and
 # runs the rubric's example line through vocab.sh and stamp.sh.
 
-shared-layer: 0.86.0
+# 0.87.0 — a review event carries its join keys (ticket #832, the kit's
+# ADR-0034). NO file joins the shared layer and none leaves. One shared file
+# changes behaviour besides UPDATING.md: scripts/trace.sh carries
+# TRACE_REQUIRED, and `emit` refuses, exit 2 and nothing written, a
+# finding.raise with no data.id or no data.severity, a severity that is
+# not a word scripts/vocab.sh declares (asked of the checker beside it; none beside it, no word judged),
+# and a review.verdict with no outcome or no data.axis, which a new shape row
+# holds to 1 or 2. `verify` advises on such lines already written, and
+# `summary` and `export` say their count once.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): .agents/prompts/review-worker.md, which ships beside the
+# skills — the VERDICT line opens with not blocking, no blocking, no findings
+# or blocking. Take it. And, landed since v0.86.0: /pr-iterate (#839) —
+# SKILL.md records exactly one pr.iterate on every iteration however it
+# ends, and green waits until every raise of a re-review carries a local
+# finding.triage; /to-tickets (#840) — SKILL.md rule 16, one shared-layer
+# ticket per frontier, a held one giving its session slot away (the kit's
+# ADR-0033). Take both SKILL.md files. Wiring (9b): none. Templates (9c): none. Config (9d):
+# none — the severity words are your scripts/vocab.config.sh's VOCAB_SEVERITY
+# already.
+# Kit-only, never shipped: scripts/forge-broker.kit.sh reads "no blocking" as
+# pass and refuses, before posting, a VERDICT opening with none of the four;
+# tests/trace.test.sh section 41 and tests/forge-broker.test.sh section 25
+# hold both; docs/adr/0034 records the rule.
+
+# 0.88.0 — /to-tickets splits a ticket at the emitter, hook and guard seams
+# (ticket #837), and /pr-iterate folds each fetched body to printable ASCII
+# (ticket #836). NO file joins the shared layer and none leaves. No shared
+# file changes content but UPDATING.md: the arriving-from paragraph, and both
+# worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — SKILL.md rule 2 splits work spanning more than
+# one of the trace emitter, an agent-harness hook and a guard at the seam
+# between them, each proved by its own suite, and a `low` tier stamp is a
+# prompt to look for that split before the quiz; rules 14 and 16 lose a
+# clause each, no rule changes. The domain rubric moves out of SKILL.md into
+# a new .agents/skills/to-tickets/DOMAIN-RUBRIC.md beside it, word for word,
+# and SKILL.md points there before a Domain: line is stamped. Take the
+# to-tickets directory: SKILL.md and DOMAIN-RUBRIC.md. And, landed since
+# v0.87.0: /pr-iterate (#836) — SKILL.md's fetch_bodies folds each body on
+# its way into the scratch file, a double quote to a single quote and every
+# other byte outside printable ASCII but the newline to ?, so a span the
+# reader copies from the file it read can pass the evidence check, which is
+# unchanged. Take the pr-iterate SKILL.md.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/docs-conformance/config.mjs's skillCeilings raise
+# pr-iterate's SKILL.md to 38000 — MERGE the number in where you kept the
+# kit's ceilings, or the gate fails the skill.
+# Kit-only, never shipped: tests/spec-skills.test.sh asserts the seam
+# sentence, the low-stamp prompt and the rubric's new home;
+# tests/typed-return.test.sh 4h holds a posted lens review and a posted
+# confirm-list read through the fold.
+
+shared-layer: 0.88.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

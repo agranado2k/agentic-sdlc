@@ -170,6 +170,11 @@ become table cells.
     VERDICT: <one line — blocking or not, and what to fix first.
               "no findings" is a valid verdict and a good one>
 
+    The VERDICT line opens with `not blocking`, `no blocking`, `no findings`
+    or `blocking`, in any case: the review's recorded outcome is read from
+    those words, and a line that opens with any other is refused and posts
+    nothing.
+
     REVIEWED is the FIRST line of the report and it is required: the sha
     you pinned before reading the diff and diffed against, repeated
     verbatim. Never resolve the branch a second time to produce it — the
