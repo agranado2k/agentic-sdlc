@@ -42,15 +42,7 @@ t_init
 # nothing itself.
 FIELDS=$(VOCAB_CONFIG="$POLICY" sh "$VOCAB" fields 2>"$SCRATCH/fields.err") || {
 	fail "the shipped policy file does not load: $(cat "$SCRATCH/fields.err")"
-	# ---------------------------------------------------------------------------
-banner "targets — a query field /to-tickets writes and checks (process/R25, #802)"
-# ---------------------------------------------------------------------------
-printf '%s\n' "$FIELDS" | grep -qx 'targets (query):' && pass "targets is declared a query field" ||
-	fail "targets must be a QUERY field — its value is a trace filter, not a token"
-assert_file_has "$TICKETS" "\`'Targets: <query>'\`" "/to-tickets checks a Targets: line at the quiz"
-assert_file_has "$TICKETS" "a \`Targets:\` line on a ticket that edits a review lens or a skill" "/to-tickets writes one on a lens or skill edit"
-
-t_done "vocab-policy"
+	t_done "vocab-policy"
 }
 
 # assert_equal <label> <expected> <actual>
