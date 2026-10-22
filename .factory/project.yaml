@@ -7,5 +7,5 @@ agents:
   default: claude-code
 stages:
   discovery: [exploring, shaped, closed]
-  prd: [draft, review, approved]
-  ticket: [ready, build, review, qa, done]
+  prd: [draft, review, approved, done]
+  ticket: [proposed, ready, build, review, qa, done]

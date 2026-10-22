@@ -1,0 +1,16 @@
+# Evidence behind D-02. One entry per source; `claim` is what we take from it.
+- id: S-1
+  title: Building an AI-native SDLC (https://www.tenex.co/blog/building-an-ai-native-sdlc)
+  claim: not yet read
+- id: S-2
+  title: We stopped reviewing code and started verifying intent (https://tessl.io/blog/we-stopped-reviewing-code-and-started-verifying-intent)
+  claim: not yet read
+- id: S-3
+  title: Decision model evals (https://hamel.dev/blog/posts/decision-model-evals)
+  claim: not yet read
+- id: S-4
+  title: Topology (https://blog.exe.dev/topology)
+  claim: not yet read
+- id: S-5
+  title: Claude mods (https://www.latent.space/p/claude-mods)
+  claim: not yet read
