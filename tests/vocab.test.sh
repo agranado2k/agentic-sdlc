@@ -266,8 +266,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # its lift is bounded like every other site here.
 LIFTED=$(
 	cat <<'EOLIFT'
-scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
-scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain)[[:space:]]*:'
+scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
+scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
 .agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
@@ -1067,5 +1067,42 @@ AGENTS_CONFIG="$SCRATCH/agents.config.sh" t_exec sh "$KIT/scripts/agents.lib.sh"
 expect_status 2 "the resolver still refuses it — the tier vocabulary is closed where it is owned"
 expect_err_has "unknown capability tier 'senior'"
 assert_file_has "$KIT/scripts/vocab.config.sh" "owned by" "the shipped policy file says who owns each field"
+
+# ---------------------------------------------------------------------------
+banner "Targets: — a QUERY field, a trace filter held to a grammar (process/R25, #802)"
+# ---------------------------------------------------------------------------
+# A ticket that edits a review lens or a skill names the trace events it means
+# to move, as `Targets: kind=<kind> [<key>=<value> …]`. No token set can hold
+# that, so the policy declares the field a QUERY (VOCAB_QUERY) and the checker
+# holds the value to the grammar instead: one to eight `<key>=<value>` terms,
+# exactly one `kind=`, no key twice, a key a field name or `data.<key>` in the
+# trace's own shape, and a value of the token alphabet with dots — never a
+# quote, a space inside, or a character a shell or awk would read.
+vocab fields
+expect_out_has "targets (query):" "the targets field is marked a QUERY — a filter, not a token"
+vocab 'Targets: kind=finding.raise data.agent=security data.severity=high'
+expect_resolved "" "the PRD's own example is accepted"
+vocab 'Targets: kind=review.verdict outcome=blocked'
+expect_resolved "" "a field term beside the kind is accepted"
+vocab 'Targets: data.agent=security'
+expect_status 2 "a filter with no kind= term is refused"
+expect_err_has "targets: the filter names no kind= term"
+vocab 'Targets: kind=finding.raise kind=review.verdict'
+expect_status 2 "a key twice is refused — two answers are none"
+expect_err_has "targets: the key 'kind' appears twice"
+vocab 'Targets: kind=finding.raise data.Agent=security'
+expect_status 2 "a data key outside the trace's [a-z][a-z0-9_]* is refused"
+expect_err_has "targets: 'data.Agent' is not a field name or data.<key>"
+vocab "Targets: kind=finding.raise data.agent=sec'urity"
+expect_status 2 "a value carrying a quote is refused"
+expect_err_has "targets: the value of 'data.agent' is not"
+vocab 'Targets: kind=finding.raise data.agent'
+expect_status 2 "a term with no = is refused"
+expect_err_has "targets: 'data.agent' is not a <key>=<value> term"
+vocab 'Targets: kind=a data.a=1 data.b=1 data.c=1 data.d=1 data.e=1 data.f=1 data.g=1 data.h=1'
+expect_status 2 "nine terms are refused — the filter is bounded"
+expect_err_has "targets: more than 8 terms"
+vocab 'Targets: kind=finding.raise data.agent=$(id)'
+expect_status 2 "a value shaped like a command is refused"
 
 t_done "vocab"
