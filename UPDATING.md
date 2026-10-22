@@ -237,7 +237,14 @@ quiz; its domain rubric moves, word for word, out of `SKILL.md` into a new
 `.agents/skills/to-tickets/DOMAIN-RUBRIC.md` beside it, which `SKILL.md`
 opens before a `Domain:` line is stamped. Take the to-tickets directory,
 both files: a `SKILL.md` taken without `DOMAIN-RUBRIC.md` points at a file
-you do not have.
+you do not have. One more skill change landed since 0.87.0 rides with this
+release (9a): `/pr-iterate`'s `fetch_bodies` folds each fetched body to
+printable ASCII — a double quote to a single quote, any other byte outside
+it but the newline to `?` — so the reader's evidence span can match the
+file it read; take its `SKILL.md`. And one config number (9d): your
+`scripts/docs-conformance/config.mjs` raises the pr-iterate `SKILL.md`
+ceiling in `skillCeilings` to 38000; merge it in where you kept the kit's
+ceilings, or the gate fails the skill.
 
 **Arriving from 0.86.0 or older, a review event carries its join keys.** No
 file joins or leaves at 0.87.0. One shared file changes behaviour besides
@@ -1512,10 +1519,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3209 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3216 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3363 insertions(+), 1 deletion(-)
+ 3 files changed, 3370 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
