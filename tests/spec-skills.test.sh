@@ -1039,6 +1039,35 @@ else
 		fail "scripts/stamp.sh did not pass the drafted Class: line (exit $rc, printed '$got')"
 fi
 
+# ---------------------------------------------------------------------------
+banner "The release frontier: one shared-layer ticket per frontier (#833)"
+# ---------------------------------------------------------------------------
+# Retro 20261022T135553Z: parallel PRs that each moved the shared layer
+# collided on VERSION and were re-cut one after another — eight conflict
+# iterations on seven PRs. The rule picks one of the ticket's two forms — at
+# most one such ticket per frontier, the rest chained — and names the other
+# as rejected, with the reason; the hand-off holds a started one back while
+# another release is open. The record behind it is the kit's ADR-0033.
+rel=$(printf '%s\n' "$rules" | grep '^[0-9]*\. \*\*One shared-layer ticket per frontier' | head -n 1)
+[ -n "$rel" ] && pass "/to-tickets carries the rule 'One shared-layer ticket per frontier'" ||
+	fail "/to-tickets has no 'One shared-layer ticket per frontier' rule — parallel release tickets collide on VERSION"
+t_text_has "$rel" "at most one ticket that moves the shared layer" "the chosen form: at most one per frontier" "the release-frontier rule"
+t_text_has "$rel" "file \`VERSION\` lists, or \`VERSION\` itself" "what counts as moving the shared layer" "the release-frontier rule"
+t_text_has "$rel" "\`Blocked by:\` edge" "two that would share a frontier are chained, not raced" "the release-frontier rule"
+t_text_has "$rel" "feedback-first" "the chain's order is the feedback-first rule's" "the release-frontier rule"
+t_text_has "$rel" "Deferring the bumps to one release ticket" "the rejected form is named" "the release-frontier rule"
+t_text_has "$rel" "with no bump" "…with the reason it is rejected: a move with no bump" "the release-frontier rule"
+t_text_has "$rel" "the kit's ADR-0033" "the rule cites its record as the kit's (ADR-0017)" "the release-frontier rule"
+[ -f "$ROOT/docs/adr/0033-a-frontier-holds-one-shared-layer-ticket.md" ] &&
+	grep -qF '0033-a-frontier-holds-one-shared-layer-ticket.md' "$ROOT/docs/adr/INDEX.md" &&
+	pass "ADR-0033 exists and the index lists it" ||
+	fail "docs/adr/0033-a-frontier-holds-one-shared-layer-ticket.md is missing or unindexed"
+handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
+t_text_has "$handoff" "One shared-layer ticket per frontier" "the hand-off names the rule its sequencing honours" "step 5"
+t_text_has "$handoff" "while another release's pull request is open" "a shared-layer ticket waits on another wave's open release too" "step 5"
+t_text_has "$handoff" "A held shared-layer ticket occupies no session" "a held release ticket takes no slot of the cap" "step 5"
+t_text_has "$handoff" "its slot goes to the next unblocked ticket" "…the slot passes to the next unblocked ticket" "step 5"
+
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
 t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"
 
