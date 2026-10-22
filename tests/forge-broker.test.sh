@@ -1546,4 +1546,76 @@ raise_has L-2 '"where":"untouched.md:1"'
 STUB_PR=12
 export STUB_PR
 
+# ---------------------------------------------------------------------------
+banner "24. A BLOCKED report — no lens ran — lands, and its verdict traces blocked (#817)"
+# ---------------------------------------------------------------------------
+# /review-pr's NO-LENS.md (#808): a review in which no lens ran records
+# outcome=blocked data.lenses=0 and opens its summary with the BLOCKED line.
+# The worker contract allows that line; the broker posts it first and traces
+# the Axis-1 verdict exactly as the in-session review does, so the landing
+# script (ADR-0032) refuses a head it is the only verdict on. A BLOCKED line
+# in any other shape, or one over a report that carries a finding, is refused.
+BLOCKED="$SCRATCH/blocked.md"
+cat >"$BLOCKED" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: BLOCKED — no lens ran; this is not a review
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+#### HIGH
+— none found.
+#### MEDIUM
+— none found.
+#### LOW
+— none found.
+
+## Axis 2 — Behavior (for a human)
+
+✅ SPECIFIED    b.md gains the two lines the ticket named.
+EOF
+STUB_PR=40
+export STUB_PR
+broker 40 "$BLOCKED"
+expect_status 0 "a BLOCKED report lands"
+assert_mutating 2 "…with the same two operations as ever"
+REVIEW=$(payload pulls/40/reviews)
+case "$REVIEW" in
+*'"body":"<!-- forge-broker: '*' -->\nVERDICT: BLOCKED — no lens ran; this is not a review\n'*) pass "the review body opens with the BLOCKED line" ;;
+*) fail "the review body does not open with the BLOCKED line"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#40' --kind review.verdict
+AX1=$(printf '%s\n' "$T_OUT" | grep -F '"axis":"1"' | tail -n 1)
+for want in '"outcome":"blocked"' '"lenses":"0"' '"roster":"6"' '"reason":"no lens ran"' '"via":"broker"'; do
+	case "$AX1" in
+	*"$want"*) pass "the Axis-1 verdict carries $want" ;;
+	*) fail "the Axis-1 verdict lacks $want: $AX1" ;;
+	esac
+done
+[ "$(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"' | grep -c '"kind":"review.verdict"')" = 1 ] &&
+	pass "Axis 2 still records its own verdict" ||
+	fail "a BLOCKED report left no Axis-2 verdict"
+
+# A malformed BLOCKED line is refused like any malformed verdict: nothing
+# posted, exit 65, and the reason names the line's one accepted shape.
+for bad in 'BLOCKED' 'BLOCKED — no lens ran' 'Blocked — no lens ran; this is not a review' 'BLOCKED: fix H-1 first'; do
+	sed "s|^VERDICT: .*|VERDICT: $bad|" "$BLOCKED" >"$SCRATCH/blocked-bad.md"
+	broker 40 "$SCRATCH/blocked-bad.md"
+	expect_status 65 "VERDICT: $bad is refused"
+	assert_mutating 0 "…and nothing is posted"
+	expect_err_has 'BLOCKED — no lens ran; this is not a review'
+done
+# No lens ran, so no lens raised: a BLOCKED report carrying a finding
+# contradicts itself, and is refused.
+awk '/^#### HIGH$/ { print; print "**H-1** `scripts/a.sh:3` — a finding no lens raised."; print "↳ fix: delete the line."; skip = 1; next }
+	skip { skip = 0; next } { print }' "$BLOCKED" >"$SCRATCH/blocked-finding.md"
+grep -q '^\*\*H-1\*\*' "$SCRATCH/blocked-finding.md" || fail "the blocked-with-finding fixture did not build"
+broker 40 "$SCRATCH/blocked-finding.md"
+expect_status 65 "a BLOCKED report carrying a finding is refused"
+assert_mutating 0 "…and nothing is posted"
+expect_err_has 'no lens ran'
+STUB_PR=12
+export STUB_PR
+
 t_done "tests/forge-broker.test.sh"

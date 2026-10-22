@@ -179,6 +179,18 @@ become table cells.
     your findings anchors them to that commit rather than to whatever the
     head is by then.
 
+    When you audited the diff through NONE of the six standards lenses —
+    the diff would not read, or the budget ran out before the first lens —
+    the verdict is exactly this line and no other:
+
+    VERDICT: BLOCKED — no lens ran; this is not a review
+
+    Nothing audited the diff, so a clean verdict would be a claim nobody
+    checked. Under it, every severity heading carries `— none found.` and
+    no finding: no lens ran, so no lens raised one. Axis 2 is unchanged.
+    The session that lands your report refuses a VERDICT opening with
+    BLOCKED in any other shape, and one beside a finding.
+
     ## Axis 1 — Standards
 
     #### CRITICAL

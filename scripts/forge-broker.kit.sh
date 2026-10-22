@@ -38,8 +38,11 @@
 #      in order with an empty one STATING its absence, findings in the
 #      `**ID** \`path:line\` — text` / `↳ fix:` shape with an ID whose letter
 #      matches its section, and a confirm-list whose items open with their
-#      tag. A report that fails ANY of this posts nothing — exit 65 — and a
-#      `REVIEWED` that contradicts `--commit` is the same failure, as is a
+#      tag. A VERDICT opening with BLOCKED is the no-lens verdict (#817),
+#      `BLOCKED — no lens ran; this is not a review` exactly, over a report
+#      carrying no finding. A report that fails ANY of this posts nothing
+#      — exit 65 — and a `REVIEWED` that contradicts `--commit` is the same
+#      failure, as is a
 #      drifted report (step 3) that carries no `--commit` at all. What the
 #      worker did not say, the broker does not write: absence is published
 #      only where the report stated it.
@@ -76,7 +79,9 @@
 #      ones are not raised), each saying which — `data.posted=yes`, or `no`
 #      for a LOW, the key /retro's dismissal denominator counts, and `data.agent` a /review-pr roster token — then
 #      one `review.verdict` per axis — Axis 1 with the verdict
-#      as outcome, Axis 2 as /review-pr §5b counts it — each marked
+#      as outcome (the no-lens verdict as /review-pr's NO-LENS.md records
+#      it: blocked, data.lenses=0, data.roster=6, reason `no lens ran`),
+#      Axis 2 as /review-pr §5b counts it — each marked
 #      `data.via=broker`, with the model and agent harness when the caller
 #      passed them. The report is untrusted: what reaches an event is lifted
 #      by shape or mapped onto a closed list — a raise's agent is the
@@ -328,6 +333,27 @@ END {
 	print n > (out "/count")
 }
 ' "$TMP/report.md"
+
+# A report in which no lens ran says so with one line and no other (#817):
+# /review-pr's NO-LENS.md verdict, which the broker traces as blocked with
+# no lens counted. A VERDICT whose first word is "blocked" in any case is
+# that line or it is refused — a near miss would otherwise post a verdict
+# the trace reads as no outcome at all — and since no lens ran, no lens
+# raised: a finding beside it contradicts it.
+NO_LENS_VERDICT='BLOCKED — no lens ran; this is not a review'
+NO_LENS=
+if [ -s "$TMP/verdict" ]; then
+	_v=$(head -n 1 "$TMP/verdict" | sed -e 's/^VERDICT:[ 	]*//' -e 's/[ 	]*$//')
+	if printf '%s\n' "$_v" | LC_ALL=C grep -qi '^blocked\([^A-Za-z]\|$\)'; then
+		if [ "$_v" != "$NO_LENS_VERDICT" ]; then
+			echo "a VERDICT opening with BLOCKED is the no-lens verdict, and its one shape is: VERDICT: $NO_LENS_VERDICT" >>"$TMP/error"
+		elif [ "$(cat "$TMP/count" 2>/dev/null)" != 0 ]; then
+			echo "the verdict says no lens ran, yet the report carries a finding — no lens ran means no lens raised one" >>"$TMP/error"
+		else
+			NO_LENS=yes
+		fi
+	fi
+fi
 
 if [ -s "$TMP/error" ]; then
 	note "the report fails the worker contract; nothing posted:"
@@ -719,12 +745,20 @@ done <"$TMP/raises"
 # the contract's own clean "no findings" are pass, "blocking" is blocked,
 # any other opening carries no outcome — and the sentence goes whole into
 # the reason.
-case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
-'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
-blocking*) VERDICT_WORD=blocked ;;
-*) VERDICT_WORD= ;;
-esac
-trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT_WORD" "reason=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
+# The no-lens verdict is traced as /review-pr's NO-LENS.md records it in
+# session — blocked, no lens counted, the roster the worker contract's six
+# lenses, the reason its own — so the landing script (ADR-0032) refuses a
+# head it is the only Axis-1 verdict on.
+if [ -n "$NO_LENS" ]; then
+	trace loud kind=review.verdict "subject=pr:#$PR" outcome=blocked "reason=no lens ran" data.axis=1 data.lenses=0 data.roster=6 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
+else
+	case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
+	'not blocking'* | 'no findings'*) VERDICT_WORD=pass ;;
+	blocking*) VERDICT_WORD=blocked ;;
+	*) VERDICT_WORD= ;;
+	esac
+	trace loud kind=review.verdict "subject=pr:#$PR" "outcome=$VERDICT_WORD" "reason=$VERDICT" data.axis=1 data.via=broker "data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.reviewed=$REVIEWED" "data.dropped=$NDROPPED"
+fi
 # Axis 2, counted by tag as /review-pr §5b records it: `confirm` when any item
 # needs the human, `pass` when none does.
 tagcount() { LC_ALL=C grep -c "^[^A-Za-z0-9]*$1" "$TMP/behavior" || :; }
