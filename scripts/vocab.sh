@@ -79,6 +79,10 @@ _vocab_here=$(cd "$(dirname "$0")" && pwd -P)
 # bracket RANGE collates by locale, and `[!a-z]` accepts `CONTENT` under
 # en_US.UTF-8. The two spellings are kept in step by hand.
 VOCAB_TOKEN_SHAPE='[a-z][a-z0-9-]*'
+# A token is bounded too: an open field's value (domain, class) is a
+# ticket's text, so a well-formed token of any length would still reach a
+# trace line unbounded. 64 bytes, the same bound a query value carries.
+VOCAB_TOKEN_MAX=64
 
 # ---------------------------------------------------------------------------
 # THE SHIPPED VOCABULARIES. scripts/vocab.config.sh restates every line of
@@ -89,7 +93,7 @@ VOCAB_TOKEN_SHAPE='[a-z][a-z0-9-]*'
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
 	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class'
-	VOCAB_OPEN='domain'
+	VOCAB_OPEN='domain class'
 	VOCAB_QUERY='targets'
 	VOCAB_TIER='planner implementer mechanical reviewer'
 	VOCAB_LABEL='ready-for-agent none'
@@ -101,7 +105,6 @@ vocab_shipped_defaults() {
 	VOCAB_CONFIDENCE='low medium high'
 	VOCAB_COMMAND_SHAPED='yes no'
 	VOCAB_AUTHOR_KIND='bot human'
-	VOCAB_CLASS='feature fix toil'
 	VOCAB_RULES='command-shaped=yes => action!=apply'
 }
 
@@ -256,6 +259,7 @@ vocab_has_token() { vocab_in_list "$(vocab_tokens "$1")" "$2"; }
 
 # vocab_shape_ok <token> — the task-domain shape, alphabet spelled out.
 vocab_shape_ok() {
+	[ "${#1}" -le "$VOCAB_TOKEN_MAX" ] || return 1
 	case $1 in
 	'' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1 ;;
 	esac
@@ -470,7 +474,7 @@ vocab_validate_policy() {
 	[ -n "${VOCAB_FIELDS:-}" ] || vocab_refuse "policy: VOCAB_FIELDS declares no field"
 	for _vp_f in $VOCAB_FIELDS; do
 		vocab_shape_ok "$_vp_f" || {
-			vocab_refuse "policy: field name '$_vp_f' is not a well-formed token — a field is a $VOCAB_TOKEN_SHAPE"
+			vocab_refuse "policy: field name '$_vp_f' is not a well-formed token — a field is a $VOCAB_TOKEN_SHAPE of at most $VOCAB_TOKEN_MAX bytes"
 			continue
 		}
 		# A field's tokens live in VOCAB_<FIELD>, the namespace the checker's
@@ -494,7 +498,7 @@ vocab_validate_policy() {
 		fi
 		for _vp_t in $_vp_tokens; do
 			vocab_shape_ok "$_vp_t" || {
-				vocab_refuse "policy: $_vp_f token '$_vp_t' is not a well-formed token — a token is a $VOCAB_TOKEN_SHAPE"
+				vocab_refuse "policy: $_vp_f token '$_vp_t' is not a well-formed token — a token is a $VOCAB_TOKEN_SHAPE of at most $VOCAB_TOKEN_MAX bytes"
 				continue
 			}
 			vocab_neutral_ok "$_vp_t" ||
@@ -541,7 +545,7 @@ vocab_check_value() {
 	# policy file passed it at load. An OPEN field has only the shape.
 	if vocab_is_open "$1"; then
 		if ! vocab_shape_ok "$2"; then
-			vocab_refuse "$1: '$2' is not a well-formed token — a token is a $VOCAB_TOKEN_SHAPE"
+			vocab_refuse "$1: '$2' is not a well-formed token — a token is a $VOCAB_TOKEN_SHAPE of at most $VOCAB_TOKEN_MAX bytes"
 			return 1
 		fi
 		return 0

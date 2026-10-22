@@ -228,16 +228,18 @@ printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
 **Arriving from 0.84.1 or older, a ticket's class is a stamp line.** No
-file joins or leaves at 0.85.0. `scripts/vocab.sh` declares a closed `class`
-field in its built-in defaults, and `scripts/stamp.sh` lifts a `Class:` line
-beside the other stamp lines; take both verbatim. Your
-`scripts/vocab.config.sh` is yours (9d): add `class` to `VOCAB_FIELDS` and
-declare `VOCAB_CLASS` — the kit's words are `feature fix toil`, and a project
-that sorts its tickets otherwise names its own — or a `Class:` line is a field
-your policy does not declare, and `scripts/stamp.sh` drops it. `/implement`'s
-`ticket.start` line now records `data.class` from that stamp, and `/retro`
-counts toil's share by it (9a): take the implement `SKILL.md` and the retro
-directory.
+file joins or leaves at 0.85.0. `scripts/vocab.sh` declares an open `class`
+field in its built-in defaults, like `domain`: any token of the shape is
+read, and the kit names no class of its own. Every token, open or closed, is
+now bounded at 64 bytes. `scripts/stamp.sh` lifts a `Class:` line beside the
+other stamp lines. Take both verbatim. **This needs one edit of yours, and
+the shared scripts cannot spare you it**: your `scripts/vocab.config.sh` is
+the whole policy, and the shipped defaults never layer under it, so until
+you add `class` to `VOCAB_FIELDS` and to `VOCAB_OPEN` (9d) a `Class:` line
+is a field your policy does not declare, and `scripts/stamp.sh` drops it.
+`/implement`'s `ticket.start` line now records `data.class` from that stamp,
+and `/retro` counts `data.class=toil` as toil (9a): take the implement
+`SKILL.md` and the retro directory.
 
 **Arriving from 0.84.0 or older, a relative path holding `=` is a file to
 the failure signature.** No file joins or leaves at 0.84.1, a patch. One
@@ -1467,10 +1469,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3161 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3163 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3315 insertions(+), 1 deletion(-)
+ 3 files changed, 3317 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

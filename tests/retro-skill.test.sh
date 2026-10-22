@@ -1659,7 +1659,7 @@ fe="$SCRATCH/flow-emit.retro"
 	( cd "$ROOT" && TRACE_DIR="$fe" TRACE_QUIET=1 sh "$TRACE" export ) | grep -qF '"data":{"class":"toil"}' &&
 	pass "process/R24: ticket.start accepts a consumer's data.class" || fail "process/R24: ticket.start refused or dropped data.class=toil"
 fprose=$(flow_sec | flat)
-for needle in 'lead time' 'review wait' '`n/a`' 'never zero' 'median' 'longest' '`toil: <n> of <m> landed`' '`toil: not recorded`' 'ticket'"'"'s own `Class:` stamp line'; do
+for needle in 'lead time' 'review wait' '`n/a`' 'never zero' 'median' 'longest' '`toil: <n> of <m> landed`' '`toil: not recorded`' 'names no class of its own'; do
 	case "$fprose" in *"$needle"*) pass "the flow section says: $needle" ;; *) fail "the flow section does not say: $needle" ;; esac
 done
 case "$(sed -n '/^## Procedure/,/^## Routing/p' "$SKILL_ABS" | flat)" in

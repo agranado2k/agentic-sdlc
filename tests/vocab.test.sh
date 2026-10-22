@@ -1106,17 +1106,27 @@ vocab 'Targets: kind=finding.raise data.agent=$(id)'
 expect_status 2 "a value shaped like a command is refused"
 
 # ---------------------------------------------------------------------------
-banner "Class: — the ticket's class, a closed token set /retro counts toil by (#819)"
+banner "Class: — the ticket's class, an OPEN token field /retro counts toil by (#819)"
 # ---------------------------------------------------------------------------
 # /retro's flow section reads toil's share from ticket.start's data.class,
-# and /implement records one only from a `Class:` stamp line this checker
-# passed — so the field is declared, closed, and an undeclared class refused.
+# and /implement records one only from a `Class:` line this checker passed.
+# The class is the consumer's — the kit names no class of its own (PRD-03) —
+# so the field is OPEN, like domain: any well-formed token, held to the shape
+# and a bound, and never a quote, a capital or a command.
 vocab fields
-expect_out_has "class: feature fix toil" "the class field is declared, closed, with its three tokens"
+expect_out_has "class (open): " "the class field is declared open, with no tokens of the kit's own"
 vocab 'Class: toil'
 expect_resolved "" "a Class: toil line is accepted"
 vocab 'Class: chore'
-expect_status 2 "an undeclared class is refused"
-expect_err_has "class"
+expect_resolved "" "a class the kit never named is accepted — the field is open"
+vocab 'Class: Toil'
+expect_status 2 "a class outside the token shape is refused"
+expect_err_has "class: 'Toil' is not a well-formed token"
+vocab "Class: toil';touch PWN;'"
+expect_status 2 "a class carrying a quote is refused"
+vocab "Class: $(printf '%065d' 0 | tr 0 a)"
+expect_status 2 "a class past 64 bytes is refused — the token is bounded"
+vocab "Class: $(printf '%064d' 0 | tr 0 a)"
+expect_resolved "" "a class of exactly 64 bytes is accepted"
 
 t_done "vocab"

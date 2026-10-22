@@ -64,7 +64,7 @@
 # reads it.
 
 VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class'
-VOCAB_OPEN='domain'
+VOCAB_OPEN='domain class'
 VOCAB_QUERY='targets'
 
 # tier — owned by scripts/agents.lib.sh (see above); stamped by /to-tickets
@@ -130,9 +130,10 @@ VOCAB_AUTHOR_KIND='bot human'
 
 # class — the ticket's class, stamped as `Class:` when a ticket declares one
 # and recorded by /implement as ticket.start's data.class, only from a line
-# scripts/stamp.sh printed; /retro's flow section counts toil's share by it.
-# CLOSED: a class it cannot count is refused, never recorded.
-VOCAB_CLASS='feature fix toil'
+# scripts/stamp.sh printed; /retro's flow section counts `toil` by it. OPEN,
+# like domain: the class is yours, and the kit names no class of its own, so
+# any token of the shape (64 bytes at most) is read. Name yours here, in
+# VOCAB_CLASS, for their canonical order if you like; the checker needs none.
 
 # ---------------------------------------------------------------------------
 # THE RULES. One per line: `<field>=<value> => <field>=<value>` demands the

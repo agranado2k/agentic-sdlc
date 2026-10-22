@@ -509,9 +509,9 @@ records.*
 - **Toil's share**: the landed tickets whose `ticket.start` carries
   `data.class=toil`, as `toil: <n> of <m> landed`, where `<m>` counts the
   landed tickets — a landing joined to no ticket counts in neither. The class is the
-  ticket's own `Class:` stamp line, a token of the vocabulary policy's `class`
-  field, which `/implement`'s `ticket.start` records as `data.class` — a ticket
-  with none records none. A
+  consumer's — a ticket that declares one carries a `Class:` stamp line, which
+  `/implement`'s `ticket.start` records as `data.class` — and the kit names no
+  class of its own. A
   window where no landed ticket carries a class prints `toil: not recorded`,
   never `toil: 0`.
 
