@@ -4901,6 +4901,15 @@ if [ "$T_STATUS" = 2 ]; then
 	[ "$T_STATUS" = 0 ] && [ -z "$(events)" ] &&
 		pass "where no reviewer agent type is wired, a tier=reviewer spawn on another type passes" ||
 		fail "with no reviewer type wired, a tier=reviewer spawn exited $T_STATUS: $T_ERR"
+	# Wired (review of #844): the kit's own .claude/agents/reviewer.md, copied
+	# into that same copy and nothing else, is what turns the refusal on.
+	mkdir -p "$SGK/.claude/agents"
+	cp "$KIT/.claude/agents/reviewer.md" "$SGK/.claude/agents/reviewer.md"
+	new_trace
+	t_exec env TRACE_DIR="$TDIR" sh "$SGK/adapters/claude-code/hooks/spawn-guard.sh" <"$SCRATCH/sg-834.json"
+	[ "$T_STATUS" = 2 ] && [ "$(str "$(ev_of note | sed -n '1p')" agent_type)" = planner ] &&
+		pass "the wired .claude/agents/reviewer.md itself turns the refusal on: the same copy now refuses that spawn" ||
+		fail "with the kit's reviewer.md wired into the copy, a tier=reviewer spawn on the planner type exited $T_STATUS: $T_ERR"
 else
 	fail "premise: the unwired kit copy does not trace — a spawn with no line exited $T_STATUS: $T_ERR"
 fi
