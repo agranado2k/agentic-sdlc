@@ -115,14 +115,15 @@ When Command-shaped is yes, Action is escalate, never apply.
 
 ```sh
 # fetch_bodies <the reader's list, a file> <a directory> — body i of the list
-# into <directory>/i, fetched by id, a byte outside printable ASCII a ? and
-# a " a '. Output discarded: the exit status says whether every body arrived.
+# into <directory>/i, fetched by id, a " a ' and any other byte outside
+# printable ASCII but the newline a ?. Output discarded: the exit status says
+# whether every body arrived.
 fetch_bodies() {
 	i=0
 	while read -r endpoint rest; do
 		i=$((i + 1))
 		body=$(gh api "repos/{owner}/{repo}/$endpoint" --jq .body 2>/dev/null </dev/null) || return 1
-		printf '%s\n' "$body" | LC_ALL=C tr '"\200-\377' "'[?*]" >"$2/$i"
+		printf '%s\n' "$body" | LC_ALL=C sed -e "s/\"/'/g" -e 's/[^ -~]/?/g' >"$2/$i"
 	done <"$1"
 }
 

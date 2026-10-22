@@ -357,7 +357,8 @@ assert_file_has "$FLAT" "unless it is the whole" "the one exception to the floor
 
 TAB=$(printf '\t')
 ESC=$(printf '\033')
-printf 'rename%sthe helper\nclear %s[2J the screen\nsay "hello" twice\n' "$TAB" "$ESC" >"$FORGE/pulls/comments/3"
+CR=$(printf '\r')
+printf 'rename%sthe helper\nclear %s[2J the screen\nsay "hello" twice\nposted from a form%s\n' "$TAB" "$ESC" "$CR" >"$FORGE/pulls/comments/3"
 t_verdict_is refused "a span carrying a tab is refused — though it is in the comment" bot \
 	"$(with_evidence "Evidence: \"rename${TAB}the helper\"")" pulls/comments/3
 silent "…and refusing it prints nothing: the bytes the rule keeps out stay out"
@@ -427,12 +428,13 @@ st=$?
 [ "$st" -eq 0 ] && pass "fetch_bodies fetches every body on the list" || fail "fetch_bodies exited $st on a list it could fetch"
 [ ! -s "$SCRATCH/fetch.out" ] && pass "…and prints nothing: no line of a body enters the session" ||
 	fail "fetch_bodies printed into the session: $(head -1 "$SCRATCH/fetch.out")"
-# Folded on the way in (#836): a double quote becomes a single quote; the
-# tab and the escape, inside the C locale's single bytes, stay for the span
-# rule to refuse.
-printf "rename%sthe helper\nclear %s[2J the screen\nsay 'hello' twice\n" "$TAB" "$ESC" >"$SCRATCH/fetched.want"
+# Folded on the way in (#836): a double quote becomes a single quote, and
+# every other byte outside printable ASCII a ? — the tab, the escape and a
+# carriage return too (PR #841, M-1). The newline is the one kept: the
+# reader quotes one line, and the check matches within one.
+printf "rename?the helper\nclear ?[2J the screen\nsay 'hello' twice\nposted from a form?\n" >"$SCRATCH/fetched.want"
 cmp -s "$SCRATCH/fetched/1" "$FORGE/$ONE" && cmp -s "$SCRATCH/fetched/2" "$SCRATCH/fetched.want" &&
-	pass "body i of the list is scratch file i — byte for byte, a double quote folded to a single one" ||
+	pass "body i of the list is scratch file i — a double quote folded to a single one, a control byte to a ?, the newlines kept" ||
 	fail "the scratch files are not the bodies, in the list's order"
 printf '%s\n' "$ONE Bot review-bot[bot] src/a.sh:12 reply-to:null" "pulls/comments/404 User someone src/b.sh:40 reply-to:null" >"$SCRATCH/fetch.bad"
 (cd "$PROJECT" && FORGE="$FORGE" sh -c "$STUB"'; . "$1"; fetch_bodies "$2" "$3"' _ "$SCRATCH/check.sh" "$SCRATCH/fetch.bad" "$SCRATCH/fetched") >"$SCRATCH/fetch.out" 2>&1
@@ -440,7 +442,7 @@ st=$?
 [ "$st" -ne 0 ] && pass "a body that cannot be fetched fails the fetch — by exit status" || fail "fetch_bodies exited 0 though a body could not be fetched"
 [ ! -s "$SCRATCH/fetch.out" ] && pass "…and still prints nothing" || fail "a failing fetch printed into the session: $(head -1 "$SCRATCH/fetch.out")"
 grep -q '^		body=$(gh api "repos/{owner}/{repo}/\$endpoint" --jq \.body 2>/dev/null </dev/null) || return 1$' "$SCRATCH/check.sh" &&
-	grep -q '^		printf .%s\\n. "\$body" | LC_ALL=C tr .*>"\$2/\$i"$' "$SCRATCH/check.sh" &&
+	grep -q '^		printf .%s\\n. "\$body" | LC_ALL=C sed .*>"\$2/\$i"$' "$SCRATCH/check.sh" &&
 	pass "the fence fetches by id into the scratch file, folded on the way, output discarded" ||
 	fail "the fence should fetch each body by id into its scratch file with stdout and stderr both off the session"
 [ "$(sed -e '/^#/d' "$SCRATCH/check.sh" | grep -c 'gh ')" -eq 1 ] &&
@@ -731,10 +733,15 @@ names "the returns the readers sent on #810 and #811 stay unreadable — the che
 # The reader reads what fetch_bodies wrote: nothing outside printable ASCII,
 # no double quote — so a span quoted from it whole is a span the check
 # finds there.
-LC_ALL=C grep -q '[^ -~]' "$SCRATCH/fetched.read/1" "$SCRATCH/fetched.read/2" ||
-	grep -q '"' "$SCRATCH/fetched.read/1" "$SCRATCH/fetched.read/2" &&
-	fail "the scratch bodies the reader reads still hold a byte outside printable ASCII or a double quote" ||
+# Both files must be there and hold something: a grep that finds nothing in
+# a missing file proves nothing (PR #841, M-2).
+if [ -s "$SCRATCH/fetched.read/1" ] && [ -s "$SCRATCH/fetched.read/2" ] &&
+	! LC_ALL=C grep -q '[^ -~]' "$SCRATCH/fetched.read/1" "$SCRATCH/fetched.read/2" &&
+	! grep -q '"' "$SCRATCH/fetched.read/1" "$SCRATCH/fetched.read/2"; then
 	pass "the scratch bodies the reader reads hold printable ASCII only, and no double quote"
+else
+	fail "the scratch bodies the reader reads are missing, empty, or still hold a byte outside printable ASCII or a double quote"
+fi
 # The spans a reader quotes from those files: the lens line whole, its
 # double quotes now single, and the confirm-list's header, its em dash
 # three ?s — its first line, the one the readers kept quoting.
