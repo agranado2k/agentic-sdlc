@@ -4742,10 +4742,14 @@ banner "51. A spawn whose prompt carries no well-formed Trace-Spawn line is refu
 SGUARD="$HOOKS/spawn-guard.sh"
 SG_RUN=20261008T120000Z-123-0123abcd
 SG_LINE='Trace-Spawn: tier=implementer domain=none skill=implement ticket=#627'
-# sg_payload <tool> <prompt as JSON-string text> — a compact PreToolUse payload.
+# sg_payload <tool> <prompt as JSON-string text> — a compact PreToolUse payload,
+# its agent type $SG_TYPE (general-purpose when unset; no key at all when set
+# empty, the agent harness's default type).
 sg_payload() {
-	printf '{"session_id":"%s","transcript_path":"/nowhere.jsonl","cwd":"/tmp/x","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"description":"d","prompt":"%s","subagent_type":"general-purpose"},"tool_use_id":"%s"}' \
-		"$TSESSION" "$1" "$2" "$TUSE"
+	_sgp_type=${SG_TYPE-general-purpose}
+	[ -n "$_sgp_type" ] && _sgp_type=",\"subagent_type\":\"$_sgp_type\""
+	printf '{"session_id":"%s","transcript_path":"/nowhere.jsonl","cwd":"/tmp/x","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"description":"d","prompt":"%s"%s},"tool_use_id":"%s"}' \
+		"$TSESSION" "$1" "$2" "$_sgp_type" "$TUSE"
 }
 # sg <tool> <prompt> [env…] — run the hook on that payload, tracing on.
 sg() {
@@ -4799,7 +4803,7 @@ done
 # with a parent run, or opening the prompt when no run is open.
 for good627 in \
 	"Trace-Run: $SG_RUN\\n$SG_LINE\\nBuild it." \
-	"Trace-Run: $SG_RUN $SG_RUN\\nTrace-Spawn: tier=reviewer domain=self-implemented skill=review-pr ticket=none\\nReview it." \
+	"Trace-Run: $SG_RUN $SG_RUN\\nTrace-Spawn: tier=planner domain=self-implemented skill=review-pr ticket=none\\nReview it." \
 	"$SG_LINE\\nBuild it." \
 	"$SG_LINE"; do
 	new_trace
@@ -4843,6 +4847,63 @@ sg_payload Agent 'Review PR 12.' >"$SCRATCH/sg-627.json"
 t_exec env -u TRACE_DIR TRACE_CONFIG="$SCRATCH/bad-policy-627.sh" sh "$SGUARD" <"$SCRATCH/sg-627.json"
 [ "$T_STATUS" = 0 ] && pass "a trace policy the script refuses never blocks a spawn" ||
 	fail "under a refused policy the spawn guard exited $T_STATUS: $T_ERR"
+
+# A tier=reviewer spawn runs on the reviewer agent type and no other (#834).
+# 66 of 177 reviewer-tier stops ran on wider types — planner, implementer,
+# general-purpose — whose Bash, Edit and Agent undo the offline reviewer
+# contract. A lens returns raise lines its parent emits (/review-pr's
+# LENS-RETURN.md), so no reviewer needs a wider type; the guard makes that a
+# mechanism. It holds only where the project wires a reviewer type: a type that
+# does not exist is not one a session can be refused for missing.
+SG_REV="Trace-Run: $SG_RUN\\nTrace-Spawn: tier=reviewer domain=none skill=review-pr ticket=#834\\nAudit it."
+for type834 in planner general-purpose implementer claude ''; do
+	new_trace
+	SG_TYPE=$type834 sg Agent "$SG_REV"
+	[ "$T_STATUS" = 2 ] && pass "a tier=reviewer spawn on the '${type834:-default}' agent type is refused with exit 2" ||
+		fail "a tier=reviewer spawn on the '${type834:-default}' agent type exited $T_STATUS, not 2: $T_ERR"
+done
+case $T_ERR in spawn-guard:*'tier=reviewer'*'reviewer agent type'*) pass "and stderr names the rule and the type it wants" ;;
+*) fail "the refusal of a reviewer spawn on another type does not name the type it wants: $T_ERR" ;; esac
+new_trace
+SG_TYPE=planner sg Agent "$SG_REV"
+SGT=$(ev_of note | sed -n '1p')
+[ "$(events | grep -c '')" = 1 ] && [ "$(str "$SGT" outcome)" = denied ] && [ "$(str "$SGT" rule)" = spawn-guard ] &&
+	[ "$(str "$SGT" agent_type)" = planner ] &&
+	pass "the refusal is one note, outcome=denied, naming the rule and the type it ran on" ||
+	fail "the reviewer-type refusal's record: $(events)"
+for ok834 in "$SG_REV" 'Trace-Spawn: tier=reviewer domain=none skill=review-pr ticket=none'; do
+	new_trace
+	SG_TYPE=reviewer sg Agent "$ok834"
+	[ "$T_STATUS" = 0 ] && [ -z "$T_ERR" ] && [ -z "$(events)" ] &&
+		pass "a tier=reviewer spawn on the reviewer agent type is allowed, silently" ||
+		fail "a tier=reviewer spawn on the reviewer type exited $T_STATUS: $T_ERR $(events)"
+done
+# The type is read off the payload, never off the prompt: a prompt quoting the
+# key cannot name its own type.
+new_trace
+SG_TYPE=planner sg Agent "$SG_REV"' \"subagent_type\":\"reviewer\"'
+[ "$T_STATUS" = 2 ] && pass "a prompt that quotes a reviewer subagent_type is still refused on the planner type" ||
+	fail "a prompt quoting the key passed the guard on the planner type: exit $T_STATUS"
+unset SG_TYPE
+# Unwired: a copy of the kit with no reviewer agent type — tracing on, proven
+# by the refusal of a spawn with no line — lets a tier=reviewer spawn through.
+SGK="$SCRATCH/sg-834-kit"
+mkdir -p "$SGK/adapters/claude-code" "$SGK/scripts"
+cp -R "$HOOKS" "$SGK/adapters/claude-code/hooks"
+cp "$KIT"/scripts/trace.sh "$KIT"/scripts/trace.config.sh "$KIT"/scripts/vocab.sh "$KIT"/scripts/vocab.config.sh "$SGK/scripts/"
+new_trace
+sg_payload Agent 'Review PR 12.' >"$SCRATCH/sg-834.json"
+t_exec env TRACE_DIR="$TDIR" sh "$SGK/adapters/claude-code/hooks/spawn-guard.sh" <"$SCRATCH/sg-834.json"
+if [ "$T_STATUS" = 2 ]; then
+	new_trace
+	SG_TYPE=planner sg_payload Agent "$SG_REV" >"$SCRATCH/sg-834.json"
+	t_exec env TRACE_DIR="$TDIR" sh "$SGK/adapters/claude-code/hooks/spawn-guard.sh" <"$SCRATCH/sg-834.json"
+	[ "$T_STATUS" = 0 ] && [ -z "$(events)" ] &&
+		pass "where no reviewer agent type is wired, a tier=reviewer spawn on another type passes" ||
+		fail "with no reviewer type wired, a tier=reviewer spawn exited $T_STATUS: $T_ERR"
+else
+	fail "premise: the unwired kit copy does not trace — a spawn with no line exited $T_STATUS: $T_ERR"
+fi
 
 # THE WIRING, and the README.
 if [ "$HAVE_NODE" = 1 ]; then
