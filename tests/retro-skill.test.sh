@@ -1683,8 +1683,9 @@ banner "18. Before and after: a lens or skill edit, by its Targets: query (proce
 # 09-28..10-08 (two landed PRs, four high findings) against 10-08..10-18
 # (three landed PRs), and one landed on 2026-10-15 is still pending.
 ba_sec() { awk '/^## Before and after/ { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
-ba_list=$(ba_sec | grep -o '`sh scripts/trace\.sh export | awk[^`]*`' | tr -d '`' | grep -v ' tf=' | head -1)
-ba_check=$(ba_sec | grep -o '`sh scripts/trace\.sh export | awk[^`]*`' | tr -d '`' | grep ' tf=' | head -1)
+ba_list=$(ba_sec | grep -o '`sh scripts/trace\.sh export | awk[^`]*`' | tr -d '`' | head -1)
+ba_check=$(ba_sec | grep -o '`sh scripts/trace\.sh export | tf=[^`]*`' | tr -d '`' | head -1)
+ba_loop=$(ba_sec | flat)
 [ -n "$ba_list" ] && pass "QUESTIONS.md's before-and-after section carries the listing span" ||
 	fail "QUESTIONS.md has no '## Before and after' section carrying a listing \`sh scripts/trace.sh export | awk …\` span (process/R25)"
 [ -n "$ba_check" ] && pass "…and the check span, reading the targets file as tf=" ||
@@ -1730,12 +1731,16 @@ ba_fixture() {
 	ba_land "$1" 2026-10-15T00:00:00Z 70 70
 	ba_ev "$1" 2026-10-21T00:00:00Z note ",\"subject\":\"pr:#1\",\"outcome\":\"candidate\",\"reason\":\"fixture\""
 }
-ba_targets="$SCRATCH/ba-targets"
+# The targets file sits under a directory whose name carries a single quote:
+# the check reads it by path, and a checkout path is the operator's to name
+# (review L-2).
+mkdir -p "$SCRATCH/it's"
+ba_targets="$SCRATCH/it's/ba-targets"
 printf '%s\n' '61 Tier: implementer' '61 Targets: kind=finding.raise data.agent=security data.severity=high' \
-	'70 targets:  kind=finding.raise data.agent=security' '9 Targets: kind=finding.raise' >"$ba_targets"
+	'70 targets:  kind=finding.raise data.agent=security' '9 Targets: kind=finding.raise' '62 stamp-exit 2' >"$ba_targets"
 ba_run() {
-	_br_span=$(printf '%s\n' "$2" | sed -e 's/<YYYY-MM-DD>/2026-10-11/g' -e "s|<targets-file>|$ba_targets|g")
-	( cd "$ROOT" && TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$_br_span" 2>/dev/null )
+	_br_span=$(printf '%s\n' "$2" | sed -e 's/<YYYY-MM-DD>/2026-10-11/g' -e 's|<targets-file>|"$BA_TF"|g')
+	( cd "$ROOT" && BA_TF=$ba_targets TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$_br_span" 2>/dev/null )
 }
 ba_drop="$SCRATCH/ba-drop.retro"
 ba_flat="$SCRATCH/ba-flat.retro"
@@ -1767,10 +1772,14 @@ if [ -n "$ba_check" ]; then
 	ba_assert "$ba_model" 'ticket:#61 security/high: inconclusive — tier mapping changed' "process/R26: a changed tier mapping is inconclusive"
 	ba_assert "$ba_kit" 'ticket:#61 security/high: inconclusive — kit version changed' "process/R26: a changed kit version is inconclusive"
 	ba_assert "$ba_stop" 'ticket:#61 security/high: 2.00 → 0.33 per PR' "process/R26: a stopped run's events are left out of both counts"
+	ba_assert "$ba_drop" 'ticket:#62: stamp not read — scripts/stamp.sh exit 2' "a refused stamp is named, never dropped (review M-2), read from a path with a quote in it"
 	ba_run "$ba_drop" "$ba_check" | grep -q 'ticket:#9' && fail "the check judged a ticket landed before the window before" ||
 		pass "…and judges no ticket landed before the window before"
 fi
 baprose=$(ba_sec | flat)
+case "$ba_loop" in *'s=$(sh scripts/stamp.sh "$n"); rc=$?'*'echo "$n stamp-exit $rc"'*) pass "the stamp loop keeps the read's own status and writes a stamp-exit line" ;;
+*) fail "the stamp loop does not keep scripts/stamp.sh's status as a stamp-exit line (review M-2)" ;;
+esac
 for needle in '`Targets:`' 'scripts/stamp.sh' 'equal window' 'per landed PR' 'inconclusive' 'stopped' '— no drop' 'names the ticket'; do
 	case "$baprose" in *"$needle"*) pass "the before-and-after section says: $needle" ;; *) fail "the before-and-after section does not say: $needle" ;; esac
 done
