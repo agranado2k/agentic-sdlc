@@ -20,7 +20,8 @@
 # spaces and underscores read as hyphens (`Tier:`, `tier:`, `Command shaped:`
 # and `command_shaped:` all name a field), and a line whose key is not a
 # declared field is not a decision line and is ignored. The VALUE is matched
-# exactly, one token whole. A field that appears twice with two different
+# exactly, one token whole — a QUERY field's value against its grammar
+# instead (vocab_query_ok). A field that appears twice with two different
 # values is refused — a body with two answers has none, and a line appended
 # to it cannot withdraw a rule — while the same value repeated is one answer.
 #
@@ -33,7 +34,8 @@
 #
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else: `check`
 # prints nothing, `fields` prints one field per line, an open one marked
-# `(open)`, then one line per rule. Every reason is on
+# `(open)`, a query one marked `(query)` with no tokens (its value is a trace
+# filter held to a grammar, VOCAB_QUERY), then one line per rule. Every reason is on
 # stderr, prefixed `x vocab:`, one line per violation naming the field, the
 # value and the vocabulary. Exit 0 is legal; exit 2 is a refused value, a
 # usage error, a policy file named explicitly and missing, or a policy file
@@ -86,8 +88,9 @@ VOCAB_TOKEN_SHAPE='[a-z][a-z0-9-]*'
 # file: a file is the whole policy, never a layer over these — a rule it
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
-	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind'
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets'
 	VOCAB_OPEN='domain'
+	VOCAB_QUERY='targets'
 	VOCAB_TIER='planner implementer mechanical reviewer'
 	VOCAB_LABEL='ready-for-agent none'
 	VOCAB_DOMAIN='content code tests html-report self-implemented'
@@ -126,6 +129,7 @@ vocab_git() {
 vocab_load_config() {
 	VOCAB_FIELDS=
 	VOCAB_OPEN=
+	VOCAB_QUERY=
 	VOCAB_RULES=
 	if [ -n "${VOCAB_CONFIG:-}" ]; then
 		[ -f "$VOCAB_CONFIG" ] || {
@@ -177,6 +181,73 @@ vocab_in_list() {
 vocab_is_field() { vocab_in_list "$VOCAB_FIELDS" "$1"; }
 
 vocab_is_open() { vocab_in_list "${VOCAB_OPEN:-}" "$1"; }
+
+vocab_is_query() { vocab_in_list "${VOCAB_QUERY:-}" "$1"; }
+
+# vocab_query_ok <field> <value> — a QUERY field's value is a trace filter,
+# held to a grammar because no token set can hold it: one to
+# VOCAB_QUERY_TERMS `<key>=<value>` terms split on blanks, exactly one of them
+# `kind=`, no key twice; a key is a field name or `data.<key>` in the trace's
+# own `[a-z][a-z0-9_]*`; a value is `[a-z0-9][a-z0-9._-]*`, at most 64
+# characters. That alphabet is the point: the value is ticket text, and a
+# filter that passes here carries nothing a shell, awk or a JSON reader would
+# read as syntax. Mechanism, not policy — a literal, like the neutral list.
+VOCAB_QUERY_TERMS=8
+vocab_query_ok() {
+	_qo_field=$1
+	# Split the value into terms once, with globbing off, so a term is never
+	# expanded against the cwd and no return path has to restore it.
+	set -f
+	# shellcheck disable=SC2086  # the split into terms is the point
+	set -- $2
+	set +f
+	if [ $# -gt "$VOCAB_QUERY_TERMS" ]; then
+		vocab_refuse "$_qo_field: more than $VOCAB_QUERY_TERMS terms — a filter is bounded"
+		return 1
+	fi
+	_qo_keys=' '
+	_qo_kind=0
+	for _qo_t in "$@"; do
+		case $_qo_t in
+		*=*) ;;
+		*)
+			vocab_refuse "$_qo_field: '$_qo_t' is not a <key>=<value> term"
+			return 1
+			;;
+		esac
+		_qo_k=${_qo_t%%=*}
+		_qo_v=${_qo_t#*=}
+		case ${_qo_k#data.} in
+		'' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789_]*)
+			vocab_refuse "$_qo_field: '$_qo_k' is not a field name or data.<key> — a key is [a-z][a-z0-9_]*"
+			return 1
+			;;
+		esac
+		case $_qo_v in
+		'' | [!abcdefghijklmnopqrstuvwxyz0123456789]* | *[!abcdefghijklmnopqrstuvwxyz0123456789._-]*)
+			vocab_refuse "$_qo_field: the value of '$_qo_k' is not [a-z0-9][a-z0-9._-]*"
+			return 1
+			;;
+		esac
+		if [ "${#_qo_v}" -gt 64 ]; then
+			vocab_refuse "$_qo_field: the value of '$_qo_k' is longer than 64 characters"
+			return 1
+		fi
+		case $_qo_keys in
+		*" $_qo_k "*)
+			vocab_refuse "$_qo_field: the key '$_qo_k' appears twice — one value per key"
+			return 1
+			;;
+		esac
+		_qo_keys="$_qo_keys$_qo_k "
+		[ "$_qo_k" = kind ] && _qo_kind=1
+	done
+	if [ "$_qo_kind" = 0 ]; then
+		vocab_refuse "$_qo_field: the filter names no kind= term — a filter is over one kind"
+		return 1
+	fi
+	return 0
+}
 
 # vocab_has_token <field> <value> — membership in the field's vocabulary: one
 # token, matched whole.
@@ -270,6 +341,10 @@ vocab_rule_side_ok() {
 		vocab_refuse "policy: rule '$1' names '$2', which is not a declared field"
 		return 1
 	fi
+	if vocab_is_query "$2"; then
+		vocab_refuse "policy: rule '$1' names '$2', a query field — a rule reads tokens, and a query has none"
+		return 1
+	fi
 	if vocab_is_open "$2"; then
 		vocab_shape_ok "$3" || {
 			vocab_refuse "policy: rule '$1' names '$3', which is not a well-formed token"
@@ -356,6 +431,7 @@ vocab_conflicts() {
 vocab_token_lines() {
 	for _tl_f in $VOCAB_FIELDS; do
 		vocab_is_open "$_tl_f" && continue
+		vocab_is_query "$_tl_f" && continue
 		printf 'T %s %s\n' "$_tl_f" "$(vocab_tokens "$_tl_f")"
 	done
 }
@@ -406,6 +482,11 @@ vocab_validate_policy() {
 			;;
 		esac
 		_vp_tokens=$(vocab_tokens "$_vp_f")
+		if vocab_is_query "$_vp_f"; then
+			vocab_is_open "$_vp_f" && vocab_refuse "policy: field '$_vp_f' is declared both open and a query — one kind per field"
+			[ -z "$_vp_tokens" ] || vocab_refuse "policy: field '$_vp_f' is a query and declares tokens ($(vocab_var "$_vp_f")) — a query is held to its grammar, never to tokens"
+			continue
+		fi
 		if [ -z "$_vp_tokens" ] && ! vocab_is_open "$_vp_f"; then
 			vocab_refuse "policy: field '$_vp_f' declares no tokens ($(vocab_var "$_vp_f") is empty)"
 			continue
@@ -418,6 +499,9 @@ vocab_validate_policy() {
 			vocab_neutral_ok "$_vp_t" ||
 				vocab_refuse "policy: $_vp_f token '$_vp_t' carries its answer in its spelling ('$_vocab_answer_word') — tokens are neutral names"
 		done
+	done
+	for _vp_q in ${VOCAB_QUERY:-}; do
+		vocab_is_field "$_vp_q" || vocab_refuse "policy: VOCAB_QUERY names '$_vp_q', which is not a declared field"
 	done
 	_vocab_rule_lines=
 	vocab_each_rule vocab_check_policy_rule
@@ -445,6 +529,10 @@ vocab_check_value() {
 	if [ -z "$2" ]; then
 		vocab_refuse "$1: the value is empty; expected one of $(vocab_tokens "$1")"
 		return 1
+	fi
+	if vocab_is_query "$1"; then
+		vocab_query_ok "$1" "$2"
+		return
 	fi
 	# A CLOSED field answers by membership, whatever the value's shape: a
 	# reader of `Tier: Implementor` wants the four names, not a note about
@@ -540,7 +628,9 @@ vocab_print_rule() {
 
 vocab_fields() {
 	for _vf_field in $VOCAB_FIELDS; do
-		if vocab_is_open "$_vf_field"; then
+		if vocab_is_query "$_vf_field"; then
+			printf '%s (query):\n' "$_vf_field"
+		elif vocab_is_open "$_vf_field"; then
 			printf '%s (open): %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
 		else
 			printf '%s: %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
