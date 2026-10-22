@@ -3127,7 +3127,26 @@
 # own with no allowed-tools, naming each — tests/adopt-demo.sh and
 # tests/kit-demo.sh hold both arms.
 
-shared-layer: 0.84.0
+# 0.85.0 — a ticket's class is a stamp line, recorded on ticket.start (ticket
+# #819). NO file joins the shared layer and none leaves. Two shared files
+# change content besides UPDATING.md: scripts/vocab.sh's built-in defaults
+# declare a closed `class` field (feature fix toil); scripts/stamp.sh lifts a
+# `Class:` line beside Tier:, Confidence:, Domain: and Targets:, checked the
+# same way, and bounds it like the others.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /implement — SKILL.md's ticket.start line takes an optional
+# data.class=<token>, only from a Class: line scripts/stamp.sh printed, never
+# guessed. /retro — SKILL.md and QUESTIONS.md say toil's share reads that
+# stamp-sourced class. Take the implement SKILL.md and the retro directory.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/vocab.config.sh adds `class` to VOCAB_FIELDS and
+# declares VOCAB_CLASS='feature fix toil' — MERGE the two in, with your own
+# classes if you sort tickets otherwise, or a Class: line is a field your
+# policy does not declare, and scripts/stamp.sh drops it.
+# Kit-only, never shipped: tests/vocab.test.sh, tests/stamp.test.sh and
+# tests/trace-skills.test.sh hold the field, the lift and the line.
+
+shared-layer: 0.85.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
