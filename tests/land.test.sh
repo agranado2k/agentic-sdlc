@@ -1172,8 +1172,8 @@ banner "14. No review.verdict at the head commit: refused, or landed on a named 
 # ---------------------------------------------------------------------------
 # On 2026-10-09 #665's review degraded and posted with no review.verdict; the
 # landing checked for an iteration at the head and not for a review, and
-# landed it. The same check as section 9's, for the review: a review.verdict
-# on the PR, any axis and any outcome, stamped at or after its head commit's
+# landed it. The same check as section 9's, for the review: an Axis-1
+# review.verdict on the PR, any outcome but blocked (#816), stamped at or after its head commit's
 # date — else exit 2, nothing merged, nothing recorded, unless --no-review
 # names why, and then merge.land says the landing had none. Every PR here is
 # #600 up, so no seed above reaches it.
@@ -1209,17 +1209,56 @@ seed pr.iterate green 604
 land STUB_HEAD_RC=1 604 --no-iteration 'iteration aside'
 no_rev "a forge that does not date the head commit" 604
 
+# A blocked Axis-1 verdict is not a review the landing counts (#816,
+# ADR-0032): since #808 a review in which no lens ran records exactly that,
+# and nothing audited the diff. Nor is an Axis-2 verdict alone — the no-lens
+# review records one beside its blocked Axis 1.
 seed review.verdict blocked 605
 seed pr.iterate red 605
 land 605
-landed_with 605 "a blocked verdict at the head — any outcome counts; the gate judges the checks" '"reviewed":"yes"'
+no_rev "a blocked Axis-1 verdict alone at the head" 605
+expect_err_has "blocked" "stderr names the blocked verdict"
 
 seed pr.iterate green 606
 seed review.verdict confirm 606
 land 606
-landed_with 606 "an Axis-2 verdict at the head" '"reviewed":"yes"' '"iterated":"yes"'
-show 'pr:#606' --kind merge.land | grep -qF '"no_review"' && fail "a reviewed landing carries a no_review reason" ||
+no_rev "an Axis-2 verdict alone at the head" 606
+
+# verdict <pr> <outcome> <data…> — a review.verdict in the exact shape a
+# /review-pr branch records it.
+verdict() {
+	_vd_pr=$1
+	_vd_outcome=$2
+	shift 2
+	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=review.verdict \
+		"subject=pr:#$_vd_pr" "outcome=$_vd_outcome" "$@" </dev/null >/dev/null 2>&1 ||
+		fail "could not seed a review.verdict on pr:#$_vd_pr"
+}
+# The no-lens review exactly as NO-LENS.md records it, Axis 2 beside it.
+seed pr.iterate green 613
+verdict 613 blocked data.axis=1 data.lenses=0 data.roster=6 'reason=no lens ran'
+verdict 613 confirm data.axis=2 data.unspecified=1 data.mixed=0 data.missing=0 reason=seeded
+land 613
+no_rev "a no-lens review (blocked, data.lenses=0) with its Axis-2 verdict" 613
+expect_err_has "blocked" "stderr names the blocked verdict"
+
+seed pr.iterate green 614
+verdict 614 pass data.axis=1 data.agent=single-reviewer data.lenses=0 data.roster=0 reason=seeded
+land 614
+landed_with 614 "a single-reviewer pass at data.lenses=0" '"reviewed":"yes"' '"iterated":"yes"'
+show 'pr:#614' --kind merge.land | grep -qF '"no_review"' && fail "a reviewed landing carries a no_review reason" ||
 	pass "and carries no no_review reason"
+
+seed pr.iterate green 615
+verdict 615 blocked data.axis=1 data.lenses=0 data.roster=6 'reason=no lens ran'
+verdict 615 pass data.axis=1 data.lenses=6 data.roster=6 reason=seeded
+land 615
+landed_with 615 "a blocked verdict and a pass at the same head" '"reviewed":"yes"'
+
+seed pr.iterate green 616
+verdict 616 blocked data.axis=1 data.lenses=0 data.roster=6 'reason=no lens ran'
+land 616 --no-review 'no lens ran; read by hand'
+landed_with 616 "a blocked verdict alone, with --no-review" '"reviewed":"no"' '"no_review":"no lens ran; read by hand"'
 
 seed pr.iterate green 607
 land 607 --no-review 'the review degraded; read by hand'
