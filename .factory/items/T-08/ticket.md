@@ -3,11 +3,22 @@ id: T-08
 type: ticket
 title: /to-prd writes scenarios as use cases, and /to-tickets reads their main flows
 parent: PRD-05
-stage: ready
+stage: done
 created: 2026-10-21
-updated: 2026-10-21
+updated: 2026-10-22
 deps: []
 priority: 1
+links:
+  pr: "#806"
+review:
+  outcome: approved
+  commit: "f87c71d"
+  by: "review-pr (sonnet) on #806"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#806 landed, suite green)"
+  at: 2026-10-22
 ---
 
 # T-08 · /to-prd writes scenarios as use cases, and /to-tickets reads their main flows
