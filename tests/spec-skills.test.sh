@@ -35,6 +35,7 @@ TIX_ABS="$ROOT/$TIX"
 # The retro branch lives beside SKILL.md (#592): one entry point, the rare
 # branch in a file it names by relative path.
 RETRO_CAND_ABS="$ROOT/.agents/skills/to-tickets/RETRO-CANDIDATES.md"
+DOMAIN_RUBRIC_ABS="$ROOT/.agents/skills/to-tickets/DOMAIN-RUBRIC.md"
 
 cd "$ROOT" || exit 2
 
@@ -1010,6 +1011,16 @@ banner "The class stamp: /to-tickets writes the Class: line /implement records a
 # it. This holds the writer's half: the rubric, the quiz check and
 # confirmation, the body line and the ticket.write field — and that the line
 # the rubric shows passes the stamp checker, read back through stamp.sh.
+# The domain rubric lives beside SKILL.md (PR #843): a `Domain:` line is the
+# unusual case, so its rubric is a rare branch, opened from a one-line pointer
+# under its heading — the arrangement RETRO-CANDIDATES.md set.
+section_of "$TIX_ABS" "The domain rubric" | grep -qF "(DOMAIN-RUBRIC.md)" &&
+	pass "/to-tickets' SKILL.md names DOMAIN-RUBRIC.md by relative path, under its domain rubric heading" ||
+	fail "/to-tickets' SKILL.md does not name DOMAIN-RUBRIC.md from '## The domain rubric' — a moved branch no entry point opens"
+dom=$(section_of "$DOMAIN_RUBRIC_ABS" "The domain rubric" | tr '\n' ' ' | tr -s ' ')
+t_text_has "$dom" "would the medium of this work change which model you would pick" "the one question that decides a Domain: line" "the domain rubric"
+t_text_has "$dom" "leave the line off" "no distinctive medium is the ordinary case: the line is left off" "the domain rubric"
+t_text_has "$dom" "Still never a model name" "a domain is a fact about the work, never a model" "the domain rubric"
 cls=$(section_of "$TIX_ABS" "The class rubric")
 [ -n "$cls" ] && pass "/to-tickets carries a class rubric" ||
 	fail "/to-tickets has no '## The class rubric' section — nothing says when a Class: line is stamped"
@@ -1058,6 +1069,7 @@ t_text_has "$rel" "feedback-first" "the chain's order is the feedback-first rule
 t_text_has "$rel" "Deferring the bumps to one release ticket" "the rejected form is named" "the release-frontier rule"
 t_text_has "$rel" "with no bump" "…with the reason it is rejected: a move with no bump" "the release-frontier rule"
 t_text_has "$rel" "the kit's ADR-0033" "the rule cites its record as the kit's (ADR-0017)" "the release-frontier rule"
+t_text_has "$rel" "A ticket that moves no listed file is untouched by this rule" "the rule's scope: a ticket moving no listed file is untouched" "the release-frontier rule"
 [ -f "$ROOT/docs/adr/0033-a-frontier-holds-one-shared-layer-ticket.md" ] &&
 	grep -qF '0033-a-frontier-holds-one-shared-layer-ticket.md' "$ROOT/docs/adr/INDEX.md" &&
 	pass "ADR-0033 exists and the index lists it" ||
@@ -1067,6 +1079,18 @@ t_text_has "$handoff" "One shared-layer ticket per frontier" "the hand-off names
 t_text_has "$handoff" "while another release's pull request is open" "a shared-layer ticket waits on another wave's open release too" "step 5"
 t_text_has "$handoff" "A held shared-layer ticket occupies no session" "a held release ticket takes no slot of the cap" "step 5"
 t_text_has "$handoff" "its slot goes to the next unblocked ticket" "…the slot passes to the next unblocked ticket" "step 5"
+
+# ---------------------------------------------------------------------------
+banner "The seam split: emitter, hook and guard are separate tickets (#837)"
+# ---------------------------------------------------------------------------
+# Retro 20261022T135553Z F6: one ticket touched the trace emitter, the hook and
+# the guard together, was stamped low, and took four iterations at well over
+# the wave's median spend. The sizing rule names that split, and makes a low
+# tier stamp the prompt to look for one before the quiz.
+rule2=$(rule_n 2)
+t_text_has "$rule2" "more than one of the trace emitter, an agent-harness hook and a guard" "the three seams are named together" "rule 2"
+t_text_has "$rule2" "is split at the seam between them" "a ticket spanning them is split there" "rule 2"
+t_text_has "$rule2" "A \`low\` tier stamp (rule 14) is a prompt to look for such a split before the quiz" "a low tier stamp prompts the search, before the quiz" "rule 2"
 
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
 t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"
