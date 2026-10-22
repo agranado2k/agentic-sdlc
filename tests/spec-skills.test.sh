@@ -1065,6 +1065,8 @@ t_text_has "$rel" "the kit's ADR-0033" "the rule cites its record as the kit's (
 handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "$TIX_ABS")
 t_text_has "$handoff" "One shared-layer ticket per frontier" "the hand-off names the rule its sequencing honours" "step 5"
 t_text_has "$handoff" "while another release's pull request is open" "a shared-layer ticket waits on another wave's open release too" "step 5"
+t_text_has "$handoff" "A held shared-layer ticket occupies no session" "a held release ticket takes no slot of the cap" "step 5"
+t_text_has "$handoff" "its slot goes to the next unblocked ticket" "…the slot passes to the next unblocked ticket" "step 5"
 
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
 t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"
