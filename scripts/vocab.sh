@@ -194,22 +194,24 @@ vocab_is_query() { vocab_in_list "${VOCAB_QUERY:-}" "$1"; }
 # read as syntax. Mechanism, not policy — a literal, like the neutral list.
 VOCAB_QUERY_TERMS=8
 vocab_query_ok() {
-	_qo_n=0
+	_qo_field=$1
+	# Split the value into terms once, with globbing off, so a term is never
+	# expanded against the cwd and no return path has to restore it.
+	set -f
+	# shellcheck disable=SC2086  # the split into terms is the point
+	set -- $2
+	set +f
+	if [ $# -gt "$VOCAB_QUERY_TERMS" ]; then
+		vocab_refuse "$_qo_field: more than $VOCAB_QUERY_TERMS terms — a filter is bounded"
+		return 1
+	fi
 	_qo_keys=' '
 	_qo_kind=0
-	set -f
-	for _qo_t in $2; do
-		_qo_n=$((_qo_n + 1))
-		if [ "$_qo_n" -gt "$VOCAB_QUERY_TERMS" ]; then
-			set +f
-			vocab_refuse "$1: more than $VOCAB_QUERY_TERMS terms — a filter is bounded"
-			return 1
-		fi
+	for _qo_t in "$@"; do
 		case $_qo_t in
 		*=*) ;;
 		*)
-			set +f
-			vocab_refuse "$1: '$_qo_t' is not a <key>=<value> term"
+			vocab_refuse "$_qo_field: '$_qo_t' is not a <key>=<value> term"
 			return 1
 			;;
 		esac
@@ -217,36 +219,31 @@ vocab_query_ok() {
 		_qo_v=${_qo_t#*=}
 		case ${_qo_k#data.} in
 		'' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789_]*)
-			set +f
-			vocab_refuse "$1: '$_qo_k' is not a field name or data.<key> — a key is [a-z][a-z0-9_]*"
+			vocab_refuse "$_qo_field: '$_qo_k' is not a field name or data.<key> — a key is [a-z][a-z0-9_]*"
 			return 1
 			;;
 		esac
 		case $_qo_v in
 		'' | [!abcdefghijklmnopqrstuvwxyz0123456789]* | *[!abcdefghijklmnopqrstuvwxyz0123456789._-]*)
-			set +f
-			vocab_refuse "$1: the value of '$_qo_k' is not [a-z0-9][a-z0-9._-]*"
+			vocab_refuse "$_qo_field: the value of '$_qo_k' is not [a-z0-9][a-z0-9._-]*"
 			return 1
 			;;
 		esac
 		if [ "${#_qo_v}" -gt 64 ]; then
-			set +f
-			vocab_refuse "$1: the value of '$_qo_k' is longer than 64 characters"
+			vocab_refuse "$_qo_field: the value of '$_qo_k' is longer than 64 characters"
 			return 1
 		fi
 		case $_qo_keys in
 		*" $_qo_k "*)
-			set +f
-			vocab_refuse "$1: the key '$_qo_k' appears twice — one value per key"
+			vocab_refuse "$_qo_field: the key '$_qo_k' appears twice — one value per key"
 			return 1
 			;;
 		esac
 		_qo_keys="$_qo_keys$_qo_k "
 		[ "$_qo_k" = kind ] && _qo_kind=1
 	done
-	set +f
 	if [ "$_qo_kind" = 0 ]; then
-		vocab_refuse "$1: the filter names no kind= term — a filter is over one kind"
+		vocab_refuse "$_qo_field: the filter names no kind= term — a filter is over one kind"
 		return 1
 	fi
 	return 0
