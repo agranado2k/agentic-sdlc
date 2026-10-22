@@ -1577,8 +1577,9 @@ banner "21. A blocked review's report has one order, in both sidecars, and they 
 # first line" against "the ⚠️ items come first, above everything else". Each
 # sidecar now carries one skeleton of its report, and the order is read off
 # the skeleton's lines, never off prose.
-# nl_fence <file> — the first triple-backtick block in <file>, fences dropped.
-nl_fence() { awk '/^```/ { if (in_f) exit; in_f = 1; next } in_f' "$1" 2>/dev/null; }
+# nl_fence [<file>] — the first triple-backtick block in <file>, or in stdin
+# with no file, fences dropped.
+nl_fence() { awk '/^```/ { if (in_f) exit; in_f = 1; next } in_f' "${1:--}" 2>/dev/null; }
 # nl_line <text> <needle> — the line number of the first line of <text>
 # carrying <needle>, 0 when none does.
 nl_line() { _nl_n=$(printf '%s\n' "$1" | grep -nF -- "$2" | head -n 1 | cut -d: -f1); echo "${_nl_n:-0}"; }
@@ -1589,7 +1590,7 @@ NL_ESCALATION='🟡 Escalated: no lens ran — the review audited nothing on thi
 order_missing() {
 	_o_rn=$(nl_fence "$1/review-pr/NO-LENS.md")
 	_o_in=$(nl_fence "$1/pr-iterate/NO-LENS.md")
-	_o_fmt=$(region '^## Output format' '^## ' "$1/pr-iterate/SKILL.md" | awk '/^```/ { if (in_f) exit; in_f = 1; next } in_f')
+	_o_fmt=$(region '^## Output format' '^## ' "$1/pr-iterate/SKILL.md" | nl_fence)
 	# The review's skeleton: heading, then the Verdict line as the next line
 	# that says anything, then the rule and Axis 2's header, then ⚠️.
 	_o_h=$(nl_line "$_o_rn" '### Review Summary')
