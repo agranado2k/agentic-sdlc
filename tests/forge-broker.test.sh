@@ -1556,7 +1556,7 @@ banner "24. A BLOCKED report — no lens ran — lands, and its verdict traces b
 # script (ADR-0032) refuses a head it is the only verdict on. A BLOCKED line
 # in any other shape, or one over a report that carries a finding, is refused.
 BLOCKED="$SCRATCH/blocked.md"
-cat >"$BLOCKED" <<EOF
+sed 's|^VERDICT: .*|VERDICT: BLOCKED — no lens ran; this is not a review|' "$NONE" >"$BLOCKED"
 REVIEWED: $HEAD_SHA
 VERDICT: BLOCKED — no lens ran; this is not a review
 
