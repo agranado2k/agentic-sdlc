@@ -1557,24 +1557,6 @@ banner "24. A BLOCKED report — no lens ran — lands, and its verdict traces b
 # in any other shape, or one over a report that carries a finding, is refused.
 BLOCKED="$SCRATCH/blocked.md"
 sed 's|^VERDICT: .*|VERDICT: BLOCKED — no lens ran; this is not a review|' "$NONE" >"$BLOCKED"
-REVIEWED: $HEAD_SHA
-VERDICT: BLOCKED — no lens ran; this is not a review
-
-## Axis 1 — Standards
-
-#### CRITICAL
-— none found.
-#### HIGH
-— none found.
-#### MEDIUM
-— none found.
-#### LOW
-— none found.
-
-## Axis 2 — Behavior (for a human)
-
-✅ SPECIFIED    b.md gains the two lines the ticket named.
-EOF
 STUB_PR=40
 export STUB_PR
 broker 40 "$BLOCKED"
