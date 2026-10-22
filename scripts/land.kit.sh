@@ -27,11 +27,12 @@
 #      head, data.iterated=yes. The same for the review (#673): no Axis-1
 #      review.verdict on pr:#<N>, any outcome but blocked (#816, ADR-0032),
 #      at or after the head commit's date refuses it, unless --no-review
-#      '<reason>' names why — data.reviewed=no with data.no_review, or data.reviewed=yes. One
-#      refusal names every check that failed. A prose-only PR nobody iterated
-#      or reviewed — a diary stamp — lands on both overrides, each with its
-#      reason. Unconfigured, the trace holds nothing to read and records
-#      nothing: both checks are skipped, and stderr says so.
+#      '<reason>' names why — data.reviewed=no with data.no_review, or
+#      data.reviewed=yes. One refusal names every check that failed. A
+#      prose-only PR nobody iterated or reviewed — a diary stamp — lands on
+#      both overrides, each with its reason. Unconfigured, the trace holds
+#      nothing to read and records nothing: both checks are skipped, and
+#      stderr says so.
 #   1c. REFUSES the same way a PR that moves a file VERSION's files: list
 #      names — at its merge base or its head — with no new version on the
 #      shared-layer line (#728, ADR-0025): a shared-layer change is a release

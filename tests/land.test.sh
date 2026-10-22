@@ -1173,8 +1173,8 @@ banner "14. No review.verdict at the head commit: refused, or landed on a named 
 # On 2026-10-09 #665's review degraded and posted with no review.verdict; the
 # landing checked for an iteration at the head and not for a review, and
 # landed it. The same check as section 9's, for the review: an Axis-1
-# review.verdict on the PR, any outcome but blocked (#816), stamped at or after its head commit's
-# date — else exit 2, nothing merged, nothing recorded, unless --no-review
+# review.verdict on the PR, any outcome but blocked (#816), stamped at or
+# after its head commit's date — else exit 2, nothing merged, nothing recorded, unless --no-review
 # names why, and then merge.land says the landing had none. Every PR here is
 # #600 up, so no seed above reaches it.
 # no_rev <label> <pr> — refused on the review check, the trace untouched.
