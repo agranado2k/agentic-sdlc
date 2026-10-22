@@ -3,11 +3,22 @@ id: T-07
 type: ticket
 title: Every skill declares its powers in allowed-tools
 parent: PRD-04
-stage: ready
+stage: done
 created: 2026-10-21
-updated: 2026-10-21
+updated: 2026-10-22
 deps: [T-06]
 priority: 3
+links:
+  pr: "#821"
+review:
+  outcome: approved
+  commit: "a45ddf0"
+  by: "review-pr (sonnet) on #821"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#821 landed, suite green)"
+  at: 2026-10-22
 ---
 
 # T-07 · Every skill declares its powers in allowed-tools
