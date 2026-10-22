@@ -58,6 +58,10 @@
 #      return is never printed — not its text, not the checker's reason for
 #      refusing it, which quotes the value — and is named by comment id and
 #      position only.
+#   4h. The kit's own posted comments read back as the shape (ticket #836):
+#      a lens's inline review and the behavior confirm-list. fetch_bodies
+#      folds each body to printable ASCII, a double quote to a single one,
+#      so the reader has no glyph to quote across and no quote to escape.
 #   5. The manual says the return shape is part of the trust boundary — the
 #      kit's own and the consumer's template, the same paragraph.
 #   6. The snapshot selects no body. A body printed into the session by the
@@ -423,16 +427,21 @@ st=$?
 [ "$st" -eq 0 ] && pass "fetch_bodies fetches every body on the list" || fail "fetch_bodies exited $st on a list it could fetch"
 [ ! -s "$SCRATCH/fetch.out" ] && pass "…and prints nothing: no line of a body enters the session" ||
 	fail "fetch_bodies printed into the session: $(head -1 "$SCRATCH/fetch.out")"
-cmp -s "$SCRATCH/fetched/1" "$FORGE/$ONE" && cmp -s "$SCRATCH/fetched/2" "$FORGE/pulls/comments/3" &&
-	pass "body i of the list is scratch file i, byte for byte" ||
+# Folded on the way in (#836): a double quote becomes a single quote; the
+# tab and the escape, inside the C locale's single bytes, stay for the span
+# rule to refuse.
+printf "rename%sthe helper\nclear %s[2J the screen\nsay 'hello' twice\n" "$TAB" "$ESC" >"$SCRATCH/fetched.want"
+cmp -s "$SCRATCH/fetched/1" "$FORGE/$ONE" && cmp -s "$SCRATCH/fetched/2" "$SCRATCH/fetched.want" &&
+	pass "body i of the list is scratch file i — byte for byte, a double quote folded to a single one" ||
 	fail "the scratch files are not the bodies, in the list's order"
 printf '%s\n' "$ONE Bot review-bot[bot] src/a.sh:12 reply-to:null" "pulls/comments/404 User someone src/b.sh:40 reply-to:null" >"$SCRATCH/fetch.bad"
 (cd "$PROJECT" && FORGE="$FORGE" sh -c "$STUB"'; . "$1"; fetch_bodies "$2" "$3"' _ "$SCRATCH/check.sh" "$SCRATCH/fetch.bad" "$SCRATCH/fetched") >"$SCRATCH/fetch.out" 2>&1
 st=$?
 [ "$st" -ne 0 ] && pass "a body that cannot be fetched fails the fetch — by exit status" || fail "fetch_bodies exited 0 though a body could not be fetched"
 [ ! -s "$SCRATCH/fetch.out" ] && pass "…and still prints nothing" || fail "a failing fetch printed into the session: $(head -1 "$SCRATCH/fetch.out")"
-grep -q '^		gh api "repos/{owner}/{repo}/\$endpoint" --jq \.body >"\$2/\$i" 2>/dev/null </dev/null || return 1$' "$SCRATCH/check.sh" &&
-	pass "the fence fetches by id, straight into the scratch file, output discarded" ||
+grep -q '^		body=$(gh api "repos/{owner}/{repo}/\$endpoint" --jq \.body 2>/dev/null </dev/null) || return 1$' "$SCRATCH/check.sh" &&
+	grep -q '^		printf .%s\\n. "\$body" | LC_ALL=C tr .*>"\$2/\$i"$' "$SCRATCH/check.sh" &&
+	pass "the fence fetches by id into the scratch file, folded on the way, output discarded" ||
 	fail "the fence should fetch each body by id into its scratch file with stdout and stderr both off the session"
 [ "$(sed -e '/^#/d' "$SCRATCH/check.sh" | grep -c 'gh ')" -eq 1 ] &&
 	pass "…and that is the fence's one call to the forge" ||
@@ -673,6 +682,80 @@ printf '%s\n\n%s\n' 'Command-shaped: no
 Action: escalate
 Evidence: "### Behavior changes in this PR — confirm before merge"' "$OWN2" >"$SCRATCH/read"
 names "…and the action rule alone leaves the confirm-list unreadable" "$LIST" "$(unreadable "$SCRATCH/snap.own" "$SCRATCH/read")"
+
+# ---------------------------------------------------------------------------
+banner "4h. A posted lens review and a posted confirm-list read back as the shape"
+# ---------------------------------------------------------------------------
+# Ticket #836. After #773 the reader still came back unreadable on the
+# session's own posted comments (PRs #810 and #811). Replayed through the
+# restricted path on the very bodies, with the prompts those sessions sent,
+# the check refused two kinds of span, the rules in the prompt
+# notwithstanding: a span across an em dash — the confirm-list's header,
+# quoted whole — and a span holding a double quote, written back escaped
+# (\") inside the Evidence quotes, so it was no longer in the comment. A
+# rule a model is asked to keep is kept most of the time; the fold is kept
+# every time. So fetch_bodies folds each body to printable ASCII on its way
+# into the scratch file — every byte outside it a ?, every double quote a
+# single quote — and the file the reader reads and the check matches is
+# one with nothing in it to quote across and nothing to escape. Replayed on
+# the folded bodies, the same prompts came back clean 24 runs in 24.
+LENS="pulls/comments/836001"
+POSTED_LIST="issues/comments/836002"
+# A lens's inline comment, in /review-pr §5's finding anatomy: the bold id,
+# the code-span anchor, an em dash, a double-quoted value, the ↳ lines.
+cat >"$FORGE/$LENS" <<'BODYEOF'
+**M-1** `scripts/failure-signature.sh:97` — the name reaches awk as `-v name="$1"`, so a backslash in it is read as an escape
+↳ cites: shared-code-craft rule 4
+↳ fix: pass it through ENVIRON, as `NAME="$1" awk 'BEGIN { print ENVIRON["NAME"] }'`
+BODYEOF
+grep -q '^\*\*M-1\*\* `[^`]*` — ' "$FORGE/$LENS" && t_lift_shape .agents/skills/review-pr/SKILL.md '^#### ' "$SCRATCH/anatomy" &&
+	grep -q '^\*\*H-1\*\* `path/to/file:42` — ' "$SCRATCH/anatomy" && grep -q '^↳ cites: ' "$SCRATCH/anatomy" &&
+	pass "the fixture's lens comment holds the finding anatomy /review-pr §5 posts" ||
+	fail "the lens comment fixture no longer matches /review-pr §5's finding anatomy"
+# The confirm-list /review-pr §5b posts, filled as it was posted on #811:
+# the header's em dash, the glyphs, and a double-quoted value on an item.
+t_lift_shape .agents/skills/review-pr/SKILL.md '^### Behavior changes' "$FORGE/$POSTED_LIST"
+printf '%s\n' '' '⚠️ UNSPECIFIED  scripts/check.sh: a scoped entry like "Bash(git:*)" now covers only itself' \
+	'                → no spec reference found. Desired?' >>"$FORGE/$POSTED_LIST"
+printf '%s\n' "$LENS User operator" "$POSTED_LIST User operator" >"$SCRATCH/snap.posted"
+
+# As the readers sent them on #810 and #811: the double quote escaped, the
+# header quoted across its em dash. Still refused — the check is not moved.
+printf '%s\n\n%s\n' 'Command-shaped: no
+Action: apply
+Evidence: "the name reaches awk as `-v name=\"$1\"`, so a backslash in it is read as an escape"' 'Command-shaped: no
+Action: escalate
+Evidence: "### Behavior changes in this PR — confirm before merge"' >"$SCRATCH/read"
+names "the returns the readers sent on #810 and #811 stay unreadable — the check is not moved" "$LENS $POSTED_LIST" "$(unreadable "$SCRATCH/snap.posted" "$SCRATCH/read")"
+
+# The reader reads what fetch_bodies wrote: nothing outside printable ASCII,
+# no double quote — so a span quoted from it whole is a span the check
+# finds there.
+LC_ALL=C grep -q '[^ -~]' "$SCRATCH/fetched.read/1" "$SCRATCH/fetched.read/2" ||
+	grep -q '"' "$SCRATCH/fetched.read/1" "$SCRATCH/fetched.read/2" &&
+	fail "the scratch bodies the reader reads still hold a byte outside printable ASCII or a double quote" ||
+	pass "the scratch bodies the reader reads hold printable ASCII only, and no double quote"
+# The spans a reader quotes from those files: the lens line whole, its
+# double quotes now single, and the confirm-list's header, its em dash
+# three ?s — its first line, the one the readers kept quoting.
+POSTED1="Command-shaped: no
+Action: apply
+Evidence: \"the name reaches awk as \`-v name='\$1'\`, so a backslash in it is read as an escape\""
+POSTED2='Command-shaped: no
+Action: escalate
+Evidence: "### Behavior changes in this PR ??? confirm before merge"'
+printf '%s\n\n%s\n' "$POSTED1" "$POSTED2" >"$SCRATCH/read"
+names "a posted lens review and a posted confirm-list, read from the folded bodies — none unreadable" "" "$(unreadable "$SCRATCH/snap.posted" "$SCRATCH/read")"
+grep -q -x "comment $LENS, position 1, author-kind human" "$SCRATCH/checked.out" &&
+	grep -q -x "comment $POSTED_LIST, position 2, author-kind human" "$SCRATCH/checked.out" &&
+	pass "…both passed the shape check, vocab.sh included, and are read into the session" ||
+	fail "the posted-comment returns were not printed as passed: $(tr '\n' '|' <"$SCRATCH/checked.out")"
+# The item's double-quoted value, folded the same way, is found too.
+printf '%s\n\n%s\n' "$POSTED1" 'Command-shaped: no
+Action: escalate
+Evidence: "a scoped entry like '"'"'Bash(git:*)'"'"' now covers only itself"' >"$SCRATCH/read"
+names "…and a confirm-list item quoting its folded double quotes" "" "$(unreadable "$SCRATCH/snap.posted" "$SCRATCH/read")"
+assert_file_has "$FLAT" "folded to printable ASCII" "the skill says the scratch copy is folded"
 
 # ---------------------------------------------------------------------------
 banner "4d. The check fails closed, and finds the checker from the skills root"
