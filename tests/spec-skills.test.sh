@@ -1068,6 +1068,18 @@ t_text_has "$handoff" "while another release's pull request is open" "a shared-l
 t_text_has "$handoff" "A held shared-layer ticket occupies no session" "a held release ticket takes no slot of the cap" "step 5"
 t_text_has "$handoff" "its slot goes to the next unblocked ticket" "…the slot passes to the next unblocked ticket" "step 5"
 
+# ---------------------------------------------------------------------------
+banner "The seam split: emitter, hook and guard are separate tickets (#837)"
+# ---------------------------------------------------------------------------
+# Retro 20261022T135553Z F6: one ticket touched the trace emitter, the hook and
+# the guard together, was stamped low, and took four iterations at well over
+# the wave's median spend. The sizing rule names that split, and makes a low
+# tier stamp the prompt to look for one before the quiz.
+rule2=$(rule_n 2)
+t_text_has "$rule2" "more than one of the trace emitter, an agent-harness hook and a guard" "the three seams are named together" "rule 2"
+t_text_has "$rule2" "is split at the seam between them" "a ticket spanning them is split there" "rule 2"
+t_text_has "$rule2" "A \`low\` tier stamp (rule 14) is a prompt to look for such a split before the quiz" "a low tier stamp prompts the search, before the quiz" "rule 2"
+
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
 t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"
 
