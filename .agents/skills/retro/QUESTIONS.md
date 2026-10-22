@@ -509,8 +509,9 @@ records.*
 - **Toil's share**: the landed tickets whose `ticket.start` carries
   `data.class=toil`, as `toil: <n> of <m> landed`, where `<m>` counts the
   landed tickets — a landing joined to no ticket counts in neither. The class is the
-  consumer's — a project that sorts its tickets adds `data.class=<its class>`
-  to `/implement`'s `ticket.start` line — and the kit names no class of its own. A
+  consumer's — a ticket that declares one carries a `Class:` stamp line, which
+  `/implement`'s `ticket.start` records as `data.class` — and the kit names no
+  class of its own. A
   window where no landed ticket carries a class prints `toil: not recorded`,
   never `toil: 0`.
 

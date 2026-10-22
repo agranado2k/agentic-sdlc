@@ -360,7 +360,7 @@ sta=$(printed_statuses "$SKILL_ABS" | tr '\n' ' ' | sed 's/ $//')
 # tests/lib.sh, the one copy every suite uses; this case holds it on THIS
 # suite's field and the policy-file argument, so it guards the shared reader,
 # not a local copy — keep it.
-sed "s/^VOCAB_OPEN=.*/VOCAB_OPEN='domain severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
+sed "s/^VOCAB_OPEN='\(.*\)'/VOCAB_OPEN='\1 severity'/" "$POLICY" >"$SCRATCH/opened.config.sh"
 [ -n "$(t_field_tokens severity "$POLICY")" ] && [ "$(t_field_tokens severity "$SCRATCH/opened.config.sh")" = "$(t_field_tokens severity "$POLICY")" ] &&
 	pass "a vocabulary a consumer opens is still read: the reader knows the (open) mark" ||
 	fail "with severity opened in the policy file the reader read '$(t_field_tokens severity "$SCRATCH/opened.config.sh")', not '$(t_field_tokens severity "$POLICY")'"

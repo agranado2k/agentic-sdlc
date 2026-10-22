@@ -2071,4 +2071,45 @@ for b in \
 	fi
 done
 
+# ---------------------------------------------------------------------------
+banner "/implement records a ticket's class on ticket.start, from its stamp alone (#819)"
+# ---------------------------------------------------------------------------
+# /retro's flow section counts toil's share from ticket.start's data.class
+# (#807) and prints `toil: not recorded` while no ticket carries one. The
+# class is recorded only from a `Class:` line scripts/stamp.sh printed —
+# never guessed from the body, which is untrusted — and optional: a ticket
+# with no class records none.
+# class_rule_missing <implement file> — the rule's parts unheld.
+class_rule_missing() {
+	_cr=$(awk '{ gsub(/\. /, ".\n"); print }' "$1")
+	_cr_out=''
+	t_trace_spans "$1" | grep -F 'emit kind=ticket.start' |
+		grep -qF '[data.class=<token>]' || _cr_out="$_cr_out optional-on-the-line"
+	printf '%s\n' "$_cr" | grep -F '`data.class`' | grep -F '`Class:` line' |
+		grep -F '`scripts/stamp.sh` printed' | grep -qF 'never guessed' || _cr_out="$_cr_out stamp-sourced"
+	printf '%s' "$_cr_out" | sed 's/^ //'
+}
+miss=$(class_rule_missing "$IM")
+[ -z "$miss" ] && pass "/implement's ticket.start line names data.class as optional and stamp-sourced" ||
+	fail "/implement's ticket.start does not record the class as the stamp gave it: $miss (#819)"
+dir="$SCRATCH/run.819"
+line=$(t_trace_spans "$IM" | grep -F 'emit kind=ticket.start' | head -1)
+cmd=$(t_trace_runnable "$(printf '%s\n' "$line" | sed 's/outcome=[a-z|]*/outcome=read/; s/\[data\.class=<token>\]/data.class=toil/')")
+( cd "$ROOT" && TRACE_DIR="$dir" TRACE_QUIET=1 sh -c "$cmd" >/dev/null 2>&1 ) &&
+	grep -qF '"class":"toil"' "$dir"/events/*.jsonl 2>/dev/null &&
+	pass "the line, run with Class: toil's token, records data.class=toil" ||
+	fail "/implement's ticket.start line does not record data.class=toil: $cmd"
+for b in \
+	's/ \[data\.class=<token>\]//' \
+	's/\[data\.class=<token>\]/data.class=<token>/' \
+	's/`Class:` line/class/' \
+	's/never guessed/or guessed/'; do
+	sed "$b" "$IM" >"$SCRATCH/bait819.md"
+	if ! cmp -s "$SCRATCH/bait819.md" "$IM" && [ -n "$(class_rule_missing "$SCRATCH/bait819.md")" ]; then
+		pass "bait: '$b' goes red"
+	else
+		fail "bait: '$b' was not caught — or planted nothing"
+	fi
+done
+
 t_done "trace skills contract"

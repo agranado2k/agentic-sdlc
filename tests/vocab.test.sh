@@ -266,8 +266,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # its lift is bounded like every other site here.
 LIFTED=$(
 	cat <<'EOLIFT'
-scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
-scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets)[[:space:]]*:'
+scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class)[[:space:]]*:'
+scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class)[[:space:]]*:'
 .agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
@@ -1104,5 +1104,29 @@ expect_status 2 "nine terms are refused — the filter is bounded"
 expect_err_has "targets: more than 8 terms"
 vocab 'Targets: kind=finding.raise data.agent=$(id)'
 expect_status 2 "a value shaped like a command is refused"
+
+# ---------------------------------------------------------------------------
+banner "Class: — the ticket's class, an OPEN token field /retro counts toil by (#819)"
+# ---------------------------------------------------------------------------
+# /retro's flow section reads toil's share from ticket.start's data.class,
+# and /implement records one only from a `Class:` line this checker passed.
+# The class is the consumer's — the kit names no class of its own (PRD-03) —
+# so the field is OPEN, like domain: any well-formed token, held to the shape
+# and a bound, and never a quote, a capital or a command.
+vocab fields
+expect_out_has "class (open): " "the class field is declared open, with no tokens of the kit's own"
+vocab 'Class: toil'
+expect_resolved "" "a Class: toil line is accepted"
+vocab 'Class: chore'
+expect_resolved "" "a class the kit never named is accepted — the field is open"
+vocab 'Class: Toil'
+expect_status 2 "a class outside the token shape is refused"
+expect_err_has "class: 'Toil' is not a well-formed token"
+vocab "Class: toil';touch PWN;'"
+expect_status 2 "a class carrying a quote is refused"
+vocab "Class: $(printf '%065d' 0 | tr 0 a)"
+expect_status 2 "a class past 64 bytes is refused — the token is bounded"
+vocab "Class: $(printf '%064d' 0 | tr 0 a)"
+expect_resolved "" "a class of exactly 64 bytes is accepted"
 
 t_done "vocab"

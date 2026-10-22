@@ -103,6 +103,24 @@ expect_status 2 "a Targets: line outside its grammar is refused, nothing printed
 expect_err_has "the targets line is refused"
 no_pwn "refused Targets: line"
 
+# A Class: line (#819) is a stamp line too: /implement records it as
+# ticket.start's data.class, so it leaves only once the checker passed it.
+body 'Tier: implementer\nClass: toil\n'
+stamp 819
+expect_resolved "$(printf 'Tier: implementer\nClass: toil')" \
+	"a Class: line is lifted and checked like any stamp line"
+body "Tier: implementer\nClass: toil';touch PWN;'\n"
+stamp 819
+expect_status 2 "a Class: line outside its vocabulary is refused, nothing printed"
+expect_err_has "the class line is refused"
+no_pwn "refused Class: line"
+# …and it is bounded like the others: nine Class: lines are exit 5, the key
+# named, nothing checked.
+body "$(awk 'BEGIN { print "Tier: implementer"; for (i = 0; i < 9; i++) print "Class: toil" }')\n"
+stamp 819
+expect_status 5 "nine Class: lines are past the bound: exit 5, a stop"
+expect_err_has "9 class lines"
+
 body 'Tier: implementer\r\nConfidence: high\r\n'
 stamp 331
 expect_resolved "$(printf 'Tier: implementer\nConfidence: high')" \
