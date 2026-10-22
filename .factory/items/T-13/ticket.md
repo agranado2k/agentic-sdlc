@@ -42,4 +42,4 @@ Tier: planner
 Confidence: medium
 Class: toil
 Targets: kind=agent.stop tier=reviewer data.agent_type=planner
-Label: none
+Label: ready-for-agent

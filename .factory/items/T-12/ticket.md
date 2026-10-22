@@ -41,4 +41,4 @@ Tier: planner
 Confidence: medium
 Class: toil
 Targets: kind=pr.iterate data.cause=conflict
-Label: none
+Label: ready-for-agent

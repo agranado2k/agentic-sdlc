@@ -36,4 +36,4 @@ Find why a posted lens review comment, or a posted behaviour confirm-list, yield
 Tier: implementer
 Confidence: medium
 Class: toil
-Label: none
+Label: ready-for-agent

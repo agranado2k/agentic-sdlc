@@ -40,4 +40,4 @@ A rule with a failing check:
 Tier: implementer
 Confidence: high
 Class: toil
-Label: none
+Label: ready-for-agent

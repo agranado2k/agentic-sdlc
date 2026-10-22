@@ -40,4 +40,4 @@ Tier: implementer
 Confidence: medium
 Class: toil
 Targets: kind=finding.raise data.severity=high data.posted=no
-Label: none
+Label: ready-for-agent

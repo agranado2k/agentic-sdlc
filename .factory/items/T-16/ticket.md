@@ -36,4 +36,4 @@ Blocked by: #833 (T-12)
 Tier: planner
 Confidence: low
 Class: toil
-Label: none
+Label: ready-for-agent
