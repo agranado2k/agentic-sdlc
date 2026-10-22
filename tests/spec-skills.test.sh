@@ -35,6 +35,7 @@ TIX_ABS="$ROOT/$TIX"
 # The retro branch lives beside SKILL.md (#592): one entry point, the rare
 # branch in a file it names by relative path.
 RETRO_CAND_ABS="$ROOT/.agents/skills/to-tickets/RETRO-CANDIDATES.md"
+DOMAIN_RUBRIC_ABS="$ROOT/.agents/skills/to-tickets/DOMAIN-RUBRIC.md"
 
 cd "$ROOT" || exit 2
 
@@ -1010,6 +1011,16 @@ banner "The class stamp: /to-tickets writes the Class: line /implement records a
 # it. This holds the writer's half: the rubric, the quiz check and
 # confirmation, the body line and the ticket.write field — and that the line
 # the rubric shows passes the stamp checker, read back through stamp.sh.
+# The domain rubric lives beside SKILL.md (PR #843): a `Domain:` line is the
+# unusual case, so its rubric is a rare branch, opened from a one-line pointer
+# under its heading — the arrangement RETRO-CANDIDATES.md set.
+section_of "$TIX_ABS" "The domain rubric" | grep -qF "(DOMAIN-RUBRIC.md)" &&
+	pass "/to-tickets' SKILL.md names DOMAIN-RUBRIC.md by relative path, under its domain rubric heading" ||
+	fail "/to-tickets' SKILL.md does not name DOMAIN-RUBRIC.md from '## The domain rubric' — a moved branch no entry point opens"
+dom=$(section_of "$DOMAIN_RUBRIC_ABS" "The domain rubric" | tr '\n' ' ' | tr -s ' ')
+t_text_has "$dom" "would the medium of this work change which model you would pick" "the one question that decides a Domain: line" "the domain rubric"
+t_text_has "$dom" "leave the line off" "no distinctive medium is the ordinary case: the line is left off" "the domain rubric"
+t_text_has "$dom" "Still never a model name" "a domain is a fact about the work, never a model" "the domain rubric"
 cls=$(section_of "$TIX_ABS" "The class rubric")
 [ -n "$cls" ] && pass "/to-tickets carries a class rubric" ||
 	fail "/to-tickets has no '## The class rubric' section — nothing says when a Class: line is stamped"
