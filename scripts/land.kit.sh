@@ -24,14 +24,15 @@
 #      after the head commit's committed date (#630, ADR-0019). The operator
 #      overrides it with --no-iteration '<reason>', and merge.land records
 #      data.iterated=no with the reason as data.no_iteration; with one at
-#      head, data.iterated=yes. The same for the review (#673): no
-#      review.verdict on pr:#<N>, any axis and any outcome, at or after the
-#      head commit's date refuses it, unless --no-review '<reason>' names why
-#      — data.reviewed=no with data.no_review, or data.reviewed=yes. One
-#      refusal names every check that failed. A prose-only PR nobody iterated
-#      or reviewed — a diary stamp — lands on both overrides, each with its
-#      reason. Unconfigured, the trace holds nothing to read and records
-#      nothing: both checks are skipped, and stderr says so.
+#      head, data.iterated=yes. The same for the review (#673): no Axis-1
+#      review.verdict on pr:#<N>, any outcome but blocked (#816, ADR-0032),
+#      at or after the head commit's date refuses it, unless --no-review
+#      '<reason>' names why — data.reviewed=no with data.no_review, or
+#      data.reviewed=yes. One refusal names every check that failed. A
+#      prose-only PR nobody iterated or reviewed — a diary stamp — lands on
+#      both overrides, each with its reason. Unconfigured, the trace holds
+#      nothing to read and records nothing: both checks are skipped, and
+#      stderr says so.
 #   1c. REFUSES the same way a PR that moves a file VERSION's files: list
 #      names — at its merge base or its head — with no new version on the
 #      shared-layer line (#728, ADR-0025): a shared-layer change is a release
@@ -223,20 +224,30 @@ esac
 # /review-pr one review.verdict per axis — and /pr-iterate runs a review each
 # iteration — so a loop or a review that saw the head commit is stamped at or
 # after that commit's date. Each such stamp on pr:#<N> is compared with the
-# head's date, both ISO 8601 in UTC, as strings. Any outcome and any axis
-# counts: whether the checks are green is the gate above's question, and
-# what a verdict found is the operator's read, not this one's. A head the
-# forge does not date is neither at it.
+# head's date, both ISO 8601 in UTC, as strings. An iteration counts on any
+# outcome: whether the checks are green is the gate above's question. A
+# review counts as an Axis-1 verdict on any outcome but blocked (#816,
+# ADR-0032): a review in which no lens ran records exactly that, and what a
+# blocked verdict found is no audit a landing can stand on. An Axis-2 verdict
+# alone is no standards review. A head the forge does not date is neither
+# at it.
 ITERATED=
 REVIEWED=
-# at_head <kind> — a <kind> event on pr:#<PR> stamped at or after $HEAD_AT.
-# The envelope only — up to the data map, as `show` reads it — so a data key
-# never reads as the event's subject or stamp.
+REVIEWED_BLOCKED=
+# at_head <kind> — print "<outcome> <axis>" for each <kind> event on pr:#<PR>
+# stamped at or after $HEAD_AT; exit 1 when there is none. The subject,
+# stamp and outcome are read from the envelope only — up to the data map, as
+# `show` prints it — so a data key never reads as one of them; the axis from
+# the data map.
 at_head() {
 	trace_read show "pr:#$PR" --kind "$1" |
 		awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" '
-			{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) }
-			index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h { f = 1 }
+			{ e = $0; m = ""; d = index(e, ",\"data\":{"); if (d) { m = substr(e, d); e = substr(e, 1, d - 1) } }
+			index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h {
+				o = match(e, /"outcome":"[^"]*"/) ? substr(e, RSTART + 11, RLENGTH - 12) : "-"
+				a = match(m, /"axis":"[^"]*"/) ? substr(m, RSTART + 8, RLENGTH - 9) : "-"
+				print o, a; f = 1
+			}
 			END { exit !f }'
 }
 # The head commit and its date: the trace checks here and the shared-layer
@@ -254,18 +265,22 @@ else
 	REVIEWED=no
 	case $HEAD_AT in
 	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z)
-		! at_head pr.iterate || ITERATED=yes
-		! at_head review.verdict || REVIEWED=yes
+		! at_head pr.iterate >/dev/null || ITERATED=yes
+		_verdicts=$(at_head review.verdict) || _verdicts=
+		! printf '%s\n' "$_verdicts" | awk '$2 == "1" && $1 != "blocked" { f = 1 } END { exit !f }' || REVIEWED=yes
+		! printf '%s\n' "$_verdicts" | grep -qx 'blocked 1' || REVIEWED_BLOCKED=yes
 		;;
 	*) HEAD_AT='<undated>' ;;
 	esac
 	# One refusal names every check that failed, so an operator learns both
 	# overrides from one run.
 	_missing=
+	_no_verdict='no /review-pr Axis-1 verdict'
+	[ -z "$REVIEWED_BLOCKED" ] || _no_verdict='only a blocked /review-pr Axis-1 verdict, which is no review'
 	[ "$ITERATED" = yes ] || [ -n "$NO_ITERATION" ] ||
 		_missing="no /pr-iterate iteration — run /pr-iterate $PR, or land it with --no-iteration '<reason>'"
 	[ "$REVIEWED" = yes ] || [ -n "$NO_REVIEW" ] ||
-		_missing="${_missing:+$_missing; }no /review-pr verdict — run /review-pr on it, or land it with --no-review '<reason>'"
+		_missing="${_missing:+$_missing; }$_no_verdict — run /review-pr on it, or land it with --no-review '<reason>'"
 	[ -z "$_missing" ] || refuse "at its head commit $HEAD_OID ($HEAD_AT) the trace records $_missing"
 	[ "$ITERATED" = yes ] || note "no /pr-iterate iteration at the head commit $HEAD_OID — landing on --no-iteration, recorded"
 	[ "$REVIEWED" = yes ] || note "no /review-pr verdict at the head commit $HEAD_OID — landing on --no-review, recorded"
