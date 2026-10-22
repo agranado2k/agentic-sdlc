@@ -1058,6 +1058,7 @@ t_text_has "$rel" "feedback-first" "the chain's order is the feedback-first rule
 t_text_has "$rel" "Deferring the bumps to one release ticket" "the rejected form is named" "the release-frontier rule"
 t_text_has "$rel" "with no bump" "…with the reason it is rejected: a move with no bump" "the release-frontier rule"
 t_text_has "$rel" "the kit's ADR-0033" "the rule cites its record as the kit's (ADR-0017)" "the release-frontier rule"
+t_text_has "$rel" "A ticket that moves no listed file is untouched by this rule" "the rule's scope: a ticket moving no listed file is untouched" "the release-frontier rule"
 [ -f "$ROOT/docs/adr/0033-a-frontier-holds-one-shared-layer-ticket.md" ] &&
 	grep -qF '0033-a-frontier-holds-one-shared-layer-ticket.md' "$ROOT/docs/adr/INDEX.md" &&
 	pass "ADR-0033 exists and the index lists it" ||
