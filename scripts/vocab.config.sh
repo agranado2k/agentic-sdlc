@@ -58,10 +58,14 @@
 # THE FIELDS. VOCAB_FIELDS names them; VOCAB_<FIELD> (upper-cased, hyphens
 # folded to underscores) holds each one's tokens; VOCAB_OPEN names the fields
 # whose membership is NOT enforced — only the shape is — because their
-# vocabulary is open local policy, as the task domain's is.
+# vocabulary is open local policy, as the task domain's is. VOCAB_QUERY names
+# the fields whose value is a TRACE FILTER, held to a grammar the checker owns
+# rather than to tokens: such a field declares no VOCAB_<FIELD> and no rule
+# reads it.
 
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind'
+VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets'
 VOCAB_OPEN='domain'
+VOCAB_QUERY='targets'
 
 # tier — owned by scripts/agents.lib.sh (see above); stamped by /to-tickets
 # as `Tier:`, read by /implement.
@@ -117,6 +121,12 @@ VOCAB_COMMAND_SHAPED='yes no'
 # `author` on purpose: a field is a key every body handed to the checker is
 # read for, and `Author: <a name>` is a line ordinary bodies carry.
 VOCAB_AUTHOR_KIND='bot human'
+
+# targets — a QUERY: the trace events a ticket that edits a review lens or a
+# skill means to move, stamped by /to-tickets as `Targets:` and read by
+# /retro's before-and-after check (process/R25): `kind=<kind>` and up to seven
+# more `<field>=<value>` or `data.<key>=<value>` terms, all of which an event
+# must match. Its grammar is the checker's (vocab_query_ok); no tokens here.
 
 # ---------------------------------------------------------------------------
 # THE RULES. One per line: `<field>=<value> => <field>=<value>` demands the

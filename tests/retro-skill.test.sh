@@ -1667,4 +1667,118 @@ case "$(sed -n '/^## Procedure/,/^## Routing/p' "$SKILL_ABS" | flat)" in
 *) fail "SKILL.md's procedure does not put the flow section in the report" ;;
 esac
 
+# ---------------------------------------------------------------------------
+banner "18. Before and after: a lens or skill edit, by its Targets: query (process/R25-R28, #802)"
+# ---------------------------------------------------------------------------
+# A ticket that edits a review lens or a skill names, in its `Targets:` stamp
+# line, the trace events it means to move. /retro counts them per landed PR
+# in the window before the ticket's landing and in an equal window after,
+# reports `inconclusive` when the two windows ran under a different kit or
+# tier mapping, leaves a stopped run's events out, and files a finding when
+# the rate did not drop. Two spans RUN here: the listing, which names the
+# landed tickets whose stamps to read, and the check, over fixture traces
+# with a fixture targets file — the stamps a real pass reads through
+# scripts/stamp.sh. The window is 2026-10-11 to the trace's last event,
+# 2026-10-21: ten days, so a ticket landed on 2026-10-08 is judged over
+# 09-28..10-08 (two landed PRs, four high findings) against 10-08..10-18
+# (three landed PRs), and one landed on 2026-10-15 is still pending.
+ba_sec() { awk '/^## Before and after/ { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+ba_list=$(ba_sec | grep -o '`sh scripts/trace\.sh export | awk[^`]*`' | tr -d '`' | grep -v ' tf=' | head -1)
+ba_check=$(ba_sec | grep -o '`sh scripts/trace\.sh export | awk[^`]*`' | tr -d '`' | grep ' tf=' | head -1)
+[ -n "$ba_list" ] && pass "QUESTIONS.md's before-and-after section carries the listing span" ||
+	fail "QUESTIONS.md has no '## Before and after' section carrying a listing \`sh scripts/trace.sh export | awk …\` span (process/R25)"
+[ -n "$ba_check" ] && pass "…and the check span, reading the targets file as tf=" ||
+	fail "QUESTIONS.md's before-and-after section carries no check span reading a targets file as tf= (process/R25)"
+# ba_ev <dir> <ts> <kind> <rest of the JSON object, after the kind> — one raw
+# event line in its day file, its id unique by a counter.
+ba_n=0
+ba_ev() {
+	ba_n=$((ba_n + 1))
+	mkdir -p "$1/events"
+	printf '{"v":1,"ts":"%s","id":"%s-%d-0000abcd","kind":"%s"%s}\n' "$2" "$(printf '%s' "$2" | tr -d ':-')" "$ba_n" "$3" "$4" >>"$1/events/${2%%T*}.jsonl"
+}
+# ba_land <dir> <ts> <pr> [ticket] — a landed PR.
+ba_land() { ba_ev "$1" "$2" merge.land ",\"subject\":\"pr:#$3\"${4:+,\"related\":\"ticket:#$4\"},\"outcome\":\"landed\",\"reason\":\"fixture\""; }
+# ba_hit <dir> <ts> <severity> [run] — one security finding.
+ba_hit() { ba_ev "$1" "$2" finding.raise ",\"subject\":\"pr:#1\"${4:+,\"run\":\"$4\"},\"outcome\":\"raised\",\"reason\":\"fixture\",\"data\":{\"agent\":\"security\",\"severity\":\"$3\"}"; }
+# ba_ctx <dir> <ts> <kit> <reviewer model> — a run's recorded context and a spawn's model.
+ba_ctx() {
+	ba_ev "$1" "$2" run.start ",\"skill\":\"implement\",\"run\":\"20261001T000000Z-1-0000abcd\",\"data\":{\"kit\":\"$3\"}"
+	ba_ev "$1" "${2%:00Z}:30Z" spawn ",\"subject\":\"pr:#1\",\"tier\":\"reviewer\",\"model\":\"$4\",\"outcome\":\"in-session\",\"reason\":\"fixture\""
+}
+# ba_fixture <dir> <after-window hits> <after-window reviewer model> [stopped]
+ba_fixture() {
+	ba_land "$1" 2026-09-20T00:00:00Z 9 9
+	ba_ctx "$1" 2026-09-29T00:00:00Z 0.82.0 m-one
+	ba_land "$1" 2026-09-30T00:00:00Z 50
+	ba_land "$1" 2026-10-02T00:00:00Z 51
+	for d in 01 03 04 05; do ba_hit "$1" "2026-10-${d}T00:00:00Z" high; done
+	ba_hit "$1" 2026-10-05T01:00:00Z low
+	ba_land "$1" 2026-10-08T00:00:00Z 61 61
+	ba_ctx "$1" 2026-10-09T00:00:00Z 0.82.0 "$3"
+	ba_land "$1" 2026-10-10T00:00:00Z 62
+	ba_land "$1" 2026-10-12T00:00:00Z 63
+	_bf_i=0
+	while [ "$_bf_i" -lt "$2" ]; do
+		_bf_i=$((_bf_i + 1))
+		ba_hit "$1" "2026-10-1${_bf_i}T06:00:00Z" high
+	done
+	if [ -n "${4:-}" ]; then
+		for h in 07 08; do ba_hit "$1" "2026-10-11T${h}:00:00Z" high 20261011T000000Z-2-0000dead; done
+		ba_ev "$1" 2026-10-11T09:00:00Z run.end ",\"run\":\"20261011T000000Z-2-0000dead\",\"outcome\":\"stopped\",\"reason\":\"fixture\""
+	fi
+	ba_land "$1" 2026-10-15T00:00:00Z 70 70
+	ba_ev "$1" 2026-10-21T00:00:00Z note ",\"subject\":\"pr:#1\",\"outcome\":\"candidate\",\"reason\":\"fixture\""
+}
+ba_targets="$SCRATCH/ba-targets"
+printf '%s\n' '61 Tier: implementer' '61 Targets: kind=finding.raise data.agent=security data.severity=high' \
+	'70 targets:  kind=finding.raise data.agent=security' '9 Targets: kind=finding.raise' >"$ba_targets"
+ba_run() {
+	_br_span=$(printf '%s\n' "$2" | sed -e 's/<YYYY-MM-DD>/2026-10-11/g' -e "s|<targets-file>|$ba_targets|g")
+	( cd "$ROOT" && TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$_br_span" 2>/dev/null )
+}
+ba_drop="$SCRATCH/ba-drop.retro"
+ba_flat="$SCRATCH/ba-flat.retro"
+ba_model="$SCRATCH/ba-model.retro"
+ba_kit="$SCRATCH/ba-kit.retro"
+ba_stop="$SCRATCH/ba-stop.retro"
+ba_fixture "$ba_drop" 1 m-one
+ba_fixture "$ba_flat" 3 m-one
+ba_fixture "$ba_model" 1 m-two
+ba_fixture "$ba_stop" 1 m-one stopped
+ba_fixture "$ba_kit" 1 m-one
+ba_ctx "$ba_kit" 2026-10-14T00:00:00Z 0.83.0 m-one
+( cd "$ROOT" && TRACE_DIR="$ba_drop" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the before-and-after fixture is a trace verify accepts" ||
+	fail "the before-and-after fixture does not verify — the spans would be read over a damaged trace"
+if [ -n "$ba_list" ]; then
+	bl=$(ba_run "$ba_drop" "$ba_list" | sort -n | tr '\n' ' ')
+	assert_equal "process/R25: the listing names the tickets landed in the window or the one before it" "61 70 " "$bl"
+fi
+if [ -n "$ba_check" ]; then
+	ba_assert() {
+		_ba_out=$(ba_run "$1" "$ba_check")
+		printf '%s\n' "$_ba_out" | grep -qxF "$2" && pass "$3: '$2'" || fail "$3: expected '$2'; it printed: $(printf '%s' "$_ba_out" | tr '\n' ';')"
+	}
+	ba_assert "$ba_drop" 'ticket:#61 security/high: 2.00 → 0.33 per PR' "process/R25: a drop, per landed PR before and after"
+	ba_assert "$ba_drop" 'ticket:#70 security: pending — its after window is still open' "process/R25: a ticket whose after window has not closed waits"
+	ba_assert "$ba_flat" 'ticket:#61 security/high: 2.00 → 1.00 per PR' "process/R25: a smaller drop"
+	ba_fixture "$SCRATCH/ba-none.retro" 6 m-one
+	ba_assert "$SCRATCH/ba-none.retro" 'ticket:#61 security/high: 2.00 → 2.00 per PR — no drop' "process/R27: no drop is marked, the finding filed"
+	ba_assert "$ba_model" 'ticket:#61 security/high: inconclusive — tier mapping changed' "process/R26: a changed tier mapping is inconclusive"
+	ba_assert "$ba_kit" 'ticket:#61 security/high: inconclusive — kit version changed' "process/R26: a changed kit version is inconclusive"
+	ba_assert "$ba_stop" 'ticket:#61 security/high: 2.00 → 0.33 per PR' "process/R26: a stopped run's events are left out of both counts"
+	ba_run "$ba_drop" "$ba_check" | grep -q 'ticket:#9' && fail "the check judged a ticket landed before the window before" ||
+		pass "…and judges no ticket landed before the window before"
+fi
+baprose=$(ba_sec | flat)
+for needle in '`Targets:`' 'scripts/stamp.sh' 'equal window' 'per landed PR' 'inconclusive' 'stopped' '— no drop' 'names the ticket'; do
+	case "$baprose" in *"$needle"*) pass "the before-and-after section says: $needle" ;; *) fail "the before-and-after section does not say: $needle" ;; esac
+done
+# R28: a lens or skill edit this pass proposes cites its evidence by run id
+# and carries its Targets: line, or is not filed.
+r28=$(sed -n '/^## Procedure/,/^## Anti-patterns/p' "$SKILL_ABS" | flat)
+for needle in 'the before-and-after section' 'by run id' '`Targets:` line' 'never filed without'; do
+	case "$r28" in *"$needle"*) pass "process/R28: SKILL.md says: $needle" ;; *) fail "process/R28: SKILL.md does not say: $needle" ;; esac
+done
+
 t_done "/retro contract"
