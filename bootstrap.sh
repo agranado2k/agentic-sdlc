@@ -1010,14 +1010,24 @@ if [ "$ADOPT" = 1 ]; then
 		cp "$a_kit/scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs" ||
 			die "preparing the gate policy file failed"
 		opt_stamp "scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs"
+		# declares_allowed_tools <SKILL.md> — exit 0 when its frontmatter
+		# declares at least one tool under allowed-tools, read as the docs
+		# gate reads it (validators/skill-tools.mjs and its POSIX twin): the
+		# value inline, or a block list of `- <tool>` lines under the key.
+		declares_allowed_tools() {
+			awk 'NR == 1 { if ($0 ~ /^---[ \t\r]*$/) next; exit 1 }
+				/^---[ \t\r]*$/ { exit found ? 0 : 1 }
+				inlist { if ($0 ~ /^[ \t]+-/) { v = $0; sub(/^[ \t]+-/, "", v); if (v ~ /[^][ \t\r,"\047()]/) { found = 1; exit 0 } next } inlist = 0 }
+				index($0, "allowed-tools:") == 1 { v = substr($0, 15); if (v ~ /[^][ \t\r,"\047()]/) { found = 1; exit 0 } inlist = 1 }
+				END { exit found ? 0 : 1 }' "$1"
+		}
 		# Every kit skill declares its allowed-tools, so a SKILL.md here that
 		# does not is theirs: the rule ships failing, and their own sweep is
 		# not this run's to force — stamp it as an advisory, and say so.
 		_undeclared=
 		for _s in .agents/skills/*/SKILL.md .claude/skills/*/SKILL.md; do
 			[ -f "$_s" ] || continue
-			awk 'NR == 1 && !/^---/ { exit 1 } NR > 1 && /^---/ { exit 1 }
-				/^allowed-tools:[ \t]*[^ \t]/ { found = 1; exit } END { exit !found }' "$_s" && continue
+			declares_allowed_tools "$_s" && continue
 			_undeclared=yes
 			echo "  note: $_s declares no allowed-tools — the gate's rule for it is stamped as an advisory" >&2
 		done

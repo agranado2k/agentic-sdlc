@@ -260,6 +260,40 @@ assert_file_lacks "$TARGET/scripts/docs-conformance/config.mjs" "DOGFOOD:BEGIN" 
 expect_exit 0 "the clean adoption's gate is green" -- \
 	sh -c "cd '$TARGET' && sh scripts/check.sh"
 t_assert_no_kit_residue "$KITCOPY" "$TARGET" "a one-run adoption"
+# No skill of theirs: the stamped policy keeps the tools rule failing.
+assert_file_has "$TARGET/scripts/docs-conformance/config.mjs" '  missingAllowedTools: "violation",' \
+	"a tree with no undeclared skill of its own keeps the missing-allowed-tools rule failing"
+
+# Their own skills at the neutral home: one declares its tools as a block
+# list, the form the gate reads, one declares none. Only the second is named,
+# and the rule is stamped as an advisory with the way back to failing.
+mk_kitcopy
+mk_target
+t_write "$TARGET" ".agents/skills/their-lint/SKILL.md" "---
+name: their-lint
+description: lints.
+allowed-tools:
+  - Read
+  - Bash
+---
+Lint the tree.
+"
+t_write "$TARGET" ".agents/skills/their-notes/SKILL.md" "---
+name: their-notes
+description: takes notes.
+---
+Take notes.
+"
+git -C "$TARGET" add -A && git -C "$TARGET" commit -q -m "chore: their skills"
+expect_exit 0 "a tree with skills of its own at the neutral home adopts in one run" -- \
+	sh -c "cd '$TARGET' && sh '$KITCOPY/bootstrap.sh' --adopt --no-dogfood '$PROJECT_NAME' '$PROJECT_DESC'"
+expect_said "note: .agents/skills/their-notes/SKILL.md declares no allowed-tools"
+expect_unsaid "their-lint/SKILL.md declares no allowed-tools"
+expect_said 'note: declare allowed-tools in each, then set skillTools.missingAllowedTools to "violation"'
+assert_file_has "$TARGET/scripts/docs-conformance/config.mjs" '  missingAllowedTools: "warning",' \
+	"an undeclared skill of theirs at the neutral home stamps the rule as an advisory"
+expect_exit 0 "and their gate is green, the undeclared skill an advisory" -- \
+	sh -c "cd '$TARGET' && sh scripts/check.sh"
 
 # …and where their ignore file does cover it, the same yes is written.
 mk_kitcopy
