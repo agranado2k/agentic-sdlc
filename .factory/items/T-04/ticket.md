@@ -3,11 +3,22 @@ id: T-04
 type: ticket
 title: /retro reports lead time, review wait and toil's share
 parent: PRD-03
-stage: ready
+stage: done
 created: 2026-10-21
-updated: 2026-10-21
+updated: 2026-10-22
 deps: []
 priority: 1
+links:
+  pr: "#807"
+review:
+  outcome: approved
+  commit: "3a67eda"
+  by: "review-pr (sonnet) on #807"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#807 landed, suite green)"
+  at: 2026-10-22
 ---
 
 # T-04 · /retro reports lead time, review wait and toil's share
