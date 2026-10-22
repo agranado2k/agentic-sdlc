@@ -848,6 +848,15 @@ lens_rules_missing() {
 		grep -qF 're-resolve' || _lr_out="$_lr_out re-resolve-past-the-model-it-spawned-on"
 	printf '%s\n' "$_lr_sen" | grep -F 'in this context instead' | grep -qF 'its record stands' ||
 		_lr_out="$_lr_out audited-here:record-stands"
+	# ADR-0035 clause 2 (review of #844, M-2): a spent walk names the lens
+	# under `Lenses not run:`, and only a context with no subagent tool
+	# audits in place — no sentence of §3 sends a spent walk to this context.
+	printf '%s\n' "$_lr_sen" | grep -F 'the walk is spent' | grep -qF '`Lenses not run:`' ||
+		_lr_out="$_lr_out spent-walk:named-under-lenses-not-run"
+	printf '%s\n' "$_lr_sen" | grep -F 'the walk is spent' | grep -qF 'in this context instead' &&
+		_lr_out="$_lr_out spent-walk:audited-here"
+	printf '%s\n' "$_lr_sen" | grep -F 'in this context instead' | grep -F 'its record stands' |
+		grep -qF 'no subagent tool' || _lr_out="$_lr_out audited-here:only-with-no-subagent-tool"
 	_lr_line=$(region '^### Review Summary$' '^| | Severity | Count |$' "$1" | grep '^Lenses not run: ')
 	for _lr_p in 'refused' 'ended in fail' 'in this context instead'; do
 		printf '%s\n' "$_lr_line" | grep -qF -- "$_lr_p" || _lr_out="$_lr_out summary-line:'$_lr_p'"
@@ -974,7 +983,7 @@ banner "13. A single-reviewer review says so, and records both verdicts (#568)"
 single_rules_missing() {
 	_sr_rows=$(t_roster_rows "$1")
 	printf '%s\n' "$_sr_rows" | grep -qF -- '- `single-reviewer` — ' || printf '%s\n' 'roster row'
-	printf '%s\n' "$_sr_rows" | grep -F -- '- `single-reviewer` — ' | grep -qF 'never a spawn' || printf '%s\n' 'row: never a spawn'
+	printf '%s\n' "$_sr_rows" | grep -F -- '- `single-reviewer` — ' | grep -qF "a spawn's token only as [\`LENS-RETURN.md\`](LENS-RETURN.md) says" || printf '%s\n' 'row: a spawn only per LENS-RETURN'
 	_sr_s3=$(region '^### 3\. ' '^#### Agents 1–6 ' "$1" | tr '\n' ' ' | tr -s ' ')
 	for _sr_r in \
 		'protocol|**The seven sub-agents are the protocol; one context auditing every lens itself is the single-reviewer pass, allowed only when no lens agent can run and only when recorded.**' \
@@ -1012,7 +1021,7 @@ bait568() { # <rule name> <sed script>
 }
 for b in \
 	'roster row|/^- `single-reviewer` — /d' \
-	'row: never a spawn|/^- `single-reviewer` — /s/never a spawn/a spawn/' \
+	'row: a spawn only per LENS-RETURN|/^- `single-reviewer` — /s/ only as / /' \
 	'protocol|s/allowed only when no lens agent can run and only when recorded/allowed whenever it is quicker/' \
 	'never to save spawns|s/never a choice made to save spawns/also a way to save spawns/' \
 	'summary names the lenses|s/line names every lens it audited/line may name a lens/' \
@@ -1650,5 +1659,83 @@ Escalate it above the ⚠️ block.' \
 		fail "bait: without '${b%%|*}' was not caught — or the bait planted nothing"
 done
 rm -rf "$SCRATCH/820"
+
+# ---------------------------------------------------------------------------
+banner "22. A lens returns raise lines; its parent records them (#834)"
+# ---------------------------------------------------------------------------
+# 66 of 177 reviewer-tier stops ran on wider agent types, because a lens that
+# records its own raises needs a shell. The ruling: a lens returns its raises
+# in a declared shape — one `Raise: <id> <file:line>` line per finding, then
+# `Raises: <count>` — and the coordinator that spawned it records them with
+# LENS-RETURN.md's own fenced `lens_raise`, which is lifted and RUN here
+# against the real trace script: ADR-0034's required keys hold, ids number in
+# arrival order across lenses, a LOW is never posted, and a return off the
+# shape is refused whole with nothing recorded.
+LR="$ROOT/.agents/skills/review-pr/LENS-RETURN.md"
+if [ -f "$LR" ]; then pass "LENS-RETURN.md sits beside the skill"; else fail "LENS-RETURN.md is missing beside /review-pr"; fi
+t_lift_shape "$LR" '^Raise: ' "$SCRATCH/834-shape"
+[ "$(cat "$SCRATCH/834-shape" 2>/dev/null)" = 'Raise: <its id, [CHML]-[0-9]+> <file:line>
+Raises: <count>' ] && pass "the return shape is a fence: one raise line per finding, then the count" ||
+	fail "LENS-RETURN.md declares no 'Raise: … / Raises: …' fence: $(cat "$SCRATCH/834-shape" 2>/dev/null)"
+t_fence "$LR" holds 'lens_raise()' >"$SCRATCH/834-fn.sh"
+[ -s "$SCRATCH/834-fn.sh" ] && pass "the parent-side emit is a fenced lens_raise()" || fail "LENS-RETURN.md has no fenced lens_raise()"
+t_text_has "$(region '^### 3\. ' '^#### Agents 1–6 ' "$SKILL_ABS" | tr '\n' ' ')" '[`LENS-RETURN.md`](LENS-RETURN.md)' "§3 sends the coordinator to the lens return" "§3"
+TD834="$SCRATCH/834-trace"
+lr() { # <return file> <agent> <posted> — the fence, run from the kit root
+	( cd "$ROOT" && . "$SCRATCH/834-fn.sh" && TRACE_DIR="$TD834" TRACE_QUIET=1 lens_raise 12 "$2" "$3" "$1" "$SCRATCH/834-tally" )
+}
+# A planted command (review of #844, M-3): were any line of a return run, the
+# touch would leave its file behind, so the absence below can fail.
+rm -f "$SCRATCH/834-planted"
+printf '%s\n' '### Review' '**H-1** `a.sh:3` — x' 'Raise: H-1 scripts/a.sh:3' 'Raise: L-1 scripts/b.sh:9' \
+	"Raise: H-2 bad\$(touch\${IFS}$SCRATCH/834-planted)path:1" 'Raises: 3' >"$SCRATCH/834-sec"
+printf '%s\n' 'Raise: H-1 scripts/c.sh:4' 'Raises: 1' >"$SCRATCH/834-pat"
+printf '%s\n' 'all clean' 'Raises: 0' >"$SCRATCH/834-clean"
+rm -rf "$TD834" "$SCRATCH/834-tally"
+map=$(lr "$SCRATCH/834-sec" security yes; lr "$SCRATCH/834-pat" pattern yes; lr "$SCRATCH/834-clean" simplicity yes)
+[ "$map" = 'H-1 H-1
+L-1 L-1
+H-2 H-2
+H-1 H-3' ] && pass "lens_raise prints each lens id beside its review id, numbered in arrival order across lenses" ||
+	fail "lens_raise's renumbering: $map"
+raises=$(cat "$TD834"/events/*.jsonl 2>/dev/null | grep -F '"kind":"finding.raise"')
+[ "$(printf '%s\n' "$raises" | grep -c .)" = 4 ] && pass "one finding.raise per raise line, none for a clean return" ||
+	fail "the raises recorded: $raises"
+printf '%s\n' "$raises" | grep -F '"id":"H-3"' | grep -F '"severity":"high"' | grep -F '"agent":"pattern"' | grep -F '"where":"scripts/c.sh:4"' | grep -qF '"posted":"yes"' &&
+	pass "a raise carries its review id, its severity from the letter, its lens, its place and the post answer" ||
+	fail "the pattern lens's raise: $raises"
+printf '%s\n' "$raises" | grep -F '"id":"L-1"' | grep -F '"severity":"low"' | grep -qF '"posted":"no"' &&
+	pass "a LOW is recorded as not posted, whatever the path's answer" || fail "the LOW's raise: $raises"
+printf '%s\n' "$raises" | grep -F '"id":"H-2"' | grep -qF '"where":"unsafe-path"' &&
+	pass "a place off the plain set is recorded as unsafe-path, never typed" || fail "the unsafe place: $raises"
+grep -qF '$(touch${IFS}' "$SCRATCH/834-sec" && [ ! -e "$SCRATCH/834-planted" ] &&
+	pass "and nothing in a return was executed: the planted touch left no file" || fail "a return's text was executed, or no command was planted"
+rm -f "$SCRATCH/834-planted"
+for bad834 in \
+	'no count|Raise: H-1 a.sh:1' \
+	'count disagrees|Raise: H-1 a.sh:1\nRaises: 2' \
+	'off-shape id|Raise: X-1 a.sh:1\nRaises: 1' \
+	'trailing prose|Raise: H-1 a.sh:1\nRaises: 1\nthanks' \
+	'stray raise in prose|Raise: H-1 a.sh:1\nprose\nRaise: H-2 a.sh:2\nRaises: 1' \
+	'markdown-wrapped|- Raise: H-1 a.sh:1\nRaises: 1'; do
+	printf '%b\n' "${bad834#*|}" >"$SCRATCH/834-bad"
+	rm -rf "$TD834"
+	_lr_err=$(lr "$SCRATCH/834-bad" security yes 2>&1 >/dev/null); _lr_rc=$?
+	[ "$_lr_rc" = 2 ] && [ -z "$(cat "$TD834"/events/*.jsonl 2>/dev/null)" ] && case $_lr_err in *'a.sh'*) false ;; *) : ;; esac &&
+		pass "a return with ${bad834%%|*} is refused whole: exit 2, nothing recorded, nothing of it printed" ||
+		fail "a return with ${bad834%%|*}: exit $_lr_rc, stderr '$_lr_err', trace $(cat "$TD834"/events/*.jsonl 2>/dev/null)"
+done
+# The coordinator is never reviewer-tier on a wider type: /implement and
+# /pr-iterate stamp the /review-pr spawn planner, and the lens prompt is told
+# to return the fence.
+LRF=$(tr '\n' ' ' <"$LR" | tr -s ' ')
+t_text_has "$LRF" 'quote the fence above in its spawn prompt' "each lens prompt carries the shape" "LENS-RETURN.md"
+t_text_has "$LRF" 'never through a shell heredoc' "the return reaches a file without a shell parsing it" "LENS-RETURN.md"
+t_text_has "$LRF" 'one `reviewer`-type spawn' "the single-reviewer pass is a reviewer-type spawn where types are offered" "LENS-RETURN.md"
+t_text_has "$(tr '\n' ' ' <"$ROOT/.agents/skills/implement/SKILL.md")" "this spawn is the review's coordinator and judges nothing: resolve it, stamp its \`Trace-Spawn:\` line and record its spawn \`planner\`" "/implement stamps its /review-pr coordinator planner where types are offered" "/implement"
+grep -qF 'Trace-Spawn: tier=planner domain=none skill=pr-iterate' "$ROOT/.agents/skills/pr-iterate/SKILL.md" &&
+	pass "/pr-iterate stamps its /review-pr spawn planner" || fail "/pr-iterate still stamps its /review-pr spawn reviewer"
+grep -qF 'Trace-Spawn: tier=reviewer domain=none skill=pr-iterate' "$ROOT/.agents/skills/pr-iterate/SKILL.md" &&
+	fail "/pr-iterate keeps a tier=reviewer stamp on a skill-running spawn" || pass "/pr-iterate has no tier=reviewer coordinator stamp"
 
 t_done "/review-pr output contract"

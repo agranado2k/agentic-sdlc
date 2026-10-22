@@ -99,13 +99,17 @@ Two consequences worth knowing before you wire them:
   skill dispatcher's `--dry-run` prints the type and the resolver's model (or
   "no model", the spawn inheriting the session's). Unwired, a spawn uses the
   catch-all type as before.
-- **One spawn is not on its tier's type: the review coordinator.** The
-  `/review-pr` run that `/implement` spawns is sized `reviewer` and runs on
-  the reviewer tier's model, but it runs a skill, spawns seven lenses and
-  posts to the forge — none of which the read-only `reviewer` type can do. It
-  takes the `planner` type (#588's ruling): the type is the tool envelope, the
-  tier the model and the trace's attribution. Its seven lenses are the
-  `reviewer`-type spawns, handed the diff as files to read.
+- **Every spawn is on its tier's type, the review coordinator included.**
+  The `/review-pr` run that `/implement` or `/pr-iterate` spawns runs a skill,
+  spawns lenses and posts to the forge, and judges nothing: every judging
+  context — the six lenses, Agent 7, the single-reviewer pass — is a
+  `reviewer`-type spawn handed its inputs as files, and a lens returns its
+  findings as raise lines the coordinator records (`/review-pr`'s
+  `LENS-RETURN.md`). So the coordinator is planner work: resolved, stamped
+  and spawned `planner`, on the `planner` type. The kit's ADR-0035 replaced
+  #588's ruling, which ran it on the `planner` type stamped `reviewer`, after
+  66 of 177 reviewer-tier stops ran on wider types (#834). The spawn guard
+  below now refuses a `tier=reviewer` spawn on any type but `reviewer`.
 - **A tool list is the whole list.** A type with no `tools:` line inherits
   every tool, which is the catch-all again; and a tool server's tools are only
   reachable when listed by name, which is why none of these lists one. The docs gate
@@ -306,7 +310,7 @@ live here rather than in the shared script (the kit's ADR-0008 clause 8).
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below — carrying the run handed over at spawn (`Trace-Run: <run id> [<parent run id>]`, with that parent) to the agent that made the call: the subagent the payload's `agent_id` names, read from its own transcript, or the session itself (#474); the run the shared script resolves when none was handed, never the run handed to its session for a subagent handed none — once the payload is read: a `tool.use` `outcome=fail` written before then (no scratch, no node, a payload the reader refuses) resolves as the shared script does |
 | `hooks/tool-pre.sh` | no event: the pending marker a tool call leaves until it returns, swept by the session-end hook into `tool.use` `outcome=denied` when it never does — behind the same switch |
 | `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
-| `hooks/spawn-guard.sh` | a guard, not a recorder: with tracing on, refuses a spawn (the `Agent` or `Task` tool) whose prompt carries no well-formed `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` line where `hooks/subagent-stop.sh` reads it, naming the line it wants, and leaves one `note` (#627) — see "The spawn guard" below |
+| `hooks/spawn-guard.sh` | a guard, not a recorder: with tracing on, refuses a spawn (the `Agent` or `Task` tool) whose prompt carries no well-formed `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` line where `hooks/subagent-stop.sh` reads it, naming the line it wants, and leaves one `note` (#627); and, where the project wires a `reviewer` agent type, a `tier=reviewer` spawn on any other type (#834) — see "The spawn guard" below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
 | `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` and `tool-pre.sh` split a payload with |
 | `hooks/hook.lib.sh` | not a hook either: what the seven share |
@@ -673,6 +677,16 @@ and up to six digits. **It never refuses a spawn for lacking a `Trace-Run:`
 line**: the payload's `cwd` is the session's, not the checkout its run was
 begun in (#478), so the hook cannot tell whether a run is open, and it holds
 only the line it can judge.
+
+**A reviewer-tier spawn runs on the reviewer type** (#834). Where the
+project wires a `reviewer` agent type (`.claude/agents/reviewer.md`), a spawn
+whose line says `tier=reviewer` and whose `subagent_type` is anything else —
+or absent, the default type — is refused the same way, the type it asked for
+recorded as `data.agent_type` on the `note`. The type is read off the
+payload's own key, never the prompt's text. A judging context needs no shell:
+it returns raise lines and its parent records them. Unwired, the check is
+skipped: a type that does not exist is not one a session can be refused for
+missing.
 
 **It is never in the way of a session that traces nothing.** Tracing off, a
 trace policy the shared script refuses, a tool other than `Agent` or `Task`, or
