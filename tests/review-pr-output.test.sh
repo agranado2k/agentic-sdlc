@@ -87,6 +87,13 @@
 #      /pr-iterate never converges on it and escalates it at the top. Each
 #      rule proved by a bait, and the all-empty case shown on a real slicer
 #      run over a new top-level directory.
+#  21. A blocked review's report has one order (#820): each NO-LENS.md
+#      carries one report skeleton, in its skill's own output format. The
+#      review's: the summary heading, then the BLOCKED Verdict line, the
+#      confirm-list's ⚠️ items below the rule. /pr-iterate's: the ⚠️ block
+#      first, as its Output format and hard rule 4 put it, then the
+#      escalation line, then the /review-pr: status line carrying the same
+#      Verdict text — which both skeletons and the broker spell alike.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -1448,7 +1455,7 @@ nolens_missing() {
 		'R16: some lenses ran is unchanged|rn|A review in which some lenses ran is unchanged' \
 		'R17: step 6 points at the branch|i6|- The review recorded Axis 1 `blocked` with the reason `no lens ran` → 🟡 escalate, never ✅ converged: open [`NO-LENS.md`](NO-LENS.md) beside this file' \
 		'R17: not converged|in|**A review whose Axis-1 verdict is `blocked` with the reason `no lens ran` is no verdict for step 6'"'"'s converged condition: the PR is not converged, whatever its checks and threads say.**' \
-		'R17: escalated at the top|in|Escalate it at the top of the report, above the ⚠️ block, as its first line:' \
+		'R17: escalated at the top|in|Escalate it at the top of the report, directly below the ⚠️ block:' \
 		'R17: recognised by the review'"'"'s own Verdict line|in|Its report'"'"'s Verdict line reads `BLOCKED — no lens ran; this is not a review`'; do
 		_nl_name=${_nl_r%%|*}
 		_nl_rest=${_nl_r#*|}
@@ -1492,7 +1499,7 @@ for b in \
 	'R16: some lenses ran is unchanged|review-pr/NO-LENS.md|s/some lenses ran is unchanged/one lens ran is blocked too/' \
 	'R17: step 6 points at the branch|pr-iterate/SKILL.md|s/→ 🟡 escalate, never ✅ converged/→ ✅ converged/' \
 	'R17: not converged|pr-iterate/NO-LENS.md|s/the PR is not converged/the PR may converge/' \
-	'R17: escalated at the top|pr-iterate/NO-LENS.md|s/at the top of the report, above the ⚠️ block/at the end of the report/' \
+	'R17: escalated at the top|pr-iterate/NO-LENS.md|s/at the top of the report, directly below the ⚠️ block/at the end of the report/' \
 	"R17: recognised by the review's own Verdict line|pr-iterate/NO-LENS.md|s/this is not a review/no review/g"; do
 	_b_rest=${b#*|}
 	bait796 "${b%%|*}" "${_b_rest%%|*}" "${_b_rest#*|}" && pass "bait: without '${b%%|*}' goes red" ||
@@ -1561,5 +1568,86 @@ t_exec sh -c 'cd "$1" && LENS_SLICE_CONFIG="$2" sh "$3" main "$4"' _ "$REPO" "$S
 [ "$(nolens_counts "$T_OUT")" != all-empty ] && pass "bait: a diff a lens selects is not read as all-empty" ||
 	fail "bait: a diff a lens selects was read as all-empty — the fixture check cannot fail"
 rm -rf "$SCRATCH/796-out1" "$SCRATCH/796-out2" "$SCRATCH/796-out3" "$SCRATCH/796-policy.sh"
+
+# ---------------------------------------------------------------------------
+banner "21. A blocked review's report has one order, in both sidecars, and they agree (#820)"
+# ---------------------------------------------------------------------------
+# The no-lens branch said where its lines go in words, and one of those words
+# contradicted /pr-iterate's own Output format: "above the ⚠️ block, as its
+# first line" against "the ⚠️ items come first, above everything else". Each
+# sidecar now carries one skeleton of its report, and the order is read off
+# the skeleton's lines, never off prose.
+# nl_fence <file> — the first triple-backtick block in <file>, fences dropped.
+nl_fence() { awk '/^```/ { if (in_f) exit; in_f = 1; next } in_f' "$1" 2>/dev/null; }
+# nl_line <text> <needle> — the line number of the first line of <text>
+# carrying <needle>, 0 when none does.
+nl_line() { _nl_n=$(printf '%s\n' "$1" | grep -nF -- "$2" | head -n 1 | cut -d: -f1); echo "${_nl_n:-0}"; }
+NL_VERDICT='BLOCKED — no lens ran; this is not a review'
+NL_ESCALATION='🟡 Escalated: no lens ran — the review audited nothing on this head'
+# order_missing <skills dir> <broker script> — the order rules broken, one
+# name per line.
+order_missing() {
+	_o_rn=$(nl_fence "$1/review-pr/NO-LENS.md")
+	_o_in=$(nl_fence "$1/pr-iterate/NO-LENS.md")
+	_o_fmt=$(region '^## Output format' '^## ' "$1/pr-iterate/SKILL.md" | awk '/^```/ { if (in_f) exit; in_f = 1; next } in_f')
+	# The review's skeleton: heading, then the Verdict line as the next line
+	# that says anything, then the rule and Axis 2's header, then ⚠️.
+	_o_h=$(nl_line "$_o_rn" '### Review Summary')
+	_o_v=$(nl_line "$_o_rn" "**Verdict:** $NL_VERDICT")
+	_o_next=$(printf '%s\n' "$_o_rn" | awk -v h="$_o_h" 'NR > h && NF { print NR; exit }')
+	_o_b=$(nl_line "$_o_rn" '### Behavior changes in this PR — confirm before merge')
+	_o_w=$(nl_line "$_o_rn" '⚠️ UNSPECIFIED')
+	[ "$_o_h" -gt 0 ] && [ "$_o_v" -gt 0 ] && [ "$_o_v" = "${_o_next:-0}" ] || echo 'review: the Verdict line opens the summary'
+	[ "$_o_v" -gt 0 ] && [ "$_o_b" -gt "$_o_v" ] && [ "$_o_w" -gt "$_o_b" ] || echo 'review: the ⚠️ items stay below the rule'
+	# /pr-iterate's skeleton: its format's own title and ⚠️ lines first, then
+	# the escalation, then the status line, then the stop.
+	_o_t=$(nl_line "$_o_in" 'PR #<N> — "<title>" — iteration <i>')
+	_o_wi=$(nl_line "$_o_in" '⚠️ For you (behavior confirm-list, human-only):')
+	_o_e=$(nl_line "$_o_in" "$NL_ESCALATION")
+	_o_s=$(nl_line "$_o_in" "/review-pr:    $NL_VERDICT")
+	_o_x=$(nl_line "$_o_in" 'Next: stop — escalation')
+	[ "$_o_t" = 1 ] && [ "$_o_wi" -gt 1 ] && [ "$(nl_line "$_o_fmt" '⚠️ For you (behavior confirm-list, human-only):')" -gt 0 ] &&
+		[ "$(printf '%s\n' "$_o_in" | sed -n "2,$((_o_wi - 1))p" | grep -c .)" = 0 ] || echo 'iterate: the ⚠️ block comes first, as the Output format says'
+	[ "$_o_wi" -gt 0 ] && [ "$_o_e" -gt "$_o_wi" ] || echo 'iterate: the escalation follows the ⚠️ block'
+	[ "$_o_e" -gt 0 ] && [ "$_o_s" -gt "$_o_e" ] && [ "$_o_x" -gt "$_o_s" ] || echo 'iterate: the BLOCKED status line, then the stop'
+	# Said once: the escalation line stands once in the skeleton, and no
+	# word in the sidecar puts it above the ⚠️ block.
+	[ "$(printf '%s\n' "$_o_in" | grep -cF -- "$NL_ESCALATION")" = 1 ] &&
+		! grep -qF 'above the ⚠️ block' "$1/pr-iterate/NO-LENS.md" || echo 'iterate: the order is said once'
+	# The two agree: one Verdict text, the broker's too.
+	grep -qF "NO_LENS_VERDICT='$NL_VERDICT'" "$2" || echo 'agree: the broker spells the Verdict alike'
+}
+miss=$(order_missing "$SKILLS_DIR" "$ROOT/scripts/forge-broker.kit.sh" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "#820: a blocked review's report has one order — the review's Verdict line opens its summary, /pr-iterate's ⚠️ block precedes its escalation and its BLOCKED status line, one Verdict text throughout" ||
+	fail "#820: a blocked review's report order is broken: $miss"
+mkdir -p "$SCRATCH/820/review-pr" "$SCRATCH/820/pr-iterate"
+bait820() { # <rule name> <file under the skills dir, or broker> <sed script>
+	for _b_f in review-pr/NO-LENS.md pr-iterate/NO-LENS.md pr-iterate/SKILL.md; do
+		cp "$SKILLS_DIR/$_b_f" "$SCRATCH/820/$_b_f" 2>/dev/null || : >"$SCRATCH/820/$_b_f"
+	done
+	cp "$ROOT/scripts/forge-broker.kit.sh" "$SCRATCH/820/broker.sh"
+	if [ "$2" = broker ]; then _b_src="$ROOT/scripts/forge-broker.kit.sh" _b_dst="$SCRATCH/820/broker.sh"
+	else _b_src="$SKILLS_DIR/$2" _b_dst="$SCRATCH/820/$2"; fi
+	sed "$3" "$_b_src" >"$_b_dst"
+	! cmp -s "$_b_dst" "$_b_src" && order_missing "$SCRATCH/820" "$SCRATCH/820/broker.sh" | grep -qxF -- "$1"
+}
+for b in \
+	'review: the Verdict line opens the summary|review-pr/NO-LENS.md|/^### Review Summary$/a\
+Clean audits: none' \
+	'review: the ⚠️ items stay below the rule|review-pr/NO-LENS.md|/^### Behavior changes in this PR/i\
+⚠️ UNSPECIFIED  <surface>: above the rule' \
+	'iterate: the ⚠️ block comes first, as the Output format says|pr-iterate/NO-LENS.md|/^PR #<N>/a\
+🟡 Escalated: first' \
+	'iterate: the ⚠️ block comes first, as the Output format says|pr-iterate/SKILL.md|s/⚠️ For you (behavior confirm-list, human-only):/For you:/' \
+	'iterate: the escalation follows the ⚠️ block|pr-iterate/NO-LENS.md|/^⚠️ For you/,$d' \
+	'iterate: the BLOCKED status line, then the stop|pr-iterate/NO-LENS.md|/\/review-pr:    BLOCKED/d' \
+	'iterate: the order is said once|pr-iterate/NO-LENS.md|$a\
+Escalate it above the ⚠️ block.' \
+	'agree: the broker spells the Verdict alike|broker|s/this is not a review/not a review/'; do
+	_b_rest=${b#*|}
+	bait820 "${b%%|*}" "${_b_rest%%|*}" "${_b_rest#*|}" && pass "bait: without '${b%%|*}' goes red" ||
+		fail "bait: without '${b%%|*}' was not caught — or the bait planted nothing"
+done
+rm -rf "$SCRATCH/820"
 
 t_done "/review-pr output contract"

@@ -12,8 +12,24 @@ Opened from `/review-pr` §3 when every lens's slice counts 0, and from §5 when
 
 `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=blocked data.axis=1 data.lenses=0 data.roster=<count> reason='no lens ran' || :`
 
-— `data.roster` the lenses planned, as §5 counts it, `0` when every slice was empty. The summary's first line is then
+— `data.roster` the lenses planned, as §5 counts it, `0` when every slice was empty. The report keeps §5's and §5b's order, and only the Verdict line is new: it is the first line under the summary's heading, and the confirm-list's ⚠️ items stay below the rule, after it:
 
-`**Verdict:** BLOCKED — no lens ran; this is not a review`
+```
+### Review Summary
 
-and the count table's zeros count nothing, which that line is there to say. Axis 2 is unchanged: Agent 7 reads `behavior.diff` and records its own verdict, and both verdicts are still recorded before anything is posted. A review in which some lenses ran is unchanged: its verdict is decided on the lenses that returned, and the rest are named under `Lenses not run:`.
+**Verdict:** BLOCKED — no lens ran; this is not a review
+Clean audits: none
+Lenses not run: <each lens, by roster token and cause>
+Lenses run: 0 of <data.roster>
+
+<the count table and the four severity sections, as §5 shapes them>
+
+---
+
+### Behavior changes in this PR — confirm before merge
+
+🔀 MIXED COMMIT …
+⚠️ UNSPECIFIED  …
+```
+
+The count table's zeros count nothing, which the Verdict line is there to say. Axis 2 is unchanged: Agent 7 reads `behavior.diff` and records its own verdict, and both verdicts are still recorded before anything is posted. A review in which some lenses ran is unchanged: its verdict is decided on the lenses that returned, and the rest are named under `Lenses not run:`.
