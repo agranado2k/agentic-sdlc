@@ -3180,12 +3180,12 @@
 # Kit-only, never shipped: tests/spec-skills.test.sh asserts each clause and
 # runs the rubric's example line through vocab.sh and stamp.sh.
 
-# 0.87.0 — a review event carries its join keys (ticket #832, ADR-0033). NO
-# file joins the shared layer and none leaves. One shared file changes
-# behaviour besides UPDATING.md: scripts/trace.sh carries TRACE_REQUIRED, and
-# `emit` refuses, exit 2 and nothing written, a finding.raise with no data.id
-# or no data.severity, a severity that is not a word scripts/vocab.sh
-# declares (asked of the checker beside it; none beside it, no word judged),
+# 0.87.0 — a review event carries its join keys (ticket #832, the kit's
+# ADR-0033). NO file joins the shared layer and none leaves. One shared file
+# changes behaviour besides UPDATING.md: scripts/trace.sh carries
+# TRACE_REQUIRED, and `emit` refuses, exit 2 and nothing written, a
+# finding.raise with no data.id or no data.severity, a severity that is
+# not a word scripts/vocab.sh declares (asked of the checker beside it; none beside it, no word judged),
 # and a review.verdict with no outcome or no data.axis, which a new shape row
 # holds to 1 or 2. `verify` advises on such lines already written, and
 # `summary` and `export` say their count once.
