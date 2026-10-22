@@ -1010,6 +1010,24 @@ if [ "$ADOPT" = 1 ]; then
 		cp "$a_kit/scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs" ||
 			die "preparing the gate policy file failed"
 		opt_stamp "scripts/docs-conformance/config.mjs" "$a_scratch/config.mjs"
+		# Every kit skill declares its allowed-tools, so a SKILL.md here that
+		# does not is theirs: the rule ships failing, and their own sweep is
+		# not this run's to force — stamp it as an advisory, and say so.
+		_undeclared=
+		for _s in .agents/skills/*/SKILL.md .claude/skills/*/SKILL.md; do
+			[ -f "$_s" ] || continue
+			awk 'NR == 1 && !/^---/ { exit 1 } NR > 1 && /^---/ { exit 1 }
+				/^allowed-tools:[ \t]*[^ \t]/ { found = 1; exit } END { exit !found }' "$_s" && continue
+			_undeclared=yes
+			echo "  note: $_s declares no allowed-tools — the gate's rule for it is stamped as an advisory" >&2
+		done
+		if [ -n "$_undeclared" ]; then
+			sed 's/^  missingAllowedTools: "violation",$/  missingAllowedTools: "warning",/' \
+				"$a_scratch/config.mjs" >"$a_scratch/config.mjs.tools" &&
+				mv "$a_scratch/config.mjs.tools" "$a_scratch/config.mjs" ||
+				die "preparing the gate policy file failed"
+			echo "  note: declare allowed-tools in each, then set skillTools.missingAllowedTools to \"violation\"" >&2
+		fi
 		mkdir -p scripts/docs-conformance
 		mv "$a_scratch/config.mjs" "scripts/docs-conformance/config.mjs"
 		echo "  stamped scripts/docs-conformance/config.mjs"

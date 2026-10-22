@@ -138,6 +138,12 @@ for f in VERSION scripts/guards.lib.sh constitution/shared-invariants.md \
 done
 assert_file_has "$TARGET/docs/domain-glossary.md" "$PROJECT_NAME" "stamped, not copied"
 assert_file_has "$TARGET/scripts/docs-conformance/local-vocabulary.mjs" "$PROJECT_NAME" "the vocabulary is armed from the first run"
+# Their own skill declares no allowed-tools: the stamped policy holds the
+# rule at an advisory, and the run names the skill, so adoption does not turn
+# their gate red on a sweep they have not done (process/R30).
+assert_file_has "$TARGET/scripts/docs-conformance/config.mjs" 'missingAllowedTools: "warning"' \
+	"a tree with an undeclared skill of its own gets the missing-allowed-tools rule as an advisory"
+expect_said "note: .claude/skills/tdd/SKILL.md declares no allowed-tools"
 
 # Dogfood declined: the skill stays out and the config's marked exemption
 # block leaves with it — the same contract the new-project arm keeps.
