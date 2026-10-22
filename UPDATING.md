@@ -227,7 +227,7 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
-**Arriving from 0.84.0 or older, a ticket's class is a stamp line.** No
+**Arriving from 0.84.1 or older, a ticket's class is a stamp line.** No
 file joins or leaves at 0.85.0. `scripts/vocab.sh` declares a closed `class`
 field in its built-in defaults, and `scripts/stamp.sh` lifts a `Class:` line
 beside the other stamp lines; take both verbatim. Your
@@ -238,6 +238,15 @@ your policy does not declare, and `scripts/stamp.sh` drops it. `/implement`'s
 `ticket.start` line now records `data.class` from that stamp, and `/retro`
 counts toil's share by it (9a): take the implement `SKILL.md` and the retro
 directory.
+
+**Arriving from 0.84.0 or older, a relative path holding `=` is a file to
+the failure signature.** No file joins or leaves at 0.84.1, a patch. One
+shared file changes behaviour besides this recipe:
+`scripts/failure-signature.sh` hands a relative log or state file to awk as
+`./<path>`, where it handed the bare path — which awk reads as a variable
+assignment when it is shaped `name=value`, so `sign` signed an empty log and
+`streak` forgot its counts for a path such as `logs/a=b.txt`. Every other
+path signs and counts as before. Nothing to set, and nothing for Part 2.
 
 **Arriving from 0.83.0 or older, every skill declares its powers.** No file
 joins or leaves at 0.84.0, and no shared file changes content besides this
@@ -1458,10 +1467,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3152 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3161 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3306 insertions(+), 1 deletion(-)
+ 3 files changed, 3315 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
