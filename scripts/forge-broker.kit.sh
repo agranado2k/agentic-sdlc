@@ -363,7 +363,7 @@ fi
 # "no blocking" and the contract's own clean "no findings" are pass,
 # "blocking" is blocked — and the sentence goes whole into the reason. An
 # opening that is none of these is refused here, before anything is posted
-# (ADR-0033, #832): the trace refuses a verdict with no outcome, so a review
+# (ADR-0034, #832): the trace refuses a verdict with no outcome, so a review
 # landed with an unreadable verdict would be one no reader could count.
 case $(printf '%s' "$VERDICT" | tr '[:upper:]' '[:lower:]') in
 'not blocking'* | 'no blocking'* | 'no findings'*) VERDICT_WORD=pass ;;

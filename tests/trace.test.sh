@@ -2208,7 +2208,7 @@ banner "30. A finding raise's id is the review's severity id, held at emit (tick
 # (/review-pr's C-/H-/M-/L- ids, the worker contract's "C-1, H-1, M-1, L-1",
 # the broker's **[CHML]-[0-9]+** lift). A confirm-list item is never raised,
 # so A2-N, legal on the triage side, is refused here. A present id is held,
-# and since #832 a missing one is refused too (ADR-0033, section 41).
+# and since #832 a missing one is refused too (ADR-0034, section 41).
 RI="$SCRATCH/raise-id"; RION=$(policy "$RI")
 # ri_emit <emit args…> — runs the emit and sets RI_GREW to the lines it added.
 ri_emit() {
@@ -3535,7 +3535,7 @@ banner "41. A review event carries its join keys: a raise its id and severity, a
 # required. A raise without its id joins no triage, one without its severity
 # drops out of every per-severity count, and a verdict without its axis or
 # its outcome is no verdict the landing script or /retro can read. The
-# severity words are the vocabulary checker's, never a copy (ADR-0033).
+# severity words are the vocabulary checker's, never a copy (ADR-0034).
 MK="$SCRATCH/mandatory-keys"; MKON=$(policy "$MK")
 # mk_emit <emit args…> — runs the emit and sets MK_GREW to the lines it added.
 mk_emit() {
@@ -3654,9 +3654,9 @@ for _mk_cmd in summary export; do
 done
 
 # The decision is recorded where decisions live.
-_mk_adr=$(ls "$KIT"/docs/adr/0033-*.md 2>/dev/null | head -1)
+_mk_adr=$(ls "$KIT"/docs/adr/0034-*.md 2>/dev/null | head -1)
 [ -n "$_mk_adr" ] && grep -qF 'ADR-0024 clause 1' "$_mk_adr" && grep -qF 'data.severity' "$_mk_adr" && grep -qF 'data.axis' "$_mk_adr" &&
-	pass "ADR-0033 records the rule as an amendment of ADR-0024 clause 1" ||
-	fail "no docs/adr/0033-*.md naming ADR-0024 clause 1, data.severity and data.axis"
+	pass "ADR-0034 records the rule as an amendment of ADR-0024 clause 1" ||
+	fail "no docs/adr/0034-*.md naming ADR-0024 clause 1, data.severity and data.axis"
 
 t_done "trace script"

@@ -1602,7 +1602,7 @@ export STUB_PR
 
 
 # ---------------------------------------------------------------------------
-banner "25. Every verdict the broker traces carries an outcome (#832, ADR-0033)"
+banner "25. Every verdict the broker traces carries an outcome (#832, ADR-0034)"
 # ---------------------------------------------------------------------------
 # PR #811's Axis-1 verdict was traced with no outcome: the worker wrote
 # "no blocking findings", which none of the broker's openings matched, so the

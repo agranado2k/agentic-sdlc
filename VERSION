@@ -3181,7 +3181,7 @@
 # runs the rubric's example line through vocab.sh and stamp.sh.
 
 # 0.87.0 — a review event carries its join keys (ticket #832, the kit's
-# ADR-0033). NO file joins the shared layer and none leaves. One shared file
+# ADR-0034). NO file joins the shared layer and none leaves. One shared file
 # changes behaviour besides UPDATING.md: scripts/trace.sh carries
 # TRACE_REQUIRED, and `emit` refuses, exit 2 and nothing written, a
 # finding.raise with no data.id or no data.severity, a severity that is
@@ -3192,13 +3192,18 @@
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # Skills (9a): .agents/prompts/review-worker.md, which ships beside the
 # skills — the VERDICT line opens with not blocking, no blocking, no findings
-# or blocking. Take it. Wiring (9b): none. Templates (9c): none. Config (9d):
+# or blocking. Take it. And, landed since v0.86.0: /pr-iterate (#839) —
+# SKILL.md records exactly one pr.iterate on every iteration however it
+# ends, and green waits until every raise of a re-review carries a local
+# finding.triage; /to-tickets (#840) — SKILL.md rule 16, one shared-layer
+# ticket per frontier, a held one giving its session slot away (the kit's
+# ADR-0033). Take both SKILL.md files. Wiring (9b): none. Templates (9c): none. Config (9d):
 # none — the severity words are your scripts/vocab.config.sh's VOCAB_SEVERITY
 # already.
 # Kit-only, never shipped: scripts/forge-broker.kit.sh reads "no blocking" as
 # pass and refuses, before posting, a VERDICT opening with none of the four;
 # tests/trace.test.sh section 41 and tests/forge-broker.test.sh section 25
-# hold both; docs/adr/0033 records the rule.
+# hold both; docs/adr/0034 records the rule.
 
 shared-layer: 0.87.0
 

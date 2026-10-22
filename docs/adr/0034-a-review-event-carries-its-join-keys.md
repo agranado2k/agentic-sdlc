@@ -1,4 +1,4 @@
-# ADR-0033: A review event carries its join keys — a raise its id and severity, a verdict its outcome and axis
+# ADR-0034: A review event carries its join keys — a raise its id and severity, a verdict its outcome and axis
 
 - **Status**: Accepted
 - **Date**: 2026-10-22

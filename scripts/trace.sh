@@ -247,7 +247,7 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
 # from here).
 TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2'
-# THE REQUIRED KEYS (the kit's ADR-0033, amending the kit's ADR-0024 clause 1, #832):
+# THE REQUIRED KEYS (the kit's ADR-0034, amending the kit's ADR-0024 clause 1, #832):
 # a field or data key every line of a kind must carry, whatever its outcome.
 # Each entry is `<kind>=outcome` or `<kind>=data.<key>`. A raise names its
 # finding by id and severity, and a verdict its axis and outcome: a line
@@ -481,7 +481,7 @@ trace_check_required() {
 		data.*) printf '%s\n' "$3" | grep -q "^${_rq_f#data.}=." && continue ;;
 		*) die "TRACE_REQUIRED: '$_rq_e' names neither outcome nor a data key" ;;
 		esac
-		TRACE_SHAPE_WHY="$1: $_rq_f is missing — every $1 carries one (the kit's ADR-0033)"
+		TRACE_SHAPE_WHY="$1: $_rq_f is missing — every $1 carries one (the kit's ADR-0034)"
 		return 1
 	done
 	return 0
