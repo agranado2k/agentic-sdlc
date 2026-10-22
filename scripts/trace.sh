@@ -219,7 +219,7 @@ TRACE_EVENT_CAP=4000
 # that carries NO outcome, and any outcome on it is refused; `note=*` is the
 # one open kind, held to a single word ([a-z][a-z0-9-]*) and to nothing else,
 # because a note is the free remark. An emit with no outcome at all is legal
-# on every kind: the field is optional, as every field but kind is. The kind
+# on every kind but those TRACE_REQUIRED names (below, #832). The kind
 # list after it stays a literal line, because the skill suites read it as
 # one; the trace suite holds the two to the same kinds, row for row.
 TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
@@ -242,10 +242,21 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # is the interruption that turned it red or stopped it: a conflict, or a
 # pending-stuck check; and a review's verdict, when it counts its lenses,
 # counts them in digits — the lens agents that returned a report, and the
-# lenses the review planned. `verify` advises on a raise and on a lens count
+# lenses the review planned; and a verdict's axis is 1 or 2, the two axes
+# /review-pr records (#832). `verify` advises on a raise and on a lens count
 # written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
 # from here).
-TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+'
+TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2'
+# THE REQUIRED KEYS (the kit's ADR-0034, amending the kit's ADR-0024 clause 1, #832):
+# a field or data key every line of a kind must carry, whatever its outcome.
+# Each entry is `<kind>=outcome` or `<kind>=data.<key>`. A raise names its
+# finding by id and severity, and a verdict its axis and outcome: a line
+# missing one joins no triage, falls out of every per-severity count, or is
+# no verdict a reader can count. An empty value is no value. The VALUE stays
+# the shape row's, the outcome table's, and for a raise's severity the
+# vocabulary checker's (trace_check_severity). `verify` advises on a line
+# already written without one (TRACE_AWK_REQUIRED reads this table).
+TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -455,6 +466,67 @@ EOF
 		}
 	done
 	trace_glob_on
+	return 0
+}
+
+# trace_check_required <kind> <outcome> <key=value lines> — every entry of
+# TRACE_REQUIRED for the kind is on the line, non-empty. Returns 1 with
+# TRACE_SHAPE_WHY naming the kind and the first key missing.
+trace_check_required() {
+	for _rq_e in $TRACE_REQUIRED; do
+		case $_rq_e in "$1="*) ;; *) continue ;; esac
+		_rq_f=${_rq_e#*=}
+		case $_rq_f in
+		outcome) [ -n "$2" ] && continue ;;
+		data.*) printf '%s\n' "$3" | grep -q "^${_rq_f#data.}=." && continue ;;
+		*) die "TRACE_REQUIRED: '$_rq_e' names neither outcome nor a data key" ;;
+		esac
+		TRACE_SHAPE_WHY="$1: $_rq_f is missing — every $1 carries one (the kit's ADR-0034)"
+		return 1
+	done
+	return 0
+}
+
+# trace_check_severity <key=value lines> — every data.severity on a raise is a
+# severity word the vocabulary checker beside this script declares, asked of
+# the checker itself (`Severity: <value>`), so a project's own words are the
+# ones held and the kit's are never copied here. No checker beside the script:
+# no words to hold a value to, and the rule is off. Returns 1 with
+# TRACE_SHAPE_WHY set to the checker's own refusal.
+trace_check_severity() {
+	[ -f "$_trace_here/vocab.sh" ] || return 0
+	while IFS= read -r _sv_l; do
+		case $_sv_l in severity=*) ;; *) continue ;; esac
+		# The checker trims a value's edges; the trace writes it as given, so
+		# a padded word is refused here rather than written padded.
+		case ${_sv_l#severity=} in *[[:space:]]*)
+			TRACE_SHAPE_WHY="finding.raise: data.severity '${_sv_l#severity=}' is not one word"
+			return 1
+			;;
+		esac
+		_sv_why=$(trace_severity_refusal "${_sv_l#severity=}") && continue
+		TRACE_SHAPE_WHY="finding.raise: data.severity — ${_sv_why#x vocab: }"
+		return 1
+	done <<EOF
+$1
+EOF
+	return 0
+}
+
+# trace_severity_refusal <value> — asks the checker of one word, one line:
+# exit 0 when it is a severity word, else 1 with the checker's refusal on
+# stdout. The positional form the checker's audit exempts (#337): one
+# argument, one line, a value the emit already held to one word.
+trace_severity_refusal() { sh "$_trace_here/vocab.sh" "Severity: $1" 2>&1 >/dev/null; }
+
+# trace_severity_words — the words verify holds a written raise's severity to:
+# the checker's `fields` line for severity, space-padded, or nothing when no
+# checker sits beside this script, it failed, or its policy leaves the field
+# open (an open field has no words, only a shape).
+trace_severity_words() {
+	[ -f "$_trace_here/vocab.sh" ] || return 0
+	_sw=$(sh "$_trace_here/vocab.sh" fields 2>/dev/null | sed -n 's/^severity: //p')
+	[ -n "$_sw" ] && printf ' %s ' "$_sw"
 	return 0
 }
 
@@ -1063,6 +1135,10 @@ trace_emit() {
 	# command line. An empty value is no outcome: the line omits it.
 	[ -z "$_em_outcome" ] || trace_check_outcome "$_em_kind" "$_em_outcome" || die "$TRACE_OUTCOME_WHY"
 	trace_check_shapes "$_em_kind" "$_em_outcome" "$_em_dlines" || die "$TRACE_SHAPE_WHY"
+	trace_check_required "$_em_kind" "$_em_outcome" "$_em_dlines" || die "$TRACE_SHAPE_WHY"
+	if [ "$_em_kind" = finding.raise ]; then
+		trace_check_severity "$_em_dlines" || die "$TRACE_SHAPE_WHY"
+	fi
 	if [ "$_em_kind" = spawn ] && [ -n "$_em_model" ]; then
 		trace_check_spawn_model "$_em_model" || die "$TRACE_MODEL_WHY"
 	fi
@@ -1917,6 +1993,40 @@ function lens_key(m, k, re,   v) {
 }
 '
 
+# TRACE_AWK_REQUIRED — verify's half of TRACE_REQUIRED and of the severity
+# words (#832): a raise or a verdict written before its keys were required,
+# missing one, or a raise whose severity is off the checker's words, is
+# history and an advisory. required is TRACE_REQUIRED, space-padded, and
+# sev_words trace_severity_words' answer, empty when there is none to judge
+# by, so the emit and the advisory cannot read different tables.
+# required_scan reads the kind and the outcome from the ENVELOPE and each key
+# from the DATA MAP, and calls the caller's key_missing(kind, field) for each
+# entry absent or empty, and severity_bad(value) for each raise severity off
+# the words. Single-quoted: no apostrophe in it.
+TRACE_AWK_REQUIRED='
+function required_scan(line,   env, d, m, k, n, i, e, f, v) {
+	env = line
+	m = ""
+	d = index(env, ",\"data\":{")
+	if (d) { env = substr(line, 1, d - 1); m = substr(line, d + 8) }
+	if (!match(env, /,"kind":"[a-z.]+"/)) return
+	k = substr(env, RSTART + 9, RLENGTH - 10)
+	n = split(required, e, " ")
+	for (i = 1; i <= n; i++) {
+		if (index(e[i], k "=") != 1) continue
+		f = substr(e[i], length(k) + 2)
+		if (f == "outcome") { if (!match(env, /,"outcome":"[^"]/)) key_missing(k, f) }
+		else if (!match(m, "[{,]\"" substr(f, 6) "\":\"[^\"]")) key_missing(k, f)
+	}
+	if (k != "finding.raise" || sev_words == "") return
+	while (match(m, /[{,]"severity":"[^"]*"/)) {
+		v = substr(m, RSTART + 13, RLENGTH - 14)
+		if (v != "" && !index(sev_words, " " v " ")) severity_bad(v)
+		m = substr(m, RSTART + RLENGTH)
+	}
+}
+'
+
 # TRACE_AWK_MODEL — verify's half of the spawn-model rule (#569): a spawn
 # written before its model was held, with a model the agents policy does not
 # map, is history and an advisory. model_ids is TRACE_MODEL_IDS, space-padded,
@@ -1984,6 +2094,8 @@ trace_spelling_note() {
 	_sn_r=0
 	_sn_m=0
 	_sn_l=0
+	_sn_k=0
+	_sn_sev=$(trace_severity_words)
 	_sn_re=$(trace_shape_re finding.raise id) || exit 2
 	_sn_lre=$(trace_shape_re review.verdict lenses) || exit 2
 	_sn_rre=$(trace_shape_re review.verdict roster) || exit 2
@@ -1994,20 +2106,23 @@ trace_spelling_note() {
 	trace_glob_off
 	for _sn_f in $_sn_files; do
 		IFS=$_sn_ifs
-		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" -v lens_re="$_sn_lre" -v roster_re="$_sn_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL"'
+		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" -v lens_re="$_sn_lre" -v roster_re="$_sn_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" -v required=" $TRACE_REQUIRED " -v sev_words="$_sn_sev" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL$TRACE_AWK_REQUIRED"'
 		function spelled(field, v) { if (!spelled_ok(v)) n++ }
+		function key_missing(k, f) { q++ }
+		function severity_bad(v) { q++ }
 		function outcome_bad(k, o) { m++ }
 		function raise_bad(v) { r++ }
 		function model_bad(v) { s++ }
 		function lens_bad(k, v) { l++ }
-		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0); raise_scan($0); lens_scan($0); model_scan($0) }
-		END { print n + 0, m + 0, r + 0, s + 0, l + 0 }' "$_sn_f")
+		substr($0, 1, 13) == "{\"v\":1,\"ts\":\"" { spelled_scan($0); outcome_scan($0); raise_scan($0); lens_scan($0); model_scan($0); required_scan($0) }
+		END { print n + 0, m + 0, r + 0, s + 0, l + 0, q + 0 }' "$_sn_f")
 		set -- $_sn_c
 		_sn_n=$((_sn_n + $1))
 		_sn_o=$((_sn_o + $2))
 		_sn_r=$((_sn_r + $3))
 		_sn_m=$((_sn_m + $4))
 		_sn_l=$((_sn_l + $5))
+		_sn_k=$((_sn_k + $6))
 	done
 	IFS=$_sn_ifs
 	trace_glob_on
@@ -2015,6 +2130,7 @@ trace_spelling_note() {
 	[ "$_sn_o" = 0 ] || echo "!  trace: $_sn_o outcome(s) in the trace are not a word their kind declares — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_r" = 0 ] || echo "!  trace: $_sn_r finding.raise id(s) in the trace are not $_sn_re — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_l" = 0 ] || echo "!  trace: $_sn_l review.verdict lens count(s) in the trace are not digits — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
+	[ "$_sn_k" = 0 ] || echo "!  trace: $_sn_k event key(s) in the trace are missing where their kind requires one, or off the vocabulary's severity words — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	[ "$_sn_m" = 0 ] || echo "!  trace: $_sn_m spawn model(s) in the trace are not an id the agents policy maps — kept as history; sh scripts/trace.sh verify names each with file and line" >&2
 	return 0
 }
@@ -2050,6 +2166,7 @@ trace_verify() {
 	_vf_raise=$(trace_shape_re finding.raise id) || exit 2
 	_vf_lre=$(trace_shape_re review.verdict lenses) || exit 2
 	_vf_rre=$(trace_shape_re review.verdict roster) || exit 2
+	_vf_sev=$(trace_severity_words)
 	if [ "${_trace_quiet_advice:-list}" = list ]; then trace_model_scan_args say; else trace_model_scan_args quiet; fi
 	_vf_files=$(trace_files "$_vf_since")
 	_vf_ifs=$IFS
@@ -2064,7 +2181,7 @@ trace_verify() {
 		# note goes to stderr through a pipe, which POSIX awk has where it has no
 		# /dev/stderr. `summary` and `export` switch the per-line notes off and
 		# say the count once instead (trace_spelling_note).
-		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" -v lens_re="$_vf_lre" -v roster_re="$_vf_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL"'
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" -v lens_re="$_vf_lre" -v roster_re="$_vf_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" -v required=" $TRACE_REQUIRED " -v sev_words="$_vf_sev" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL$TRACE_AWK_REQUIRED"'
 		function spelled(field, v) {
 			if (advise != "list" || spelled_ok(v)) return
 			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_type(v) | "cat 1>&2"
@@ -2089,6 +2206,15 @@ trace_verify() {
 			if (advise != "list") return
 			printf "!  trace: %s:%d: spawn model %s%s%s is not an id the agents policy maps — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, q, v, q | "cat 1>&2"
 		}
+		function key_missing(k, fld) {
+			if (advise != "list") return
+			printf "!  trace: %s:%d: %s %s is missing — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, k, fld | "cat 1>&2"
+		}
+		function severity_bad(v,   w) {
+			if (advise != "list") return
+			w = sev_words; sub(/^ /, "", w); sub(/ $/, "", w)
+			printf "!  trace: %s:%d: finding.raise data.severity %s%s%s is not one of %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, q, v, q, w | "cat 1>&2"
+		}
 		{
 			bad = ""
 			if (substr($0, 1, 13) != "{\"v\":1,\"ts\":\"") bad = "does not open with the schema version and a timestamp"
@@ -2100,7 +2226,7 @@ trace_verify() {
 				if (index(kinds, " " k " ") == 0) bad = "unknown kind " k
 			}
 			if (bad != "") { printf "%s:%d: %s\n", f, NR, bad; n++ }
-			else { spelled_scan($0); outcome_scan($0); raise_scan($0); lens_scan($0); model_scan($0) }
+			else { spelled_scan($0); outcome_scan($0); raise_scan($0); lens_scan($0); model_scan($0); required_scan($0) }
 		}
 		END { close("cat 1>&2"); exit (n > 0) }' "$_vf_f" || _vf_bad=1
 		if [ "$_vf_node" = 1 ]; then
