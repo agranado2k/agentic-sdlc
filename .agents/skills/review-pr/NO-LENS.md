@@ -20,7 +20,7 @@ Opened from `/review-pr` §3 when every lens's slice counts 0, and from §5 when
 **Verdict:** BLOCKED — no lens ran; this is not a review
 Clean audits: none
 Lenses not run: <each lens, by roster token and cause>
-Lenses run: 0 of <data.roster>
+Lenses run: 0 of <data.roster>< — single-context review, when the roster is above 0, as §5 says>
 
 <the count table and the four severity sections, as §5 shapes them>
 
