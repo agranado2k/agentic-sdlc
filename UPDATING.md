@@ -240,7 +240,11 @@ advisories, and `summary` and `export` say their count once: history stays.
 Take the script verbatim; nothing to set, since the severity words are your
 `VOCAB_SEVERITY` already. One shipped prompt moves (9a):
 `.agents/prompts/review-worker.md` says the `VERDICT:` line opens with `not
-blocking`, `no blocking`, `no findings` or `blocking`. Take it.
+blocking`, `no blocking`, `no findings` or `blocking`. Take it. Two skill
+changes landed since 0.86.0 ride with this release (9a): `/pr-iterate`
+records one `pr.iterate` on every iteration and holds green until each
+re-review raise is triaged, and `/to-tickets` holds a frontier to one
+shared-layer ticket; take both `SKILL.md` files.
 
 **Arriving from 0.85.0 or older, `/to-tickets` stamps a ticket's class.** No
 file joins or leaves at 0.86.0, and no shared file changes content besides
@@ -1496,10 +1500,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3190 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3194 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3344 insertions(+), 1 deletion(-)
+ 3 files changed, 3348 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
