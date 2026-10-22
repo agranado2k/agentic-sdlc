@@ -239,7 +239,9 @@ you add `class` to `VOCAB_FIELDS` and to `VOCAB_OPEN` (9d) a `Class:` line
 is a field your policy does not declare, and `scripts/stamp.sh` drops it.
 `/implement`'s `ticket.start` line now records `data.class` from that stamp,
 and `/retro` counts `data.class=toil` as toil (9a): take the implement
-`SKILL.md` and the retro directory.
+`SKILL.md` and the retro directory. One skill change landed since 0.84.1
+rides with this release (9a): both `NO-LENS.md` sidecars, `/review-pr`'s and
+`/pr-iterate`'s, give a blocked review's report one order; take both.
 
 **Arriving from 0.84.0 or older, a relative path holding `=` is a file to
 the failure signature.** No file joins or leaves at 0.84.1, a patch. One
@@ -1469,10 +1471,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3163 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3165 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3317 insertions(+), 1 deletion(-)
+ 3 files changed, 3319 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

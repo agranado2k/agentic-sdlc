@@ -3151,7 +3151,10 @@
 # data.class=<token>, only from a Class: line scripts/stamp.sh printed, never
 # guessed. /retro — SKILL.md and QUESTIONS.md say toil's share counts the
 # data.class=toil that stamp records, and the kit still names no class of its
-# own. Take the implement SKILL.md and the retro directory.
+# own. Take the implement SKILL.md and the retro directory. And, landed
+# since v0.84.1 (#826): review-pr and pr-iterate — NO-LENS.md in both gives
+# a blocked review's report one order, its Lenses run line carrying §5's
+# single-context suffix. Take both NO-LENS.md files.
 # Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/vocab.config.sh adds `class` to VOCAB_FIELDS and to
 # VOCAB_OPEN — MERGE both in. Your policy file is the whole policy (the
