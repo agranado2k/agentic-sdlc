@@ -4,11 +4,13 @@ type: ticket
 title: Restricted reader returns unreadable on posted review and confirm-list comments
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: ready
 created: 2026-10-22
 updated: 2026-10-22
 deps: []
 priority: 3
+approved_by: "agranado"
+approved_at: 2026-10-22
 ---
 
 # T-15 · Restricted reader returns unreadable on posted review and confirm-list comments

@@ -4,11 +4,13 @@ type: ticket
 title: Trace refuses malformed review emits (finding.raise, review.verdict)
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: ready
 created: 2026-10-22
 updated: 2026-10-22
 deps: []
 priority: 3
+approved_by: "agranado"
+approved_at: 2026-10-22
 ---
 
 # T-11 · Trace refuses malformed review emits (finding.raise, review.verdict)

@@ -4,11 +4,13 @@ type: ticket
 title: "/to-tickets: split a ticket spanning trace emitter, hook and guard"
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: ready
 created: 2026-10-22
 updated: 2026-10-22
 deps: [T-12]
 priority: 3
+approved_by: "agranado"
+approved_at: 2026-10-22
 ---
 
 # T-16 · "/to-tickets: split a ticket spanning trace emitter, hook and guard"

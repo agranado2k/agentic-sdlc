@@ -4,11 +4,13 @@ type: ticket
 title: Reviewer lenses run on the reviewer agent type; the parent emits their raises
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: ready
 created: 2026-10-22
 updated: 2026-10-22
 deps: [T-11]
 priority: 3
+approved_by: "agranado"
+approved_at: 2026-10-22
 ---
 
 # T-13 · Reviewer lenses run on the reviewer agent type; the parent emits their raises
