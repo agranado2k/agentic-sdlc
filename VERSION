@@ -3233,7 +3233,37 @@
 # tests/typed-return.test.sh 4h holds a posted lens review and a posted
 # confirm-list read through the fold.
 
-shared-layer: 0.88.0
+# 0.89.0 — a review lens returns raise lines its coordinator records, and a
+# reviewer-tier spawn runs on the reviewer agent type (ticket #834). NO file
+# joins the shared layer and none leaves. No shared file changes content but
+# UPDATING.md: the arriving-from paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /review-pr — a new .agents/skills/review-pr/LENS-RETURN.md
+# beside SKILL.md: a lens ends its report with one `Raise: <id> <file:line>`
+# line per finding and `Raises: <count>`, and the coordinator records them
+# with the file's fenced lens_raise, which refuses a return off the shape
+# whole; where tier agent types are offered every judging context, the
+# single-reviewer pass included, is a reviewer-type spawn, and a lens whose
+# reviewer walk is spent is named under `Lenses not run:`, never audited in
+# the coordinator's own context. SKILL.md section 3 points there. Take the
+# review-pr directory: SKILL.md and LENS-RETURN.md. /implement — step 9(b)'s
+# /review-pr spawn is the review's coordinator, and where tier types are
+# offered it is resolved, stamped and recorded planner, on the planner type.
+# /pr-iterate — its /review-pr spawn is stamped tier=planner. Take both
+# SKILL.md files.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): the Claude Code adapter's hooks/spawn-guard.sh refuses, exit
+# 2 and one note with data.agent_type, a tier=reviewer spawn on any agent
+# type but reviewer, the default type included, read off the payload's
+# subagent_type — only where the project wires .claude/agents/reviewer.md.
+# Its README.md says so, and that the coordinator runs on the planner type.
+# Take both; a project with no reviewer type wired sees no change.
+# Kit-only, never shipped: docs/adr/0035 records the rule;
+# tests/trace-hooks.test.sh section 51 and tests/review-pr-output.test.sh
+# section 22 hold it, and tests/skill-phase.test.sh 4d holds the dispatched
+# review worker to the guard.
+
+shared-layer: 0.89.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
