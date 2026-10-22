@@ -4,13 +4,24 @@ type: ticket
 title: "/to-tickets: one VERSION-moving ticket per frontier"
 parent: agentic-sdlc
 class: toil
-stage: ready
+stage: done
 created: 2026-10-22
 updated: 2026-10-22
 deps: []
 priority: 3
+links:
+  pr: "#840"
 approved_by: "agranado"
 approved_at: 2026-10-22
+review:
+  outcome: approved
+  commit: "ba3e899"
+  by: "review-pr (sonnet) on #840"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#840 landed, workflows green)"
+  at: 2026-10-22
 ---
 
 # T-12 · "/to-tickets: one VERSION-moving ticket per frontier"

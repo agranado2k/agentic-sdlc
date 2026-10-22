@@ -4,13 +4,24 @@ type: ticket
 title: "/to-tickets: split a ticket spanning trace emitter, hook and guard"
 parent: agentic-sdlc
 class: toil
-stage: ready
+stage: done
 created: 2026-10-22
 updated: 2026-10-22
 deps: [T-12]
 priority: 3
+links:
+  pr: "#843"
 approved_by: "agranado"
 approved_at: 2026-10-22
+review:
+  outcome: approved
+  commit: "58e515f"
+  by: "review-pr (sonnet) on #843"
+  at: 2026-10-22
+qa:
+  outcome: pass
+  by: "merge-train (#843 landed as v0.88.0, workflows green)"
+  at: 2026-10-22
 ---
 
 # T-16 · "/to-tickets: split a ticket spanning trace emitter, hook and guard"
