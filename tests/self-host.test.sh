@@ -231,16 +231,14 @@ for tools_env in $tools_engines; do
 	rm -f "$TOOLS/.claude/agents/scout.md"
 done
 
-# process/R29: every SKILL.md the kit ships declares allowed-tools, and the
-# kit's own gate holds it — the first rule a violation, never the advisory.
-r29_missing=
-for s in $(manifest_section skills <"$KIT/VERSION"); do
-	awk 'NR == 1 && !/^---/ { exit 1 } NR > 1 && /^---/ { exit 1 } /^allowed-tools:[ \t]*[^ \t]/ { found = 1; exit } END { exit !found }' \
-		"$KIT/.agents/skills/$s/SKILL.md" || r29_missing="$r29_missing $s"
-done
-[ -z "$r29_missing" ] &&
-	pass "process/R29: every SKILL.md the kit ships declares allowed-tools in its frontmatter" ||
-	fail "process/R29: these shipped skills declare no allowed-tools:$r29_missing"
+# process/R29: every SKILL.md the kit ships declares allowed-tools — read by
+# the gate's own reader, the POSIX twin here, so no second reader can drift
+# from it — and the kit's own gate holds it: the first rule a violation,
+# never the advisory.
+t_exec env GIT_CEILING_DIRECTORIES="$SCRATCH" DOCS_CHECK_NO_NODE=1 sh -c 'cd "$1" && sh scripts/check.sh' sh "$KIT"
+printf '%s\n%s\n' "$T_OUT" "$T_ERR" | grep -q 'skill-allowed-tools-missing' &&
+	fail "process/R29: the kit's gate names a shipped skill with no allowed-tools" ||
+	pass "process/R29: every SKILL.md the kit ships declares allowed-tools in its frontmatter"
 grep -q '^  missingAllowedTools: "violation",$' "$KIT/scripts/docs-conformance/config.mjs" &&
 	pass "process/R30: the kit's gate fails a SKILL.md with no allowed-tools — a violation, not an advisory" ||
 	fail "process/R30: the kit's config.mjs still runs the missing-allowed-tools rule as an advisory"
