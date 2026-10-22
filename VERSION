@@ -3074,43 +3074,60 @@
 # Kit-only, never shipped: docs/specs/process.md gains process/R15 to R17;
 # tests/review-pr-output.test.sh section 20 drives both skills' prose.
 
-# 0.83.0 — every skill declares its powers in allowed-tools (ticket #803,
-# PRD-04 slice 2), and two skill changes landed since 0.82.0 ride with it.
-# NO file joins the shared layer and none leaves. No shared file changes
-# content but UPDATING.md: the arriving-from paragraph, and both worked
-# examples re-pin.
+# 0.83.0 — a lens or skill edit is checked before and after, by its Targets:
+# query (ticket #802). NO file joins the shared layer and none leaves. Two
+# shared files change content besides UPDATING.md: scripts/vocab.sh gains
+# QUERY fields (VOCAB_QUERY) — a value held to a trace-filter grammar, one to
+# eight <key>=<value> terms with exactly one kind=, instead of to tokens — and
+# its built-in defaults declare `targets` one; scripts/stamp.sh lifts a
+# `Targets:` line beside Tier:, Confidence: and Domain:, checked the same way.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — SKILL.md gains the before-and-after section and the
+# rule that a lens or skill edit it proposes cites its trace events by run id
+# and carries its Targets: line, or is not filed; QUESTIONS.md gains the
+# "Before and after" section with its two spans — and, landed since v0.82.0
+# (#807), the flow section: lead time, review wait and toil's share.
+# /to-tickets — SKILL.md checks a Targets: line at the quiz and writes one on
+# a lens or skill edit, and (#806) reads each use case's main flow as a
+# candidate tracer bullet. /to-prd — SKILL.md (#806) writes each scenario as a
+# use case, UC<n> with a numbered main flow and extensions, and ends a
+# requirement with the steps it checks in brackets; a PRD written before
+# keeps its walkthrough scenarios. Take the retro directory whole, and the
+# to-tickets and to-prd SKILL.md files.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/vocab.config.sh adds `targets` to VOCAB_FIELDS and
+# declares VOCAB_QUERY='targets' — MERGE the two lines in, or a Targets: line
+# is a field your policy does not declare, and scripts/stamp.sh drops it.
+# Kit-only, never shipped: docs/specs/process.md gains process/R25 to R28;
+# tests/retro-skill.test.sh section 18 runs both spans over fixture traces.
+
+# 0.84.0 — every skill declares its powers in allowed-tools (ticket #803,
+# PRD-04 slice 2). NO file joins the shared layer and none leaves. No shared
+# file changes content but UPDATING.md: the arriving-from paragraph, and both
+# worked examples re-pin.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # Skills (9a): every SKILL.md gains one `allowed-tools:` line in its
 # frontmatter, before `metadata:`, naming the tools its own session uses and
 # every tool of each agent type it spawns (a skill spawning a tier-named type
 # lists that type's whole tools line): /design-brief, /diagnose,
-# the dogfood skill, /explain-diff, /grill-me, /grill-with-docs, /housekeeping,
-# /implement, /improve-codebase-architecture, /merge-train, /pr-iterate,
-# /prototype, /retro, /review-pr, /tdd, /to-prd, /to-tickets and
+# the dogfood skill, /explain-diff, /grill-me, /grill-with-docs,
+# /housekeeping, /implement, /improve-codebase-architecture, /merge-train,
+# /pr-iterate, /prototype, /retro, /review-pr, /tdd, /to-prd, /to-tickets and
 # /worktree-cleanup. Take the line into each skill you kept; a skill you
 # adapted keeps its own list, held by the gate to the types it names.
-# Besides the line: /retro gains a flow section (ticket #799) — per landing in
-# the window, the ticket's lead time and the PR's review wait, each column's
-# median and longest, and toil's share from ticket.start's data.class; its
-# QUESTIONS.md carries the section, so take the directory whole. /to-prd's
-# template writes each scenario as a use case (ticket #801) — UC<n>, actor,
-# goal, numbered main flow, extensions numbered from their step — and ends a
-# requirement a step checks with those steps in brackets; /to-tickets reads
-# each main flow as a candidate tracer bullet. A PRD written before keeps its
-# walkthrough scenarios, and the coverage check is unchanged.
 # Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/docs-conformance/config.mjs's skillTools block sets
 # missingAllowedTools to "violation" — the gate's missing-allowed-tools rule
 # now FAILS a SKILL.md with no allowed-tools, in both engines. MERGE the value
 # once every skill of yours declares its tools; until then keep "warning",
 # one advisory naming each undeclared skill.
-# Kit-only, never shipped: docs/specs/process.md gains process/R22 to R24,
-# R29 and R33 to R36; tests/self-host.test.sh holds R29 through the gate's
-# own reader; bootstrap.sh's adopt arm stamps the rule as "warning" when the
-# adopted tree holds a skill of its own with no allowed-tools, naming each —
-# tests/adopt-demo.sh and tests/kit-demo.sh hold both arms.
+# Kit-only, never shipped: docs/specs/process.md gains process/R29, held by
+# tests/self-host.test.sh through the gate's own reader; bootstrap.sh's adopt
+# arm stamps the rule as "warning" when the adopted tree holds a skill of its
+# own with no allowed-tools, naming each — tests/adopt-demo.sh and
+# tests/kit-demo.sh hold both arms.
 
-shared-layer: 0.83.0
+shared-layer: 0.84.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

@@ -36,6 +36,10 @@ R21. WHEN either skill stops under R18 or R20, it SHALL record the stop in the t
 R22. `/retro` SHALL report, per landed ticket in the window, the lead time from its first `ticket.start` to its `merge.land`, with the window's median and longest.
 R23. `/retro` SHALL report, per landed PR, the review wait from its last `pr.iterate outcome=green` to its `merge.land`, and SHALL report `n/a` for a PR with no green iteration.
 R24. `/retro` SHALL report toil's share of landed tickets from `ticket.start`'s `data.class=toil`, and `not recorded` when no ticket in the window carries a class.
+R25. WHEN a landed ticket carries a `Targets:` line, `/retro` SHALL report that query's count per landed PR in the window before its landing and in an equal window after.
+R26. IF the two windows of R25 differ in tier → model mapping or in kit version, THEN `/retro` SHALL report the comparison as inconclusive, and SHALL leave failed runs out of both counts.
+R27. IF R25's after-rate is not below its before-rate, THEN `/retro` SHALL file a finding naming the ticket.
+R28. A lens or skill edit that `/retro` proposes SHALL cite the trace events behind it by run id and carry its `Targets:` line, and SHALL NOT be filed without them.
 R29. Every `SKILL.md` the kit ships SHALL declare `allowed-tools` in its frontmatter.
 R30. The docs gate SHALL fail a `SKILL.md` with no `allowed-tools`.
 R31. The docs gate SHALL fail an agent type under the adapter with no `tools:` line.

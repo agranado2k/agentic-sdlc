@@ -263,4 +263,12 @@ expect_status 0 "bootstrap runs in a kit tree with no resolver"
 left=$(ls "$OLDKIT/.claude/agents" 2>/dev/null | tr '\n' ' ')
 assert_equal "…and strips every tier's agent type" "$left" ""
 
+# ---------------------------------------------------------------------------
+banner "targets — a query field /to-tickets writes and checks (process/R25, #802)"
+# ---------------------------------------------------------------------------
+printf '%s\n' "$FIELDS" | grep -qx 'targets (query):' && pass "targets is declared a query field" ||
+	fail "targets must be a QUERY field — its value is a trace filter, not a token"
+assert_file_has "$TICKETS" "\`'Targets: <query>'\`" "/to-tickets checks a Targets: line at the quiz"
+assert_file_has "$TICKETS" "a \`Targets:\` line on a ticket that edits a review lens or a skill" "/to-tickets writes one on a lens or skill edit"
+
 t_done "vocab-policy"

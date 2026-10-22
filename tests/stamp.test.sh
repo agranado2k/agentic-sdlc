@@ -91,6 +91,18 @@ grep -qx 'issue view 331 --json body --jq .body' "$SCRATCH/calls" &&
 	pass "the body is fetched with the tracker's CLI: gh issue view 331 --json body --jq .body" ||
 	fail "the stub was not called as 'gh issue view 331 --json body --jq .body': $(cat "$SCRATCH/calls")"
 
+# A Targets: line (process/R25, #802) is a stamp line: lifted beside the
+# other three, checked against its grammar, printed only once it passed.
+body 'Tier: implementer\nTargets: kind=finding.raise data.agent=security data.severity=high\n'
+stamp 802
+expect_resolved "$(printf 'Tier: implementer\nTargets: kind=finding.raise data.agent=security data.severity=high')" \
+	"a Targets: line is lifted and checked like any stamp line"
+body "Tier: implementer\nTargets: kind=finding.raise data.agent=x';touch PWN;'\n"
+stamp 802
+expect_status 2 "a Targets: line outside its grammar is refused, nothing printed"
+expect_err_has "the targets line is refused"
+no_pwn "refused Targets: line"
+
 body 'Tier: implementer\r\nConfidence: high\r\n'
 stamp 331
 expect_resolved "$(printf 'Tier: implementer\nConfidence: high')" \
