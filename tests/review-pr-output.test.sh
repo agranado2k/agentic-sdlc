@@ -392,8 +392,7 @@ held "every status Agent 7 tags a line with is a token the policy file declares:
 # of the lens directory, and the inline single baits keep their own edit: the
 # PR #864 ruling left them outside this refactor.
 bait_copy() {
-	sed "$3" "$1" >"$2"
-	! cmp -s "$2" "$1"
+	sed "$3" "$1" >"$2" && ! cmp -s "$2" "$1"
 }
 bait_gap() {
 	bait_copy "$SKILL_ABS" "$SCRATCH/bait-gap.md" "$3" && "$1" "$SCRATCH/bait-gap.md" | grep -qxF -- "$2"
