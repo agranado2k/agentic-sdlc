@@ -91,7 +91,7 @@ The one agent whose job is the question the other six never ask: **did anything 
 
 It must **NOT** receive the other six agents' findings, the implementation conversation, or this skill's earlier summarization — anchoring on the implementer's narrative is exactly what it exists to avoid.
 
-**The contract artifacts.** Behavior lives in them, so behavior changes are machine-visible in them. **This repo's list is data, not prose: it is `BEHAVIOR_DELTA_SURFACES` in `scripts/guards.config.sh`, and `scripts/behavior-delta.sh` inventories exactly that set.** The table below is a starting shape, not the authority.
+**The contract artifacts.** Behavior lives in them, so behavior changes are machine-visible in them. **This repo's list is data, not prose: it is `BEHAVIOR_DELTA_SURFACES` in `scripts/guards.config.sh`, and `scripts/behavior-delta.sh` inventories exactly that set.** Read the policy file; the table below is a starting shape, not the authority.
 
 | Behavior surface | Typical artifact | Red flag |
 |---|---|---|
