@@ -5269,6 +5269,94 @@ grep -qx "export TRACE_MODEL='$(printf 'm%0127d' 0)'" "$CTXF" &&
 	pass "a model of exactly 128 characters is still a plain id, and exported" ||
 	fail "the 128-character model was not exported: $(cat "$CTXF")"
 
+# ---------------------------------------------------------------------------
+banner "57. The Bash guard refuses a pgrep -f wait loop and names the bounded alternative (#849)"
+# ---------------------------------------------------------------------------
+# Retro 20261023T103804Z, R4: `until ! pgrep -f "<command>"` matches its own
+# shell's command line — the pattern is in it — so the loop never exits. Ten
+# such loops ran in one window; one, waiting on `gh pr checks 841 --watch`,
+# held a worktree "live" until somebody killed it by hand at wrap-up, twice.
+# tool-pre-guard.sh refuses a `while` or `until` loop that polls `pgrep -f`,
+# for the operator's own session as much as for a spawned sub-agent — the
+# hazard is the loop, not who typed it — and its refusal names the bounded
+# alternatives. A command that opens with its own `timeout <n>` is bounded, and
+# passes.
+if [ "$HAVE_NODE" = 1 ]; then
+	for at in '' general-purpose; do
+		for c in 'until ! pgrep -f "x"; do sleep 5; done' \
+			'while pgrep -f "gh pr checks 841 --watch" >/dev/null; do sleep 10; done' \
+			'until ! pgrep -af x >/dev/null 2>&1; do sleep 5; done' \
+			'while [ -n "$(pgrep --full x)" ]; do sleep 5; done' \
+			'cd /tmp && until ! /usr/bin/pgrep -f x; do sleep 5; done'; do
+			new_trace
+			guard "$at" "$c"
+			[ "$T_STATUS" = 2 ] && pass "${at:-the operator}'s '$c' is refused with exit 2" ||
+				fail "${at:-the operator}'s '$c' exited $T_STATUS, not 2: $T_ERR"
+		done
+	done
+	new_trace
+	guard '' 'until ! pgrep -f "x"; do sleep 5; done'
+	case $T_ERR in wait-guard:*) pass "and stderr names the rule, wait-guard" ;;
+	*) fail "stderr does not name the rule: $T_ERR" ;; esac
+	case $T_ERR in *'timeout <n>'*) pass "and names the bounded alternative, a foreground timeout <n>" ;;
+	*) fail "the refusal does not name timeout <n>: $T_ERR" ;; esac
+	case $T_ERR in *notification*) pass "and names the harness's notification when a background command ends" ;;
+	*) fail "the refusal does not name the background notification: $T_ERR" ;; esac
+	[ -z "$T_OUT" ] && pass "and says nothing on stdout" || fail "the guard printed on stdout: $T_OUT"
+	GN=$(ev_of note | sed -n '1p')
+	[ "$(events | grep -c '')" = 1 ] && [ "$(str "$GN" outcome)" = denied ] &&
+		[ "$(str "$GN" rule)" = wait-guard ] && [ "$(str "$GN" tool_use_id)" = "$TUSE" ] &&
+		pass "the refusal is one note, outcome=denied, naming the rule and the call" ||
+		fail "the refusal is not one denied wait-guard note: $(events)"
+
+	# Bounded waits, and pgrep that does not loop, pass — for either caller.
+	for at in '' general-purpose; do
+		for c in 'timeout 30m gh pr checks 841 --watch' \
+			"timeout 30m sh -c 'until ! pgrep -f \"x\"; do sleep 5; done'" \
+			'timeout -k 5 600 sh -c "until ! pgrep -f x; do sleep 5; done"' \
+			'pgrep -f x' 'pgrep -fl node | head' \
+			'while read -r l; do echo "$l"; done < f' \
+			'until ! pgrep x; do sleep 5; done' \
+			"grep -n 'until ! pgrep -f' adapters/claude-code/hooks/tool-pre-guard.sh" \
+			'for i in 1 2 3; do pgrep -f x || break; sleep 5; done'; do
+			new_trace
+			guard "$at" "$c"
+			[ "$T_STATUS" = 0 ] && [ -z "$(events)" ] &&
+				pass "${at:-the operator}'s '$c' passes through" ||
+				fail "${at:-the operator}'s '$c' exited $T_STATUS: $T_ERR"
+		done
+	done
+	# A timeout of zero is no bound: timeout 0 runs the command unlimited. The
+	# heredoc's newlines go into the payload JSON-escaped, as the harness sends them.
+	for b in 0 10m; do
+		new_trace
+		guard_payload '' "timeout $b sh <<EOF@NL@until ! pgrep -f x; do sleep 5; done@NL@EOF" |
+			sed 's/@NL@/\\n/g' >"$SCRATCH/wait-849.json"
+		t_exec env TRACE_DIR="$TDIR" sh "$GUARD" <"$SCRATCH/wait-849.json"
+		case $b in
+		0) [ "$T_STATUS" = 2 ] && pass "a heredoc loop under 'timeout 0' is refused: zero is no bound" ||
+			fail "a heredoc loop under 'timeout 0' exited $T_STATUS: $T_ERR" ;;
+		*) [ "$T_STATUS" = 0 ] && pass "the same heredoc loop under 'timeout $b' passes" ||
+			fail "a heredoc loop under 'timeout $b' exited $T_STATUS: $T_ERR" ;;
+		esac
+	done
+else
+	SKIPPED=$((SKIPPED + 1))
+	printf '  --    skipped: section 57 reads the command through node, absent here\n'
+fi
+# WITHOUT NODE the command cannot be read: the operator's session is let through
+# (it never was refused before #849, and a guard that blocks what it cannot read
+# would block every Bash call), while a sub-agent's call naming pgrep is refused
+# unread, as section 35 already holds.
+new_trace
+guard '' 'until ! pgrep -f "x"; do sleep 5; done' PATH="$(no_node_path)"
+[ "$T_STATUS" = 0 ] && pass "with node off PATH the operator's pgrep loop is let through, unread" ||
+	fail "with node off PATH the operator's loop exited $T_STATUS: $T_ERR"
+new_trace
+guard general-purpose 'until ! pgrep -f "x"; do sleep 5; done' PATH="$(no_node_path)"
+[ "$T_STATUS" = 2 ] && pass "and a sub-agent's is refused unread" ||
+	fail "with node off PATH a sub-agent's loop exited $T_STATUS: $T_ERR"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s case(s) skipped above — this host proved less than one with node and a millisecond clock would\n' "$SKIPPED"
 fi
