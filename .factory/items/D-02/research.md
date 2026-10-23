@@ -252,7 +252,16 @@ invariant §7, ADR-0008 the trace read only by `/retro`, ADR-0009, ADR-0025, ADR
 until a first slice can be demonstrated.
 
 ### Operator's criteria
-None recorded yet. Phase 3 collects them.
+- **Accuracy, with the human pulled in only for high risk** (operator, 2026-10-23). An option scores
+  on how precise its automated verdicts are, and on how rarely it asks the human for anything that
+  is not high risk. [inference] This reads S-3's precision floor and S-6's path-based escalation as
+  one criterion: a judge accurate enough to be trusted on low risk, and a risk rule that decides
+  when the human is asked.
+- **Order of value: measurement first, then guard safety, then policy safety** (operator,
+  2026-10-23).
+- **Labels come from post-merge outcomes** (operator, 2026-10-23), not from the session's own
+  rulings. [inference] So a lens finding is judged against what happened after landing (a revert, a
+  fix that touched the flagged line), which the trace does not yet record (§5 Q6).
 
 ### Comparison against the kit
 
@@ -282,10 +291,11 @@ These feed phases 4 and 5.
 1. **Who labels a lens's findings?** Under ADR-0016 the session rules on each confirm-list, and the
    triage outcomes in the trace are mostly the implementing session's. A label from the same model
    family as the judge is circular (S-26). The options are an operator-labelled sample, the
-   operator's rulings only, or post-merge outcomes (reverts). The answer is the operator's.
+   operator's rulings only, or post-merge outcomes (reverts). **Answered: post-merge outcomes**
+   (operator, 2026-10-23).
 2. **Which outcome should D-02 drive first?** Review cost and false positives (recommendations 1
-   and 3), safety of the guard plane (2 and 5), or measurement (4)? This is the operator's call;
-   the evidence does not rank them.
+   and 3), safety of the guard plane (2 and 5), or measurement (4)? **Answered: measurement, then
+   guard safety, then policy safety** (operator, 2026-10-23).
 3. **Fail-open or fail-closed guards.** `root-guard.sh` chose fail-open so a parse failure cannot
    brick the session. S-33 shows the cost of that default in a security hook. Is a narrower rule,
    fail-closed for a sub-agent only, acceptable? The kill guard already fails closed for a sub-agent
