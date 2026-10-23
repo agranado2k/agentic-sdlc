@@ -251,8 +251,13 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
   let compacted = false;
   let copied = false;
 
+  // A LAST LINE WITH NO NEWLINE THAT DOES NOT PARSE IS STILL BEING WRITTEN
+  // (#848): a stop can read the file mid-write. It is left for the next read,
+  // and the complete lines before it are priced. A bad line anywhere else, or
+  // a bad last line that IS terminated, is complete and wrong: drift.
+  const lines = raw.split("\n");
   let lineNo = 0;
-  for (const line of raw.split("\n")) {
+  for (const line of lines) {
     lineNo += 1;
     if (line.trim() === "") continue;
 
@@ -260,6 +265,7 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
     try {
       entry = JSON.parse(line);
     } catch {
+      if (lineNo === lines.length) break;
       fail(`${where}line ${lineNo} is not JSON — the transcript's shape has drifted`);
     }
     if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
