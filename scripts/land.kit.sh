@@ -62,6 +62,9 @@
 #      judged. A re-run refused because the run is already running is no
 #      verdict: that run is watched to its end and judged (#661); any other
 #      refusal is a failure. An untagged merge's red is never re-run.
+#      A job whose record stays "in progress" after it ended is re-run once,
+#      by its job id, and named on stderr; the same job stuck again is a stop,
+#      judged as a red check is (#850).
 #   4. Emits merge.land (`landed`, the sha, the method, the wait, the
 #      workflows' result) on pr:#<N>, related to the ticket — and whether
 #      /implement opened the PR (data.implement=yes|no, with
@@ -461,6 +464,55 @@ push_workflows() {
 	done
 }
 
+# watch_run <run id> — wait for one run's end, then judge it with the forge's
+# own watch: exit 0 green, 1 red or stopped. A run can end with one job
+# record still "in progress" — the job finished (its conclusion is set) or
+# its run completed, yet the record never closed — and a watch on it never
+# returns (pr:#842 waited 3,308 s; pr:#831, #850). So the wait reads the job
+# records itself: each job stuck so is re-run once, by its job id, and named
+# on stderr; the same job stuck again — or still stuck LAND_POLL_TRIES reads
+# after its re-run — is a stop, judged as a red check is. Records it cannot
+# read leave the plain watch, the wait before #850.
+# shellcheck disable=SC2016 # $s is jq's variable, not the shell's
+STALL_JQ='.status, (.status as $s | .jobs[] | select(.status != "completed" and ($s == "completed" or (.conclusion // "") != "")) | "\(.databaseId) \(.name)")'
+watch_run() {
+	_wr_ids=" " _wr_names= _wr_tries=0
+	while _wr_seen=$(gh run view "$1" --json status,jobs --jq "$STALL_JQ" 2>/dev/null); do
+		_wr_stuck=$(printf '%s\n' "$_wr_seen" | sed -n 2p)
+		if [ -n "$_wr_stuck" ]; then
+			_wr_job=${_wr_stuck%% *} _wr_name=${_wr_stuck#* }
+			case $_wr_job in '' | *[!0-9]*) break ;; esac # not a job id: the plain watch
+			case $_wr_ids in
+			*" $_wr_job "*)
+				# The re-run was asked; the forge has not replaced the record yet.
+				_wr_tries=$((_wr_tries + 1))
+				if [ "$_wr_tries" -ge "$POLL_TRIES" ]; then
+					note "run $1's job '$_wr_name' is still stuck in progress after its re-run — stopped, judged a failure"
+					return 1
+				fi
+				;;
+			*)
+				if printf '%s\n' "$_wr_names" | grep -qxF -- "$_wr_name"; then
+					note "run $1's job '$_wr_name' is stuck again in progress after its one re-run — stopped, judged a failure"
+					return 1
+				fi
+				note "run $1's job '$_wr_name' (job $_wr_job) is stuck in progress after it ended — re-running that job, once"
+				gh run rerun --job "$_wr_job" >&2 || {
+					note "the forge refused to re-run job '$_wr_name' of run $1 — judged a failure"
+					return 1
+				}
+				_wr_ids="$_wr_ids$_wr_job " _wr_names="$_wr_names$_wr_name
+" _wr_tries=0
+				;;
+			esac
+		elif [ "$(printf '%s\n' "$_wr_seen" | sed -n 1p)" = completed ]; then
+			break
+		fi
+		[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
+	done
+	gh run watch "$1" --exit-status >&2
+}
+
 # --- 3. the base branch's workflows on the merge commit -----------------------
 # Listed until nothing new appears: a workflow the forge registers a beat
 # after the first is watched too. With no sha there is nothing to list.
@@ -480,7 +532,7 @@ else
 		done
 		if [ -n "$NEW" ]; then
 			for id in $NEW; do
-				gh run watch "$id" --exit-status >&2 || { WORKFLOWS=failure; FAILED="$FAILED $id"; }
+				watch_run "$id" || { WORKFLOWS=failure; FAILED="$FAILED $id"; }
 			done
 			WATCHED="$WATCHED$NEW"
 		elif [ -n "$WATCHED" ]; then
@@ -525,7 +577,7 @@ if [ "$TAGGED" = yes ] && [ -n "$FAILED" ]; then
 			case $_said in
 			*"already running"*)
 				note "run $id is already running — the re-run was refused; waiting for that run's end instead"
-				gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure
+				watch_run "$id" || WORKFLOWS=failure
 				;;
 			*)
 				note "the forge refused to re-run run $id — judged a failure"
@@ -542,7 +594,7 @@ if [ "$TAGGED" = yes ] && [ -n "$FAILED" ]; then
 			i=$((i + 1))
 			[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
 		done
-		gh run watch "$id" --exit-status >&2 || WORKFLOWS=failure
+		watch_run "$id" || WORKFLOWS=failure
 	done
 fi
 WAITED=$(($(date +%s) - START))
