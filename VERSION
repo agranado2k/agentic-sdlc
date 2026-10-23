@@ -3263,7 +3263,35 @@
 # section 22 hold it, and tests/skill-phase.test.sh 4d holds the dispatched
 # review worker to the guard.
 
-shared-layer: 0.89.0
+# 0.90.0 — a stop priced past a half-written transcript line records
+# data.partial (ticket #862). NO file joins the shared layer and none
+# leaves. No shared file changes content but UPDATING.md: the arriving-from
+# paragraph, and both worked examples re-pin.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — QUESTIONS.md question 5 reads data.partial, and its
+# spend span prints a `partial stops <count> <cost>` row, named beside the
+# unpriced ones; landed since v0.89.0 (#847), it also takes a stop's
+# data.ticket as the per-ticket spend's fallback join. Take it. And, landed
+# since v0.89.0: /review-pr (#846) — SKILL.md says a version bump is owed
+# only by a path on VERSION's files: list, and a lens refused or failed is
+# named under `Lenses not run:`, never audited by the coordinator; the
+# offline worker contract .agents/prompts/review-worker.md states the same
+# bump rule; and (#867) SKILL.md's prose is trimmed under its size ceiling,
+# no rule added or dropped. Take SKILL.md and review-worker.md.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): the Claude Code adapter's hooks/transcript-usage.mjs leaves
+# an unterminated last line that does not parse for the next read and prices
+# the lines before it (#848), and prints a one-word `partial` line when it
+# did; hooks/hook.lib.sh records data.partial=yes on that read's usage
+# events (#862). Landed since v0.89.0 too: hooks/subagent-stop.sh records a
+# stop with no run handed under data.ticket, from its Trace-Spawn line
+# (#847), and hooks/tool-pre-guard.sh refuses, for every caller, a Bash
+# loop that polls `pgrep -f` (#849). README.md says all four. Take the
+# reader and hook.lib.sh together, and all five files.
+# Kit-only, never shipped: tests/trace-hooks.test.sh sections 57 to 59 and
+# tests/retro-skill.test.sh section 16 hold it.
+
+shared-layer: 0.90.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

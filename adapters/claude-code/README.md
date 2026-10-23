@@ -475,6 +475,12 @@ you get it wrong:
   the gap's `tok_out` holds those messages' remainder, which the rollup
   counts and their own events cannot: so "usage plus agent.stop equals the
   rollup" holds for output only where a gap was judged.
+- **A stop can read a transcript mid-write** (tickets #848, #862). A last
+  line with no newline that does not parse is a line the agent harness is
+  still writing: it is left for the next read, the complete lines before it
+  are priced, and the event says so with `data.partial=yes` — its counts are
+  short by that line. A whole read carries no such key. A bad line anywhere
+  else, or a bad last line that is terminated, is drift as before.
 - **A subagent's tokens are in the subagent's own file.** The `SubagentStop`
   payload carries two paths: `transcript_path` is the *parent session's* and
   `agent_transcript_path` is the subagent's. Read the first one there and every

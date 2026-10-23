@@ -565,7 +565,10 @@ hook_session_usage() {
 #                    data.last_msg (its last one), its own resume anchor (#408)
 #                    — and data.out_snapshot, only when some of those messages
 #                    were written mid-stream: how many, so tok_out is a lower
-#                    bound (#608; transcript-usage.mjs says why)
+#                    bound (#608; transcript-usage.mjs says why) — and
+#                    data.partial=yes when the read stopped short of a last
+#                    line still being written, so the counts are the complete
+#                    lines before it (#848, #862)
 #   node missing     one event, outcome=fail, the reason naming node
 #   shape drift      one event, outcome=fail, the reason the extractor gave —
 #                    a resume anchor the transcript no longer holds is one
@@ -677,7 +680,9 @@ hook_tokens() {
 			reason="${_ht_why:-the rollup was refused and the extractor said nothing}" "$@"
 	fi
 	_ht_gap=$(printf '%s\n' "$_ht_out" | awk '$6 == "rollup"')
-	_ht_out=$(printf '%s\n' "$_ht_out" | awk 'NF && $6 != "rollup"')
+	# The one-word `partial` line: the read skipped a half-written last line.
+	_ht_part=$(printf '%s\n' "$_ht_out" | awk 'NF == 1 && $1 == "partial"')
+	_ht_out=$(printf '%s\n' "$_ht_out" | awk 'NF > 1 && $6 != "rollup"')
 	printf '%s\n' "$_ht_gap" | while read -r _ht_m _ht_i _ht_o _ht_w _ht_r _ht_v _ht_c _ht_s; do
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
@@ -686,7 +691,7 @@ hook_tokens() {
 			reason="the agent harness rollup counts these tokens and no assistant line carries them (data.reason $_ht_c)" "$@"
 	done
 	if [ -z "$_ht_out" ] && [ -n "$_ht_after" ]; then
-		hook_trace emit kind="$_ht_kind" data.last_msg="$_ht_after" data.msgs=0 \
+		hook_trace emit kind="$_ht_kind" data.last_msg="$_ht_after" data.msgs=0 ${_ht_part:+data.partial=yes} \
 			reason="nothing new in the transcript since $_ht_after, which an earlier usage event counted" "$@"
 		return 0
 	fi
@@ -699,7 +704,7 @@ hook_tokens() {
 		[ -n "$_ht_m" ] || continue
 		hook_trace emit kind="$_ht_kind" model="$_ht_m" \
 			tok_in="$_ht_i" tok_out="$_ht_o" tok_cache_w="$_ht_w" tok_cache_r="$_ht_r" \
-			data.msgs="$_ht_n" data.last_msg="$_ht_l" ${_ht_s:+data.out_snapshot="$_ht_s"} "$@"
+			data.msgs="$_ht_n" data.last_msg="$_ht_l" ${_ht_s:+data.out_snapshot="$_ht_s"} ${_ht_part:+data.partial=yes} "$@"
 	done
 	return 0
 }
