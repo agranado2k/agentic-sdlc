@@ -236,7 +236,7 @@ expect_out_has "agents config: /operator/own.sh" "an AGENTS_CONFIG the operator 
 # The trace's identity and policy are the exception: a session's hooks export
 # them, and a suite must start from none whatever the calling shell said —
 # in the run inside the budget too, not only in the bare one (#303).
-stub TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONFIG=/nowhere.sh TRACE_QUIET=1 sh "$GREEN"
+stub TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONFIG=/nowhere.sh TRACE_QUIET=1 TRACE_HARNESS=h TRACE_MODEL=m sh "$GREEN"
 expect_out_has "trace: <end>" "the trace variables a calling shell exported do not reach the suite inside the budget"
 [ "$(starts)" = 2 ] && pass "…and that was the re-executed run, not a bare one" || fail "the scrubbed stub ran $(starts) time(s) — expected 2"
 
