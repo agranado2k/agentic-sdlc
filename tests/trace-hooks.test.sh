@@ -5291,9 +5291,8 @@ if [ "$HAVE_NODE" = 1 ]; then
 		fail "the extractor exited $T_STATUS on a half-written last line: $T_ERR"
 
 	new_trace
-	set_key transcript_path "$SCRATCH/main.jsonl" <"$FIX/subagent-stop.payload.json" |
-		set_key agent_transcript_path "$SCRATCH/sub-partial-848.jsonl" >"$SCRATCH/sub-stop-partial-848.json"
-	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/sub-stop-partial-848.json"
+	stop_on "$SCRATCH/sub-partial-848.jsonl"
+	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-308.json"
 	[ "$T_STATUS" = 0 ] && pass "the stop hook exits 0" || fail "the stop hook exited $T_STATUS: $T_ERR"
 	A=$(ev_of agent.stop | sed -n '1p')
 	[ "$(str "$A" model)" = "$MODEL" ] && pass "the stop names its model" ||
@@ -5315,9 +5314,8 @@ if [ "$HAVE_NODE" = 1 ]; then
 	*) fail "stderr does not name line 5: $T_ERR" ;; esac
 	[ -z "$T_OUT" ] && pass "and prints no numbers" || fail "a malformed middle line printed: $T_OUT"
 	new_trace
-	set_key transcript_path "$SCRATCH/main.jsonl" <"$FIX/subagent-stop.payload.json" |
-		set_key agent_transcript_path "$SCRATCH/sub-middle-848.jsonl" >"$SCRATCH/sub-stop-middle-848.json"
-	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/sub-stop-middle-848.json"
+	stop_on "$SCRATCH/sub-middle-848.jsonl"
+	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-308.json"
 	A=$(ev_of agent.stop | sed -n '1p')
 	[ "$(str "$A" outcome)" = fail ] && [ -z "$(num "$A" tok_out)" ] &&
 		pass "and its stop is recorded as a failure with no tokens, as before" ||
