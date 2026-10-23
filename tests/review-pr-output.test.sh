@@ -386,8 +386,9 @@ held "every status Agent 7 tags a line with is a token the policy file declares:
 # bait_copy <source> <copy> <sed script> — edit a copy, green only when the
 # edit changed it, so a bait whose anchor moved cannot pass by planting nothing.
 # bait_gap <checker> <rule name> <sed script> — the same on the skill, then
-# green when the checker run on the copy names the rule. The multi-file baits
-# (#635, #796, #820) stage their own companions and call bait_copy for the edit.
+# green when the checker run on the copy names the rule. The baits that stage
+# companions or edit one of several files (#635, #796, #820, bt_bait) keep
+# that staging and call bait_copy for the edit.
 bait_copy() {
 	sed "$3" "$1" >"$2"
 	! cmp -s "$2" "$1"
@@ -1320,8 +1321,7 @@ miss=$(band_test_missing "$LENS_DIR" "$WORKER_ABS" "$ROOT/$TWIN" | tr '\n' ',' |
 bt_bait() { # <file name> <sed script>
 	rm -rf "$SCRATCH/bt-bait" && mkdir -p "$SCRATCH/bt-bait" &&
 		cp "$LENS_DIR"/*.md "$WORKER_ABS" "$ROOT/$TWIN" "$SCRATCH/bt-bait/" &&
-		cp "$SCRATCH/bt-bait/$1" "$SCRATCH/bt-bait/$1.orig" && sed -i "$2" "$SCRATCH/bt-bait/$1" &&
-		! cmp -s "$SCRATCH/bt-bait/$1" "$SCRATCH/bt-bait/$1.orig" &&
+		cp "$SCRATCH/bt-bait/$1" "$SCRATCH/bt-bait/$1.orig" && bait_copy "$SCRATCH/bt-bait/$1.orig" "$SCRATCH/bt-bait/$1" "$2" &&
 		band_test_missing "$SCRATCH/bt-bait" "$SCRATCH/bt-bait/review-worker.md" "$SCRATCH/bt-bait/ai-review-prompt.md" | grep -qxF -- "$1"
 }
 for _bt_l in "$LENS_DIR"/lens-*.md; do
