@@ -3,9 +3,9 @@ id: D-02
 type: discovery
 title: Outside reading on AI-native SDLC practice
 parent: agentic-sdlc
-stage: exploring
+stage: shaped
 created: 2026-10-22
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 ## Problem
