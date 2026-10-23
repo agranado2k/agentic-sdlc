@@ -1037,7 +1037,6 @@ t_roster_rows "$SKILL_ABS" | grep -F -- '- `single-reviewer` — ' | grep -q 'Ag
 	fail "the single-reviewer row names an agent number — it is not a lens, and the lens count would grow" ||
 	pass "the single-reviewer row names no agent number: it is not a lens"
 # Baits: each rule deleted from a copy is named.
-bait568() { bait_gap single_rules_missing "$1" "$2"; }
 for b in \
 	'roster row|/^- `single-reviewer` — /d' \
 	'row: a spawn only per LENS-RETURN|/^- `single-reviewer` — /s/ only as / /' \
@@ -1051,7 +1050,7 @@ for b in \
 	'both verdicts always|s/Both verdicts are recorded on every review/A verdict is recorded on most reviews/' \
 	'pass is a verdict|s/`pass` is a verdict\./no findings need no verdict./' \
 	'end after both verdicts|s/closes after the raises and both verdicts/closes after the raises/'; do
-	bait568 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+	bait_gap single_rules_missing "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
 		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done
 
@@ -1167,7 +1166,6 @@ emit_points_missing() {
 miss=$(emit_points_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
 [ -z "$miss" ] && pass "/review-pr records a lens's raises at its return on path (a), and both verdicts before anything is posted" ||
 	fail "/review-pr's emit points are missing: $miss — a posted review reads raise-less in the trace (#629)"
-bait629() { bait_gap emit_points_missing "$1" "$2"; }
 for b in \
 	"raise at lens return|s/a lens's raises are recorded beside its \`spawn.end\`, the moment it returns/a lens's raises wait for the end/" \
 	'ids in arrival order|s/numbers it in arrival order/picks/' \
@@ -1179,7 +1177,7 @@ for b in \
 	'both verdicts before the post|s/before anything is posted and before the run/before the run/' \
 	'relay order|s/record, verdict, post/record, post, verdict/' \
 	'relay verdicts above its post|s/\*\*Then the two verdicts/**Last, the two verdicts/'; do
-	bait629 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+	bait_gap emit_points_missing "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
 		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done
 # The acceptance, run: replay every documented trace line above §6 — the
@@ -1781,15 +1779,13 @@ rm -f "$SCRATCH/bait846w.md"
 miss=$(adr_rules_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
 [ -z "$miss" ] && pass "§4 tells every lens a skill owes no bump (ADR-0025), and §3 never audits a refused or failed lens in its place (ADR-0035)" ||
 	fail "/review-pr's ADR-0025/ADR-0035 rules are missing: $miss — lenses raise findings every triage rejects (#846)"
-bait846() { bait_gap adr_rules_missing "$1" "$2"; }
 for b in \
 	'bump rule in §4|s/a skill sits on its `skills:` list by name and owes none/a skill owes one too/' \
 	'failed lens not audited here|s/never audits its slice in its place/audits its slice/' \
 	'no audit of a failed lens|s/^\(\*\*The seven sub-agents.*\)$/\1 The same holds for one lens audited here after its agent was refused or failed./' \
 	'summary mark needs no subagent tool|s/by a context with no subagent tool>/when this session audited it itself>/'; do
-	bait846 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+	bait_gap adr_rules_missing "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
 		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done
-rm -f "$SCRATCH/bait846.md"
 
 t_done "/review-pr output contract"
