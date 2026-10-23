@@ -396,6 +396,11 @@ bait_copy() {
 bait_gap() {
 	bait_copy "$SKILL_ABS" "$SCRATCH/bait-gap.md" "$3" && "$1" "$SCRATCH/bait-gap.md" | grep -qxF -- "$2"
 }
+# Every bait's "planted nothing" guard lives in bait_copy alone, so hold it here:
+# an edit that changes nothing must fail, or every bait could go green unplanted.
+bait_copy "$SKILL_ABS" "$SCRATCH/bait-noop.md" 's/^\(.*\)$/\1/' &&
+	fail "bait_copy passed an edit that changed nothing" ||
+	pass "bait_copy fails an edit that changes nothing"
 
 # The bait. Each plants ONE line in a copy of the skill — where a session
 # would print it from — and the same holder must name exactly that token.
