@@ -5405,6 +5405,15 @@ if [ "$HAVE_NODE" = 1 ]; then
 	[ -n "$(num "$A" tok_out)" ] && [ -z "$(data_of "$A" partial)" ] &&
 		pass "a stop whose whole transcript was read records no data.partial" ||
 		fail "a whole transcript's stop: $A"
+	# THE NOTHING-NEW PATH SAYS SO TOO (#862 review): the same agent stops again
+	# with only a half-written line past the anchor the stop above left. The
+	# read prices nothing new, and still records that it skipped a line.
+	stop_on "$SCRATCH/sub-partial-848.jsonl"
+	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-308.json"
+	A=$(ev_of agent.stop | sed -n '2p')
+	[ "$(str "$A" msgs)" = 0 ] && [ -z "$(num "$A" tok_out)" ] && [ "$(data_of "$A" partial)" = yes ] &&
+		pass "a nothing-new stop past a half-written line records data.partial=yes" ||
+		fail "the nothing-new stop past a half-written line: $A"
 
 	# A malformed MIDDLE line is still drift, named by its line number.
 	sed '5s/.*/{"type":"assistant","message":{"id":"msg_01/' "$SCRATCH/sub.jsonl" >"$SCRATCH/sub-middle-848.jsonl"
