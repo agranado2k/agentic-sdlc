@@ -94,6 +94,11 @@
 #      first, as its Output format and hard rule 4 put it, then the
 #      escalation line, then the /review-pr: status line carrying the same
 #      Verdict text — which both skeletons and the broker spell alike.
+#  23. Two rejected findings never raised again (#846): §4, which every
+#      standards lens reads, says a version bump is owed only by a path on
+#      VERSION's files: list and a skill, listed by name, owes none
+#      (ADR-0025); and §3 names a refused or failed lens under `Lenses not
+#      run:` without the coordinator auditing its slice (ADR-0035 clause 2).
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -990,8 +995,7 @@ single_rules_missing() {
 		'never to save spawns|never a choice made to save spawns: a context that can spawn the seven spawns them' \
 		'summary names the lenses|Its summary'"'"'s `Lenses not run:` line names every lens it audited, each marked "run in this context instead"' \
 		'raises under the token|Every finding it raises carries `data.agent=single-reviewer`, never the token of a lens no lens agent ran' \
-		'verdicts carry the token|both of its verdict lines (§5, §5b) carry `data.agent=single-reviewer`' \
-		'one lens audited here|that lens'"'"'s findings are `single-reviewer`'"'"'s'; do
+		'verdicts carry the token|both of its verdict lines (§5, §5b) carry `data.agent=single-reviewer`'; do
 		case "$_sr_s3" in *"${_sr_r#*|}"*) ;; *) printf '%s\n' "${_sr_r%%|*}" ;; esac
 	done
 	_sr_rec=$(region '^#### Approval Process' '^#### Relaying a review' "$1" | tr '\n' ' ' | tr -s ' ')
@@ -1027,7 +1031,6 @@ for b in \
 	'summary names the lenses|s/line names every lens it audited/line may name a lens/' \
 	'raises under the token|s/never the token of a lens no lens agent ran/or the token of the lens it fits/' \
 	'verdicts carry the token|s/both of its verdict lines (§5, §5b) carry/its verdict lines may carry/' \
-	"one lens audited here|s/that lens's findings are \`single-reviewer\`'s/that lens keeps its token/" \
 	'raise step: the token|s/the token is `single-reviewer` for every finding no lens agent produced/the token is the lens it fits/' \
 	'relay: the token|s/whatever lens it names/unless it names a lens/' \
 	'both verdicts always|s/Both verdicts are recorded on every review/A verdict is recorded on most reviews/' \
@@ -1737,5 +1740,36 @@ grep -qF 'Trace-Spawn: tier=planner domain=none skill=pr-iterate' "$ROOT/.agents
 	pass "/pr-iterate stamps its /review-pr spawn planner" || fail "/pr-iterate still stamps its /review-pr spawn reviewer"
 grep -qF 'Trace-Spawn: tier=reviewer domain=none skill=pr-iterate' "$ROOT/.agents/skills/pr-iterate/SKILL.md" &&
 	fail "/pr-iterate keeps a tier=reviewer stamp on a skill-running spawn" || pass "/pr-iterate has no tier=reviewer coordinator stamp"
+
+# ---------------------------------------------------------------------------
+banner "23. A lens is told the bump rule; a failed lens is never audited here (#846)"
+# ---------------------------------------------------------------------------
+# Lenses kept raising "a skill edit owes a version bump", rejected every time
+# under ADR-0025, and §3 still let the coordinator audit a refused or failed
+# lens itself, against ADR-0035 clause 2. Both sentences are read where the
+# lens and the coordinator read them; each is proved by a bait.
+# adr_rules_missing <skill file> — the rules the file has lost, one per line.
+adr_rules_missing() {
+	_ar_s4=$(region '^### 4\. ' '^### 5\. ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_ar_s4" in *"**A version bump is owed only by a path on \`VERSION\`'s \`files:\` list**: a skill sits on its \`skills:\` list by name and owes none (the kit's ADR-0025)"*) ;; *) printf '%s\n' 'bump rule in §4' ;; esac
+	_ar_s3=$(region '^### 3\. ' '^#### Agents 1–6 ' "$1" | tr '\n' ' ' | tr -s ' ')
+	case "$_ar_s3" in *'A lens refused or failed is named under `Lenses not run:`, and the coordinator never audits its slice in its place'*) ;; *) printf '%s\n' 'failed lens not audited here' ;; esac
+	case "$_ar_s3" in *'one lens audited here after its agent was refused or failed'*) printf '%s\n' 'no audit of a failed lens' ;; esac
+}
+miss=$(adr_rules_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "§4 tells every lens a skill owes no bump (ADR-0025), and §3 never audits a refused or failed lens in its place (ADR-0035)" ||
+	fail "/review-pr's ADR-0025/ADR-0035 rules are missing: $miss — lenses raise findings every triage rejects (#846)"
+bait846() { # <rule name> <sed script>
+	sed "$2" "$SKILL_ABS" >"$SCRATCH/bait846.md"
+	! cmp -s "$SCRATCH/bait846.md" "$SKILL_ABS" && adr_rules_missing "$SCRATCH/bait846.md" | grep -qxF -- "$1"
+}
+for b in \
+	'bump rule in §4|s/a skill sits on its `skills:` list by name and owes none/a skill owes one too/' \
+	'failed lens not audited here|s/never audits its slice in its place/audits its slice/' \
+	'no audit of a failed lens|s/^\(\*\*The seven sub-agents.*\)$/\1 The same holds for one lens audited here after its agent was refused or failed./'; do
+	bait846 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
+done
+rm -f "$SCRATCH/bait846.md"
 
 t_done "/review-pr output contract"
