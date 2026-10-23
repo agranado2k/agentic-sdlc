@@ -45,10 +45,13 @@ export LC_ALL
 # Session, run and parent are the identity; TRACE_DIR and TRACE_CONFIG the
 # policy overrides scripts/trace.sh reads before its policy file, and
 # TRACE_AGENT_WAIT_MS the one the subagent-stop hook reads before it; TRACE_QUIET
-# its unconfigured-note switch. Unset here, above the budget, so the run
-# re-executed inside it starts without them too. A suite that needs one sets
-# it on the command itself, as tests/trace.test.sh does with TRACE_CONFIG.
-unset TRACE_SESSION TRACE_RUN TRACE_PARENT TRACE_DIR TRACE_CONFIG TRACE_QUIET TRACE_AGENT_WAIT_MS
+# its unconfigured-note switch; TRACE_HARNESS and TRACE_MODEL the session's
+# own facts, which the session-start hook exports and a run's begin records —
+# inherited, they turned the fixture-builders and suite-budget suites red in
+# every agent shell and left CI green (#861). Unset here, above the budget, so
+# the run re-executed inside it starts without them too. A suite that needs one
+# sets it on the command itself, as tests/trace.test.sh does with TRACE_CONFIG.
+unset TRACE_SESSION TRACE_RUN TRACE_PARENT TRACE_DIR TRACE_CONFIG TRACE_QUIET TRACE_AGENT_WAIT_MS TRACE_HARNESS TRACE_MODEL
 
 # The repo root, derived once from the suite that sourced this harness; every
 # helper below anchors on it rather than on the working directory.

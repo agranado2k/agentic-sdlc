@@ -168,7 +168,7 @@ fi
 # green in CI (#303). The probe exports every one of them, sources the lib,
 # and lists what survived between two sentinels — so a source that failed
 # prints nothing and goes red, rather than reading as "nothing survived".
-probe=$(TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONFIG=/nowhere.sh TRACE_QUIET=1 \
+probe=$(TRACE_SESSION=s TRACE_RUN=r TRACE_PARENT=p TRACE_DIR=/nowhere TRACE_CONFIG=/nowhere.sh TRACE_QUIET=1 TRACE_HARNESS=h TRACE_MODEL=m \
 	sh -c '. "$0"; printf "sourced["; env | grep "^TRACE_" | sort | tr "\n" " "; printf "]"' "$KIT/tests/lib.sh" 2>/dev/null)
 [ "$probe" = "sourced[]" ] &&
 	pass "after sourcing tests/lib.sh, no TRACE_ identity or policy variable the caller exported survives" ||
