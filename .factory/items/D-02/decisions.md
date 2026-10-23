@@ -10,3 +10,4 @@
 - 2026-10-23 **Criterion for phase 4: accuracy, with the human in the loop only for high-risk changes** (operator). Recorded in research.md §4, Operator's criteria.
 - 2026-10-23 **Phase 3 done, operator ready.** The operator answered the open questions and opened phase 4 with their own idea (recorded in proposals.md, in their words).
 - 2026-10-23 **Phase 4 options written.** Option 1 (the operator's: ticket as contract, autopilot below a risk line), Option 2 (measure first), Option 3 (earned autonomy, recommended). The choice is the operator's.
+- 2026-10-23 **The operator's second idea recorded:** the kit learns from its mistakes and fixes them automatically through /retro, and learns the project's guidelines and the human's preferences. Folded into all three options; Option 3 gains stage ⑥, the closed loop.

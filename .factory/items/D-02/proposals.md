@@ -30,6 +30,51 @@ lets the session rule and run the train *after the operator starts it*; this goe
 The idea needs a new decision record that supersedes §7 for low-risk changes. The rule cannot be
 edited in place (hard rule 5).
 
+## The operator's second idea, in their words (2026-10-23)
+
+> Also, I'd like that the kit learns with the mistakes so it can automatically fix that ( /retro )
+> and learn the projects guidelines and the humnans preferences
+
+**Which schools it matches [inference]:**
+- **B (harness engineering):** each agent struggle becomes a repo rule (S-42), and lessons compound
+  into checks and skills (S-1).
+- **E (eval-driven improvement):** error analysis over traces into a failure taxonomy (S-25, S-7).
+- **S-2:** mine recurring review comments into enforced invariants.
+- **F (attention interface):** a harness that proposes its own improvements from real use (S-5,
+  S-13). The attention policy is learned from the human's corrections (S-12).
+
+**What the kit has today.** `/retro` already reads the trace and turns what recurs into candidate
+tickets. This session ran that loop twice, and the second run caught a false finding on five PRs.
+
+**What is missing:**
+- **"Automatically":** the loop stops at a human publishing the tickets and starting the work.
+- **"Human preferences":** the operator's rulings and overrides are not collected as data a retro
+  learns from.
+
+**Where it meets binding rules:**
+- `/retro` never fixes, so the reading stays independent of the repair (ADR-0008 clause 7).
+- What it learns must become a **rule with a failing check, never a lessons file** or memory (shared
+  invariant §11; ADR-0005's and ADR-0008's "not a memory" non-goal).
+
+Neither rule blocks the idea. Together they set its shape [inference]:
+1. The retro proposes.
+2. The proposal becomes a ticket.
+3. The ticket's fix is a check, a policy value or a skill line, carrying a `Targets:` query.
+4. The before-and-after section proves the fix worked, or reopens it.
+
+"Automatic" means that whole cycle runs through the same lane as any other ticket. A preference is
+learned when an operator ruling recurs: the retro proposes making it the default, as a policy value
+or a skill line, and the operator's ruling on that proposal is the label (S-12).
+
+**How each option takes it.**
+- **Option 1** runs retro tickets through the autopilot like any ticket.
+- **Option 2** adds the labels. Operator rulings and overrides are recorded as their own events,
+  beside post-merge outcomes, so a preference can be counted.
+- **Option 3** adds a stage ⑥, the closed loop. Retro candidates whose fix is low-risk flow through
+  the low-risk lane, and a candidate that edits a lens or a skill must carry its `Targets:` line,
+  which retro already requires. Recurring operator rulings become proposed defaults that the
+  operator confirms once.
+
 ---
 
 ## Option 1 · Ticket as contract, autopilot below a risk line (the operator's)
@@ -117,11 +162,13 @@ measurements say the automated verdicts are accurate enough.
 - One decision record that supersedes §7 for that lane only.
 
 **Rough slices:**
-1. Option 2.
+1. Option 2, with operator rulings and overrides recorded as events.
 2. The base-branch policy rule (guard safety, the operator's second priority).
 3. The risk rule, reporting only.
 4. The decision log.
 5. The lane switch and its decision record.
+6. The closed loop: low-risk retro candidates ride the lane; recurring rulings become proposed
+   defaults.
 
 **Cost and risk.** Medium. Every step is reversible, and autonomy arrives only with evidence. It
 serves the operator's criterion directly: it is accurate first, and the human is reserved for high
@@ -144,6 +191,7 @@ risk.
 | Reversibility | Low: unsupervised landings ship | Full | High: the lane is a switch |
 | Fit with the decision records | Supersedes §7 at once | Fits | Supersedes §7 for one lane, with evidence |
 | Time to a first slice | Long | Short | Short (its first slice is Option 2) |
+| Learns from mistakes and preferences (operator) | Retro tickets ride the autopilot; no preference data | Collects the labels: outcomes and rulings | Closed loop ⑥: retro → ticket → lane → before-and-after check; recurring rulings become proposed defaults |
 
 **Recommendation: Option 3.** It reaches the operator's vision, but in the operator's own order:
 measure, make the guards safe, then change policy. Its first slice is Option 2, so nothing is lost
