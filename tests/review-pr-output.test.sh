@@ -382,6 +382,20 @@ held "every status Agent 7 tags a line with is a token the policy file declares:
 	pass "…and every declared status is a tag Agent 7 prints" ||
 	fail "Agent 7 tags '$sta', the policy file declares '$(t_field_tokens status "$POLICY")'"
 
+# The one copy-and-edit helper every bait case below calls (#860).
+# bait_copy <source> <copy> <sed script> — edit a copy, green only when the
+# edit changed it, so a bait whose anchor moved cannot pass by planting nothing.
+# bait_gap <checker> <rule name> <sed script> — the same on the skill, then
+# green when the checker run on the copy names the rule. The multi-file baits
+# (#635, #796, #820) stage their own companions and call bait_copy for the edit.
+bait_copy() {
+	sed "$3" "$1" >"$2"
+	! cmp -s "$2" "$1"
+}
+bait_gap() {
+	bait_copy "$SKILL_ABS" "$SCRATCH/bait-gap.md" "$3" && "$1" "$SCRATCH/bait-gap.md" | grep -qxF -- "$2"
+}
+
 # The bait. Each plants ONE line in a copy of the skill — where a session
 # would print it from — and the same holder must name exactly that token.
 bait_skill() { awk -v at="$1" -v add="$2" '{ print } index($0, at) == 1 { print add }' "$SKILL_ABS" >"$SCRATCH/bait.md"; }
@@ -1022,10 +1036,7 @@ t_roster_rows "$SKILL_ABS" | grep -F -- '- `single-reviewer` — ' | grep -q 'Ag
 	fail "the single-reviewer row names an agent number — it is not a lens, and the lens count would grow" ||
 	pass "the single-reviewer row names no agent number: it is not a lens"
 # Baits: each rule deleted from a copy is named.
-bait568() { # <rule name> <sed script>
-	sed "$2" "$SKILL_ABS" >"$SCRATCH/bait568.md"
-	! cmp -s "$SCRATCH/bait568.md" "$SKILL_ABS" && single_rules_missing "$SCRATCH/bait568.md" | grep -qxF -- "$1"
-}
+bait568() { bait_gap single_rules_missing "$1" "$2"; }
 for b in \
 	'roster row|/^- `single-reviewer` — /d' \
 	'row: a spawn only per LENS-RETURN|/^- `single-reviewer` — /s/ only as / /' \
@@ -1155,10 +1166,7 @@ emit_points_missing() {
 miss=$(emit_points_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
 [ -z "$miss" ] && pass "/review-pr records a lens's raises at its return on path (a), and both verdicts before anything is posted" ||
 	fail "/review-pr's emit points are missing: $miss — a posted review reads raise-less in the trace (#629)"
-bait629() { # <rule name> <sed script>
-	sed "$2" "$SKILL_ABS" >"$SCRATCH/bait629.md"
-	! cmp -s "$SCRATCH/bait629.md" "$SKILL_ABS" && emit_points_missing "$SCRATCH/bait629.md" | grep -qxF -- "$1"
-}
+bait629() { bait_gap emit_points_missing "$1" "$2"; }
 for b in \
 	"raise at lens return|s/a lens's raises are recorded beside its \`spawn.end\`, the moment it returns/a lens's raises wait for the end/" \
 	'ids in arrival order|s/numbers it in arrival order/picks/' \
@@ -1264,8 +1272,7 @@ miss=$(low_band_missing "$SKILL_ABS" "$ITER_ABS" | tr '\n' ',' | sed 's/,$//')
 	fail "the LOW band rule is missing: $miss (#635)"
 bait635() { # <rule name> <file: r|i> <sed script>
 	_bf=$SKILL_ABS; [ "$2" = i ] && _bf=$ITER_ABS
-	sed "$3" "$_bf" >"$SCRATCH/bait635.md"
-	! cmp -s "$SCRATCH/bait635.md" "$_bf" || return 1
+	bait_copy "$_bf" "$SCRATCH/bait635.md" "$3" || return 1
 	if [ "$2" = i ]; then low_band_missing "$SKILL_ABS" "$SCRATCH/bait635.md"; else low_band_missing "$SCRATCH/bait635.md" "$ITER_ABS"; fi | grep -qxF -- "$1"
 }
 for b in \
@@ -1498,8 +1505,7 @@ bait796() { # <rule name> <file under the skills dir> <sed script>
 	for _b_f in review-pr/SKILL.md review-pr/NO-LENS.md pr-iterate/SKILL.md pr-iterate/NO-LENS.md; do
 		cp "$SKILLS_DIR/$_b_f" "$SCRATCH/796/$_b_f" 2>/dev/null || : >"$SCRATCH/796/$_b_f"
 	done
-	sed "$3" "$SKILLS_DIR/$2" >"$SCRATCH/796/$2"
-	! cmp -s "$SCRATCH/796/$2" "$SKILLS_DIR/$2" && nolens_missing "$SCRATCH/796" | grep -qxF -- "$1"
+	bait_copy "$SKILLS_DIR/$2" "$SCRATCH/796/$2" "$3" && nolens_missing "$SCRATCH/796" | grep -qxF -- "$1"
 }
 for b in \
 	'R15: §3 points at the branch|review-pr/SKILL.md|s/When every count is 0, open/When a count is 0, skip/' \
@@ -1644,8 +1650,7 @@ bait820() { # <rule name> <file under the skills dir, or broker> <sed script>
 	cp "$ROOT/scripts/forge-broker.kit.sh" "$SCRATCH/820/broker.sh"
 	if [ "$2" = broker ]; then _b_src="$ROOT/scripts/forge-broker.kit.sh" _b_dst="$SCRATCH/820/broker.sh"
 	else _b_src="$SKILLS_DIR/$2" _b_dst="$SCRATCH/820/$2"; fi
-	sed "$3" "$_b_src" >"$_b_dst"
-	! cmp -s "$_b_dst" "$_b_src" && order_missing "$SCRATCH/820" "$SCRATCH/820/broker.sh" | grep -qxF -- "$1"
+	bait_copy "$_b_src" "$_b_dst" "$3" && order_missing "$SCRATCH/820" "$SCRATCH/820/broker.sh" | grep -qxF -- "$1"
 }
 for b in \
 	'review: the Verdict line opens the summary|review-pr/NO-LENS.md|/^### Review Summary$/a\
@@ -1776,10 +1781,7 @@ rm -f "$SCRATCH/bait846w.md"
 miss=$(adr_rules_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
 [ -z "$miss" ] && pass "§4 tells every lens a skill owes no bump (ADR-0025), and §3 never audits a refused or failed lens in its place (ADR-0035)" ||
 	fail "/review-pr's ADR-0025/ADR-0035 rules are missing: $miss — lenses raise findings every triage rejects (#846)"
-bait846() { # <rule name> <sed script>
-	sed "$2" "$SKILL_ABS" >"$SCRATCH/bait846.md"
-	! cmp -s "$SCRATCH/bait846.md" "$SKILL_ABS" && adr_rules_missing "$SCRATCH/bait846.md" | grep -qxF -- "$1"
-}
+bait846() { bait_gap adr_rules_missing "$1" "$2"; }
 for b in \
 	'bump rule in §4|s/a skill sits on its `skills:` list by name and owes none/a skill owes one too/' \
 	'failed lens not audited here|s/never audits its slice in its place/audits its slice/' \
