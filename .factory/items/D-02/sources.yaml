@@ -217,7 +217,8 @@
   title: Embracing the parallel coding agent lifestyle (Simon Willison, 2025-10-05)
   kind: literature
   read: 2026-10-23
-  claim: Review is the bottleneck: one person lands one significant change at a time.
+  claim: >-
+    Review is the bottleneck: one person lands one significant change at a time.
 - id: S-30
   url: https://www.anthropic.com/engineering/claude-code-sandboxing
   title: "Beyond permission prompts: making Claude Code more secure and autonomous (Anthropic, 2025-10-20)"
