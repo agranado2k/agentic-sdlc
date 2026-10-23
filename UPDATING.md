@@ -245,8 +245,9 @@ stops` in its spend span, names them beside the unpriced ones, and takes a
 stop's `data.ticket` as the per-ticket fallback join; `/review-pr`'s
 `SKILL.md` and `.agents/prompts/review-worker.md` say a version bump is owed
 only by a path on `VERSION`'s `files:` list, and a lens refused or failed is
-named under `Lenses not run:`, never audited by the coordinator. Take all
-three.
+named under `Lenses not run:`, never audited by the coordinator; the
+same `SKILL.md` is also trimmed under its size ceiling, no rule added or
+dropped. Take all three.
 
 **Arriving from 0.88.0 or older, a review lens returns raise lines and runs
 on the reviewer type.** No file joins or leaves at 0.89.0, and no shared
@@ -1559,10 +1560,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3257 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3258 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3411 insertions(+), 1 deletion(-)
+ 3 files changed, 3412 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

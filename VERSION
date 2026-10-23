@@ -3276,7 +3276,8 @@
 # only by a path on VERSION's files: list, and a lens refused or failed is
 # named under `Lenses not run:`, never audited by the coordinator; the
 # offline worker contract .agents/prompts/review-worker.md states the same
-# bump rule. Take SKILL.md and review-worker.md.
+# bump rule; and (#867) SKILL.md's prose is trimmed under its size ceiling,
+# no rule added or dropped. Take SKILL.md and review-worker.md.
 # Wiring (9b): none. Templates (9c): none. Config (9d): none.
 # Adapter (9e): the Claude Code adapter's hooks/transcript-usage.mjs leaves
 # an unterminated last line that does not parse for the next read and prices
