@@ -40,4 +40,5 @@ The half-written fixture yields a stop with its model and token counts.
 
 Tier: implementer
 Confidence: high
+Label: ready-for-agent
 Class: toil

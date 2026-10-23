@@ -41,4 +41,5 @@ The stubbed run lands after one re-run, and the output line names the job.
 
 Tier: implementer
 Confidence: medium
+Label: ready-for-agent
 Class: toil

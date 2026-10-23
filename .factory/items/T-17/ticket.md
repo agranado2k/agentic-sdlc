@@ -42,4 +42,5 @@ A stop with no run, spawned for ticket #7, shows `data.ticket=#7` in the trace.
 
 Tier: implementer
 Confidence: medium
+Label: none
 Class: toil

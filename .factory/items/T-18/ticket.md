@@ -44,4 +44,5 @@ Targets: kind=finding.triage outcome=rejected
 
 Tier: implementer
 Confidence: medium
+Label: none
 Class: toil
