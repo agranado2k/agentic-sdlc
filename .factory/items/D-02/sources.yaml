@@ -1,16 +1,319 @@
 # Evidence behind D-02. One entry per source; `claim` is what we take from it.
+# Every page was read through a restricted reader on 2026-10-23, via a summarising fetch tool:
+# quotes in research.md are near-verbatim and are checked against the page before a record cites them.
+
+# --- The operator's sources (phase 2) ---
 - id: S-1
-  title: Building an AI-native SDLC (https://www.tenex.co/blog/building-an-ai-native-sdlc)
-  claim: not yet read
+  url: https://www.tenex.co/blog/building-an-ai-native-sdlc
+  title: Building an AI-Native SDLC (Lieberman, Zakon, Hess, Hezarkhani; Tenex, 2026-08-05)
+  kind: operator
+  read: 2026-10-23
+  claim: >-
+    Treat project context as code: a versioned record beside the code, machine-owned fenced regions,
+    status derived from the record and "done" gated on linked evidence. Lessons compound into checks
+    and skills. No outcome data; consultancy framing.
 - id: S-2
-  title: We stopped reviewing code and started verifying intent (https://tessl.io/blog/we-stopped-reviewing-code-and-started-verifying-intent)
-  claim: not yet read
+  url: https://tessl.io/blog/we-stopped-reviewing-code-and-started-verifying-intent
+  title: We stopped reviewing code and started verifying intent (Ankit Jain, Aviator; Tessl blog, 2026-10-20)
+  kind: operator
+  read: 2026-10-23
+  claim: >-
+    Humans review acceptance criteria before code exists; each criterion becomes a contract with a
+    deterministic verdict and attached evidence; recurring review comments are mined into
+    machine-enforced invariants. One number (4x PR volume); vendor author.
 - id: S-3
-  title: Decision model evals (https://hamel.dev/blog/posts/decision-model-evals)
-  claim: not yet read
+  url: https://hamel.dev/blog/posts/decision-model-evals
+  title: How To Use Decision Models for Evals (Hamel Husain, Antaripa Saha; 2026-10-20)
+  kind: operator
+  read: 2026-10-23
+  claim: >-
+    Treat any automated judge as a classifier: set a precision/recall floor from the consequences,
+    tune its threshold by cross-validation, compare on a cost Pareto frontier, check calibration,
+    one judge per failure mode. n=98 traces, one domain.
 - id: S-4
-  title: Topology (https://blog.exe.dev/topology)
-  claim: not yet read
+  url: https://blog.exe.dev/topology
+  title: The Topology of an LLM Agent Loop With Tool Use (Philip Zeyliger; exe.dev, 2026-10-20)
+  kind: operator
+  read: 2026-10-23
+  claim: >-
+    An agent is model, loop and tools; where each runs decides privacy, cost, capability and blast
+    radius. VMs are the safest place to run tools; map where credentials live. Descriptive, no
+    measurement; author sells VMs.
 - id: S-5
-  title: Claude mods (https://www.latent.space/p/claude-mods)
-  claim: not yet read
+  url: https://www.latent.space/p/claude-mods
+  title: "Claude Mods: Flipping the Harness Inside Out (Dan McAteer; Latent Space, 2026-10-21)"
+  kind: operator
+  read: 2026-10-23
+  claim: >-
+    In-process harness middleware (mods) turns the harness toward the human's attention: side-agent
+    supervisors, guards that hold a tool call. Costs: noise (99 of 111 turns triggered), tokens, and
+    mods are not sandboxed. One practitioner's evidence.
+
+# --- One hop from the operator's sources (phase 2) ---
+- id: S-6
+  url: https://latent.space/p/reviews-dead
+  title: How to Kill the Code Review (Ankit Jain; Latent Space, 2026-03-02)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    A five-layer "Swiss cheese" in place of approval review: parallel candidates ranked by
+    verification, deterministic guardrails, human-written BDD criteria, path-based escalation
+    (auth, schema, dependencies), adversarial verifiers. Opinion; cites Faros second-hand.
+- id: S-7
+  url: https://parlance-labs.com/blog/posts/auto-evals/
+  title: Do Automated Evals Work? (Saha, Husain; Parlance Labs, 2026-07-11)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Six automated error-analysis systems reached 74-87% recall against a human expert, and all
+    missed failures that "looked correct" but missed the product goal. A human-in-the-loop taxonomy
+    loop is recommended.
+- id: S-8
+  url: https://randalolson.com/2026/10/14/when-to-use-a-decision-model-instead-of-an-llm/
+  title: When to use a decision model instead of an LLM (Randal S. Olson, 2026-10-15)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Decision models match LLMs on routing and safety classification at a fraction of the cost and
+    latency, and trail them by 19-30 points on reasoning and knowledge.
+- id: S-9
+  url: https://code.claude.com/docs/en/plugins/mods/overview
+  title: Mods overview (Anthropic, Claude Code docs, undated)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Mods run in-process, are not sandboxed, and without managed settings a mod's approval can pass a
+    tool call that ask rules or PreToolUse hooks would hold.
+- id: S-10
+  url: https://blog.exe.dev/revisiting-joel
+  title: Revisiting Joel's Test (Philip Zeyliger; exe.dev, 2026-08-31)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    A nine-point test for agent-era teams: adversarial cross-model review, agent-supervised deploys
+    that can halt, a merge queue under 3 minutes, observability agents can query.
+- id: S-11
+  url: https://blog.philz.dev/blog/sandboxes/
+  title: "computing 2+2: so many sandboxes (philz.dev, 2026-03-29)"
+  kind: literature
+  read: 2026-10-23
+  claim: A ladder of sandboxes by job, from microVM for a coding agent to WASM for a data agent.
+- id: S-12
+  url: https://www.latent.space/p/attention-interface
+  title: The Evolution of the Agent Harness (Dan McAteer; Latent Space, 2026-08-22)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    As models absorb the harness, what remains faces the human: a policy for when the agent may
+    interrupt and what it decides alone, learned from corrections.
+- id: S-13
+  url: https://github.com/DannyMac180/skills/tree/main/modsmith
+  title: ModSmith README (DannyMac180, undated)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Mods including a next-steps supervisor and an assumption ledger, a static cost audit per mod, and
+    a DECISIONS.md per mod; only two run live.
+- id: S-14
+  url: https://cursor.com/docs/approval-agents
+  title: PR Routing & Approval (Cursor docs, undated)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Approval policy lives in files; a PR that edits a policy file is judged by the base branch's
+    version, failing closed to a human; only exact basenames are trusted.
+- id: S-15
+  url: https://sketch.dev/blog/agent-loop
+  title: The Unreasonable Effectiveness of an LLM Agent Loop with Tool Use (Philip Zeyliger; sketch.dev, 2025-05-15)
+  kind: literature
+  read: 2026-10-23
+  claim: A nine-line loop with one bash tool solves many coding tasks; specialised tools add reliability.
+
+# --- Literature survey (phase 1) ---
+- id: S-16
+  url: https://www.anthropic.com/engineering/building-effective-agents
+  title: Building effective agents (Schluntz, Zhang; Anthropic, 2024-12-19)
+  kind: literature
+  read: 2026-10-23
+  claim: Workflows before agents; add complexity only when it demonstrably improves outcomes.
+- id: S-17
+  url: https://code.claude.com/docs/en/best-practices
+  title: Best practices for Claude Code (Anthropic docs, living)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    A check the agent can run is the central lever; hooks are deterministic where instructions are
+    advisory; writer/reviewer split; a reviewer told to find gaps will usually report some.
+- id: S-18
+  url: https://cognition.com/blog/dont-build-multi-agents
+  title: Don't Build Multi-Agents (Walden Yan; Cognition, 2025-06-12)
+  kind: literature
+  read: 2026-10-23
+  claim: Parallel writers make conflicting implicit decisions; share full traces; single-threaded by default.
+- id: S-19
+  url: https://www.anthropic.com/engineering/multi-agent-research-system
+  title: How we built our multi-agent research system (Anthropic, 2025-06-13)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Orchestrator-workers beat a single agent by 90% on research at about 15x the tokens of chat;
+    coding is a poor fit; production needs full tracing.
+- id: S-20
+  url: https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/
+  title: Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity (METR, 2025-07-10)
+  kind: literature
+  read: 2026-10-23
+  claim: An RCT measured 19% slower with AI while developers believed they were 20% faster; METR now says it is outdated.
+- id: S-21
+  url: https://metr.org/blog/2026-02-24-uplift-update/
+  title: We are Changing our Developer Productivity Experiment Design (METR, 2026-02-24)
+  kind: literature
+  read: 2026-10-23
+  claim: The follow-up leans to speedup but its intervals include zero; the RCT design broke under universal adoption.
+- id: S-22
+  url: https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html
+  title: "Understanding Spec-Driven-Development: Kiro, spec-kit, and Tessl (Birgitta Böckeler; Thoughtworks, 2025-10-15)"
+  kind: literature
+  read: 2026-10-23
+  claim: Spec-first, spec-anchored, spec-as-source; heavy specs overload review and give false control.
+- id: S-23
+  url: https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/
+  title: Spec-driven development with AI (Den Delimarsky; GitHub, 2025-09-02)
+  kind: literature
+  read: 2026-10-23
+  claim: Specify, plan, tasks, implement against a constitution; the human verifies each artifact.
+- id: S-24
+  url: https://hamel.dev/blog/posts/llm-judge/
+  title: "Using LLM-as-a-Judge For Evaluation: A Complete Guide (Hamel Husain, 2024-10-29, rev. 2026-09-01)"
+  kind: literature
+  read: 2026-10-23
+  claim: Binary judges built from an expert's critiques; report true positive and true negative rates against human labels.
+- id: S-25
+  url: https://hamel.dev/blog/posts/field-guide/
+  title: A Field Guide to Rapidly Improving AI Products (Hamel Husain, 2025-03-24)
+  kind: literature
+  read: 2026-10-23
+  claim: Error analysis over traces, bottom-up failure taxonomy and counts, is the most valuable activity.
+- id: S-26
+  url: https://arxiv.org/abs/2404.12272
+  title: Who Validates the Validators? (Shankar et al.; UIST 2024, 2024-04-18)
+  kind: literature
+  read: 2026-10-23
+  claim: LLM evaluators inherit the evaluated model's problems and need human validation; criteria drift as outputs are graded.
+- id: S-27
+  url: https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
+  title: Demystifying evals for AI agents (Anthropic, 2026-01-09)
+  kind: literature
+  read: 2026-10-23
+  claim: Code, model and human graders; capability evals graduate into regression evals; read the transcripts.
+- id: S-28
+  url: https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/
+  title: The lethal trifecta for AI agents (Simon Willison, 2025-06-16)
+  kind: literature
+  read: 2026-10-23
+  claim: Private data, untrusted content and external action together enable exfiltration; cut a leg architecturally.
+- id: S-29
+  url: https://simonwillison.net/2025/Oct/5/parallel-coding-agents/
+  title: Embracing the parallel coding agent lifestyle (Simon Willison, 2025-10-05)
+  kind: literature
+  read: 2026-10-23
+  claim: Review is the bottleneck: one person lands one significant change at a time.
+- id: S-30
+  url: https://www.anthropic.com/engineering/claude-code-sandboxing
+  title: "Beyond permission prompts: making Claude Code more secure and autonomous (Anthropic, 2025-10-20)"
+  kind: literature
+  read: 2026-10-23
+  claim: Filesystem and network sandboxing cut permission prompts by 84% internally and answer approval fatigue.
+- id: S-31
+  url: https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills
+  title: Equipping agents for the real world with Agent Skills (Anthropic, 2025-10-16, open standard 2025-12-18)
+  kind: literature
+  read: 2026-10-23
+  claim: A skill is a directory with a SKILL.md, progressively disclosed; install only from trusted sources.
+- id: S-32
+  url: https://cursor.com/docs/hooks
+  title: Hooks (Cursor docs, living)
+  kind: literature
+  read: 2026-10-23
+  claim: About 20 hook events, layered enterprise to user; deny wins; a failClosed option.
+- id: S-33
+  url: https://forum.cursor.com/t/beforeshellexecution-hook-malformed-json-response-silently-allows-command-instead-of-blocking/152669
+  title: "beforeShellExecution hook: malformed JSON silently allows the command (Cursor forum, 2026-02-23)"
+  kind: literature
+  read: 2026-10-23
+  claim: A policy hook that failed open let git push and rm -rf through; the vendor agreed fail-open is the wrong default.
+- id: S-34
+  url: https://cloud.google.com/blog/products/ai-machine-learning/announcing-the-2025-dora-report
+  title: Announcing the 2025 DORA Report (Google DORA, 2025-09-23)
+  kind: literature
+  read: 2026-10-23
+  claim: AI now correlates with higher throughput but lower stability; it amplifies what a team already has.
+- id: S-35
+  url: https://faros.ai/research/ai-acceleration-whiplash
+  title: The Acceleration Whiplash, AI Engineering Report Q2 2026 (Faros AI)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Telemetry over 22K developers: tasks +34%, bugs per PR +28%, review time 5x, incidents per PR 3x.
+    Landing page only; the report is gated.
+- id: S-36
+  url: https://cloud.google.com/transform/when-ai-writes-the-code-who-reviews-it-cto-google-cloud
+  title: When AI writes the code, who reviews it? (Lee Boonstra; Google Cloud, 2026-04-29)
+  kind: literature
+  read: 2026-10-23
+  claim: The bottleneck moved to the reviewers; approval fatigue; conditional approval gated on tests.
+- id: S-37
+  url: https://arxiv.org/abs/2602.04226
+  title: "Why Agentic-PRs Get Rejected: A Comparative Study of Coding Agents (Nakashima et al., 2026-02-04)"
+  kind: literature
+  read: 2026-10-23
+  claim: Seven rejection modes occur only in agent PRs, distrust among them; 67.9% of rejections carry no explicit feedback.
+- id: S-38
+  url: https://arxiv.org/abs/2602.09185
+  title: "AIDev: Studying AI Coding Agents on GitHub (Li, Zhang, Hassan; 2026-02-09)"
+  kind: literature
+  read: 2026-10-23
+  claim: A dataset of 932,791 agent PRs from five agents across 116K repositories.
+- id: S-39
+  url: https://cognition.com/blog/multi-agents-working
+  title: "Multi-Agents: What's Actually Working (Walden Yan; Cognition, 2026-04-22)"
+  kind: literature
+  read: 2026-10-23
+  claim: Single-threaded writes, extra agents for intelligence; clean-context reviewer loop; map-reduce-and-manage.
+- id: S-40
+  url: https://cognition.com/blog/how-cognition-uses-devin-to-build-devin
+  title: How Cognition Uses Devin to Build Devin (Cognition, 2026-02-27)
+  kind: literature
+  read: 2026-10-23
+  claim: Ticket, fix with regression test, PR, agent review, autofix to green, then human review; 659 merged PRs in a week.
+- id: S-41
+  url: https://cognition.com/blog/testing-development
+  title: Verifying Agentic Development at Scale (Ido Pesok; Cognition, 2026-05-29)
+  kind: literature
+  read: 2026-10-23
+  claim: Agents return a test plan with screenshots and video as proof; the reviewer inspects behaviour evidence.
+- id: S-42
+  url: https://www.martinfowler.com/articles/exploring-gen-ai/harness-engineering-memo.html
+  title: Harness Engineering, first thoughts (Birgitta Böckeler; Thoughtworks, 2026-02-17)
+  kind: literature
+  read: 2026-10-23
+  claim: >-
+    Harness = context engineering, constraints enforced by linters and structural tests, and cleanup
+    agents; each agent struggle becomes a repo rule. Behaviour verification is the missing part.
+- id: S-43
+  url: https://blog.robbowley.net/2026/04/04/metrs-developer-productivity-research-2026-update/
+  title: "METR's developer productivity research: 2026 update (Rob Bowley, 2026-04-04)"
+  kind: literature
+  read: 2026-10-23
+  claim: Secondary; warns that "18% boost" readings of S-21 misread its sign and its reliability.
+- id: S-44
+  url: https://www.infoq.com/news/2026/02/openai-harness-engineering-codex
+  title: OpenAI Introduces Harness Engineering (Leela Kumili; InfoQ, 2026-02-21)
+  kind: literature
+  read: 2026-10-23
+  claim: Secondary coverage of OpenAI's post (HTTP 403 to us); adds a layered dependency rule checked by structural tests.
+- id: S-45
+  url: https://openai.com/index/harness-engineering/
+  title: "Harness engineering: leveraging Codex in an agent-first world (OpenAI, about 2026-02-11)"
+  kind: literature
+  claim: Unread (HTTP 403). Known only through S-42 and S-44.
