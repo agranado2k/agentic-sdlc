@@ -11,7 +11,9 @@
 //
 //   <model> <input> <output> <cache write> <cache read> <messages> <last id> [<snapshots>]
 //
-// so a POSIX `while read -r` consumes it without a parser. <snapshots> is how
+// so a POSIX `while read -r` consumes it without a parser. One more line, the
+// single word `partial`, says the read stopped short of a last line still being
+// written (#848, #862, below): the rows are the complete lines before it. <snapshots> is how
 // many of the row's messages carry an output count that is a streamed
 // snapshot, not the closing one, so <output> is a lower bound (#608, below).
 // <messages> is how
@@ -254,8 +256,10 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
   // A LAST LINE WITH NO NEWLINE THAT DOES NOT PARSE IS STILL BEING WRITTEN
   // (#848): a stop can read the file mid-write. It is left for the next read,
   // and the complete lines before it are priced. A bad line anywhere else, or
-  // a bad last line that IS terminated, is complete and wrong: drift.
+  // a bad last line that IS terminated, is complete and wrong: drift. The skip
+  // is returned as `partial`, so the event can say it was priced short (#862).
   const lines = raw.split("\n");
+  let partial = false;
   let lineNo = 0;
   for (const line of lines) {
     lineNo += 1;
@@ -265,7 +269,10 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
     try {
       entry = JSON.parse(line);
     } catch {
-      if (lineNo === lines.length) break;
+      if (lineNo === lines.length) {
+        partial = true;
+        break;
+      }
       fail(`${where}line ${lineNo} is not JSON — the transcript's shape has drifted`);
     }
     if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
@@ -379,10 +386,10 @@ function scan(file, after, byModel = new Map(), where = "", fail = die) {
     const stop = modelAt.get(message.model) ?? everyAt;
     message.fresh = stop === null || message.at > stop;
   }
-  return { seen, compacted, copied, rollup: rollupLine > lastMessageLine ? lastRollup : null };
+  return { seen, compacted, copied, partial, rollup: rollupLine > lastMessageLine ? lastRollup : null };
 }
 
-const { seen, compacted, copied, rollup: lastRollup } = scan(path, after, anchors);
+const { seen, compacted, copied, partial, rollup: lastRollup } = scan(path, after, anchors);
 
 /** Four zero counts, a fresh object each time. */
 const zero = () => ({ tok_in: 0, tok_out: 0, tok_cache_w: 0, tok_cache_r: 0 });
@@ -413,7 +420,8 @@ for (const [id, { model, counts, snapshot, fresh }] of seen) {
   add(totals, model, counts);
 }
 
-let out = "";
+// One field where a row has seven or more, so no model id can be read as it.
+let out = partial ? "partial\n" : "";
 for (const [model, c] of totals) {
   out += `${model} ${c.tok_in} ${c.tok_out} ${c.tok_cache_w} ${c.tok_cache_r} ${counted.get(model)} ${lastOf.get(model)}${snapshotsField(snapshots.get(model))}\n`;
 }

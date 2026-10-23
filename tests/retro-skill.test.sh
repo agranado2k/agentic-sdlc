@@ -1518,7 +1518,9 @@ banner "16. Question 5 answers spend per tier, skill and cascade rung (spend/R22
 # stop recorded `unattributed`, a stop from before the attribution existed (no
 # tier at all), an unpriced model and a two-rung cascade, and the rows it
 # prints are the answer — the tier, skill and rung rows, the order-of-magnitude
-# buckets and the unattributed row. Its first-call span reads the stops'
+# buckets and the unattributed row — and the partial row (#862): the stops
+# priced past a half-written transcript line, data.partial=yes, counted and
+# summed so the report names them beside the unpriced ones. Its first-call span reads the stops'
 # transcripts and prints the median prompt the first call sent.
 sspan=$(sec_of 5 | grep -o '`sh scripts/trace\.sh export --csv[^`]*`' | tr -d '`' | head -1)
 fspan=$(sec_of 5 | grep -o '`sh scripts/trace\.sh export --since[^`]*transcript[^`]*`' | tr -d '`' | head -1)
@@ -1533,8 +1535,8 @@ tx() { printf '{"type":"user","message":{"content":"x"}}\n{"type":"assistant","m
 tx a1 3 30000 10000
 tx a2 2 18000 2000
 tx a3 1 59999 0
-sp_trace emit kind=agent.stop subject=agent:a1 related='ticket:#1' tier=implementer skill=implement model=m1 tok_in=1000000 data.transcript="$sp/tx/a1.jsonl"
-sp_trace emit kind=agent.stop subject=agent:a2 tier=reviewer domain=self-implemented skill=review-pr model=m1 tok_in=100000 data.transcript="$sp/tx/a2.jsonl"
+sp_trace emit kind=agent.stop subject=agent:a1 related='ticket:#1' tier=implementer skill=implement model=m1 tok_in=1000000 data.partial=yes data.transcript="$sp/tx/a1.jsonl"
+sp_trace emit kind=agent.stop subject=agent:a2 tier=reviewer domain=self-implemented skill=review-pr model=m1 tok_in=100000 data.partial=yes data.transcript="$sp/tx/a2.jsonl"
 sp_trace emit kind=agent.stop subject=agent:a3 tier=unattributed model=m1 tok_in=10000 data.transcript="$sp/tx/a3.jsonl"
 sp_trace emit kind=agent.stop subject=agent:a4 model=m1 tok_in=5000000 data.transcript="$sp/tx/gone.jsonl"
 sp_trace emit kind=agent.stop subject=agent:a5 tier=planner skill=to-tickets model=nope tok_in=10
@@ -1559,7 +1561,7 @@ if [ -n "$sspan" ]; then
 		'tier unattributed 3 15.0330' 'skill implement 3 4.8000' 'skill review-pr 1 0.3000' 'skill unattributed 3 15.0330' \
 		'rung 1 1 0.6000' 'rung 2 1 1.2000' 'verdict rung-1:escalated 1 -' 'verdict rung-2:passed 1 -' 'verdict rung-2:failed 1 -' \
 		'bucket under-0.10 2 0.0330' 'bucket 0.10-1 2 0.9000' 'bucket 1-10 2 4.2000' 'bucket 10-up 1 15.0000' \
-		'bucket unpriced 1 unpriced' 'total all 8 unpriced'; do
+		'bucket unpriced 1 unpriced' 'total all 8 unpriced' 'partial stops 2 3.3000'; do
 		printf '%s\n' "$sout" | grep -qxF "$row" && pass "spend/R22: the spend span prints '$row'" ||
 			fail "spend/R22: the spend span did not print '$row' over the fixture; it printed: $(printf '%s' "$sout" | tr '\n' ';')"
 	done
@@ -1570,7 +1572,7 @@ if [ -n "$fspan" ]; then
 	[ "$fout" = 40003 ] && pass "the first-call span prints the median first-call prompt, skipping a transcript that is gone" ||
 		fail "the first-call span printed '$fout' over the fixture, not 40003: $fspan"
 fi
-for needle in 'per tier' 'per cascade rung' 'unattributed' 'order of magnitude' 'first-call prompt'; do
+for needle in 'per tier' 'per cascade rung' 'unattributed' 'order of magnitude' 'first-call prompt' '`data.partial`'; do
 	sec_of 5 | flat | grep -qiF "$needle" && pass "question 5 names: $needle" || fail "question 5 does not name '$needle' (spend/R22)"
 done
 # A stop no run ties to a ticket still names one (#847): its `data.ticket`,

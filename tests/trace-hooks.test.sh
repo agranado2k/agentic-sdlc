@@ -5359,7 +5359,7 @@ guard general-purpose 'until ! pgrep -f "x"; do sleep 5; done' PATH="$(no_node_p
 	fail "with node off PATH a sub-agent's loop exited $T_STATUS: $T_ERR"
 
 # ---------------------------------------------------------------------------
-banner "58. A last line still being written is left for the next read; a bad line before it is drift (#848)"
+banner "58. A last line still being written is left for the next read, and its stop says so; a bad line before it is drift (#848, #862)"
 # ---------------------------------------------------------------------------
 # A subagent's transcript can be read while the agent harness is still writing
 # its last line: eleven reviewer stops on one PR went unpriced, each reason
@@ -5392,6 +5392,19 @@ if [ "$HAVE_NODE" = 1 ]; then
 		[ "$got" = "$want" ] && pass "$f is $want, priced from the complete lines" ||
 			fail "$f is '$got', expected $want: $A"
 	done
+	# AND THE STOP SAYS IT WAS PRICED SHORT (#862): a stop priced past a
+	# half-written line records data.partial=yes, so /retro can tell it from a
+	# stop whose whole transcript was read — and count how often it happens.
+	[ "$(data_of "$A" partial)" = yes ] &&
+		pass "the stop priced past a half-written line records data.partial=yes" ||
+		fail "the stop priced past a half-written line carries no data.partial=yes: $A"
+	new_trace
+	stop_on "$SCRATCH/sub.jsonl"
+	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/stop-308.json"
+	A=$(ev_of agent.stop | sed -n '1p')
+	[ -n "$(num "$A" tok_out)" ] && [ -z "$(data_of "$A" partial)" ] &&
+		pass "a stop whose whole transcript was read records no data.partial" ||
+		fail "a whole transcript's stop: $A"
 
 	# A malformed MIDDLE line is still drift, named by its line number.
 	sed '5s/.*/{"type":"assistant","message":{"id":"msg_01/' "$SCRATCH/sub.jsonl" >"$SCRATCH/sub-middle-848.jsonl"
