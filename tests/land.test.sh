@@ -101,7 +101,9 @@ case " $* " in
 	# line per job stuck in progress. STUB_STALL is the stuck job before any
 	# job was re-run, STUB_STALL_AFTER the one after; under STUB_RUN_JSON the
 	# script's own --jq program runs over a canned forge answer instead
-	# (STUB_RUN_JSON_AFTER once a job was re-run).
+	# (STUB_RUN_JSON_AFTER once a job was re-run). STUB_JOBS_RC, set, is a
+	# forge that cannot answer for the records: that exit, nothing printed.
+	[ -z "${STUB_JOBS_RC:-}" ] || exit "$STUB_JOBS_RC"
 	if grep -q '^ARGV: run rerun --job' "$STUB_LOG"; then
 		_json=${STUB_RUN_JSON_AFTER:-${STUB_RUN_JSON:-}} _stall=${STUB_STALL_AFTER:-}
 	else
@@ -1669,13 +1671,48 @@ land STUB_STALL='71 kit-ci / build' STUB_STALL_AFTER='71 kit-ci / build' 852
 expect_status 1 "a re-run that never leaves the stuck record is a stop: exit 1"
 [ "$(grep -c '^ARGV: run rerun' "$STUB_LOG")" = 1 ] && pass "and it is re-run once only" ||
 	fail "a re-run that never took was re-run $(grep -c '^ARGV: run rerun' "$STUB_LOG") times"
-[ "$(grep -c '^ARGV: run view 901 --json status,jobs' "$STUB_LOG")" -le 14 ] && pass "within the wait's bound (LAND_POLL_TRIES)" ||
-	fail "it read the job records $(grep -c '^ARGV: run view 901 --json status,jobs' "$STUB_LOG") times"
+# One read finds the stall, then LAND_POLL_TRIES (12) reads after its re-run.
+[ "$(grep -c '^ARGV: run view 901 --json status,jobs' "$STUB_LOG")" -le 13 ] && pass "within the wait's bound (LAND_POLL_TRIES reads after the re-run, 13 in all)" ||
+	fail "it read the job records $(grep -c '^ARGV: run view 901 --json status,jobs' "$STUB_LOG") times, past 13"
+expect_err_has "still stuck" "stderr says the job is still stuck after its re-run"
 
 land STUB_STALL='71 kit-ci / build' STUB_RERUN_RC=1 853
 expect_status 1 "a stuck job the forge refuses to re-run is exit 1"
 landing_of 853 | grep -qF '"workflows":"failure"' && pass "and recorded with data.workflows=failure" ||
 	fail "a refused job re-run was not recorded failure: $(landing_of 853)"
+
+# Records the forge cannot answer for, and a stuck line that names no job id,
+# leave the stall check: the run is watched as before #850, nothing re-run.
+iterated 855 856 857
+land STUB_JOBS_RC=1 855
+expect_status 0 "job records the forge cannot read fall back to the watch, and the run lands"
+grep -q '^ARGV: run watch 901' "$STUB_LOG" && pass "the run is watched" || fail "with unreadable job records, run 901 was never watched"
+grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "with unreadable job records, something was re-run: $(grep 'run rerun' "$STUB_LOG")" ||
+	pass "and nothing is re-run"
+landing_of 855 | grep -qF '"workflows":"success"' && pass "and merge.land records the workflows success" ||
+	fail "a watched green run behind unreadable records was not recorded success: $(landing_of 855)"
+
+land STUB_STALL='not-an-id kit-ci / build' 856
+expect_status 0 "a stuck line whose first word is no job id falls back to the watch, and the run lands"
+grep -q '^ARGV: run rerun' "$STUB_LOG" && fail "a stuck line with no job id was re-run: $(grep 'run rerun' "$STUB_LOG")" ||
+	pass "and no job is re-run on it"
+grep -q '^ARGV: run watch 901' "$STUB_LOG" && pass "the run is watched instead" || fail "with no job id, run 901 was never watched"
+
+# That fallback watch is bounded by the wait: a watch that does not end within
+# LAND_POLL_TRIES reads, LAND_POLL_SECONDS apart (one second at least), is
+# stopped and the workflows recorded unknown, as an exhausted wait is.
+: >"$STUB_LOG"
+printf "STUB_JOBS_RC='1'\nSTUB_WATCH_SLEEP='6'\n" >"$STUB_KNOBS"
+_t0=$(date +%s)
+t_exec env LAND_POLL_SECONDS=0 LAND_POLL_TRIES=2 sh "$LAND" 857 </dev/null
+_took=$(($(date +%s) - _t0))
+: >"$STUB_KNOBS"
+expect_status 1 "a fallback watch that outlives the wait is a stop: exit 1"
+landing_of 857 | grep -qF '"workflows":"unknown"' && pass "and merge.land records the workflows unknown" ||
+	fail "a fallback watch that outlived the wait was not recorded unknown: $(landing_of 857)"
+expect_err_has "did not end within the wait" "stderr says the watch outlived the wait"
+[ "$_took" -lt 6 ] && pass "and the landing did not wait for the watch's end (${_took}s)" ||
+	fail "the landing waited ${_took}s, the watch's whole length"
 
 # The record as the forge wrote it for #831: the run still in progress, the
 # job's conclusion success, its status never closed. The script's own --jq
