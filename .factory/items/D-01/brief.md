@@ -3,9 +3,11 @@ id: D-01
 type: discovery
 title: Proposals from the software factory
 parent: agentic-sdlc
-stage: shaped
+stage: closed
 created: 2026-10-20
-updated: 2026-10-20
+updated: 2026-10-23
+closed_by: "agranado"
+closed_at: 2026-10-23
 ---
 
 ## Problem

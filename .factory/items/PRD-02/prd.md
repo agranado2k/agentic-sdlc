@@ -3,11 +3,13 @@ id: PRD-02
 type: prd
 title: Stop after repeated identical failures
 parent: D-01
-stage: approved
+stage: done
 created: 2026-10-20
-updated: 2026-10-21
+updated: 2026-10-23
 approved_by: "agranado"
 approved_at: 2026-10-21
+closed_by: "agranado"
+closed_at: 2026-10-23
 ---
 
 # PRD-02 · Stop after repeated identical failures
