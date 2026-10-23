@@ -5269,6 +5269,38 @@ grep -qx "export TRACE_MODEL='$(printf 'm%0127d' 0)'" "$CTXF" &&
 	pass "a model of exactly 128 characters is still a plain id, and exported" ||
 	fail "the 128-character model was not exported: $(cat "$CTXF")"
 
+# ---------------------------------------------------------------------------
+banner "57. A stop with no run handed records the ticket its Trace-Spawn line names (#847)"
+# ---------------------------------------------------------------------------
+# A session with no run open spawns with the Trace-Spawn line alone. The stop
+# then has no run of its own: it is filed under none, or under whatever run
+# the checkout's stack holds — a merge train's, in the window #847 measured.
+# The ticket the spawn served is the one join left, so the stop records it as
+# data.ticket. A stop whose prompt handed a run is unchanged.
+new_trace
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-847.jsonl" "Trace-Spawn: tier=implementer domain=none skill=implement ticket=#7\\\\nBuild it."
+stop474 "$SCRATCH/spawn-847.jsonl"
+[ "$T_STATUS" = 0 ] && [ "$(data_of "$STOP" ticket)" = '#7' ] &&
+	pass "a stop with no Trace-Run line records data.ticket=#7 from its Trace-Spawn line" ||
+	fail "a stop with no run handed: exit $T_STATUS, '$STOP', stderr '$T_ERR'"
+# The checkout's stack holds a run — the train's, in #847's window — and the
+# stop falls back to it; the ticket is recorded all the same.
+TRAIN847=$(cd "$R474" && env TRACE_DIR="$TDIR" TRACE_SESSION="$SESSION" sh scripts/trace.sh begin merge-train 2>/dev/null)
+stop474 "$SCRATCH/spawn-847.jsonl"
+[ -n "$TRAIN847" ] && [ "$(str "$STOP" run)" = "$TRAIN847" ] && [ "$(data_of "$STOP" ticket)" = '#7' ] &&
+	pass "a stop filed under the checkout's run, none handed, still records data.ticket" ||
+	fail "a fallback-run stop: run '$(str "$STOP" run)' want '$TRAIN847', '$STOP'"
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-847r.jsonl" "Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=none skill=implement ticket=#7\\\\nBuild it."
+stop474 "$SCRATCH/spawn-847r.jsonl"
+[ "$(str "$STOP" run)" = "$WT474" ] && [ -z "$(data_of "$STOP" ticket)" ] &&
+	pass "a stop whose prompt handed a run is unchanged: no data.ticket" ||
+	fail "a handed-run stop: '$STOP'"
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-847n.jsonl" "Trace-Spawn: tier=reviewer domain=none skill=review-pr ticket=none\\\\nReview it."
+stop474 "$SCRATCH/spawn-847n.jsonl"
+[ -z "$(data_of "$STOP" ticket)" ] &&
+	pass "ticket=none records no data.ticket" ||
+	fail "a ticket=none stop: '$STOP'"
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s case(s) skipped above — this host proved less than one with node and a millisecond clock would\n' "$SKIPPED"
 fi
