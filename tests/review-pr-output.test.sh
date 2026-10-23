@@ -382,13 +382,15 @@ held "every status Agent 7 tags a line with is a token the policy file declares:
 	pass "…and every declared status is a tag Agent 7 prints" ||
 	fail "Agent 7 tags '$sta', the policy file declares '$(t_field_tokens status "$POLICY")'"
 
-# The one copy-and-edit helper every bait case below calls (#860).
+# The one copy-and-edit helper the per-rule bait wrappers below call (#860).
 # bait_copy <source> <copy> <sed script> — edit a copy, green only when the
 # edit changed it, so a bait whose anchor moved cannot pass by planting nothing.
 # bait_gap <checker> <rule name> <sed script> — the same on the skill, then
 # green when the checker run on the copy names the rule. The baits that stage
 # companions or edit one of several files (#635, #796, #820, bt_bait) keep
-# that staging and call bait_copy for the edit.
+# that staging and call bait_copy for the edit. lens_bait, which edits a copy
+# of the lens directory, and the inline single baits keep their own edit: the
+# PR #864 ruling left them outside this refactor.
 bait_copy() {
 	sed "$3" "$1" >"$2"
 	! cmp -s "$2" "$1"
