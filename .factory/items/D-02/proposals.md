@@ -198,4 +198,17 @@ measure, make the guards safe, then change policy. Its first slice is Option 2, 
 by starting there. Option 1 lands unmeasured verdicts with no human act, which is the one move the
 evidence argues against (S-7, S-26, S-35).
 
-**Choice:** pending the operator.
+**Choice: Option 3, earned autonomy** (operator, 2026-10-23). Option 1 lost because it lands
+unmeasured verdicts with no human act. Option 2 lives on as Option 3's first stage, not as the
+whole answer.
+
+**High risk, in the operator's words:** "The agent can't learn with the mistakes." [inference] The
+operator defines risk by learnability, not by path: a change is high risk where the kit has no
+measured record of its own accuracy on that kind of change (no outcome signal, no precision floor
+met) or where a mistake would not show up as an outcome it can learn from. Phase 5 makes that
+definition concrete.
+
+**Later, not now:** "some kind of system-one or small language model that will helps it learn by
+itself" (operator). This matches the decision models of S-3 and S-8, and the trace already holds
+the labels such a model would train or calibrate on. It is recorded as a future PRD, after
+stages ① to ⑥.
