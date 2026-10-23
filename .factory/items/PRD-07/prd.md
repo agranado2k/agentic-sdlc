@@ -366,31 +366,23 @@ counts as blocked. In this PRD, blocked means the operator sees it at the top of
   shared-layer file, does not move. If the operator reads Q6 as an amendment, that edit is its
   own shared-layer release ticket in a later frontier.
 
+- **Settled with the D-08 session, 2026-10-23** (formerly §9's three open questions):
+  - `Risk-confidence: <low|medium|high>` is its own key, and its vocabulary field is spelled
+    exactly `risk-confidence`, so `factory stamp` maps nothing. `Confidence:` stays the tier's.
+  - `Test-tier:` allows 32 lines per ticket, every other stamp key 8. The bound is published in
+    the vocabulary policy, not hard-coded, so the factory reads it from there.
+  - On a two-token line, the vocabulary checker holds only the vocabulary tokens: the tier on
+    `Test-tier: <covers-id> <tier>`, the level and its reason on `Risk: high <reason>`. The
+    covers id is the coverage check's, which also checks that each `Covers:` id has exactly one
+    `Test-tier:` line and that each `Test-tier:` id is on the `Covers:` line.
+  - The factory does not seed the check table. The PR body is the kit's, and `/implement` alone
+    writes it. Its rows come from the ticket's `Test-tier:` lines: Requirement and Test tier
+    are filled from the stamp, and Result and Evidence by the implementer. One writer per
+    artifact. This is pending the factory operator's confirmation, which D-08 relays.
+
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
-**The risk stamp's confidence key.**
-- *Problem:* D-08 says "`Risk:` beside `Tier:` with a `Confidence:`", but a ticket body carries
-  one `Confidence:` line, and it is the tier's.
-- *Options:* a separate `Risk-confidence:` key (the default here); one `Confidence:` line for the
-  whole stamp; or no confidence on risk.
-- *Next step:* the parent session relays the default to the D-08 session before slice 1 is
-  published. A different answer changes slice 1's R41 and R42.
-
-**The `Test-tier:` bound.**
-- *Problem:* the stamp reader stops past 8 lines of a key, and a ticket may cover more than 8
-  ids.
-- *Options:* 32 for `Test-tier:` only (the default here); the same 8 as every other key, with
-  `/to-tickets` splitting any ticket that covers more; or no bound.
-- *Next step:* the slice 1 session keeps 32 unless `/retro` shows a ticket covering more than 8
-  ids is a sizing smell.
-
-**Who writes the first check table in a factory-driven repository.**
-- *Problem:* D-08's proposal has `/implement` write the table, and the factory's
-  `factory-tickets` (D-08 E2) may also want to seed it.
-- *Options:* `/implement` alone (the default here); the factory seeds the rows and `/implement`
-  fills the results.
-- *Next step:* a question to the D-08 session when its E2 PRD is written. Nothing in this PRD's
-  slices waits on it.
+None open. The three this PRD was written with were settled with D-08 and moved to §8.
 
 ## 10. Dogfood plan
 
