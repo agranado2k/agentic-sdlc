@@ -378,7 +378,7 @@ counts as blocked. In this PRD, blocked means the operator sees it at the top of
   - The factory does not seed the check table. The PR body is the kit's, and `/implement` alone
     writes it. Its rows come from the ticket's `Test-tier:` lines: Requirement and Test tier
     are filled from the stamp, and Result and Evidence by the implementer. One writer per
-    artifact. This is pending the factory operator's confirmation, which D-08 relays.
+    artifact. The factory operator confirmed this (relayed by D-08, 2026-10-23).
 
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
