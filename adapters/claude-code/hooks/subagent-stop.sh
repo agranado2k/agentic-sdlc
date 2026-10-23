@@ -74,7 +74,11 @@ transcript=$(hook_expand "$(hook_field agent_transcript_path)")
 # is the session's, not the subagent's (#478), so that fallback is today's
 # resolution kept, not a way to find a worktree.
 cwd=$(hook_expand "$(hook_field cwd)")
-hook_run_handed "$transcript" || hook_run_of "$tdir" "${cwd:-$PWD}" "$sid"
+handed=yes
+hook_run_handed "$transcript" || {
+	handed=
+	hook_run_of "$tdir" "${cwd:-$PWD}" "$sid"
+}
 
 # The ids are checked before they become a subject or a field: a payload is
 # data (see hook.lib.sh's hook_id_ok), and an id that cannot be queried is one
@@ -97,6 +101,12 @@ if [ -n "$sid" ] && hook_id_ok "$sid"; then
 	set -- "$@" session="$sid"
 fi
 [ -n "$hook_spawn_ticket" ] && related="${related:+$related }ticket:$hook_spawn_ticket"
+# With no run handed, the stop is filed under no run or under whatever run the
+# checkout's stack holds — a merge train's, in the window #847 measured — so no
+# run ties it to the ticket it served. The ticket its Trace-Spawn line named is
+# then recorded as data.ticket, the per-ticket spend's fallback join (/retro
+# question 5). A stop whose prompt handed a run is unchanged.
+[ -z "$handed" ] && [ -n "$hook_spawn_ticket" ] && set -- "$@" data.ticket="$hook_spawn_ticket"
 [ -n "$related" ] && set -- "$@" related="$related"
 [ -n "$atype" ] && set -- "$@" data.agent_type="$atype"
 [ -n "$transcript" ] && set -- "$@" data.transcript="$transcript"

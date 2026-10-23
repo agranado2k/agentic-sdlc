@@ -1573,6 +1573,11 @@ fi
 for needle in 'per tier' 'per cascade rung' 'unattributed' 'order of magnitude' 'first-call prompt'; do
 	sec_of 5 | flat | grep -qiF "$needle" && pass "question 5 names: $needle" || fail "question 5 does not name '$needle' (spend/R22)"
 done
+# A stop no run ties to a ticket still names one (#847): its `data.ticket`,
+# from the spawn's Trace-Spawn line, is the per-ticket pivot's fallback join.
+sec_of 5 | flat | grep -qiE 'fallback join[^.]*`data\.ticket`|`data\.ticket`[^.]*fallback join' &&
+	pass "question 5 names data.ticket as the per-ticket fallback join (#847)" ||
+	fail "question 5 does not name \`data.ticket\` as its fallback join for a stop no run ties to a ticket (#847)"
 
 # ---------------------------------------------------------------------------
 banner "17. The flow section: lead time, review wait and toil's share (process/R22-R24, #799)"
