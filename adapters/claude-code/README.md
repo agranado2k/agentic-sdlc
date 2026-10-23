@@ -309,7 +309,7 @@ live here rather than in the shared script (the kit's ADR-0008 clause 8).
 | `hooks/subagent-stop.sh` | `agent.stop` for one subagent, with its id, its type and its own tokens — and the run handed over at spawn: its spawn prompt's first line, `Trace-Run: <run id> [<parent run id>]`, nothing else on it and each id held to the run id's shape, read back from the first 4096 bytes of the first user record of the subagent's own transcript, with that parent (empty when the line names none) (#474; the payload's `cwd` is the session's, not the subagent's — #478). With none handed, the run open in the checkout the payload's `cwd` names (a linked worktree's, not the root's; the hook's own working directory when the payload names no `cwd`) on that session's stack (the payload's `session_id` keys it, as `scripts/trace.sh` does; the per-toplevel stack when it names none — #453), read through `sh scripts/trace.sh stack <dir> [session=<id>]` so the adapter keeps no copy of the stack's format (#472), with its parent from the same checkout's stack; a checkout with no run open makes a stop that carries no run, never the root's; the root's run when that `cwd` is in no checkout of this repository; a `TRACE_RUN` already in the environment wins, with its parent; a `TRACE_PARENT` alone is kept; that `cwd` itself recorded as `data.cwd`, the expanded value the run was resolved against (a leading `~` read as the home directory) — `session.start` records the raw one — and absent when the payload names none, never the hook's own working directory (#478); how the run ended, `data.final`, `message` or `tool` — a turn-ending tool's result is final (#565) — and each model counted past this agent's own last `data.last_msg`, so a second stop never re-counts the first (#565); and `data.out_snapshot` when some of the messages it counted carry a streamed output snapshot — how many, its `tok_out` a lower bound (#608); and what the spawn served, from the prompt's second line under that one — or its first, when no run is handed (#627) — exactly `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` — the tier one of the four, a domain and a skill `[a-z][a-z0-9-]*` of 32 characters at most, a ticket `#` and up to six digits — written into the event's `tier`, `domain` and `skill` columns with the ticket a `related` subject, from the same bounded read — and, when no run was handed, the ticket as `data.ticket` too, the per-ticket spend's fallback join (#847); no such line, or one that does not match exactly, records tier `unattributed`, a row `summary --by tier` shows (#583) |
 | `hooks/tool-post.sh` | `tool.use` for one tool call — behind its own switch, see below — carrying the run handed over at spawn (`Trace-Run: <run id> [<parent run id>]`, with that parent) to the agent that made the call: the subagent the payload's `agent_id` names, read from its own transcript, or the session itself (#474); the run the shared script resolves when none was handed, never the run handed to its session for a subagent handed none — once the payload is read: a `tool.use` `outcome=fail` written before then (no scratch, no node, a payload the reader refuses) resolves as the shared script does |
 | `hooks/tool-pre.sh` | no event: the pending marker a tool call leaves until it returns, swept by the session-end hook into `tool.use` `outcome=denied` when it never does — behind the same switch |
-| `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and leaves one `note` — see "The kill guard" below |
+| `hooks/tool-pre-guard.sh` | a guard, not a recorder: refuses a spawned sub-agent's Bash call that signals processes by name, and any caller's `while` or `until` loop that polls `pgrep -f` in its sight (#849), and leaves one `note` — see "The kill guard" and "The wait guard" below |
 | `hooks/spawn-guard.sh` | a guard, not a recorder: with tracing on, refuses a spawn (the `Agent` or `Task` tool) whose prompt carries no well-formed `Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>` line where `hooks/subagent-stop.sh` reads it, naming the line it wants, and leaves one `note` (#627); and, where the project wires a `reviewer` agent type, a `tier=reviewer` spawn on any other type (#834) — see "The spawn guard" below |
 | `hooks/transcript-usage.mjs` | not a hook: the extractor the two usage hooks call |
 | `hooks/tool-payload.mjs` | not a hook either: the reader `tool-post.sh` and `tool-pre.sh` split a payload with |
@@ -649,6 +649,35 @@ the same once-only rule the usage read keeps; `/retro` sums a session's ends.
 A counter left by a session that never fires `SessionEnd` stays where it is
 until an end for that session id takes it — a resumed session's next end
 counts it — and is otherwise harmless.
+
+### The wait guard: no loop waits on `pgrep -f`
+
+`until ! pgrep -f "<command>"; do sleep 5; done` never exits: `pgrep -f`
+matches the loop's own shell, whose command line carries the pattern. The
+stuck loop then holds its worktree "live", so the cleanup keeps it — retro
+20261023T103804Z counted ten such loops in one window, and one waiting on
+`gh pr checks 841 --watch` was killed by hand at wrap-up, on two days running
+(#849). The same hook, `hooks/tool-pre-guard.sh`, refuses a Bash call whose
+`while` or `until` loop polls `pgrep -f` (`--full`, or a cluster such as
+`-af`), with the rule, `wait-guard`, named on stderr, exit 2, and one `note`
+with `outcome=denied` — **for every caller**, the operator's own session
+included: the hazard is the loop, not who typed it. The refusal names the
+bounded alternatives: run the command being waited on in the foreground under
+`timeout <n>` (`timeout 30m gh pr checks <PR> --watch`), or run it in the
+background and wait for the harness's notification when it ends.
+
+A `timeout` bounds a loop only when the loop is what it runs — the script of
+its `sh -c` — so `timeout 30m sh -c 'until ! pgrep -f x; do sleep 5; done'`
+passes, and `timeout 5 true; until ! pgrep -f x; do sleep 1; done` is refused:
+a loop the scan can see only follows a timeout on the line, since `timeout`
+runs a program, never a shell keyword. A heredoc fed to `timeout <n> sh` is read
+as commands and refused too, which errs closed. It is the kill guard's scan,
+with its limits, and one remains: a loop inside a quoted `sh -c` script is out
+of its sight and passes **whether or not a timeout runs it** — `sh -c 'until !
+pgrep -f x; do sleep 5; done'` with no bound is not caught. Without node the command
+cannot be read: the operator's call is let through, as it always was, and a
+sub-agent's payload naming `pgrep` is refused unread by the kill guard's
+fallback. An operator's command that does not name `pgrep` never starts node.
 
 ### The spawn guard: every spawn says what it served
 
