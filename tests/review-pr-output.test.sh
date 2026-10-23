@@ -98,7 +98,10 @@
 #      standards lens reads, says a version bump is owed only by a path on
 #      VERSION's files: list and a skill, listed by name, owes none
 #      (ADR-0025); and §3 names a refused or failed lens under `Lenses not
-#      run:` without the coordinator auditing its slice (ADR-0035 clause 2).
+#      run:` without the coordinator auditing its slice (ADR-0035 clause 2),
+#      its summary marks a lens "run in this context instead" only for a
+#      context with no subagent tool, and the dispatched worker's contract
+#      carries the same bump rule.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -1755,7 +1758,21 @@ adr_rules_missing() {
 	_ar_s3=$(region '^### 3\. ' '^#### Agents 1–6 ' "$1" | tr '\n' ' ' | tr -s ' ')
 	case "$_ar_s3" in *'A lens refused or failed is named under `Lenses not run:`, and the coordinator never audits its slice in its place'*) ;; *) printf '%s\n' 'failed lens not audited here' ;; esac
 	case "$_ar_s3" in *'one lens audited here after its agent was refused or failed'*) printf '%s\n' 'no audit of a failed lens' ;; esac
+	grep -qF 'marked "run in this context instead" by a context with no subagent tool>' "$1" ||
+		printf '%s\n' 'summary mark needs no subagent tool'
 }
+# The dispatched worker reads no SKILL.md: it is told the same bump rule itself.
+worker_bump_missing() { # <worker file>
+	tr '\n' ' ' <"$1" | tr -s ' ' | grep -qF "A version bump is owed only by a path on \`VERSION\`'s \`files:\` list: a skill sits on its \`skills:\` list by name and owes none (the kit's ADR-0025)." ||
+		printf '%s\n' 'worker bump rule'
+}
+[ -z "$(worker_bump_missing "$WORKER_ABS")" ] && pass "the dispatched worker is told a skill owes no bump (ADR-0025)" ||
+	fail "$WORKER does not tell the worker a skill owes no bump — it raises what every triage rejects (#846)"
+sed "s/a skill sits on its \`skills:\` list by name and owes$/a skill owes one, and/" "$WORKER_ABS" >"$SCRATCH/bait846w.md"
+! cmp -s "$SCRATCH/bait846w.md" "$WORKER_ABS" && [ -n "$(worker_bump_missing "$SCRATCH/bait846w.md")" ] &&
+	pass "bait: a worker contract without the bump rule goes red" ||
+	fail "bait: a worker contract without the bump rule was not caught — or the bait planted nothing"
+rm -f "$SCRATCH/bait846w.md"
 miss=$(adr_rules_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
 [ -z "$miss" ] && pass "§4 tells every lens a skill owes no bump (ADR-0025), and §3 never audits a refused or failed lens in its place (ADR-0035)" ||
 	fail "/review-pr's ADR-0025/ADR-0035 rules are missing: $miss — lenses raise findings every triage rejects (#846)"
@@ -1766,7 +1783,8 @@ bait846() { # <rule name> <sed script>
 for b in \
 	'bump rule in §4|s/a skill sits on its `skills:` list by name and owes none/a skill owes one too/' \
 	'failed lens not audited here|s/never audits its slice in its place/audits its slice/' \
-	'no audit of a failed lens|s/^\(\*\*The seven sub-agents.*\)$/\1 The same holds for one lens audited here after its agent was refused or failed./'; do
+	'no audit of a failed lens|s/^\(\*\*The seven sub-agents.*\)$/\1 The same holds for one lens audited here after its agent was refused or failed./' \
+	'summary mark needs no subagent tool|s/by a context with no subagent tool>/when this session audited it itself>/'; do
 	bait846 "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
 		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done

@@ -47,7 +47,9 @@ against. Do not import conventions from other projects, and do not flag a
 pattern the manual explicitly sanctions. Read the decision records the manual
 names (default location `docs/adr/`): a decision recorded there outranks your
 priors, and a finding that contradicts one must cite it by number and argue
-with it rather than ignore it.
+with it rather than ignore it. A version bump is owed only by a path on
+`VERSION`'s `files:` list: a skill sits on its `skills:` list by name and owes
+none (the kit's ADR-0025).
 
 Then pin the commit, BEFORE you read the diff: `git rev-parse %%BRANCH%%` —
 from the refs already in this checkout; there is nothing to fetch. Keep that
