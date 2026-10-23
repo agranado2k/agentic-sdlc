@@ -44,10 +44,12 @@
 # `gh pr checks 841 --watch` two days running, killed by hand at wrap-up). A
 # `while` or `until` loop that polls `pgrep -f` (or `--full`, or a cluster such
 # as `-af`) is refused, for the operator's own session as much as for a
-# sub-agent: the hazard is the loop, not who typed it. A command that opens with
-# its own non-zero `timeout <n>` is bounded and passes, and so does every loop
-# the scan cannot see — `timeout 30m sh -c '…'` among them. The refusal names
-# the bounded alternatives. Without node the command cannot be read and the
+# sub-agent: the hazard is the loop, not who typed it. A `timeout` bounds only
+# the loop it runs, the script of its `sh -c`, which is quoted and out of the
+# scan's sight: `timeout 30m sh -c '…'` passes, and so does an `sh -c` loop with
+# no timeout at all. A loop in sight is refused whatever precedes it on the
+# line, a heredoc fed to `timeout <n> sh` included. The refusal names the
+# bounded alternatives. Without node the command cannot be read and the
 # operator's call is let through, as it always was; a sub-agent's payload
 # naming pgrep is refused unread by the kill rule's fallback above.
 #
@@ -74,8 +76,9 @@ fi
 # guard_why <sub> — the first rule the command on stdin breaks, as one line
 # `<rule> <why>`, or nothing: `kill-guard` (signal by name) only when <sub> is
 # 1, a spawned sub-agent's call; `wait-guard` (a loop polling pgrep -f) for
-# any. Quoted text is literal to the shell, so a single-quoted segment, and a double-quoted one with no substitution inside, is dropped
-# before the words are read: `rg 'pkill|killall'` searches, it does not signal.
+# any. Quoted text is literal to the shell, so a single-quoted segment, and a
+# double-quoted one with no substitution inside, is dropped before the words
+# are read: `rg 'pkill|killall'` searches, it does not signal.
 # The quotes are read left to right, one character at a time, so a `'` inside
 # double quotes is text and never opens a single-quoted segment (review of PR
 # #433, L-1). A heredoc's body is not told apart from commands: a line in it
@@ -102,9 +105,11 @@ guard_why() {
 		gsub(/\$\(|[`;&|(){}\n]/, "\n", s)
 		n = split(s, segs, "\n")
 		# lp: the open loops, innermost last, each "w" (while/until) or "f" (for).
-		# bd: the command opens with its own non-zero timeout. wt: a pgrep -f
-		# polled inside an open while or until.
-		nl = 0; bd = 0; seen = 0
+		# wt: a pgrep -f polled inside an open while or until. No timeout bounds
+		# a loop read here: `timeout` runs a program, never a shell keyword, so a
+		# loop in sight only follows it on the line (`timeout 5 true; until …`).
+		# The loop a timeout does bound is a quoted `sh -c` script, out of sight.
+		nl = 0
 		for (k = 1; k <= n; k++) {
 			m = split(segs[k], w, /[ \t]+/)
 			i = 1
@@ -112,23 +117,11 @@ guard_why() {
 				w[i] ~ /^(sudo|xargs|exec|nohup|env|command|time|timeout|nice|then|do|else|if|while|until|!)$/ ||
 				w[i] ~ /^-/ || w[i] ~ /^[0-9.]+[smhd]?$/)) {
 				if (w[i] == "while" || w[i] == "until") lp[++nl] = "w"
-				# The first command word is timeout: its duration, past its own
-				# options (-k and -s take the next word), is the bound.
-				if (!seen && w[i] == "timeout") {
-					for (j = i + 1; j <= m; j++) {
-						if (w[j] ~ /^-[ks]$/) { j++; continue }
-						if (w[j] ~ /^-/) continue
-						if (w[j] ~ /^[0-9.]+[smhd]?$/ && w[j] + 0 > 0) bd = 1
-						break
-					}
-				}
-				if (w[i] != "" && w[i] !~ /^[A-Za-z_][A-Za-z0-9_]*=/) seen = 1
 				# sudo -u <user>, sudo -g <group>: the option takes the next word.
 				if (w[i] ~ /^-[ugCDhpRrTt]$/) i++
 				i++
 			}
 			if (i > m) continue
-			seen = 1
 			c = base(w[i])
 			if (c == "for" || c == "select") { lp[++nl] = "f"; continue }
 			if (c == "done") { if (nl) nl--; continue }
@@ -156,7 +149,7 @@ guard_why() {
 			}
 		}
 		if (kl && pg) { print "kill-guard kill is fed by pgrep, which matches by name"; exit }
-		if (wt && !bd) print "wait-guard a while or until loop polls pgrep -f, which matches the loop\047s own shell"
+		if (wt) print "wait-guard a while or until loop polls pgrep -f, which matches the loop\047s own shell"
 	}'
 }
 

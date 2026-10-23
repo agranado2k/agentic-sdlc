@@ -5279,15 +5279,18 @@ banner "57. The Bash guard refuses a pgrep -f wait loop and names the bounded al
 # tool-pre-guard.sh refuses a `while` or `until` loop that polls `pgrep -f`,
 # for the operator's own session as much as for a spawned sub-agent — the
 # hazard is the loop, not who typed it — and its refusal names the bounded
-# alternatives. A command that opens with its own `timeout <n>` is bounded, and
-# passes.
+# alternatives. A `timeout` bounds a loop only when the loop is what it runs —
+# the script of its `sh -c` — never a loop that merely follows it on the line
+# (ruling 3 on PR #853): `timeout 5 true; until ! pgrep -f x; …` is refused.
 if [ "$HAVE_NODE" = 1 ]; then
 	for at in '' general-purpose; do
 		for c in 'until ! pgrep -f "x"; do sleep 5; done' \
 			'while pgrep -f "gh pr checks 841 --watch" >/dev/null; do sleep 10; done' \
 			'until ! pgrep -af x >/dev/null 2>&1; do sleep 5; done' \
 			'while [ -n "$(pgrep --full x)" ]; do sleep 5; done' \
-			'cd /tmp && until ! /usr/bin/pgrep -f x; do sleep 5; done'; do
+			'cd /tmp && until ! /usr/bin/pgrep -f x; do sleep 5; done' \
+			'timeout 5 true; until ! pgrep -f x; do sleep 1; done' \
+			'timeout 30m true && while pgrep -f x; do sleep 1; done'; do
 			new_trace
 			guard "$at" "$c"
 			[ "$T_STATUS" = 2 ] && pass "${at:-the operator}'s '$c' is refused with exit 2" ||
@@ -5326,19 +5329,17 @@ if [ "$HAVE_NODE" = 1 ]; then
 				fail "${at:-the operator}'s '$c' exited $T_STATUS: $T_ERR"
 		done
 	done
-	# A timeout of zero is no bound: timeout 0 runs the command unlimited. The
-	# heredoc's newlines go into the payload JSON-escaped, as the harness sends them.
+	# A heredoc's body is read as commands, so a loop fed to `timeout <n> sh` on
+	# stdin is in sight and is not an `sh -c` script: refused whatever the bound,
+	# which errs closed. The newlines go into the payload JSON-escaped, as the
+	# harness sends them.
 	for b in 0 10m; do
 		new_trace
 		guard_payload '' "timeout $b sh <<EOF@NL@until ! pgrep -f x; do sleep 5; done@NL@EOF" |
 			sed 's/@NL@/\\n/g' >"$SCRATCH/wait-849.json"
 		t_exec env TRACE_DIR="$TDIR" sh "$GUARD" <"$SCRATCH/wait-849.json"
-		case $b in
-		0) [ "$T_STATUS" = 2 ] && pass "a heredoc loop under 'timeout 0' is refused: zero is no bound" ||
-			fail "a heredoc loop under 'timeout 0' exited $T_STATUS: $T_ERR" ;;
-		*) [ "$T_STATUS" = 0 ] && pass "the same heredoc loop under 'timeout $b' passes" ||
-			fail "a heredoc loop under 'timeout $b' exited $T_STATUS: $T_ERR" ;;
-		esac
+		[ "$T_STATUS" = 2 ] && pass "a heredoc loop fed to 'timeout $b sh' is refused: it is in sight" ||
+			fail "a heredoc loop fed to 'timeout $b sh' exited $T_STATUS: $T_ERR"
 	done
 else
 	SKIPPED=$((SKIPPED + 1))
