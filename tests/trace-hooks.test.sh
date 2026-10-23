@@ -5269,6 +5269,70 @@ grep -qx "export TRACE_MODEL='$(printf 'm%0127d' 0)'" "$CTXF" &&
 	pass "a model of exactly 128 characters is still a plain id, and exported" ||
 	fail "the 128-character model was not exported: $(cat "$CTXF")"
 
+
+# ---------------------------------------------------------------------------
+banner "57. A last line still being written is left for the next read; a bad line before it is drift (#848)"
+# ---------------------------------------------------------------------------
+# A subagent's transcript can be read while the agent harness is still writing
+# its last line: eleven reviewer stops on one PR went unpriced, each reason
+# "line N is not JSON". An UNTERMINATED last line that does not parse is a
+# write in progress, not drift — the complete lines before it are priced. A
+# bad line anywhere else, or a bad last line that IS terminated, is complete
+# and wrong, and stays drift.
+if [ "$HAVE_NODE" = 1 ]; then
+	cp "$SCRATCH/sub.jsonl" "$SCRATCH/sub-partial-848.jsonl"
+	printf '%s' '{"parentUuid":"x","type":"assistant","message":{"id":"msg_01' >>"$SCRATCH/sub-partial-848.jsonl"
+	[ -n "$(tail -c 1 "$SCRATCH/sub-partial-848.jsonl")" ] &&
+		pass "the half-written fixture ends without a newline" ||
+		fail "the half-written fixture ends in a newline — nothing to test"
+
+	t_exec node "$EXTRACTOR" "$SCRATCH/sub-partial-848.jsonl"
+	[ "$T_STATUS" = 0 ] && pass "the extractor exits 0 on a half-written last line" ||
+		fail "the extractor exited $T_STATUS on a half-written last line: $T_ERR"
+
+	new_trace
+	set_key transcript_path "$SCRATCH/main.jsonl" <"$FIX/subagent-stop.payload.json" |
+		set_key agent_transcript_path "$SCRATCH/sub-partial-848.jsonl" >"$SCRATCH/sub-stop-partial-848.json"
+	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/sub-stop-partial-848.json"
+	[ "$T_STATUS" = 0 ] && pass "the stop hook exits 0" || fail "the stop hook exited $T_STATUS: $T_ERR"
+	A=$(ev_of agent.stop | sed -n '1p')
+	[ "$(str "$A" model)" = "$MODEL" ] && pass "the stop names its model" ||
+		fail "the stop carries model '$(str "$A" model)': $A"
+	for pair in tok_in=34 tok_out=156 tok_cache_w=17138 tok_cache_r=14968; do
+		f=${pair%=*}
+		want=${pair#*=}
+		got=$(num "$A" "$f")
+		[ "$got" = "$want" ] && pass "$f is $want, priced from the complete lines" ||
+			fail "$f is '$got', expected $want: $A"
+	done
+
+	# A malformed MIDDLE line is still drift, named by its line number.
+	sed '5s/.*/{"type":"assistant","message":{"id":"msg_01/' "$SCRATCH/sub.jsonl" >"$SCRATCH/sub-middle-848.jsonl"
+	t_exec node "$EXTRACTOR" "$SCRATCH/sub-middle-848.jsonl"
+	[ "$T_STATUS" = 2 ] && pass "a malformed middle line is still exit 2" ||
+		fail "a malformed middle line exited $T_STATUS"
+	case $T_ERR in *"line 5 is not JSON"*) pass "and names line 5" ;;
+	*) fail "stderr does not name line 5: $T_ERR" ;; esac
+	[ -z "$T_OUT" ] && pass "and prints no numbers" || fail "a malformed middle line printed: $T_OUT"
+	new_trace
+	set_key transcript_path "$SCRATCH/main.jsonl" <"$FIX/subagent-stop.payload.json" |
+		set_key agent_transcript_path "$SCRATCH/sub-middle-848.jsonl" >"$SCRATCH/sub-stop-middle-848.json"
+	t_exec env TRACE_DIR="$TDIR" sh "$HOOKS/subagent-stop.sh" <"$SCRATCH/sub-stop-middle-848.json"
+	A=$(ev_of agent.stop | sed -n '1p')
+	[ "$(str "$A" outcome)" = fail ] && [ -z "$(num "$A" tok_out)" ] &&
+		pass "and its stop is recorded as a failure with no tokens, as before" ||
+		fail "a malformed middle line's stop: $A"
+
+	# A malformed last line that IS terminated is complete, so it is drift too.
+	cp "$SCRATCH/sub.jsonl" "$SCRATCH/sub-badlast-848.jsonl"
+	printf '%s\n' '{"type":"assistant","message":{"id":"msg_01' >>"$SCRATCH/sub-badlast-848.jsonl"
+	t_exec node "$EXTRACTOR" "$SCRATCH/sub-badlast-848.jsonl"
+	[ "$T_STATUS" = 2 ] && pass "a malformed last line ended by a newline is still exit 2" ||
+		fail "a terminated malformed last line exited $T_STATUS"
+else
+	echo "  skip  node is not on PATH — the half-written line legs need the extractor"
+fi
+
 if [ "$SKIPPED" -gt 0 ]; then
 	printf '  --    %s case(s) skipped above — this host proved less than one with node and a millisecond clock would\n' "$SKIPPED"
 fi
