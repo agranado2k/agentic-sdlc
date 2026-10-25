@@ -275,6 +275,17 @@ Grouped by the seam each term belongs to. Entry shape:
   marker, and is written by `/implement` alone. Ref: ADR-0037.
   - _Avoid_: "test report" — the table is evidence per requirement, never a
     suite's log.
+- **Scope** — the mark Agent 7 of `/review-pr` puts on every ⚠️ UNSPECIFIED
+  item of the confirm-list: `inside` when its effect stays inside the change
+  (a name, a structure, internal error wording, a test's shape), `outward`
+  when a user, a consumer or another skill sees or relies on it (an output
+  format, a flag, an exit code, a rule an agent obeys). Written as the first
+  words of the item's arrow line, or right after the tag in a dispatched
+  report. An item with no scope, or a word the vocabulary's `scope` field
+  does not hold, is read as `outward`. The Axis-2 verdict counts the outward
+  items as `data.outward`. Ref: ADR-0038.
+  - _Avoid_: "severity" or "impact" — the scope says who may decide an item,
+    never how bad it is.
 - **Typed return** — what a delegated untrusted read sends back: a **declared
   shape** of bare decision lines from the vocabularies plus one **evidence**
   line quoting a span of what was read, and nothing else. The caller checks
