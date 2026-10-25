@@ -776,7 +776,7 @@ N_MISSING=$(tagcount MISSING)
 # item whose tag is followed by `scope: inside`, a word the vocabulary's scope
 # field holds; a missing or unknown scope fails closed to the operator.
 N_INSIDE=0
-sh "$ROOT/scripts/vocab.sh" 'Scope: inside' >/dev/null 2>&1 &&
+sh "$ROOT/scripts/vocab.sh" fields 2>/dev/null | grep -qE '^scope:( .*)? inside( |$)' &&
 	N_INSIDE=$(LC_ALL=C grep -cE '^[^A-Za-z0-9]*UNSPECIFIED[[:blank:]]*scope:[[:blank:]]*inside([^a-z-]|$)' "$TMP/behavior" || :)
 N_OUTWARD=$((N_UNSPEC - N_INSIDE))
 AX2=pass

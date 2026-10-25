@@ -1702,6 +1702,21 @@ case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"') in
 *'"outward":"4"'*) pass "process/R54: 'scope: insider' is no scope the vocabulary holds — read as outward" ;;
 *) fail "process/R54: a word beginning with 'inside' lowered the outward count: $T_OUT" ;;
 esac
+# A vocabulary whose scope field holds no `inside` declares no inside item:
+# every one is outward, the count failing closed (review of #890).
+STUB_PR=44
+export STUB_PR
+sed "s/^VOCAB_SCOPE=.*/VOCAB_SCOPE='outward'/" "$KIT/scripts/vocab.config.sh" >"$SCRATCH/vocab-no-inside.sh"
+VOCAB_CONFIG="$SCRATCH/vocab-no-inside.sh"
+export VOCAB_CONFIG
+broker 44 "$SCOPED"
+unset VOCAB_CONFIG
+expect_status 0 "…a report lands under a vocabulary whose scope field holds no inside"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#44' --kind review.verdict
+case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"') in
+*'"outward":"4"'*) pass "process/R54: with no inside in the vocabulary, every UNSPECIFIED item is outward" ;;
+*) fail "process/R54: an inside item lowered the count under a vocabulary that holds no inside: $T_OUT" ;;
+esac
 STUB_PR=12
 export STUB_PR
 
