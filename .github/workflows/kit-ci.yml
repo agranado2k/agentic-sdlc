@@ -48,6 +48,12 @@ name: Kit CI
 #                   first of those, and the failure mode worth catching lives in
 #                   the second — a declined skill that left a row behind.
 #
+# Every job declares a timeout-minutes, and every package-install step a
+# tighter one of its own (#882; tests/ci-timeouts.test.sh holds it). Sized
+# from the measured run plus headroom: 5 for a job measured under a minute,
+# 10 for trace-hooks (78s at worst), 15 for docs-demo (196s, most of it the
+# zsh install). A new job takes one too, or that suite goes red.
+#
 # The guard scripts and the capability-tier resolver have their own file
 # (kit-guards.yml) — separate work streams do not collide on one YAML.
 #
@@ -69,6 +75,7 @@ jobs:
   task-entry:
     name: Task entry contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Task entry acceptance test
@@ -77,6 +84,7 @@ jobs:
   catalogue:
     name: Runtime catalogue admission
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Catalogue admission acceptance test
@@ -85,6 +93,7 @@ jobs:
   harness:
     name: Harness fixture tests
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -100,6 +109,7 @@ jobs:
   portability:
     name: Shared layer is portable
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -111,6 +121,7 @@ jobs:
   self-host:
     name: The kit passes its own gate
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       # Full-depth checkout, because F3 asks whether the declared shared layer
       # has its release tag. fetch-tags alone is NOT enough: at the default
@@ -141,6 +152,7 @@ jobs:
   demo:
     name: Bootstrap demo (end-to-end)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -152,6 +164,7 @@ jobs:
   docs-demo:
     name: Docs set + UPDATING recipe (end-to-end)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       # Full depth with tags, as self-host: D and D2 mark a stale worked
       # example release-bound only when the declared release's tag peels,
@@ -172,7 +185,10 @@ jobs:
       # image that quietly drops zsh would retire the case without anyone
       # deciding to. `apt-get` because the shell is a runner package, not a
       # project dependency.
+      # Its own bound, tighter than the job's: a stuck package mirror held this
+      # step for thirty minutes once (#882). Measured at 9-16s, 161s at worst.
       - name: Install zsh (C4d runs the recipe through it)
+        timeout-minutes: 6
         run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
       # The suite bootstraps throwaway consumers and runs the gate on them, so
       # it needs the same node the demo job does. Its load-bearing half is the
@@ -185,6 +201,7 @@ jobs:
   skills:
     name: /implement delivery contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # No node, no forge: the skills are documents, and this checks the one
@@ -197,6 +214,7 @@ jobs:
   workflow-templates:
     name: Workflow templates parse, and install inert
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # PyYAML is preinstalled on ubuntu-latest, so the parse leg really runs
@@ -208,6 +226,7 @@ jobs:
   adapters:
     name: Adapters are well-formed and dormant
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -225,6 +244,7 @@ jobs:
   exclusions:
     name: Exclusions record is current
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # No node: the record is a document, and the check is a comparison
@@ -238,6 +258,7 @@ jobs:
   dogfood-optin:
     name: The optional skill, both ways
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -254,6 +275,7 @@ jobs:
   setup-demo:
     name: One-line agent setup (end-to-end)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -268,6 +290,7 @@ jobs:
   review-output:
     name: /review-pr output contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Output-contract skill-text suite
@@ -276,6 +299,7 @@ jobs:
   forge-broker:
     name: The broker lands a dispatched review
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # No node: the broker is POSIX sh, git and gh, and the suite's forge is
@@ -288,6 +312,7 @@ jobs:
   land:
     name: A PR landed by hand records what the train records
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # No node: the landing script is POSIX sh and gh, and the suite's forge
@@ -300,6 +325,7 @@ jobs:
   gate-advisory:
     name: An advisory is audible through the gate
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -311,6 +337,7 @@ jobs:
   design-brief:
     name: /design-brief contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Design-brief skill-text suite
@@ -319,13 +346,23 @@ jobs:
   no-box-art:
     name: No character art in the shipped prose
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Craft §10 suite
         run: sh tests/no-box-art.test.sh
+  ci-timeouts:
+    name: Every kit CI job carries a timeout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: CI-timeouts suite
+        run: sh tests/ci-timeouts.test.sh
   mutation-kit:
     name: The kit's mutation wrapper
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Mutation-wrapper suite
@@ -333,6 +370,7 @@ jobs:
   fixture-builders:
     name: The harness's fixture builders
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Fixture-builder suite
@@ -340,6 +378,7 @@ jobs:
   harness-helpers:
     name: The harness's folded assertion helpers
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Harness-helper suite
@@ -347,6 +386,7 @@ jobs:
   suite-budget:
     name: Every suite runs inside the worker budget
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # No node: the stub suites are sh. Where this runner offers no user
@@ -359,6 +399,7 @@ jobs:
   budget-lib:
     name: The worker Budget, through its four functions
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # No node: the library and its suite are sh, and this runner's sh is
@@ -369,6 +410,7 @@ jobs:
   gate-path-roots:
     name: The gate's two engines agree on their path roots
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -380,6 +422,7 @@ jobs:
   housekeeping:
     name: /housekeeping contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Housekeeping skill-text suite
@@ -388,6 +431,7 @@ jobs:
   retro:
     name: /retro contract
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # No node: the skill is a document, and the suite runs its documented
@@ -398,6 +442,7 @@ jobs:
   spec-skills:
     name: /to-prd and /to-tickets contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Spec skills text suite
@@ -406,6 +451,7 @@ jobs:
   vocab:
     name: The vocabulary checker
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Vocabulary checker suite
@@ -414,6 +460,7 @@ jobs:
   vocab-policy:
     name: The shipped vocabularies match the skills
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Vocabulary policy suite
@@ -422,6 +469,7 @@ jobs:
   typed-return:
     name: /pr-iterate refuses a return that is not the declared shape
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Typed return suite
@@ -430,6 +478,7 @@ jobs:
   prescreen-return:
     name: The pre-screen of a PRD body and of product output is a checked typed return
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Pre-screen return suite
@@ -438,6 +487,7 @@ jobs:
   stamp:
     name: /implement reads its ticket's stamp through one checked script
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Stamp reader suite
@@ -446,6 +496,7 @@ jobs:
   coverage:
     name: /to-tickets' coverage check names uncovered requirements and orphan tickets
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Coverage check suite
@@ -454,6 +505,7 @@ jobs:
   failure-signature:
     name: A loop stops on the third identical failure
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Failure signature suite
@@ -462,6 +514,7 @@ jobs:
   trace-skills:
     name: Every chain skill emits, and none reads the trace
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Trace skills text suite
@@ -470,6 +523,7 @@ jobs:
   skill-phase:
     name: Every skill declares its phase
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Skill phase suite
@@ -478,6 +532,7 @@ jobs:
   cheap-reads:
     name: Every spawning skill and worker contract points at the cheap-reads reference
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Cheap reads suite
@@ -486,6 +541,7 @@ jobs:
   skill-cascade:
     name: A mechanical ticket runs cheap-first, escalating on a red oracle
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Skill cascade suite
@@ -494,6 +550,7 @@ jobs:
   manifest:
     name: The manifest grammar, once
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Manifest parser suite
@@ -502,6 +559,7 @@ jobs:
   requirement-grammar:
     name: The requirement-line grammar, once
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Requirement grammar suite
@@ -510,6 +568,7 @@ jobs:
   trace-hooks:
     name: The adapter's session hooks and usage extractor
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -529,6 +588,7 @@ jobs:
   root-guard:
     name: The root checkout refuses an agent's edit and an agent's commit
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       # Pure sh and git: the pre-tool hook reads its payload without a JSON
@@ -539,6 +599,7 @@ jobs:
   trace-prices:
     name: The price table's staleness advisory and its refresh
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -557,6 +618,7 @@ jobs:
   adopt-demo:
     name: Existing-repo adoption arm
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

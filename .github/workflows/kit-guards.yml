@@ -17,6 +17,9 @@ name: Kit — guards
 # own workflow files rather than jobs here — separate files so separate work
 # streams do not collide on one YAML.
 #
+# The job's timeout-minutes is sized from its measured run (174s at worst)
+# plus headroom; tests/ci-timeouts.test.sh fails on a job without one (#882).
+#
 # No install step and no runtime: everything here is POSIX sh and git, which is
 # the same claim the kit makes to its consumers. Node is present on the runner
 # and the CI guard's label lookup uses it; nothing installs it.
@@ -34,6 +37,7 @@ jobs:
   guards:
     name: Guard test tiers + demo
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
