@@ -5,7 +5,9 @@ title: Post-merge outcomes in the trace, and each area's earned record
 parent: D-02
 stage: draft
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-25
+approved_by: "agranado"
+approved_at: 2026-10-25
 ---
 
 # PRD-06 · Post-merge outcomes in the trace, and each area's earned record

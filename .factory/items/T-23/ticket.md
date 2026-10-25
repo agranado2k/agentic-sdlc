@@ -4,11 +4,15 @@ type: ticket
 title: /review-pr's skill regains 2000 bytes under its ceiling, no rule lost
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: review
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-25
 deps: []
 priority: 3
+links:
+  pr: "#867"
+approved_by: "agranado"
+approved_at: 2026-10-25
 ---
 
 # T-23 · /review-pr's skill regains 2000 bytes under its ceiling, no rule lost

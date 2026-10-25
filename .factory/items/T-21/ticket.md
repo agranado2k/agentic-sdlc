@@ -4,11 +4,15 @@ type: ticket
 title: The Bash guard refuses a pgrep -f wait loop
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: review
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-25
 deps: []
 priority: 3
+links:
+  pr: "#853"
+approved_by: "agranado"
+approved_at: 2026-10-25
 ---
 
 # T-21 · The Bash guard refuses a pgrep -f wait loop
