@@ -21,17 +21,19 @@ Exit 3 is a body with no table: nothing here applies, unless `sh scripts/stamp.s
 After step 4's push, rewrite each row's result and evidence pin: the result from this iteration's full-suite run at the new head, the pin `<path>::<test>@<the new head's sha>` — the test that checked the id, as `/implement`'s `CHECK-TABLE.md` writes it. Write one `<id> <result> <pin>` line per covered id the suite checked to `$scratch/rows`, then let a script splice them in, so no cell's text enters this session:
 
 ```sh
-gh pr view "$PR" --json body -q .body >"$scratch/pr-body"
-awk -F'|' 'NR == FNR { split($0, a, " "); r[a[1]] = a[2]; p[a[1]] = a[3]; next }
+gh pr view "$PR" --json body -q .body >"$scratch/pr-body" &&
+	[ -s "$scratch/pr-body" ] && [ -s "$scratch/rows" ] &&
+	awk -F'|' 'FILENAME == ARGV[1] { split($0, a, " "); r[a[1]] = a[2]; p[a[1]] = a[3]; next }
 	/^<!-- check-table -->$/ { t = 1; print; next }
 	t && !/^\|/ { t = 0 }
 	t { id = $2; tier = $3; gsub(/^ +| +$/, "", id); gsub(/^ +| +$/, "", tier)
 		if ((id in r) && tier != "manual") $0 = "| " id " | " tier " | " r[id] " | " p[id] " |" }
-	{ print }' "$scratch/rows" "$scratch/pr-body" >"$scratch/pr-body.new"
-gh pr edit "$PR" --body-file "$scratch/pr-body.new"
+	{ print }' "$scratch/rows" "$scratch/pr-body" >"$scratch/pr-body.new" &&
+	[ -s "$scratch/pr-body.new" ] &&
+	gh pr edit "$PR" --body-file "$scratch/pr-body.new"
 ```
 
-A `manual` row is the operator's, and the splice leaves it as it reads: no suite run checks it, and you never mark it `pass` for them. A covered id with no row gets none from the splice — the reader's `missing-row:` says so, and the fix is a row written as `/implement`'s `CHECK-TABLE.md` writes one. Then run the reader again on the edited body, as above: that run is what steps 6 and the report read.
+The chain is the safety: a fetch that failed, an empty rows file or an empty result edits nothing, so the body is never written over with less than it held. A `manual` row is the operator's, and the splice leaves it as it reads: no suite run checks it, and you never mark it `pass` for them. A covered id with no row gets none from the splice — the reader's `missing-row:` says so, and the fix is a row written as `/implement`'s `CHECK-TABLE.md` writes one. Then run the reader again on the edited body, as above: that run is what steps 6 and the report read.
 
 ## What the reader's answer means (step 6 and the report)
 

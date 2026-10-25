@@ -1882,14 +1882,13 @@ done
 # in the dispatched worker's contract (whitespace collapsed, as in both).
 CT_RULE=$(printf '%s' "list each \`<word>: <id>\` line it holds as \`❌ MISSING      <id> — <word>\`, and on its \`exit: 2\` or \`exit: 3\` every id on the ticket's \`Covers:\` line, the word \`refused\` or \`missing-row\`; an id it lists is listed once, with the reader's word." | tr -s ' ')
 CT_ONLY='No step reads the check table except through the reader'
-flat() { tr '\n' ' ' <"$1" | tr -s ' '; }
 has() { case "$1" in *"$2"*) return 0 ;; esac; return 1; }
 # review_ct_missing <review-pr SKILL.md> <its CHECK-TABLE.md> — rules lost.
 review_ct_missing() {
 	_a7=$(region '^#### Agent 7' '^\*\*Commit separation' "$1" | tr '\n' ' ' | tr -s ' ')
 	has "$_a7" "4. The check-table reader's output, where the ticket carries a \`Covers:\` line — [\`CHECK-TABLE.md\`](CHECK-TABLE.md)" || printf '%s\n' 'agent 7 input'
 	has "$_a7" "$CT_RULE" || printf '%s\n' 'agent 7 rule'
-	_rc=$(flat "$2")
+	_rc=$(unwrap "$2")
 	has "$_rc" 'gh pr view <N> --json body -q .body >"$d/pr-body"' && has "$_rc" 'gh issue view <T> --json body -q .body >"$d/ticket-body"' || printf '%s\n' 'fetched bodies'
 	has "$_rc" 'sh scripts/check-table.sh "$d/pr-body" "$d/ticket-body" >"$d/check-table" 2>/dev/null; echo "exit: $?" >>"$d/check-table"' || printf '%s\n' 'coordinator runs reader'
 	has "$_rc" "hand \`\$d/check-table\` to Agent 7 as a file, beside \`scripts/behavior-delta.sh\`'s output" || printf '%s\n' 'handed as a file'
@@ -1900,7 +1899,7 @@ review_ct_missing() {
 	done
 }
 worker_ct_missing() {
-	_wc=$(flat "$1")
+	_wc=$(unwrap "$1")
 	has "$_wc" "$CT_RULE" || printf '%s\n' 'worker rule'
 	has "$_wc" "ends with a \`Check-table reader:\` block" || printf '%s\n' 'worker block'
 }
@@ -1913,7 +1912,7 @@ iter_ct_missing() {
 		printf '%s\n' 'not converged'
 	awk '/^⚠️ For you/ { f = NR } /^Manual checks awaiting you: / { m = NR } /^Status:$/ { s = NR }
 		END { exit !(f && m && s && f < m && m < s) }' "$1" || printf '%s\n' 'manual checks at top'
-	_ic=$(flat "$2")
+	_ic=$(unwrap "$2")
 	has "$_ic" "While the reader prints a \`fail:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` line, the PR is not converged" || printf '%s\n' 'four blocking words'
 	has "$_ic" "\`skipped:\` ids are manual checks awaiting the operator, listed at the top of the report" || printf '%s\n' 'skipped is manual'
 	has "$_ic" "the result from this iteration's full-suite run at the new head, the pin \`<path>::<test>@<the new head's sha>\`" || printf '%s\n' 'rewrite from suite run'
@@ -1944,7 +1943,11 @@ for b in \
 	'handed as a file|2|s/to Agent 7 as a file/to Agent 7 in its prompt/' \
 	'only through the reader|2|s/No step reads the check table except through the reader/Read the check table/' \
 	'dispatched appends|2|s/under a `Check-table reader:` line/under the spec/' \
-	'word tier-differs|2|s/`tier-differs`/`tier`/g'; do
+	'word missing-row|2|s/`missing-row`/`missing`/g' \
+	'word extra-row|2|s/`extra-row`/`extra`/g' \
+	'word tier-differs|2|s/`tier-differs`/`tier`/g' \
+	'word fail|2|s/`fail`/`failed`/g' \
+	'word skipped|2|s/`skipped`/`skip`/g'; do
 	r=${b%%|*}; rest=${b#*|}
 	ct_bait review_ct_missing "$r" "${rest%%|*}" "${rest#*|}" "$SKILL_ABS" "$RCT_ABS" && pass "bait: /review-pr without '$r' goes red" ||
 		fail "bait: /review-pr without '$r' was not caught — or the bait planted nothing"
@@ -1959,11 +1962,16 @@ for b in \
 	'manual checks at top|1|/^Manual checks awaiting you: /d' \
 	'four blocking words|2|s/`extra-row:` or `tier-differs:` line, the PR/`extra-row:`, `tier-differs:` or `skipped:` line, the PR/' \
 	'skipped is manual|2|s/listed at the top of the report/listed under Next/' \
-	'rewrite from suite run|2|s/at the new head, the pin/at the base, the pin/'; do
+	'rewrite from suite run|2|s/at the new head, the pin/at the base, the pin/' \
+	'only through the reader|2|s/No step reads the check table except through the reader/Read the check table/'; do
 	r=${b%%|*}; rest=${b#*|}
 	ct_bait iter_ct_missing "$r" "${rest%%|*}" "${rest#*|}" "$ITER_ABS" "$ICT_ABS" && pass "bait: /pr-iterate without '$r' goes red" ||
 		fail "bait: /pr-iterate without '$r' was not caught — or the bait planted nothing"
 done
+bait_copy "$WORKER_ABS" "$SCRATCH/ct-bait-w.md" 's/ends with a `Check-table reader:` block/ends with the reader output/' &&
+	worker_ct_missing "$SCRATCH/ct-bait-w.md" | grep -qxF 'worker block' &&
+	pass "bait: a worker contract that names no Check-table reader: block goes red" ||
+	fail "bait: a worker contract that names no Check-table reader: block was not caught — or the bait planted nothing"
 rm -f "$SCRATCH/ct-bait.md" "$SCRATCH/ct-bait-w.md"
 
 # Every word the reader prints on exit 1 is one the review lists: one fixture
@@ -1997,26 +2005,47 @@ items=$(printf '%s\n' "$out" | sed -n 's/^\([a-z-]*\): \(.*\)$/❌ MISSING      
 ❌ MISSING      process/R47 — skipped" ] &&
 	pass "process/R48 (UC3 1–2): fail: and skipped: give two ❌ MISSING items, each naming its id and the reader's word" ||
 	fail "process/R48 (UC3 1–2): the reader's lines gave the items '$items'"
-# The rewrite, lifted from the pr-iterate branch's fenced block — its gh lines
-# are the forge's and stay out; the rest runs as the skill wrote it.
-mkdir -p "$SCRATCH/uc3"
-cp "$SCRATCH/ct-pr" "$SCRATCH/uc3/pr-body"
+# The rewrite, lifted from the pr-iterate branch's fenced block and run as the
+# skill wrote it, the forge stubbed: `gh pr view` prints the fixture body (or
+# fails, when FETCH=fail), `gh pr edit` copies the body file it is handed to
+# $scratch/edited — the body the PR would carry.
 NEW=0123456789abcdef0123456789abcdef01234567
-printf 'process/R46 pass tests/a.test.sh::process/R46@%s\nprocess/R47 pass tests/a.test.sh::process/R47@%s\n' "$NEW" "$NEW" >"$SCRATCH/uc3/rows"
-awk '/^```sh$/ { f = 1; b = ""; next } f && /^```$/ { f = 0; if (b ~ /awk /) print b; next } f { b = b $0 "\n" }' "$ICT_ABS" 2>/dev/null |
-	grep -v '^gh ' >"$SCRATCH/uc3/rewrite.sh"
-if [ -s "$SCRATCH/uc3/rewrite.sh" ] && (cd "$SCRATCH/uc3" && PR=950 scratch="$SCRATCH/uc3" sh ./rewrite.sh) 2>/dev/null &&
-	[ -s "$SCRATCH/uc3/pr-body.new" ]; then
-	t_exec sh scripts/check-table.sh "$SCRATCH/uc3/pr-body.new" "$SCRATCH/ct-ticket"
+# uc3_rewrite <rewrite-block source> <rows> [fail] — run the block on ct-pr;
+# exit 0 when it edited the body (even to nothing), the edited body in $SCRATCH/uc3/edited.
+uc3_rewrite() {
+	rm -rf "$SCRATCH/uc3" && mkdir -p "$SCRATCH/uc3" || return 2
+	printf '%s' "$2" >"$SCRATCH/uc3/rows"
+	{
+		printf '%s\n' 'gh() { case "$2" in view) [ "${FETCH:-}" = fail ] && return 1; cat "$CT_PR" ;; edit) cp "$5" "$scratch/edited" ;; esac; }'
+		awk '/^```sh$/ { f = 1; b = ""; next } f && /^```$/ { f = 0; if (b ~ /awk /) print b; next } f { b = b $0 "\n" }' "$1"
+	} >"$SCRATCH/uc3/rewrite.sh"
+	(cd "$SCRATCH/uc3" && CT_PR="$SCRATCH/ct-pr" FETCH="${3:-}" PR=950 scratch="$SCRATCH/uc3" sh ./rewrite.sh) >/dev/null 2>&1
+	[ -f "$SCRATCH/uc3/edited" ]
+}
+ROWS=$(printf 'process/R46 pass tests/a.test.sh::process/R46@%s\nprocess/R47 pass tests/a.test.sh::process/R47@%s\n' "$NEW" "$NEW")
+if uc3_rewrite "$ICT_ABS" "$ROWS"; then
+	t_exec sh scripts/check-table.sh "$SCRATCH/uc3/edited" "$SCRATCH/ct-ticket"
 	[ "$T_STATUS" = 1 ] && [ "$T_OUT" = 'skipped: process/R47' ] &&
 		pass "process/R49 process/R50 process/R51 (UC3 3–4): after the rewrite only skipped: process/R47 remains — a manual check, the row left as the operator's" ||
 		fail "process/R49 process/R50 process/R51 (UC3 3–4): after the rewrite the reader exited $T_STATUS printing '$T_OUT'"
-	grep -qF "| process/R46 | suite | pass | tests/a.test.sh::process/R46@$NEW |" "$SCRATCH/uc3/pr-body.new" &&
+	grep -qF "| process/R46 | suite | pass | tests/a.test.sh::process/R46@$NEW |" "$SCRATCH/uc3/edited" &&
 		pass "process/R49 (UC3 3): the fixed row reads pass, pinned to the new head" ||
 		fail "process/R49 (UC3 3): the rewritten body has no pass row for process/R46 pinned to the new head"
 else
-	fail "process/R49 (UC3 3): the pr-iterate branch carries no runnable rewrite block writing \$scratch/pr-body.new"
+	fail "process/R49 (UC3 3): the pr-iterate branch's rewrite block, run as written, edited no body"
 fi
+# The rewrite never writes a body over with less than it held: an empty rows
+# file, or a fetch that failed, edits nothing (PR #894 review, H-1 and M-1).
+! uc3_rewrite "$ICT_ABS" '' && pass "process/R49: an empty rows file edits no body" ||
+	fail "process/R49: an empty rows file edited the PR body — it would be written over"
+! uc3_rewrite "$ICT_ABS" "$ROWS" fail && pass "process/R49: a fetch that failed edits no body" ||
+	fail "process/R49: a failed fetch still edited the PR body — it would be written over"
+# Bait: the pre-review block — NR == FNR, nothing chained — empties the body on
+# an empty rows file, and the check above must see it.
+bait_copy "$ICT_ABS" "$SCRATCH/ct-bait-i.md" 's/FILENAME == ARGV\[1\]/NR == FNR/; /^	\[ -s "\$scratch\/pr-body" \] && \[ -s "\$scratch\/rows" \] &&$/d; /^	\[ -s "\$scratch\/pr-body.new" \] &&$/d' &&
+	uc3_rewrite "$SCRATCH/ct-bait-i.md" '' && pass "bait: a rewrite block that does not guard an empty rows file goes red" ||
+	fail "bait: a rewrite block with no guard for an empty rows file was not caught — or the bait planted nothing"
+rm -f "$SCRATCH/ct-bait-i.md"
 rm -rf "$SCRATCH/uc3" "$SCRATCH/ct-pr" "$SCRATCH/ct-ticket"
 
 t_done "/review-pr output contract"
