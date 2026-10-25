@@ -199,8 +199,8 @@
 # advisory, the way an empty TRACE_DIR is no trace) or when no dated line
 # exists. The JSONL `export` prices nothing, so it says nothing.
 #
-# THE RECORD READER, `record`, prints each review area's earned record (the
-# kit's ADR-0036): one row per lens of the lens-slice policy, its most recent
+# THE RECORD READER, `record`, prints each review area's earned record
+# (the kit's ADR-0036): one row per lens of the lens-slice policy, its most recent
 # 20 landed PRs, how many landed inside the 30-day fix window, and how many
 # carry a `merge.outcome`. It reads `merge.land`, `merge.outcome` and git, and
 # writes nothing. The operator and /retro run it; no chain skill does.
@@ -2879,8 +2879,8 @@ trace_record() {
 	# F <sha> <path> per path each readable landing changed against its first parent.
 	_rc_files=
 	if [ -n "$_rc_have" ]; then
-		# shellcheck disable=SC2086 # one sha per word, each checked as a commit above
-		_rc_files=$(git -c core.quotePath=false log --no-walk=unsorted --diff-merges=first-parent --name-only --format='@%H' $_rc_have 2>/dev/null |
+		# On stdin, not as arguments: the landings only grow.
+		_rc_files=$(printf '%s\n' "$_rc_have" | git -c core.quotePath=false log --stdin --no-walk=unsorted --diff-merges=first-parent --name-only --format='@%H' 2>/dev/null |
 			awk '/^@[0-9a-f]+$/ { c = substr($0, 2); next } NF { print "F\t" c "\t" $0 }')
 	fi
 	_rc_areas=$(printf '%s\n' "$_rc_files" | awk -F '\t' 'NF { print $3 }' | sort -u | sh "$_trace_here/lens-slice.sh" --areas) || return 2
