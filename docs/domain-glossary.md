@@ -243,6 +243,38 @@ Grouped by the seam each term belongs to. Entry shape:
   decision reads it, and nothing has measured it yet. Ref: PRD #273.
   - _Avoid_: "probability", "certainty", "score" — it reports a reading, not
     a likelihood.
+- **Risk** — how risky a ticket's change is, stamped as one `Risk:` decision
+  line: a level, `low` alone or `high` with exactly one reason (`irreversible`,
+  `security`, `invisible`, `shared-layer`, `unclear`, `unlearned`,
+  `outward`). It is a **qualified field** of the vocabulary: the policy names
+  the levels, the levels that take a reason, the reasons and the reserved
+  ones. `unlearned` and `outward` are written only by the risk rule, a caller
+  that declares itself so to `scripts/vocab.sh` with `--writer risk-rule`;
+  a planner, a ticket and the stamp reader never can. A ticket with no
+  `Risk:` line is read as `high unclear` by every reader that acts on risk,
+  and the line is never written in for it. Its confidence is its own key,
+  `Risk-confidence:`, so the body's one `Confidence:` line stays the tier's.
+  Ref: ADR-0037.
+  - _Avoid_: "severity" — that is a review finding's bucket, not a ticket's
+    stamp; and "risky", which a token may not be.
+- **Test tier** — the tier of test that checks one requirement: `unit`,
+  `suite`, `e2e` or `manual`, stamped as one `Test-tier: <requirement id>
+  <tier>` line per id on the ticket's `Covers:` line. It is a **keyed
+  field** of the vocabulary: the id is held to the requirement library's
+  bounded grammar, the tier to its tokens, and one id given two tiers is
+  refused. A ticket carries at most 32 such lines, the bound the vocabulary
+  policy publishes. Ref: ADR-0037.
+  - _Avoid_: "capability tier" or "tier" alone — the tier is the model's;
+    the test tier is the test's.
+- **Check table** — the block in a PR body that shows, per requirement the
+  ticket covers, the test tier that checked it, the **result** (`pass`,
+  `fail`, `skipped`) and the evidence: a `<path>::<test>@<sha>` pin, an
+  `https://` URL, or `-` on a `skipped` row. It opens with a
+  `<!-- check-table -->` marker and the header `| Requirement | Test tier |
+  Result | Evidence |`, holds at most 64 rows, sits above the explain-diff
+  marker, and is written by `/implement` alone. Ref: ADR-0037.
+  - _Avoid_: "test report" — the table is evidence per requirement, never a
+    suite's log.
 - **Typed return** — what a delegated untrusted read sends back: a **declared
   shape** of bare decision lines from the vocabularies plus one **evidence**
   line quoting a span of what was read, and nothing else. The caller checks
