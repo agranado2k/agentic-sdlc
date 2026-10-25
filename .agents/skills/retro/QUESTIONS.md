@@ -46,19 +46,23 @@ the model under it is what iterates.
 
 *Reads: `finding.raise` (`data.id`, `data.severity`, `data.agent` — the
 sub-agent that raised it), `finding.triage` (`data.source`, `data.id`,
-`outcome`, `reason`); and, through the record reader, `merge.land` and
-`merge.outcome`.*
+`outcome`, `reason`); and, through the outcome recorder and the record
+reader, `merge.land` and `merge.outcome`.*
 
-- **The earned record comes first.** Run `sh scripts/trace.sh record` and
+- **The earned record comes first.** Run `sh scripts/trace.sh outcomes`, the
+  outcome recorder: it writes one `merge.outcome` per landed PR a later
+  `revert` landing undid, read from git and the trace, and prints how many it
+  wrote. It is idempotent, so a second run writes nothing. Then run
+  `sh scripts/trace.sh record` and
   put its rows in the report, as printed, before the per-agent counts below.
   One row per review area of the lens-slice policy:
   `<area>: landings <n> of 20, in the fix window <w>, mistakes <m>` — the
   area's most recent landed PRs, at most 20, how many of them landed inside
   the 30-day fix window, and how many carry a post-merge outcome. The record
-  is each area's last 20 landings as of now, not cut to the window. No
-  `merge.outcome` is written yet but by hand, since the outcome recorder is a
-  later release, so under the rows say that `mistakes 0` is not yet a clean
-  history. The record compares nothing to a threshold, and neither does this
+  is each area's last 20 landings as of now, not cut to the window. Only
+  reverts are recorded yet: a later fix and a failed factory QA are later
+  releases, so under the rows say that only reverts are recorded yet and
+  `mistakes 0` is not yet a clean history. The record compares nothing to a threshold, and neither does this
   question: the rows are reported, never a finding on their own.
 - Join raise to triage on `data.id` within one PR, and only the triages with
   `data.source=local` and a standards id (`C-`, `H-`, `M-` or `L-N`): a

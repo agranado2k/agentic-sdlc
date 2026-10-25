@@ -2746,3 +2746,21 @@ fields` instead of spelling them, so a consumer's policy decides the tiers and
 results. `/implement`'s skill file sits 6 bytes under its 27000-byte ceiling:
 its next addition needs a trim first. #872 stamped `process/R52` without
 adding it to `docs/specs/process.md`; R48 to R60 join with their slices.
+
+## 2026-10-25 — the outcome recorder: reverts are recorded against the PR they undid
+
+PRD-06 slice 2 of K1 (#876, ADR-0036, released as 0.94.0). `sh
+scripts/trace.kit.sh outcomes` reads git and the trace and writes one
+`merge.outcome outcome=reverted` against each landed PR whose lines a later
+`revert` landing removed, as git blame at that landing's first parent says;
+a revert that removes no line is resolved only from a 40-hex sha in its
+message that lies on the first-parent history and that a `merge.land`
+names. `/retro`'s question 2 runs it before the record reader. Its first run
+over the kit's own trace backfilled one outcome: #429 (the land-probe
+revert of 2026-10-01) against #416.
+
+**Baseline, the outcome recorder over the kit's own trace** (2026-10-25, 287
+`merge.land` events, 444 first-parent commits on `main`, one `revert`
+landing, this machine): 1.3 s wall, 1.2 s user, for a run that writes
+nothing — the blame is redone on every run, and the idempotence check comes
+after it, so this is the full run's cost.

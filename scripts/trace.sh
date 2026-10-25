@@ -205,6 +205,14 @@
 # carry a `merge.outcome`. It reads `merge.land`, `merge.outcome` and git, and
 # writes nothing. The operator and /retro run it; no chain skill does.
 #
+# THE OUTCOME RECORDER, `outcomes`, writes the `merge.outcome` lines git and
+# the trace prove (the kit's ADR-0036): a `reverted` against each landed PR
+# whose lines a later `revert` landing removed, as git blame at that landing's
+# first parent says, mapped to the PR only through a `merge.land` merge sha.
+# It reads nothing from a commit message but the type token and, for a revert
+# that removes no line, a 40-hex sha. A second run writes nothing. The
+# operator and /retro run it, before `record`; no chain skill does.
+#
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
 # policy goes in scripts/trace.config.sh.
 
@@ -290,6 +298,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh id [--check <id>]
        sh scripts/trace.sh runs [<id>]
        sh scripts/trace.sh record
+       sh scripts/trace.sh outcomes
          (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
 	exit 2
@@ -2928,6 +2937,136 @@ trace_record() {
 }
 
 # ---------------------------------------------------------------------------
+# The outcome recorder (the kit's ADR-0036, #876): what happened to a landed
+# PR after its merge, written as `merge.outcome` lines from git and the trace.
+
+# How long one `data.files` list may grow before the rest is left off: the
+# line has to stay one write under TRACE_EVENT_CAP.
+TRACE_OUTCOME_FILES_BYTES=2000
+
+# trace_outcomes — one `merge.outcome outcome=reverted` per landed PR whose
+# lines a later `revert` landing removed.
+#
+# A LANDING is a `merge.land` with outcome `landed` and a 40-hex
+# `data.merge_sha`; that sha is the only way a commit maps to a PR. A landing
+# is a revert when its message's first non-blank line not opening `Merge `
+# (a squash subject, or the PR title GitHub writes under a merge commit's
+# "Merge pull request" line) opens with `revert`, as the anchored
+# `^(fix|revert)(\([^)]*\))?!?:` reads it. From a message the recorder reads
+# that type token and, for a revert that removes no line, a 40-hex sha —
+# nothing else, so a PR number written in prose is never read. The lines a
+# revert removed are its diff against its first parent; git blame at that
+# parent names the commit each came from, and the landing that brought a
+# commit is the commit itself when it lies on the first parent's first-parent
+# history, else the oldest first-parent commit descended from it. A revert
+# that removes no line takes the reverted landing from a sha in its message
+# that lies on that first-parent history and that a `merge.land` names, and
+# nothing otherwise. The outcome names the reverting PR in `related`, its
+# merge sha in `data.by_sha`, and the files git's diff named in `data.files`
+# — never text from a message. An outcome the trace already holds for the
+# same PR and `data.by_sha` is not written again, so a second run writes 0
+# lines. Lines from a landing no `merge.land` names get no outcome, and their
+# count goes to stderr. Unconfigured: nothing on stdout, nothing written,
+# exit 0, like every reader.
+trace_outcomes() {
+	[ $# -eq 0 ] || usage
+	trace_dir || {
+		trace_unconfigured_note
+		return 0
+	}
+	git rev-parse --git-dir >/dev/null 2>&1 || die "outcomes: not inside a git repository — the recorder reads the landings from git"
+	_oc_tab=$(printf '\t')
+	# L <sha> <pr> per landed merge sha; K <pr> <by sha> per revert recorded.
+	_oc_ev=$(trace_files | while IFS= read -r _oc_f; do cat "$_oc_f"; done | awk "$TRACE_AWK_LIB"'
+		function hex40(d, key,   v) {
+			if (!match(d, "\"" key "\":\"[0-9a-f]+\"")) return ""
+			v = substr(d, RSTART + length(key) + 4, RLENGTH - length(key) - 5)
+			return length(v) == 40 ? v : ""
+		}
+		{ e = tr_env($0); k = tr_str(e, "kind"); s = tr_str(e, "subject") }
+		k == "merge.land" && tr_str(e, "outcome") == "landed" && s ~ /^pr:#[0-9]+$/ {
+			m = hex40(tr_data($0), "merge_sha")
+			if (m != "" && !(m in seen)) { seen[m] = 1; print "L\t" m "\t" s }
+		}
+		k == "merge.outcome" && tr_str(e, "outcome") == "reverted" {
+			b = hex40(tr_data($0), "by_sha")
+			if (b != "") print "K\t" s "\t" b
+		}')
+	_oc_have=$(printf '%s\n' "$_oc_ev" | awk -F '\t' '$1 == "L" { print $2 }' |
+		git cat-file --batch-check='%(objectname) %(objecttype)' 2>/dev/null | awk '$2 == "commit" { print $1 }')
+	_oc_reverts=
+	[ -z "$_oc_have" ] || _oc_reverts=$(printf '%s\n' "$_oc_have" |
+		git log --stdin --no-walk=unsorted --format='%x01%H%n%B' 2>/dev/null | awk '
+			/^\001[0-9a-f]+$/ { c = substr($0, 2); done = 0; next }
+			c == "" || done || $0 ~ /^[ \t]*$/ || /^Merge / { next }
+			{ done = 1; if ($0 ~ /^revert(\([^)]*\))?!?:/) print c }')
+	_oc_written=0
+	_oc_lost=0
+	for _oc_s in $_oc_reverts; do
+		_oc_p=$(git rev-parse --verify -q "$_oc_s^1") || continue
+		_oc_by=$(printf '%s\n' "$_oc_ev" | awk -F '\t' -v s="$_oc_s" '$1 == "L" && $2 == s { print $3; exit }')
+		_oc_fp=$(git rev-list --first-parent "$_oc_p")
+		# <path> <start> <count> per run of lines the revert removed, numbered
+		# as its first parent numbers them; git ends the header of a path
+		# holding a space with a tab, which is not the path's, and the
+		# prefixes are spelled so no diff.noprefix or mnemonicPrefix setting
+		# moves them. A `--- ` line is a header only
+		# between a `diff --git` line and the first hunk: inside a hunk it is
+		# a removed line that began with `-- `.
+		_oc_runs=$(git -c core.quotePath=false diff -U0 --no-color --no-ext-diff --no-renames --src-prefix=a/ --dst-prefix=b/ "$_oc_p" "$_oc_s" | awk '
+			/^diff --git / { hdr = 1; f = ""; next }
+			hdr && /^--- / { f = substr($0, 5); sub(/\t$/, "", f); if (f == "/dev/null") f = ""; else sub(/^a\//, "", f); next }
+			/^@@ -/ { hdr = 0; if (f == "") next; n = split($2, r, ","); st = substr(r[1], 2) + 0; c = n > 1 ? r[2] + 0 : 1; if (c > 0) print f "\t" st "\t" c }')
+		# <pr> <path> per attributed line, and `-` <path> per line no landing names.
+		_oc_hits=
+		if [ -n "$_oc_runs" ]; then
+			_oc_blame=$(printf '%s\n' "$_oc_runs" | while IFS=$_oc_tab read -r _oc_f _oc_st _oc_n; do
+				git blame --porcelain -L "$_oc_st,+$_oc_n" "$_oc_p" -- "$_oc_f" 2>/dev/null |
+					awk -v f="$_oc_f" '/^[0-9a-f]+ [0-9]+ [0-9]+( [0-9]+)?$/ && length($1) == 40 { print $1 "\t" f }'
+			done)
+			_oc_map=$(printf '%s\n' "$_oc_blame" | awk -F '\t' 'NF { print $1 }' | sort -u | while IFS= read -r _oc_c; do
+				if printf '%s\n' "$_oc_fp" | grep -qx "$_oc_c"; then
+					printf '%s\t%s\n' "$_oc_c" "$_oc_c"
+				else
+					printf '%s\t%s\n' "$_oc_c" "$(git rev-list --first-parent --ancestry-path "$_oc_c..$_oc_p" | tail -n 1)"
+				fi
+			done)
+			_oc_hits=$({
+				printf '%s\n' "$_oc_ev" | awk -F '\t' '$1 == "L" { print "L\t" $2 "\t" $3 }'
+				printf '%s\n' "$_oc_map" | awk -F '\t' 'NF { print "M\t" $1 "\t" $2 }'
+				printf '%s\n' "$_oc_blame" | awk -F '\t' 'NF { print "B\t" $1 "\t" $2 }'
+			} | awk -F '\t' '
+				$1 == "L" { pr[$2] = $3; next }
+				$1 == "M" { land[$2] = $3; next }
+				$1 == "B" { l = land[$2]; print ((l != "" && (l in pr)) ? pr[l] : "-") "\t" $3 }')
+		else
+			# A pure-deletion revert: the reverted landing only by a sha its
+			# message names, and only one on the first-parent history that a
+			# merge.land names.
+			_oc_files=$(git -c core.quotePath=false diff --name-only --no-renames "$_oc_p" "$_oc_s")
+			_oc_hits=$(git log -1 --format=%B "$_oc_s" | awk '{ gsub(/[^0-9A-Za-z]/, " "); for (i = 1; i <= NF; i++) if (length($i) == 40 && $i !~ /[^0-9a-f]/) print $i }' |
+				sort -u | while IFS= read -r _oc_n; do
+					printf '%s\n' "$_oc_fp" | grep -qx "$_oc_n" || continue
+					_oc_pr=$(printf '%s\n' "$_oc_ev" | awk -F '\t' -v s="$_oc_n" '$1 == "L" && $2 == s { print $3; exit }')
+					[ -n "$_oc_pr" ] || continue
+					printf '%s\n' "$_oc_files" | awk -v p="$_oc_pr" 'NF { print p "\t" $0 }'
+				done)
+		fi
+		_oc_lost=$((_oc_lost + $(printf '%s\n' "$_oc_hits" | grep -c "^-$_oc_tab")))
+		for _oc_pr in $(printf '%s\n' "$_oc_hits" | awk -F '\t' 'NF && $1 != "-" { print $1 }' | sort -u); do
+			[ "$_oc_pr" = "$_oc_by" ] && continue
+			printf '%s\n' "$_oc_ev" | awk -F '\t' -v p="$_oc_pr" -v b="$_oc_s" '$1 == "K" && $2 == p && $3 == b { f = 1 } END { exit !f }' && continue
+			_oc_list=$(printf '%s\n' "$_oc_hits" | awk -F '\t' -v p="$_oc_pr" '$1 == p { print $2 }' | sort -u |
+				awk -v cap="$TRACE_OUTCOME_FILES_BYTES" -v p="$_oc_pr" '{ if (length(out) + length($0) + 1 > cap) { cut++; next } out = out (out == "" ? "" : " ") $0 } END { print out; if (cut) printf "trace: outcomes: %d file(s) left off %s data.files, past its %d-byte cap\n", cut, p, cap > "/dev/stderr" }')
+			( trace_emit kind=merge.outcome subject="$_oc_pr" related="$_oc_by" outcome=reverted data.by_sha="$_oc_s" data.files="$_oc_list" reason='outcome recorder: a revert landing removed lines this PR introduced' ) || return 2
+			_oc_written=$((_oc_written + 1))
+		done
+	done
+	[ "$_oc_lost" -eq 0 ] || echo "trace: outcomes: $_oc_lost line(s) a revert removed came from a landing no merge.land with a merge sha names — no outcome for them" >&2
+	printf 'trace: outcomes: %d written\n' "$_oc_written"
+}
+
+# ---------------------------------------------------------------------------
 
 [ $# -ge 1 ] || usage
 _trace_quiet_advice=
@@ -2949,5 +3088,6 @@ current) trace_current "$@" ;;
 id) trace_id_cmd "$@"; exit $? ;;
 runs) trace_runs "$@"; exit $? ;;
 record) trace_record "$@"; exit $? ;;
+outcomes) trace_outcomes "$@"; exit $? ;;
 *) usage ;;
 esac

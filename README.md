@@ -253,7 +253,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.93.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.94.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -988,6 +988,7 @@ sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/lens-slice.test.sh                            # each review lens reads only its slice
+sh tests/outcome-recorder.test.sh                      # a revert landing is recorded against the PR it undid
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
 sh tests/agents-tiers.test.sh                          # the capability-tier resolver
