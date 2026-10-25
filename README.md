@@ -801,6 +801,12 @@ skeleton (K0).
   the scan reports it, and ordinary dashes, arrows and accents left alone. The
   harness's fixture tests, which use box characters as comment rules, are
   code and out of scope.
+- `sh tests/ci-timeouts.test.sh` holds the kit's own CI to a bound: every
+  job under `.github/workflows/` declares a job-level `timeout-minutes`, and
+  every package-install step a tighter one of its own. Fixture workflows drive
+  it red first — a job with none, a timeout only on a step or in a comment, an
+  install step unbounded or bounded no tighter than its job — then the kit's
+  own workflows go green (#882).
 - `sh tests/mutation-kit.test.sh` drives the kit's own mutation wrapper,
   `scripts/mutation.kit.sh`, through a stub Stryker: the pinned `--dry-run`
   command, usage errors and a non-kit tree refused with exit 2, the exit code
@@ -1015,6 +1021,7 @@ sh tests/gate-path-roots.test.sh                       # the gate's two engines 
 sh tests/mutation-kit.test.sh                          # the kit's own mutation wrapper, through a stub
 sh tests/suite-budget.test.sh                          # every suite runs inside the worker budget
 sh tests/budget-lib.test.sh                            # the worker Budget, through its four functions
+sh tests/ci-timeouts.test.sh                           # every kit CI job and package install carries a timeout
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

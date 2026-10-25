@@ -836,12 +836,14 @@ T_IMPL="$SCRATCH/ticket-impl.md"
 	echo "- the thing is done"
 } >"$T_IMPL"
 review() { # <session model or empty> <ticket file> [extra args…]
+	# BRANCH and BASE name real commits: an in-session review is handed back
+	# with its commit pinned and its diff staged (#880).
 	_rv_ses=$1 _rv_tf=$2
 	shift 2
 	t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub ${_rv_ses:+AGENT_SESSION_MODEL=$_rv_ses} \
 		sh scripts/skill-dispatch.kit.sh review-pr --tier reviewer --ticket 682 \
 		--ticket-file "$_rv_tf" --worktree "$WT" \
-		--set BRANCH=b --set BASE=main --set-file SPEC="$_rv_tf" "$@"
+		--set BRANCH=HEAD --set BASE="$BASE" --set-file SPEC="$_rv_tf" "$@"
 }
 # The cascade: rung 1 on the Sonnet family, in-session, green.
 fresh_wt
@@ -938,7 +940,7 @@ review_nt() { # <session model> <ticket file> [extra args…] — no --ticket
 	t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub AGENT_SESSION_MODEL="$_rv_ses" \
 		sh scripts/skill-dispatch.kit.sh review-pr --tier reviewer \
 		--ticket-file "$_rv_tf" --worktree "$WT" \
-		--set BRANCH=b --set BASE=main --set-file SPEC="$_rv_tf" "$@"
+		--set BRANCH=HEAD --set BASE="$BASE" --set-file SPEC="$_rv_tf" "$@"
 }
 fresh_wt
 FIXTURE_ORACLE_GREEN=1
