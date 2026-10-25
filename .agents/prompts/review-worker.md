@@ -267,5 +267,13 @@ become table cells.
     own line, right after its tag: the session that lands this report keeps
     the tagged line and drops any line beneath it.
 
+    **When the spec above ends with a `Check-table reader:` block** — the
+    check-table reader's lines and a last `exit: <n>` line, which the
+    session that dispatched you appended after reading the PR's check table
+    through the reader — list each `<word>: <id>` line it holds as
+    `❌ MISSING      <id> — <word>`, and on its `exit: 2` or `exit: 3` every
+    id on the ticket's `Covers:` line, the word `refused` or `missing-row`;
+    an id it lists is listed once, with the reader's word.
+
 Do not modify any file. Do not commit, do not push, and do not open or merge a
 pull request. A review that edits the code it is reviewing is not a review.
