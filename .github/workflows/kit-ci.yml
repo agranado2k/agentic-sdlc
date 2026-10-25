@@ -502,6 +502,15 @@ jobs:
       - name: Coverage check suite
         run: sh tests/coverage.test.sh
 
+  check-table:
+    name: The check-table reader holds a PR's check table to its ticket
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check-table reader suite
+        run: sh tests/check-table.test.sh
+
   failure-signature:
     name: A loop stops on the third identical failure
     runs-on: ubuntu-latest

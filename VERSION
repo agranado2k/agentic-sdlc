@@ -3360,7 +3360,40 @@
 # them — tests/trace.test.sh sections 22 and 42, tests/lens-slice.test.sh,
 # tests/trace-skills.test.sh section 3, tests/retro-skill.test.sh section 19.
 
-shared-layer: 0.92.0
+# 0.93.0 — /implement writes a check table into the PR body, and the
+# check-table reader reads it (ticket #870, PRD-07 slice 2, the kit's
+# ADR-0037 clause 9). ONE file JOINS the shared layer: scripts/check-table.sh,
+# the check-table reader — `sh scripts/check-table.sh <pr-body-file>
+# <ticket-body-file>` reads the table under the `<!-- check-table -->`
+# marker above the explain-diff marker against the ticket's Covers: and
+# Test-tier: lines, runs no tracker or forge command, and prints only
+# requirement ids, tokens and row numbers: exit 0 every covered id with one
+# passing row at its stamped tier, nothing printed; 1 the missing-row:,
+# extra-row:, tier-differs:, fail: and skipped: lines; 2 a row that breaks
+# the grammar or a table past 64 rows, naming the row number, or a refused
+# ticket; 3 no table. It sources scripts/requirement.lib.sh and reads
+# scripts/vocab.sh's fields from beside itself, refusing (exit 2) without
+# either. None leaves. One shared file changes content besides it:
+# UPDATING.md, its entry, the arriving-from paragraph and both worked
+# examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /implement — step 8 of SKILL.md lists the check table among
+# the PR body's parts and opens .agents/skills/implement/CHECK-TABLE.md,
+# new beside it: the marker, the exact header, one row per covered id in
+# the Covers: order (at most 64), the stamped Test-tier:, the result, a
+# <path>::<test>@<commit> pin or an https:// URL, a manual row nobody
+# checked as skipped with `-`, and the reader run before the push.
+# Wiring (9b): none. Templates (9c): templates/docs/PULL_REQUEST_TEMPLATE.md
+# gains a Check table section — the marker line, the header and the
+# separator, no rows — above the checklist; a consumer's own
+# .github/PULL_REQUEST_TEMPLATE.md is theirs, so it adds the section by hand.
+# Config (9d): none. Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/process.md R45 to R47, the glossary's
+# check-table reader, the kit's own .github/PULL_REQUEST_TEMPLATE.md, and
+# the suites that hold them — tests/check-table.test.sh and its kit-ci.yml
+# job, tests/implement-deliver.test.sh section 4g.
+
+shared-layer: 0.93.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -3387,6 +3420,7 @@ files:
   scripts/vocab.sh
   scripts/stamp.sh
   scripts/coverage.sh
+  scripts/check-table.sh
   scripts/failure-signature.sh
   scripts/requirement.lib.sh
   scripts/trace.sh

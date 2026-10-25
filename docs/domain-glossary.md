@@ -272,7 +272,10 @@ Grouped by the seam each term belongs to. Entry shape:
   `https://` URL, or `-` on a `skipped` row. It opens with a
   `<!-- check-table -->` marker and the header `| Requirement | Test tier |
   Result | Evidence |`, holds at most 64 rows, sits above the explain-diff
-  marker, and is written by `/implement` alone. Ref: ADR-0037.
+  marker, and is written by `/implement` alone. The **check-table reader**,
+  `scripts/check-table.sh`, holds it to the ticket's `Covers:` and
+  `Test-tier:` lines and prints only ids, tokens and row numbers. Ref:
+  ADR-0037.
   - _Avoid_: "test report" — the table is evidence per requirement, never a
     suite's log.
 - **Scope** — the mark Agent 7 of `/review-pr` puts on every ⚠️ UNSPECIFIED
