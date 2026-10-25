@@ -264,7 +264,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # stamp.sh lifts by KEY and bounds the count: at most the policy's bound of
 # one key (8, 32 for Test-tier:; 8 when it publishes none) reach the checker,
 # and a body with more is its exit 5, nothing checked (#400, #869) — so
-# its lift is bounded like every other site here.
+# its lift is bounded like every other site here. check-table.sh lifts the
+# bare `Test-tier:` lines of a ticket body and refuses more than the policy's
+# bound before the checker reads them (#870).
 LIFTED=$(
 	cat <<'EOLIFT'
 scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier)[[:space:]]*:'
@@ -272,6 +274,7 @@ scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE '^[[:space:]]
 .agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
+scripts/check-table.sh@@-@@printf '%s\n' "$stamps" | sh "$vocab" check@@[ "$n" -le "$bound" ] || {
 EOLIFT
 )
 
