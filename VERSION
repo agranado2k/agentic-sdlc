@@ -3393,7 +3393,35 @@
 # the suites that hold them — tests/check-table.test.sh and its kit-ci.yml
 # job, tests/implement-deliver.test.sh section 4g.
 
-shared-layer: 0.93.0
+# 0.94.0 — the outcome recorder records reverts, and /retro's question 2
+# runs it (ticket #876, PRD-06 slice 2 of K1, the kit's ADR-0036). NO file
+# joins the shared layer and none leaves. Two shared files change content:
+# scripts/trace.sh gains the outcome recorder, `trace.sh outcomes`, which
+# reads git and the trace and writes one `merge.outcome outcome=reverted`
+# against each landed PR whose lines a later `revert` landing removed, as
+# git blame at that landing's first parent attributes them — the reverting
+# PR in related, its merge commit in data.by_sha, the files in data.files —
+# mapping a commit to a PR only through a merge.land's data.merge_sha and
+# reading from a commit message only its Conventional Commit type and, for
+# a revert that removes no line, a 40-hex sha on the first-parent history a
+# merge.land names; idempotent (a second run writes nothing), lines from a
+# landing no merge.land names counted on stderr, unconfigured silent on
+# stdout and exit 0; and UPDATING.md, its entry, the arriving-from
+# paragraph and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — .agents/skills/retro/QUESTIONS.md's question 2
+# runs `sh scripts/trace.sh outcomes` before `sh scripts/trace.sh record`,
+# and says only reverts are recorded yet; SKILL.md's question 2 names both.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: the glossary's Outcome recorder,
+# docs/specs/runtime.md R32, R33 and R39 to R42 with R43 restated,
+# docs/specs/process.md R37 restated, the diary's baseline, and the suites
+# that hold them — tests/outcome-recorder.test.sh and its kit-guards.yml
+# step, tests/trace-skills.test.sh section 3, tests/retro-skill.test.sh
+# section 19.
+
+shared-layer: 0.94.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

@@ -416,6 +416,15 @@ Grouped by the seam each term belongs to. Entry shape:
   a sha, an id, a path from git's diff, digits or an outcome word, never
   prose (ADR-0036).
   - _Avoid_: "incident"; "regression" (a fix is counted whatever it fixed).
+- **Outcome recorder** — `sh scripts/trace.sh outcomes`: reads git and the
+  trace and writes the **post-merge outcomes** they prove, today a
+  `reverted` against each landed PR whose lines a later `revert` landing
+  removed, as git blame at that landing's first parent says. A commit maps
+  to a PR only through a `merge.land`'s merge sha, and from a commit message
+  it reads only the Conventional Commit type and, for a revert that removes
+  no line, a 40-hex sha. Idempotent: a second run writes nothing. Run by the
+  operator and `/retro`'s question 2, before the record reader (ADR-0036).
+  - _Avoid_: "backfill script" (its first run backfills; every run records).
 - **Mistake** — a landed PR with at least one **post-merge outcome**: a later
   `revert` landing removed lines it introduced or reverted it by sha, a
   `fix` landing inside the **fix window** of 30 days removed or rewrote its
