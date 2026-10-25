@@ -94,6 +94,12 @@ jobs:
       - name: trace.sh (decision trace)
         run: sh tests/trace.test.sh
 
+      # The trace's outcome recorder (ADR-0036): a revert landing recorded
+      # against the PR it undid, over a throwaway repository and a fixture
+      # trace — git and sh only, like the trace suite above.
+      - name: trace.sh outcomes (outcome recorder)
+        run: sh tests/outcome-recorder.test.sh
+
       # Bootstraps a throwaway consumer in a temp dir and pushes at a real bare
       # remote through the real hook. It sets its own committer identity and
       # hooks path per fixture, so it needs nothing from the runner's git config.

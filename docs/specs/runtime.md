@@ -18,8 +18,9 @@ names. The kit's own: bootstrap strips it, so no consumer inherits a spec
 whose tests it does not have.
 
 R31 and R43 to R45 joined from PRD-06 slice 1 (#875, ADR-0036), keeping the
-PRD's numbers. R43 names the record reader alone: the outcome recorder it
-also names in the PRD lands in a later slice, which restates it.
+PRD's numbers. R32, R33 and R39 to R42 joined with the outcome recorder
+(#876), which restated R43 to name the recorder beside the record reader, as
+the PRD writes it.
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
@@ -52,6 +53,12 @@ R28. WHEN `trace.sh begin` opens a run, its `run.start` SHALL carry `data.kit`, 
 R29. WHEN the harness exposes the session's model or its own name, `run.start` SHALL carry `model` and `harness`, and SHALL leave out a value the harness does not expose, never guessing it.
 R30. WHEN a spawn is recorded, its `spawn` event SHALL carry `data.tools`, the tool list of the agent type it spawned as.
 R31. The trace SHALL accept the kind `merge.outcome` with the outcomes `reverted`, `fixed` and `qa-failed`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 3]
-R43. IF the trace is unconfigured, THEN the record reader SHALL write nothing, print nothing on standard output, and exit 0. [UC1 2c]
+R32. WHEN the outcome recorder runs, it SHALL write one `merge.outcome outcome=reverted` against each landed PR that introduced a line a later landing of Conventional Commit type `revert` removed, as git blame at that landing's first parent attributes the line, with the reverting PR in `related` and its merge commit in `data.by_sha`. [UC1 2, 3]
+R33. IF a `revert` landing removes no line, THEN the recorder SHALL take the reverted commit only from a 40-hex sha in the landing's merge commit message that lies on the base branch's first-parent history and that a `merge.land` names, and SHALL write nothing when none does. [UC1 2a]
+R39. The recorder SHALL map a landed commit to its PR only through a `merge.land` event's `data.merge_sha`, and SHALL read from commit messages and factory items nothing but the Conventional Commit type token, a 40-hex sha, `qa.outcome` and `links.pr`, each held to its shape, so that a PR number written in prose produces no outcome. [UC2 1a]
+R40. A landing whose Conventional Commit type is neither `fix` nor `revert` SHALL produce no outcome. [UC2 1b]
+R41. The recorder SHALL write no outcome the trace already holds for the same PR, outcome and evidence (`data.by_sha`, or `data.ticket` for `qa-failed`), so that a second run over the same history writes nothing. [UC1 5]
+R42. IF a blamed line resolves to a landing that no `merge.land` with a merge sha names, THEN the recorder SHALL write no outcome for that line and SHALL print the count of such lines on standard error. [UC1 2b]
+R43. IF the trace is unconfigured, THEN the recorder and the record reader SHALL write nothing, print nothing on standard output, and exit 0. [UC1 2c]
 R44. WHEN the record reader runs, it SHALL print one row per review area of the lens-slice policy, holding the area's landed PRs counted (its most recent 20, or fewer, said as `<n> of 20`), how many of them landed inside the fix window, and how many carry a mistake. [UC1 4, UC4 1, 2, 1a]
 R45. The record reader SHALL count a landed PR toward every review area that one of the paths its merge commit changed against its first parent belongs to. [UC1 4]
