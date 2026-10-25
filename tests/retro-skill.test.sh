@@ -1844,7 +1844,7 @@ q2_out_at=$(q2_sec | grep -n 'sh scripts/trace\.sh outcomes' | head -1 | cut -d:
 	pass "process/R37: question 2 runs the outcome recorder, \`sh scripts/trace.sh outcomes\`, before the record reader" ||
 	fail "process/R37: question 2's outcome recorder (line ${q2_out_at:-none}) does not come before the record reader (line ${q2_rec_at:-none})"
 q2prose=$(q2_sec | flat)
-for needle in 'before the per-agent counts below' '`<area>: landings <n> of 20, in the fix window <w>, mistakes <m>`' 'not cut to the window' 'a second run writes nothing' 'only reverts are recorded yet' 'never a finding on their own'; do
+for needle in 'before the per-agent counts below' '`<area>: landings <n> of 20, in the fix window <w>, mistakes <m>`' '`missed <k> of <n>, miss rate <r>`' 'A ratio over nothing reads `n/a`' 'not cut to the window' 'a second run writes nothing' 'only reverts are recorded yet' 'never a finding on their own'; do
 	case "$q2prose" in *"$needle"*) pass "question 2 says: $needle" ;; *) fail "question 2 does not say: $needle" ;; esac
 done
 case "$(sed -n '/^2\. \*\*Review signal/,/^3\. /p' "$SKILL_ABS" | flat)" in
@@ -1862,7 +1862,7 @@ if [ -n "$q2rec" ]; then
 			fail "process/R37: question 2's recorder span printed: $q2rc"
 	fi
 	q2out=$( cd "$ROOT" && TRACE_DIR="$q2t" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$q2rec")" 2>/dev/null )
-	[ "$(printf '%s\n' "$q2out" | grep -c '^[a-z-]*: landings [0-9]* of 20, in the fix window [0-9]*, mistakes [0-9]*$')" = 6 ] &&
+	[ "$(printf '%s\n' "$q2out" | grep -c '^[a-z-]*: landings [0-9]* of 20, in the fix window [0-9]*, mistakes [0-9]*, missed [0-9]* of [0-9]*, miss rate [0-9n./a]*, held up [0-9]* of [0-9]*, ')" = 6 ] &&
 		pass "process/R37: question 2's span prints one row per review area of the shipped lens-slice policy, six" ||
 		fail "process/R37: question 2's span printed: $(printf '%s' "$q2out" | tr '\n' ';')"
 fi

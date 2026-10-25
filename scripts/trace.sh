@@ -201,8 +201,10 @@
 #
 # THE RECORD READER, `record`, prints each review area's earned record
 # (the kit's ADR-0036): one row per lens of the lens-slice policy, its most recent
-# 20 landed PRs, how many landed inside the 30-day fix window, and how many
-# carry a `merge.outcome`. It reads `merge.land`, `merge.outcome` and git, and
+# 20 landed PRs, how many landed inside the 30-day fix window, how many
+# carry a `merge.outcome`, how many carry one the review missed, and how the
+# lens findings raised on them held up. It reads `merge.land`,
+# `merge.outcome`, the findings' raises, triages and dismissals, and git, and
 # writes nothing. The operator and /retro run it; no chain skill does.
 #
 # THE OUTCOME RECORDER, `outcomes`, writes the `merge.outcome` lines git and
@@ -2839,7 +2841,10 @@ TRACE_FIX_WINDOW_DAYS=30
 
 # trace_record — one row per review area of the lens-slice policy:
 #
-#   <area>: landings <n> of 20, in the fix window <w>, mistakes <m>
+#   <area>: landings <n> of 20, in the fix window <w>, mistakes <m>,
+#     missed <k> of <n>, miss rate <r>, held up <h> of <l>, not held up <x>,
+#     unlabelled <u>, precision <p>, labels from triage <t>, human <d>,
+#     outcome <o>
 #
 # A LANDING is a `merge.land` with outcome `landed` and a `data.merge_sha`,
 # the latest one per PR subject. Its paths are its merge commit's diff against
@@ -2851,8 +2856,17 @@ TRACE_FIX_WINDOW_DAYS=30
 # --areas`, beside this file): one parser of the policy. An area counts its
 # most recent 20 landings, by the landing's `ts`; of those, the ones whose day
 # is under 30 days before today are in the fix window, and the ones with any
-# `merge.outcome` are mistakes. Nothing is compared to a threshold and nothing
-# is written. Unconfigured: nothing on stdout, exit 0, like every reader.
+# `merge.outcome` are mistakes. A mistake is MISSED unless a finding raised
+# on its PR and rejected at triage names a file in its `data.files`; a
+# `qa-failed` one always is (PRD-06 §3: the miss is then the triage's). A
+# lens finding counts in every area its `data.where` path belongs to, on
+# the area's counted landings: HELD UP when accepted at triage or a mistake
+# against its PR (never a failed QA) names its file, NOT HELD UP when
+# rejected or dismissed by a human with no such mistake, unlabelled else.
+# A triage pairs with the latest raise of its id on its PR before it; a
+# dismissal with the latest raise at its `data.where` before it and every
+# raise at that where from the same run. A ratio over zero prints `n/a`.
+# Nothing is compared to a threshold and nothing is written. Unconfigured: nothing on stdout, exit 0, like every reader.
 trace_record() {
 	[ $# -eq 0 ] || usage
 	trace_dir || {
@@ -2863,21 +2877,39 @@ trace_record() {
 		echo "trace: record: no lens-slice.sh beside this script — no review areas to count" >&2
 		return 0
 	}
-	# L <ts> <pr> <sha> per landing, the latest per PR; O <pr> per PR that
-	# carries a post-merge outcome.
+	# L <ts> <pr> <sha> per landing, the latest per PR; O <pr> <outcome>
+	# <files> per post-merge outcome; R <ts> <pr> <id> <path> <run> <where> per lens
+	# finding raised (its `data.where`, and that with the line cut off: the
+	# path); T <ts> <pr> <id> <outcome> per local triage of one; D <ts> <pr>
+	# <where> per human dismissal. A value holding a tab or a newline is left
+	# out whole.
 	_rc_ev=$(trace_files | while IFS= read -r _rc_f; do cat "$_rc_f"; done | awk "$TRACE_AWK_LIB"'
-		{ e = tr_env($0); k = tr_str(e, "kind"); s = tr_str(e, "subject") }
+		function dstr(d, key,   v) {
+			if (d == "") return ""
+			v = tr_unesc(tr_str("," substr(d, 2), key))
+			return v ~ /[\t\n]/ ? "" : v
+		}
+		function wpath(v) { sub(/:[0-9][0-9-]*$/, "", v); return v }
+		{ e = tr_env($0); k = tr_str(e, "kind"); s = tr_str(e, "subject"); t = tr_str(e, "ts") }
 		k == "merge.land" && tr_str(e, "outcome") == "landed" {
 			d = tr_data($0)
 			m = match(d, /"merge_sha":"[0-9a-f]+"/) ? substr(d, RSTART + 13, RLENGTH - 14) : ""
-			t = tr_str(e, "ts")
 			if (m != "" && s != "" && t >= ts[s]) { ts[s] = t; sha[s] = m }
 		}
-		k == "merge.outcome" && s != "" { out[s] = 1 }
-		END {
-			for (s in sha) print "L\t" ts[s] "\t" s "\t" sha[s]
-			for (s in out) print "O\t" s
-		}')
+		k == "merge.outcome" && s != "" { print "O\t" s "\t" tr_str(e, "outcome") "\t" dstr(tr_data($0), "files") }
+		k == "finding.raise" && s != "" {
+			d = tr_data($0); i = dstr(d, "id"); w = dstr(d, "where")
+			if (i != "" && w != "") print "R\t" t "\t" s "\t" i "\t" wpath(w) "\t" tr_str(e, "run") "\t" w
+		}
+		k == "finding.triage" && s != "" {
+			d = tr_data($0); i = dstr(d, "id")
+			if (i ~ /^[CHML]-[0-9]+$/) print "T\t" t "\t" s "\t" i "\t" tr_str(e, "outcome")
+		}
+		k == "finding.dismiss" && s != "" {
+			w = dstr(tr_data($0), "where")
+			if (w != "") print "D\t" t "\t" s "\t" w
+		}
+		END { for (s in sha) print "L\t" ts[s] "\t" s "\t" sha[s] }')
 	_rc_shas=$(printf '%s\n' "$_rc_ev" | awk -F '\t' '$1 == "L" { print $4 }' | sort -u)
 	_rc_have=
 	if [ -n "$_rc_shas" ]; then
@@ -2892,13 +2924,16 @@ trace_record() {
 		_rc_files=$(printf '%s\n' "$_rc_have" | git -c core.quotePath=false log --stdin --no-walk=unsorted --diff-merges=first-parent --name-only --format='@%H' 2>/dev/null |
 			awk '/^@[0-9a-f]+$/ { c = substr($0, 2); next } NF { print "F\t" c "\t" $0 }')
 	fi
-	_rc_areas=$(printf '%s\n' "$_rc_files" | awk -F '\t' 'NF { print $3 }' | sort -u | sh "$_trace_here/lens-slice.sh" --areas) || return 2
+	_rc_areas=$({
+		printf '%s\n' "$_rc_files" | awk -F '\t' 'NF { print $3 }'
+		printf '%s\n' "$_rc_ev" | awk -F '\t' '$1 == "R" { print $5 }'
+	} | sort -u | sh "$_trace_here/lens-slice.sh" --areas) || return 2
 	# A then F then E: the areas (and every pair), the paths, the events.
 	{
 		printf '%s\n' "$_rc_areas" | awk 'NF { print "A\t" $0 }'
 		printf '%s\n' "$_rc_files"
 		printf '%s\n' "$_rc_ev"
-	} | awk -F '\t' -v today="$(date -u +%Y-%m-%d)" -v window="$TRACE_FIX_WINDOW_DAYS" -v cap="$TRACE_RECORD_LANDINGS" '
+	} | LC_ALL=C awk -F '\t' -v today="$(date -u +%Y-%m-%d)" -v window="$TRACE_FIX_WINDOW_DAYS" -v cap="$TRACE_RECORD_LANDINGS" '
 		function day(s,   y, m, d, a) {
 			y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0
 			a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3
@@ -2908,8 +2943,58 @@ trace_record() {
 		$1 == "A" { inarea[$3, $2] = 1; next }
 		$1 == "F" { paths[$2] = paths[$2] "\n" $3; next }
 		$1 == "L" { nl++; lts[nl] = $2; lpr[nl] = $3; lsha[nl] = $4; next }
-		$1 == "O" { mistake[$2] = 1; next }
+		$1 == "O" { mistake[$2] = 1; no[$2]++; oout[$2, no[$2]] = $3; ofiles[$2, no[$2]] = $4; next }
+		$1 == "R" { nr++; rts[nr] = $2; rpr[nr] = $3; rid[nr] = $4; rpath[nr] = $5; rrun[nr] = $6; rwhere[nr] = $7; byp[$3] = byp[$3] " " nr; next }
+		$1 == "T" { nt++; tts[nt] = $2; tpr[nt] = $3; tid[nt] = $4; tout[nt] = $5; next }
+		$1 == "D" { nd++; dts[nd] = $2; dpr[nd] = $3; dwhere[nd] = $4; next }
+		# names(files, path) — whether a space-separated `data.files` names the path.
+		function names(f, path) { return path != "" && index(" " f " ", " " path " ") > 0 }
+		function ratio(n, d) { return d == 0 ? "n/a" : sprintf("%.2f", n / d) }
+		# latest(pr, ts, key, val) — the latest raise on the PR at or before ts
+		# whose id (key 1) or where (key 2) is val, or 0.
+		function latest(pr, t, key, val,   m, rs, q, r, best) {
+			best = 0; m = split(byp[pr], rs, " ")
+			for (q = 1; q <= m; q++) {
+				r = rs[q] + 0
+				if (rts[r] > t || (key == 1 ? rid[r] : rwhere[r]) != val) continue
+				if (!best || rts[r] >= rts[best]) best = r
+			}
+			return best
+		}
 		END {
+			# A triage pairs with the latest raise of its id on its PR before it,
+			# the ids restarting with every review; the latest triage stands.
+			for (x = 1; x <= nt; x++) {
+				r = latest(tpr[x], tts[x], 1, tid[x])
+				if (r && (!(r in trits) || tts[x] >= trits[r])) { trits[r] = tts[x]; tri[r] = tout[x] }
+			}
+			# A dismissal pairs with the latest raise at its where before it, and
+			# with every raise at that where from the same review run.
+			for (x = 1; x <= nd; x++) {
+				r = latest(dpr[x], dts[x], 2, dwhere[x])
+				if (!r) continue
+				m = split(byp[dpr[x]], rs, " ")
+				for (q = 1; q <= m; q++) {
+					y = rs[q] + 0
+					if (y == r || (rwhere[y] == rwhere[r] && rrun[y] == rrun[r] && rrun[r] != "")) dism[y] = 1
+				}
+			}
+			# Vindicated: a mistake against its PR names its file. A failed QA
+			# names no file, whatever its line carries.
+			for (r = 1; r <= nr; r++)
+				for (o = 1; o <= no[rpr[r]]; o++)
+					if (oout[rpr[r], o] != "qa-failed" && names(ofiles[rpr[r], o], rpath[r])) vind[r] = 1
+			# Missed: a mistake no finding rejected at triage named a file of; a
+			# failed QA always.
+			for (pr in no)
+				for (o = 1; o <= no[pr]; o++) {
+					caught = 0
+					if (oout[pr, o] != "qa-failed") {
+						m = split(byp[pr], rs, " ")
+						for (q = 1; q <= m; q++) { y = rs[q] + 0; if (tri[y] == "rejected" && names(ofiles[pr, o], rpath[y])) caught = 1 }
+					}
+					if (!caught) missed[pr] = 1
+				}
 			now = day(today)
 			for (i = 1; i <= na; i++) {
 				a = order[i]
@@ -2925,13 +3010,27 @@ trace_record() {
 					for (y = x - 1; y >= 1 && (lts[cand[y]] < lts[v] || (lts[cand[y]] == lts[v] && lpr[cand[y]] > lpr[v])); y--) cand[y + 1] = cand[y]
 					cand[y + 1] = v
 				}
-				c = n < cap ? n : cap; w = 0; mk = 0
+				c = n < cap ? n : cap; w = 0; mk = 0; km = 0
+				split("", counted)
 				for (x = 1; x <= c; x++) {
 					j = cand[x]
+					counted[lpr[j]] = 1
 					if (now - day(lts[j]) < window) w++
 					if (lpr[j] in mistake) mk++
+					if (lpr[j] in missed) km++
 				}
-				printf "%s: landings %d of %d, in the fix window %d, mistakes %d\n", a, c, cap, w, mk
+				# The findings raised on those landings at a path of the area.
+				hu = 0; nh = 0; ul = 0; st = 0; sh = 0; so = 0
+				for (r = 1; r <= nr; r++) {
+					if (!(rpr[r] in counted) || !((rpath[r], a) in inarea)) continue
+					if (tri[r] == "accepted" || tri[r] == "rejected") st++
+					if (r in dism) sh++
+					if (r in vind) so++
+					if (tri[r] == "accepted" || (r in vind)) hu++
+					else if (tri[r] == "rejected" || (r in dism)) nh++
+					else ul++
+				}
+				printf "%s: landings %d of %d, in the fix window %d, mistakes %d, missed %d of %d, miss rate %s, held up %d of %d, not held up %d, unlabelled %d, precision %s, labels from triage %d, human %d, outcome %d\n", a, c, cap, w, mk, km, c, ratio(km, c), hu, hu + nh, nh, ul, ratio(hu, hu + nh), st, sh, so
 			}
 		}'
 }
