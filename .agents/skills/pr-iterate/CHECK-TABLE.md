@@ -48,10 +48,13 @@ Every ⚠️ UNSPECIFIED item carries a scope as the first words of its arrow li
 **An inside item is yours to decide** (process/R56): keep the change, or amend it in step 4 as one Conventional Commits commit. Then, after step 4's push, record the decision as one row of the PR body's **decision log** — a `<!-- decision-log -->` marker line above the explain-diff marker, then the header `| Decision | Surface | What was decided | Why |`, then one row per decision. A row's first cell is its id, `D-<n>`, numbered from 1 and never renumbered: a struck row keeps its id, and the next id is one past the highest the log holds. The log is created by the first row written — under the body's `## Decision log` heading, else directly above the explain-diff marker, else at the end. The Surface is the item's `<surface>` as its ⚠️ line names it; What was decided opens with `kept` or `amended`; Why is one line. Write the three cells, one per line, to `$scratch/row` — your own words, never a line of the body — and let the script build the row and print the id:
 
 ```sh
+# Every function skips fenced lines (``` or ~~~), as the check-table reader
+# does: a log quoted in a fence, such as a demo in the body, is no log.
 # dl_next <body> — the next decision id: one past the highest the log holds,
 # struck rows counted.
 dl_next() {
-	awk -F'|' '/^<!-- decision-log -->$/ { t = 1; next }
+	awk -F'|' '/^[ \t]*(```|~~~)/ { f = !f; t = 0; next } f { next }
+	/^<!-- decision-log -->$/ { t = 1; next }
 	t && !/^\|/ { t = 0 }
 	t { id = $2; gsub(/[ ~]/, "", id); if (id ~ /^D-[0-9]+$/ && substr(id, 3) + 0 > m) m = substr(id, 3) + 0 }
 	END { print "D-" m + 1 }' "$1"
@@ -62,15 +65,15 @@ dl_next() {
 dl_write() {
 	_dl_id=$(dl_next "$1") || return 1
 	awk -v id="$_dl_id" 'FILENAME == ARGV[1] { gsub(/\|/, "/"); gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 == "") bad = 1; c[FNR] = $0; r = FNR; next }
-	{ b[++n] = $0 }
+	{ b[++n] = $0; if ($0 ~ /^[ \t]*(```|~~~)/) { f = !f; fz[n] = 1 } else fz[n] = f }
 	END {
 		if (bad || r != 3) exit 1
 		row = "| " id " | " c[1] " | " c[2] " | " c[3] " |"
-		for (i = 1; i <= n; i++) if (b[i] == "<!-- decision-log -->") m = i
+		for (i = 1; i <= n; i++) if (!fz[i] && b[i] == "<!-- decision-log -->") m = i
 		if (m) { at = m + 1; while (at <= n && b[at] ~ /^\|/) at++; add = row }
 		else {
 			add = "\n<!-- decision-log -->\n| Decision | Surface | What was decided | Why |\n| --- | --- | --- | --- |\n" row "\n"
-			for (i = 1; i <= n; i++) { if (b[i] == "## Decision log") h = i; if (!x && b[i] == "<!-- explain-diff-appendix -->") x = i }
+			for (i = 1; i <= n; i++) if (!fz[i]) { if (b[i] == "## Decision log") h = i; if (!x && b[i] == "<!-- explain-diff-appendix -->") x = i }
 			at = h ? h + 1 : (x ? x : n + 1)
 		}
 		for (i = 1; i <= n; i++) { if (i == at) print add; print b[i] }
@@ -82,6 +85,7 @@ dl_write() {
 # byte for byte; ids only, never a cell.
 dl_ids_for() {
 	awk -F'|' 'FILENAME == ARGV[1] { want = $0; gsub(/\|/, "/", want); gsub(/^[ \t]+|[ \t]+$/, "", want); next }
+	/^[ \t]*(```|~~~)/ { f = !f; t = 0; next } f { next }
 	/^<!-- decision-log -->$/ { t = 1; next }
 	t && !/^\|/ { t = 0 }
 	t { id = $2; s = $3; gsub(/^ +| +$/, "", id); gsub(/^ +| +$/, "", s); if (id ~ /^D-[0-9]+$/ && s == want) print id }' "$2" "$1"
@@ -90,6 +94,7 @@ dl_ids_for() {
 # struck through, its id cell kept as it reads.
 dl_strike() {
 	awk -F'|' 'FILENAME == ARGV[1] { if ($0 ~ /^D-[0-9]+$/) k[$0] = 1; next }
+	/^[ \t]*(```|~~~)/ { f = !f; t = 0; print; next } f { print; next }
 	/^<!-- decision-log -->$/ { t = 1; print; next }
 	t && !/^\|/ { t = 0 }
 	t { id = $2; gsub(/^ +| +$/, "", id)

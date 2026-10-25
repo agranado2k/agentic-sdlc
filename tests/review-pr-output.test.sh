@@ -2181,6 +2181,18 @@ if [ -s "$DLD/fns.sh" ] && . "$DLD/fns.sh"; then
 	dl_write "$DLD/body3" "$DLD/row3" >"$DLD/body4"
 	[ "$(dl_ids_for "$DLD/body4" "$DLD/surface3")" = D-3 ] && pass "process/R59: a surface holding '|' finds the row dl_write wrote for it" ||
 		fail "process/R59: a surface holding '|' did not find its own row — the strike would silently not happen"
+	# A log quoted in a fence — a demo in the body — is no log: every
+	# function skips fenced lines, as the check-table reader does (PR #897).
+	{ printf '## What\n\n```console\n<!-- decision-log -->\n%s\n| --- | --- | --- | --- |\n| D-7 | x.sh | kept: q | r |\n```\n\n' "$DL_HEAD"
+		cat templates/docs/PULL_REQUEST_TEMPLATE.md; printf '\n<!-- explain-diff-appendix -->\n'; } >"$DLD/fenced"
+	printf 'x.sh\n' >"$DLD/xsurf"; printf 'D-7\n' >"$DLD/x7"
+	dl_write "$DLD/fenced" "$DLD/row1" >"$DLD/fenced1"
+	[ "$(dl_next "$DLD/fenced")" = D-1 ] && [ -z "$(dl_ids_for "$DLD/fenced" "$DLD/xsurf")" ] &&
+		awk '/^## Decision log$/ { d = NR } /^<!-- decision-log -->$/ { m = NR } END { exit !(d && m > d) }' "$DLD/fenced1" &&
+		[ "$(sed -n '/^```console$/,/^```$/p' "$DLD/fenced1" | grep -c '^| D-')" = 1 ] &&
+		dl_strike "$DLD/fenced" "$DLD/x7" | cmp -s - "$DLD/fenced" &&
+		pass "process/R56 process/R59: a log quoted in a fence is skipped — numbering, writing, finding and striking read the real log only" ||
+		fail "process/R56 process/R59: a fenced example log was read as the decision log"
 	printf 'two\nlines\n' >"$DLD/short"
 	! dl_write "$DLD/body1" "$DLD/short" >"$DLD/body-short" 2>/dev/null && pass "process/R56: a row with a cell missing writes nothing" ||
 		fail "process/R56: a row with a cell missing was written"
