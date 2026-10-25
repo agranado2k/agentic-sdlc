@@ -3293,15 +3293,22 @@
 
 # 0.91.0 — a ticket's stamp carries Risk:, Risk-confidence: and Test-tier:
 # (ticket #869, PRD-07 slice 1, the kit's ADR-0037). NO file joins the
-# shared layer and none leaves. Three shared files change content:
+# shared layer and none leaves. Five shared files change content:
 # scripts/vocab.sh learns the QUALIFIED field (`Risk: high <reason>`, the
 # reasons unlearned and outward written only under `--writer risk-rule`)
 # and the KEYED field (`Test-tier: <requirement id> <tier>`, one tier per
-# id, the id held to scripts/requirement.lib.sh), and prints the published
-# line bounds under `fields`; scripts/stamp.sh lifts and checks those lines
-# and Covers:, and holds each key to the policy's bound (32 Test-tier:
-# lines, 8 of every other key); and UPDATING.md, the arriving-from
-# paragraph and both worked examples re-pinned.
+# id, the id held to scripts/requirement.lib.sh), prints the published
+# line bounds under `fields`, and refuses at load a policy that names a
+# field qualified, keyed, bound or bounds, or <q>-qualified, <q>-reasons
+# or <q>-reserved for a qualified field <q>, that declares a field more
+# than one kind, or whose VOCAB_QUALIFIED, VOCAB_KEYED, VOCAB_<Q>_*,
+# VOCAB_BOUND or VOCAB_BOUNDS do not hold; scripts/stamp.sh lifts and
+# checks those lines and Covers:, and holds each key to the policy's bound
+# (32 Test-tier: lines, 8 of every other key); scripts/requirement.lib.sh
+# gains req_covers_ids, the one Covers: grammar, which scripts/coverage.sh
+# and scripts/stamp.sh both read (each fails closed without it); and
+# UPDATING.md, the arriving-from paragraph and both worked examples
+# re-pinned.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # Skills (9a): none. Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/vocab.config.sh declares risk, risk-confidence,

@@ -229,7 +229,7 @@ the step 9 sub-step that needs it.
 
 **Arriving from 0.90.0 or older, a ticket's stamp carries `Risk:`,
 `Risk-confidence:` and `Test-tier:`.** No file joins or leaves at 0.91.0.
-Two shared files change content besides this recipe. `scripts/vocab.sh`
+Four shared files change content besides this recipe. `scripts/vocab.sh`
 learns two new kinds of field: a qualified field, `Risk: low` or `Risk:
 high <reason>`, whose reasons `unlearned` and `outward` only a caller
 declared `--writer risk-rule` may write; and a keyed field, `Test-tier:
@@ -238,8 +238,25 @@ declared `--writer risk-rule` may write; and a keyed field, `Test-tier:
 `bound:` lines. `scripts/stamp.sh` lifts and checks those lines and
 `Covers:` with the rest of the stamp, and holds each key to the bound your
 policy publishes (8 a key, 32 `Test-tier:` lines as shipped; 8 for every
-key when it publishes none). **Your own `scripts/vocab.config.sh` needs a
-hand edit (9d)**: a policy file that is found is the whole policy, so one
+key when it publishes none). `scripts/requirement.lib.sh` gains
+`req_covers_ids`, the one `Covers:` grammar, and `scripts/coverage.sh` reads
+it there; take the three together, since each reader fails closed on a
+grammar without it. **`scripts/vocab.sh` refuses more policies at load
+time** (exit 2, naming the field or variable), so a policy that loaded at
+0.90.0 can stop loading: a field named `qualified`, `keyed`, `bound` or
+`bounds` (now the checker's own variables, beside `fields`, `open`,
+`rules`, `token-shape` and `config`); a field named `<q>-qualified`,
+`<q>-reasons` or `<q>-reserved` beside a qualified field `<q>` (those are
+`<q>`'s own lists); a field declared more than one of open, query,
+qualified and keyed; a name in `VOCAB_QUALIFIED` or `VOCAB_KEYED` that is
+no declared field; a qualified field with an empty `VOCAB_<Q>_QUALIFIED`
+or `VOCAB_<Q>_REASONS`, a qualified level that is no level, a reason that
+is not a neutral well-formed token, or a reserved reason that is no
+reason; and a `VOCAB_BOUND` or `VOCAB_BOUNDS` entry that is not a declared
+field and a count of 1 to 999. **Rename any field of yours that collides**
+— in `VOCAB_FIELDS`, its `VOCAB_<FIELD>` line and every rule that names it
+— and run `sh scripts/vocab.sh fields` until it exits 0. **Your own
+`scripts/vocab.config.sh` needs a hand edit (9d)**: a policy file that is found is the whole policy, so one
 that predates this release declares none of the five new fields, and the
 stamp reader drops their lines as undeclared. Add `risk`,
 `risk-confidence`, `test-tier`, `result` and `scope` to `VOCAB_FIELDS`;
