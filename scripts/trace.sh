@@ -3007,12 +3007,15 @@ trace_outcomes() {
 		_oc_by=$(printf '%s\n' "$_oc_ev" | awk -F '\t' -v s="$_oc_s" '$1 == "L" && $2 == s { print $3; exit }')
 		_oc_fp=$(git rev-list --first-parent "$_oc_p")
 		# <path> <start> <count> per run of lines the revert removed, numbered
-		# as its first parent numbers them. A `--- ` line is a header only
+		# as its first parent numbers them; git ends the header of a path
+		# holding a space with a tab, which is not the path's, and the
+		# prefixes are spelled so no diff.noprefix or mnemonicPrefix setting
+		# moves them. A `--- ` line is a header only
 		# between a `diff --git` line and the first hunk: inside a hunk it is
 		# a removed line that began with `-- `.
-		_oc_runs=$(git -c core.quotePath=false diff -U0 --no-color --no-ext-diff --no-renames "$_oc_p" "$_oc_s" | awk '
+		_oc_runs=$(git -c core.quotePath=false diff -U0 --no-color --no-ext-diff --no-renames --src-prefix=a/ --dst-prefix=b/ "$_oc_p" "$_oc_s" | awk '
 			/^diff --git / { hdr = 1; f = ""; next }
-			hdr && /^--- / { f = substr($0, 5); if (f == "/dev/null") f = ""; else sub(/^a\//, "", f); next }
+			hdr && /^--- / { f = substr($0, 5); sub(/\t$/, "", f); if (f == "/dev/null") f = ""; else sub(/^a\//, "", f); next }
 			/^@@ -/ { hdr = 0; if (f == "") next; n = split($2, r, ","); st = substr(r[1], 2) + 0; c = n > 1 ? r[2] + 0 : 1; if (c > 0) print f "\t" st "\t" c }')
 		# <pr> <path> per attributed line, and `-` <path> per line no landing names.
 		_oc_hits=

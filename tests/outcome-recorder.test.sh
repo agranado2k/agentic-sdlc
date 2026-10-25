@@ -170,6 +170,24 @@ record_cmd record
 [ "$T_OUT" = "$REC1" ] && [ "$(count_in "$T")" = "$_mid" ] && pass "process/R37: a second /retro adds nothing and prints the same record" ||
 	fail "process/R37: the second pass changed the trace ($_mid -> $(count_in "$T")) or the record"
 
+# A path holding a space: git ends its `--- a/<path>` header with a tab,
+# which must not reach blame as part of the name (review of PR #895).
+R_MAIN=$R
+t_repo
+R=$REPO
+T2="$SCRATCH/trace-space"
+put 'src/a b.sh' s1 s2
+SP1=$(land 'feat: a spaced path')
+put 'src/a b.sh' s2
+SP2=$(land 'revert: drop s1')
+land_ev "$T2" 'pr:#31' "$SP1"
+land_ev "$T2" 'pr:#32' "$SP2"
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" sh "$3" outcomes' _ "$R" "$(policy "$T2")" "$TRACE"
+outcomes_in "$T2" | grep -F '"subject":"pr:#31"' | grep -qF '"files":"src/a b.sh"' &&
+	pass "runtime/R32: a revert of lines in a path holding a space is blamed to the PR that wrote them" ||
+	fail "runtime/R32: no outcome for a spaced path: $T_OUT | $T_ERR"
+R=$R_MAIN
+
 OFF=$(mktemp "$SCRATCH/off.XXXXXX")
 printf "TRACE_DIR=''\n" >"$OFF"
 t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" sh "$3" outcomes' _ "$R" "$OFF" "$TRACE"
