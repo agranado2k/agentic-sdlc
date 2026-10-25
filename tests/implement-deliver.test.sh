@@ -342,6 +342,9 @@ assert_file_has "$DISPATCH" "two working cases"
 assert_file_has "$DISPATCH" "hands the review back"
 assert_file_has "$DISPATCH" '<git dir>/skill-review/prompt'
 assert_file_has "$DISPATCH" '--commit "$(cat <git dir>/skill-review/commit)"'
+# A hand-back refused for a bad call (a ref missing or naming no commit) is
+# exit 2: the skill must say that is the caller's to repair, never a stop.
+assert_file_has "$DISPATCH" "exit 2 is a caller error to repair"
 assert_file_has "$SKILL" "hands an in-session reviewer back"
 case "$(grep -F '| Run a skill on the model its work deserves' AGENTS.md)" in
 *'review-pr'*'hands the review back'*'skill-review'*'#880'*) pass "the kit manual's dispatcher row names the review hand-back" ;;
