@@ -110,6 +110,8 @@ It must **NOT** receive the other six agents' findings, the implementation conve
 - ✅ **SPECIFIED** — the spec asked for it. Cite the exact line: PRD acceptance criterion, ticket body, or decision-record number.
 - ⚠️ **UNSPECIFIED — confirm** — no spec reference found. This is the finding class the human must see; do not soften it, do not resolve it yourself.
 
+**Every ⚠️ UNSPECIFIED item carries a scope**, as the first words of its arrow line (process/R53, the kit's ADR-0038): `scope: inside` when its effect stays inside the change — a name, a structure, internal error wording, a test's shape — and `scope: outward` when a user, a consumer or another skill sees or relies on it — an output format, a flag, an exit code, a rule an agent obeys. Classify, never resolve: the scope says who may decide the item, never that it is decided. **Every reader of the confirm-list reads an item with no scope, or a word the vocabulary's `scope` field does not hold, as `outward`** (process/R54) — failing closed to the operator.
+
 Missing requirements (spec asked, diff doesn't deliver) are also Axis-2 findings, tagged ❌ **MISSING**.
 
 **Where the spec carries requirement ids** — `R<n>` lines in a PRD's Requirements section, `<area>/R<n>` for a living spec's, and a ticket's `Covers:` line naming the ones it delivers — a ✅ SPECIFIED item cites the id of the requirement it delivers, and every id on the ticket's `Covers:` line that the diff does not deliver is a ❌ MISSING item naming that id, so a covered requirement left undone reaches the human on the confirm-list rather than passing in silence. **With no requirement ids in the spec**, both read as they always have: a ✅ SPECIFIED item cites the PRD, ticket or decision-record line it answers, and a ❌ MISSING item names the spec line the diff does not deliver. (the kit's ADR-0012 clause 6.)
@@ -190,7 +192,7 @@ Immediately after the severity report — **separated by a horizontal rule and u
                 → claims refactor/style but touches <artifacts>. Split or relabel?
 
 ⚠️ UNSPECIFIED  <surface>: <what changed, one line>
-                → no spec reference found. Desired?
+                → scope: <inside|outward> — no spec reference found. Desired?
 
 ✅ SPECIFIED    <surface>: <what changed, one line>
                 → <the requirement id it delivers, where the spec carries ids; else the PRD/ticket/decision-record citation>; <artifact updated>
@@ -211,7 +213,7 @@ When no mutation adapter is wired at all, the 🧬 line does not appear; say so 
 
 Rules: never assign severities to these items, never mix them into the C/H/M/L lists, never omit a ✅ (the human should see the whole behavioral footprint, not just the suspects). 🔀 items come first — they are the cheapest to act on and the reason the rest of the list is hard to read. 🧬 comes last and appears at most once: it measures the list rather than joining it, and it is the only line that is never a question for the human. If Agent 7 found no behavior deltas, say exactly that — an empty confirm-list is a meaningful result.
 
-Record this axis's verdict once, as a count of what the human must confirm — the items themselves stay on the PR, where the human reads them: `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=confirm|pass data.axis=2 data.unspecified=<count> data.mixed=<count> data.missing=<count> reason='<what the human must confirm, one line; or no behavior deltas>' || :`. `confirm` when any item needs the human; `pass` when none does.
+Record this axis's verdict once, as a count of what the human must confirm — the items themselves stay on the PR, where the human reads them: `sh scripts/trace.sh emit kind=review.verdict subject=pr:#<N> outcome=confirm|pass data.axis=2 data.unspecified=<count> data.outward=<count> data.mixed=<count> data.missing=<count> reason='<what the human must confirm, one line; or no behavior deltas>' || :`. `data.outward` counts the ⚠️ items read as outward — a missing or unknown scope among them (process/R55). `confirm` when any item needs the human; `pass` when none does.
 
 **Both verdicts are recorded on every review — seven agents, a single-reviewer pass, a relay — before anything is posted and before the run's `end` (§7).** A missing verdict reads as an abandoned review. A verdict is never skipped because the report had no findings: `pass` is a verdict.
 

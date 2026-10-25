@@ -772,9 +772,16 @@ tagcount() { LC_ALL=C grep -c "^[^A-Za-z0-9]*$1" "$TMP/behavior" || :; }
 N_UNSPEC=$(tagcount UNSPECIFIED)
 N_MIXED=$(tagcount 'MIXED COMMIT')
 N_MISSING=$(tagcount MISSING)
+# The ⚠️ items read as outward (process/R54–R55, ADR-0038): every one but an
+# item whose tag is followed by `scope: inside`, a word the vocabulary's scope
+# field holds; a missing or unknown scope fails closed to the operator.
+N_INSIDE=0
+sh "$ROOT/scripts/vocab.sh" fields 2>/dev/null | grep -qE '^scope:( .*)? inside( |$)' &&
+	N_INSIDE=$(LC_ALL=C grep -cE '^[^A-Za-z0-9]*UNSPECIFIED[[:blank:]]*scope:[[:blank:]]*inside([^a-z-]|$)' "$TMP/behavior" || :)
+N_OUTWARD=$((N_UNSPEC - N_INSIDE))
 AX2=pass
 [ $((N_UNSPEC + N_MIXED + N_MISSING)) = 0 ] || AX2=confirm
 trace quiet kind=review.verdict "subject=pr:#$PR" "outcome=$AX2" data.axis=2 data.via=broker \
-	"data.unspecified=$N_UNSPEC" "data.mixed=$N_MIXED" "data.missing=$N_MISSING" \
+	"data.unspecified=$N_UNSPEC" "data.outward=$N_OUTWARD" "data.mixed=$N_MIXED" "data.missing=$N_MISSING" \
 	"reason=the confirm-list counted by tag; the items are on the PR comment"
 exit 0
