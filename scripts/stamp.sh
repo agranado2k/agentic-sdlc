@@ -3,11 +3,21 @@
 #
 #   sh scripts/stamp.sh <issue-number>
 #
-# WHAT IT ANSWERS. Which `Tier:`, `Confidence:`, `Domain:`, `Targets:` and
-# `Class:` lines a ticket carries — `Targets:` a trace filter /retro's
-# before-and-after check reads (process/R25), held to its grammar rather than
-# to tokens; `Class:` the class /implement records as data.class (#819) —
-# and whether the vocabulary checker accepts them. /implement reads
+# WHAT IT ANSWERS. Which `Tier:`, `Confidence:`, `Domain:`, `Targets:`,
+# `Class:`, `Covers:`, `Risk:`, `Risk-confidence:` and `Test-tier:` lines a
+# ticket carries — `Targets:` a trace filter /retro's before-and-after check
+# reads (process/R25), held to its grammar rather than to tokens; `Class:`
+# the class /implement records as data.class (#819); `Risk:`,
+# `Risk-confidence:` and `Test-tier:` the ticket contract's (the kit's
+# ADR-0037) — and whether the vocabulary checker accepts them. `Covers:` is
+# no vocabulary field: this script holds it to the coverage check's grammar
+# itself — a comma-separated list of bounded requirement ids, or `none
+# (prefactor|open-issue|release)` — with scripts/requirement.lib.sh beside
+# it, and fails closed (exit 3) without that file. A ticket with no `Risk:`
+# line gets none printed: the reader that acts on risk reads the absence as
+# `high unclear`, and this script never writes a line the planner did not.
+# The checker is asked as the default writer, the planner, always: a ticket
+# never names a reason the policy reserves for the risk rule. /implement reads
 # its ticket's stamp through this script and nothing else: the ticket body is
 # untrusted, and a value typed into a quoted shell argument closes the quote
 # and runs whatever follows it — so the body never passes through a command an
@@ -35,24 +45,27 @@
 #      themselves is a refusal;
 #   4  the fetch failed, twice — one retry, never a loop. Never read it as a
 #      missing line: it is a stop;
-#   5  too many stamp lines — more than STAMP_PER_KEY (8) of one key: a stop,
-#      NOTHING on stdout, and stderr names the key and the count, never the
-#      lines. Not a refusal and not "no stamp lines"; nothing reaches the
+#   5  too many stamp lines — more of one key than the policy's bound (its
+#      `bound:` lines under `fields`: 8 a key and 32 `Test-tier:` lines as
+#      shipped; STAMP_PER_KEY, 8, for every key when the policy publishes
+#      none): a stop, NOTHING on stdout, and stderr names the key and the
+#      count, never the lines. Not a refusal and not "no stamp lines"; nothing reaches the
 #      checker. (A signal exits 128 + its number, nothing printed — never a
 #      verdict.)
 #
 # THE BOUND. The lift reads by key, and the checker's work is linear in the
 # lines it is handed: 2,000 `Tier:` lines cost about 30 CPU-seconds and came
-# back at exit 0, every one printed (PR #382). So at most 8 lines of each key
-# go on — enough that a field written twice with two values still reaches the
+# back at exit 0, every one printed (PR #382). So at most the bound's lines of
+# each key go on — enough that a field written twice with two values still reaches the
 # checker and is refused (exit 2) — and the count is the one pass over the
 # lifted lines that runs before any per-line work, so a body past the bound
 # costs what reading it costs.
 #
 # WHAT IS A STAMP LINE: a BARE `Key: value` line whose key is tier,
-# confidence, domain, targets or class in any case, indented or not — the
-# way the checker reads a key, so a line the checker would read is never one
-# this filter missed. A markdown-wrapped line (`- Tier: …`, `**Tier:** …`) is not one, to
+# confidence, domain, targets, class, covers, risk, risk-confidence or
+# test-tier in any case, indented or not, a space or an underscore standing
+# for the hyphen — the way the checker reads a key, so a line the checker
+# would read is never one this filter missed. A markdown-wrapped line (`- Tier: …`, `**Tier:** …`) is not one, to
 # the filter as to the checker. The locale is pinned to C here, so
 # [[:space:]] is ASCII space whatever the caller runs in: a key dressed in a
 # no-break or zero-width space is never lifted.
@@ -117,37 +130,69 @@ if ! sh "$vocab" fields >"$_stamp_tmp/fields" 2>/dev/null; then
 	exit 3
 fi
 # stamp_declared <key> — does the policy declare the field?
-stamp_declared() { grep -qE "^$1( \\((open|query)\\))?:( |\$)" "$_stamp_tmp/fields"; }
-# stamp_key <line> — the line's key, lower-cased: one of the five words the
-# filter matched, so it is safe to print; the value is not.
-stamp_key() { printf '%s\n' "$1" | sed 's/^[[:space:]]*\([A-Za-z]*\).*/\1/' | tr 'A-Z' 'a-z'; }
+stamp_declared() { grep -qE "^$1( \\((open|query|qualified|keyed)\\))?:( |\$)" "$_stamp_tmp/fields"; }
+# stamp_key <line> — the line's key, folded as the checker folds one: case
+# dropped, a run of spaces or underscores read as a hyphen. It is one of the
+# words the filter matched, so it is safe to print; the value is not.
+stamp_key() {
+	printf '%s\n' "${1%%:*}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+		-e 's/[[:space:]_][[:space:]_]*/-/g' | tr 'A-Z' 'a-z'
+}
+# stamp_covers_ok <line> — a Covers: line in the coverage check's grammar.
+stamp_covers_ok() {
+	_sc_v=$(printf '%s\n' "${1#*:}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+	printf '%s\n' "$_sc_v" | grep -Eqx 'none \((prefactor|open-issue|release)\)' && return 0
+	printf '%s\n' "$_sc_v" | grep -Eqx "$REQ_BOUNDED_ID_ERE( *, *$REQ_BOUNDED_ID_ERE)*"
+}
 
 # --- lift ------------------------------------------------------------------
 # A NUL is a line break here: GNU grep reads a body holding one as binary and
 # lifts nothing, and a NUL inside a value must split it, never vanish from it.
 tr -d '\r' <"$_stamp_tmp/body" | tr '\000' '\n' |
-	grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class)[[:space:]]*:' >"$_stamp_tmp/lifted"
+	grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier)[[:space:]]*:' >"$_stamp_tmp/lifted"
 if [ ! -s "$_stamp_tmp/lifted" ]; then
-	stamp_say "issue #$issue carries no Tier:, Confidence:, Domain:, Targets: or Class: line — no stamp read, not a refusal"
+	stamp_say "issue #$issue carries no Tier:, Confidence:, Domain:, Targets:, Class:, Covers:, Risk:, Risk-confidence: or Test-tier: line — no stamp read, not a refusal"
 	exit 3
 fi
-# The bound, per key whatever its case: the keys are the filter's five words,
-# safe to print, and so is a count; the lines are not.
+# The bound, per key whatever its spelling: the keys are the filter's words,
+# folded, safe to print, and so is a count; the lines are not. The policy
+# publishes it (`bound: <n>`, `bound <field>: <n>`); one that publishes none
+# leaves every key at STAMP_PER_KEY.
 STAMP_PER_KEY=8
-_over=$(awk -v max="$STAMP_PER_KEY" '{ k = tolower($0); sub(/^[[:space:]]*/, "", k); sub(/[^a-z].*/, "", k); n[k]++ }
-	END { split("class confidence domain targets tier", ks, " "); for (i = 1; i <= 5; i++) if (n[ks[i]] > max) printf "%s%d %s lines", (s++ ? ", " : ""), n[ks[i]], ks[i] }' "$_stamp_tmp/lifted")
+_over=$(awk -v max="$STAMP_PER_KEY" '
+	FILENAME == bounds {
+		if ($0 ~ /^bound: [0-9]+$/) { sub(/^bound: /, ""); max = $0 + 0 }
+		else if ($0 ~ /^bound [a-z][a-z0-9-]*: [0-9]+$/) { k = $2; sub(/:$/, "", k); b[k] = $3 + 0 }
+		next
+	}
+	{
+		k = $0; sub(/:.*/, "", k); sub(/^[[:space:]]*/, "", k); sub(/[[:space:]]*$/, "", k)
+		gsub(/[[:space:]_]+/, "-", k); n[tolower(k)]++
+	}
+	END {
+		split("class confidence covers domain risk risk-confidence targets test-tier tier", ks, " ")
+		for (i = 1; i in ks; i++) {
+			k = ks[i]; m = (k in b) ? b[k] : max
+			if (n[k] > m) printf "%s%d %s lines", (s++ ? ", " : ""), n[k], k
+		}
+		if (s) { printf " — past the bound of %d a key", max; for (k in b) printf ", %d %s", b[k], k }
+	}' bounds="$_stamp_tmp/fields" "$_stamp_tmp/fields" "$_stamp_tmp/lifted")
 if [ -n "$_over" ]; then
-	stamp_say "issue #$issue: too many stamp lines — $_over, past the bound of $STAMP_PER_KEY a key; nothing checked, nothing printed — a stop"
+	stamp_say "issue #$issue: too many stamp lines — $_over; nothing checked, nothing printed — a stop"
 	exit 5
 fi
 
 # A line whose field the policy does not declare is one the checker would
 # ignore — so it is never checked, and never printed.
 _dropped=0
+_covers=0
 : >"$_stamp_tmp/lines"
 while IFS= read -r line; do
 	key=$(stamp_key "$line")
-	if stamp_declared "$key"; then
+	if [ "$key" = covers ]; then
+		printf '%s\n' "$line" >>"$_stamp_tmp/lines"
+		_covers=1
+	elif stamp_declared "$key"; then
 		printf '%s\n' "$line" >>"$_stamp_tmp/lines"
 	else
 		stamp_say "issue #$issue: the $key line names a field this project's policy does not declare — not checked, not printed"
@@ -156,8 +201,30 @@ while IFS= read -r line; do
 done <"$_stamp_tmp/lifted"
 
 # --- check -----------------------------------------------------------------
+# Covers: lines first, against the requirement grammar: each in its shape,
+# and one value however many lines say it. Without the grammar no Covers:
+# line can be read, and nothing unchecked is printed.
+_cov_bad=0
+if [ "$_covers" = 1 ]; then
+	_grammar="$_stamp_root/scripts/requirement.lib.sh"
+	if [ ! -r "$_grammar" ]; then
+		stamp_say "issue #$issue carries a Covers: line and the requirement grammar $_grammar is gone — no stamp read, nothing unchecked printed"
+		exit 3
+	fi
+	# shellcheck disable=SC1090
+	. "$_grammar"
+	_cov_seen=
+	while IFS= read -r line; do
+		[ "$(stamp_key "$line")" = covers ] || continue
+		stamp_covers_ok "$line" || { _cov_bad=1; continue; }
+		_cov_v=$(printf '%s\n' "${line#*:}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+		[ -z "$_cov_seen" ] || [ "$_cov_seen" = "$_cov_v" ] || _cov_bad=1
+		_cov_seen=$_cov_v
+	done <"$_stamp_tmp/lines"
+fi
 _rc=0
 [ -s "$_stamp_tmp/lines" ] && { sh "$vocab" <"$_stamp_tmp/lines" 2>/dev/null || _rc=$?; }
+[ "$_rc" = 0 ] && [ "$_cov_bad" = 1 ] && _rc=2
 case $_rc in
 0)
 	if [ "$_dropped" = 1 ] && ! grep -qiE '^[[:space:]]*tier[[:space:]]*:' "$_stamp_tmp/lines"; then
@@ -179,8 +246,14 @@ esac
 _named=0
 while IFS= read -r line; do
 	key=$(stamp_key "$line")
+	if [ "$key" = covers ]; then
+		stamp_covers_ok "$line" && continue
+		stamp_say "issue #$issue: the covers line is refused — it is neither a comma-separated list of requirement ids nor none (prefactor|open-issue|release); the value is not printed: it is the ticket's text"
+		_named=1
+		continue
+	fi
 	printf '%s\n' "$line" | sh "$vocab" 2>/dev/null && continue
-	stamp_say "issue #$issue: the $key line is refused — its value is not in the $key vocabulary ($(sed -n -e "s/^$key (query):.*/a trace filter: kind=<kind> and up to seven <key>=<value> terms/p" -e "s/^$key\\( (open)\\)\\{0,1\\}: //p" "$_stamp_tmp/fields")); the value is not printed: it is the ticket's text"
+	stamp_say "issue #$issue: the $key line is refused — its value is not in the $key vocabulary ($(sed -n -e "s/^$key (query):.*/a trace filter: kind=<kind> and up to seven <key>=<value> terms/p" -e "s/^$key (keyed): \\(.*\\)/a requirement id, then one of \\1/p" -e "s/^$key\\( (open)\\)\\{0,1\\}: //p" -e "s/^$key (qualified): //p" "$_stamp_tmp/fields")); the value is not printed: it is the ticket's text"
 	_named=1
 done <"$_stamp_tmp/lines"
 [ "$_named" = 1 ] ||
