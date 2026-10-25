@@ -36,7 +36,7 @@ banner "0. The module exists, is sourceable, and is shared layer"
 }
 # shellcheck disable=SC1090
 . "$ROOT/$MODULE"
-for fn in req_spec_lines req_spec_ids req_prd_ids fence_strip; do
+for fn in req_spec_lines req_spec_ids req_prd_ids req_covers_ids fence_strip; do
 	command -v "$fn" >/dev/null 2>&1 && pass "sourcing defines $fn" ||
 		fail "sourcing $MODULE does not define $fn"
 done
@@ -217,6 +217,40 @@ for h in interval length; do
 	! cmp -s "$ROOT/$MODULE" "$SCRATCH/home.$h" && ! bounds_follow "$SCRATCH/home.$h" &&
 		pass "the check flags a home that spells the area bound a second time, as a literal $h" ||
 		fail "the check passed a home with a literal $h bound — it is vacuous"
+done
+
+# ---------------------------------------------------------------------------
+banner "2b. A Covers: value — one grammar, read by the coverage check and the stamp reader"
+# ---------------------------------------------------------------------------
+# A ticket's Covers: value is a comma-separated list of bounded ids, or
+# `none (prefactor|open-issue|release)`. scripts/coverage.sh and
+# scripts/stamp.sh both hold a value to it, and both read req_covers_ids
+# here, so the two cannot drift apart (review M-2 on PR #887).
+command -v req_covers_ids >/dev/null 2>&1 && pass "sourcing defines req_covers_ids" ||
+	fail "sourcing $MODULE does not define req_covers_ids"
+covers_is() { # <value> <expected ids, space-joined, or - for refused>
+	if got=$(req_covers_ids "$1" 2>/dev/null); then got=$(printf '%s' "$got" | tr '\n' ' '); else got=-; fi
+	[ "$got" = "$2" ] && pass "Covers: '$1' reads as '$2'" || fail "Covers: '$1' read as '$got', expected '$2'"
+}
+covers_is 'R1' 'R1'
+covers_is 'R1,R2' 'R1 R2'
+covers_is 'R1 , billing/R2,  R3' 'R1 billing/R2 R3'
+covers_is "$A32/R123456" "$A32/R123456"
+covers_is 'none (prefactor)' ''
+covers_is 'none (open-issue)' ''
+covers_is 'none (release)' ''
+for bad in '' 'none' 'none (other)' 'none(prefactor)' 'R0' 'R1,' ',R1' 'R1;R2' 'R1 R2' "$A33/R1" 'R1234567' 'R1, none (release)' 'Billing/R1'; do
+	covers_is "$bad" -
+done
+for reader in scripts/coverage.sh scripts/stamp.sh; do
+	grep -q 'req_covers_ids' "$ROOT/$reader" && pass "$reader reads req_covers_ids" ||
+		fail "$reader does not read req_covers_ids from $MODULE"
+	grep -v '^[[:space:]]*#' "$ROOT/$reader" | grep -qF '(prefactor|open-issue|release)\)' &&
+		fail "$reader spells the none (…) pattern itself — a second copy of the grammar" ||
+		pass "$reader spells no none (…) pattern of its own"
+	grep -v '^[[:space:]]*#' "$ROOT/$reader" | grep -qF 'REQ_BOUNDED_ID_ERE( *, *' &&
+		fail "$reader spells the id-list pattern itself — a second copy of the grammar" ||
+		pass "$reader spells no id-list pattern of its own"
 done
 
 # ---------------------------------------------------------------------------

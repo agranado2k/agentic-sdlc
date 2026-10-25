@@ -11,9 +11,10 @@
 # `Risk-confidence:` and `Test-tier:` the ticket contract's, fixed by
 # the kit's ADR-0037 — and whether the vocabulary checker accepts them. `Covers:` is
 # no vocabulary field: this script holds it to the coverage check's grammar
-# itself — a comma-separated list of bounded requirement ids, or `none
-# (prefactor|open-issue|release)` — with scripts/requirement.lib.sh beside
-# it, and fails closed (exit 3) without that file. A ticket with no `Risk:`
+# — a comma-separated list of bounded requirement ids, or `none
+# (prefactor|open-issue|release)` — read from req_covers_ids in
+# scripts/requirement.lib.sh beside it, the one definition both read, and
+# fails closed (exit 3) without that file. A ticket with no `Risk:`
 # line gets none printed: the reader that acts on risk reads the absence as
 # `high unclear`, and this script never writes a line the planner did not.
 # The checker is asked as the default writer, the planner, always: a ticket
@@ -138,12 +139,11 @@ stamp_key() {
 	printf '%s\n' "${1%%:*}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
 		-e 's/[[:space:]_][[:space:]_]*/-/g' | tr 'A-Z' 'a-z'
 }
-# stamp_covers_ok <line> — a Covers: line in the coverage check's grammar.
-stamp_covers_ok() {
-	_sc_v=$(printf '%s\n' "${1#*:}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-	printf '%s\n' "$_sc_v" | grep -Eqx 'none \((prefactor|open-issue|release)\)' && return 0
-	printf '%s\n' "$_sc_v" | grep -Eqx "$REQ_BOUNDED_ID_ERE( *, *$REQ_BOUNDED_ID_ERE)*"
-}
+# stamp_covers_value <line> — a Covers: line's value, trimmed.
+stamp_covers_value() { printf '%s\n' "${1#*:}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'; }
+# stamp_covers_ok <line> — a Covers: line in the coverage check's grammar,
+# req_covers_ids in scripts/requirement.lib.sh: one definition, both read it.
+stamp_covers_ok() { req_covers_ids "$(stamp_covers_value "$1")" >/dev/null; }
 
 # --- lift ------------------------------------------------------------------
 # A NUL is a line break here: GNU grep reads a body holding one as binary and
@@ -216,8 +216,8 @@ if [ "$_covers" = 1 ]; then
 	_cov_seen=
 	while IFS= read -r line; do
 		[ "$(stamp_key "$line")" = covers ] || continue
-		stamp_covers_ok "$line" || { _cov_bad=1; continue; }
-		_cov_v=$(printf '%s\n' "${line#*:}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+		_cov_v=$(stamp_covers_value "$line")
+		req_covers_ids "$_cov_v" >/dev/null || { _cov_bad=1; continue; }
 		[ -z "$_cov_seen" ] || [ "$_cov_seen" = "$_cov_v" ] || _cov_bad=1
 		_cov_seen=$_cov_v
 	done <"$_stamp_tmp/lines"

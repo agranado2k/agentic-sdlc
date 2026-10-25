@@ -67,15 +67,19 @@
 #   req_spec_ids [<file>]     their ids, `R<n>`, in file order, each once
 #   req_prd_ids [<file>]      a PRD body's bounded ids, in order, each once
 #   fence_strip [<file>]      the lines outside every fence, fence lines dropped
+#   req_covers_ids <value>    a ticket's Covers: value, trimmed: its ids, one
+#                             a line (nothing for `none (<reason>)`), exit 0;
+#                             exit 1, nothing printed, for any other value
 #
-# Each reads stdin when given no file, prints nothing but what it names, and
-# exits with awk's status. Fence state lasts one call, so a caller with
+# Each of the first four reads stdin when given no file, prints nothing but
+# what it names, and exits with awk's status. Fence state lasts one call, so a caller with
 # several files calls once per file: a fence left open hides the rest of its
 # own file and no more.
 #
 # Shared layer: this file is manifest-listed and copied verbatim into a
 # consumer, where scripts/check.sh (its reduced engine) and scripts/coverage.sh
-# source it; both fail closed without it.
+# source it, and scripts/stamp.sh and scripts/vocab.sh when a line they check
+# carries a requirement id; each fails closed without it.
 
 # The area: one lowercase token. Unanchored — `grep -x` and the callers add
 # the anchors.
@@ -150,4 +154,15 @@ req_prd_ids() {
 			if (!seen[r]++) print r
 		}
 	' "$@"
+}
+
+# A ticket's Covers: value — the one grammar the coverage check
+# (scripts/coverage.sh) and the stamp reader (scripts/stamp.sh) hold it to: a
+# comma-separated list of bounded ids, blanks allowed around each comma, or
+# `none (prefactor|open-issue|release)` — a ticket that covers no requirement
+# on purpose, and says why.
+req_covers_ids() {
+	printf '%s\n' "$1" | grep -Eqx 'none \((prefactor|open-issue|release)\)' && return 0
+	printf '%s\n' "$1" | grep -Eqx "$REQ_BOUNDED_ID_ERE( *, *$REQ_BOUNDED_ID_ERE)*" || return 1
+	printf '%s\n' "$1" | tr ',' '\n' | tr -d ' '
 }
