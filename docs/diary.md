@@ -2733,3 +2733,16 @@ but a hand emit: the outcome recorder is #876.
 Every area printed `landings 20 of 20, in the fix window 20, mistakes 0` —
 the six rules select overlapping paths and the kit lands 20 PRs in well under
 30 days, which is PRD-06 §9's open question with its first evidence in hand.
+
+## 2026-10-25 — the check table, written and read: `scripts/check-table.sh` joins
+
+PRD-07 slice 2 (#870, ADR-0037 clause 9, released as 0.93.0). `/implement`
+step 8 writes a check table above the explain-diff marker for a ticket with a
+`Covers:` line, its branch in `CHECK-TABLE.md` beside the skill, and both PR
+templates carry the section. The check-table reader is the first shared-layer
+script to read a PR body: it takes two files the caller fetched and prints
+ids, tokens and row numbers only. It reads the token sets from `vocab.sh
+fields` instead of spelling them, so a consumer's policy decides the tiers and
+results. `/implement`'s skill file sits 6 bytes under its 27000-byte ceiling:
+its next addition needs a trim first. #872 stamped `process/R52` without
+adding it to `docs/specs/process.md`; R48 to R60 join with their slices.
