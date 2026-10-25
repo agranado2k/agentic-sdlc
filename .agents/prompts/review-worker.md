@@ -237,12 +237,22 @@ become table cells.
 
     One item per line, each opening with its tag:
 
-    ⚠️ UNSPECIFIED  <observable change nobody asked for>
+    ⚠️ UNSPECIFIED  scope: <inside|outward> — <observable change nobody asked for>
     ❌ MISSING      <the spec asked for it; the diff does not deliver it>
     🔀 MIXED COMMIT <a commit claiming refactor that changes behaviour>
     ✅ SPECIFIED    <a change the spec did ask for>
 
     Exhaustive by design. Do not answer these and do not resolve them.
+
+    **Every ⚠️ UNSPECIFIED item carries a scope**, as the first words after
+    its tag, on the item's own line: `scope: inside` when its effect stays
+    inside the change — a name, a structure, internal error wording, a
+    test's shape — and `scope: outward` when a user, a consumer or another
+    skill sees or relies on it — an output format, a flag, an exit code, a
+    rule an agent obeys. Classify, never resolve: the scope says who may
+    decide the item, never that it is decided. The session that lands this
+    report reads an item with no scope, or a word the vocabulary's `scope`
+    field does not hold, as `outward`.
 
     **Where the spec carries requirement ids** — `R<n>` lines in a PRD's
     Requirements section, `<area>/R<n>` for a living spec's, and a ticket's

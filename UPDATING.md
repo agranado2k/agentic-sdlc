@@ -242,10 +242,15 @@ prints nothing. `scripts/lens-slice.sh` gains `--areas`, which reads paths
 on stdin and prints the review areas each belongs to; the record reader
 calls it, so take the two together. Nothing writes a `merge.outcome` yet:
 the outcome recorder is a later release, so every row reads `mistakes 0`
-until then. **One skill moves (9a): `/retro`** — `QUESTIONS.md`'s question
+until then. **Two skills move (9a). First `/retro`** — `QUESTIONS.md`'s question
 2 runs `sh scripts/trace.sh record` and prints its rows before the per-agent
-triage counts, and `SKILL.md`'s summary of question 2 says so. No wiring,
-template, policy file or adapter moves.
+triage counts, and `SKILL.md`'s summary of question 2 says so. **And
+`/review-pr` moves (9a)**: every unspecified confirm-list item carries
+`scope: inside` or `scope: outward` as the first words of its arrow line,
+an item with none is read as outward, and the axis-2 verdict counts the
+outward items as `data.outward`; `.agents/prompts/review-worker.md` says the
+same for an offline reviewer. No wiring, template, policy file or adapter
+moves.
 
 **Arriving from 0.90.0 or older, a ticket's stamp carries `Risk:`,
 `Risk-confidence:` and `Test-tier:`.** No file joins or leaves at 0.91.0.
@@ -1618,10 +1623,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3316 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3321 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3470 insertions(+), 1 deletion(-)
+ 3 files changed, 3475 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

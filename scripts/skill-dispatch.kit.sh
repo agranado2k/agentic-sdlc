@@ -362,15 +362,22 @@ fi
 # back: for a review-pr dispatch, the recorded author is AGENT_SESSION_MODEL,
 # whatever the session named. A cascade-built ticket — a --ticket-file stamped
 # mechanical, whose oracle line selects a closed-list command, under a policy
-# that declares a cascade — with no author recorded for it is refused, exit 2:
-# the session's own model is the wrong answer, so no default stands in for it.
+# that declares a cascade, AND for which a cascade actually ran: its hand-back
+# state or a recorded verdict is in the worktree's git dir — with no author
+# recorded for it is refused, exit 2: the session's own model is the wrong
+# answer, so no default stands in for it. The stamp alone proves nothing
+# (#881): a mechanical ticket a session built itself leaves no cascade record,
+# and is reviewed like any self-implemented diff, from the author it names.
 # The record is the worktree's: --worktree, or the checkout this runs in.
 CASCADE_AUTHOR_NAME=skill-cascade-author
 if [ "${SKILL#/}" = review-pr ]; then
 	_ra_wt=${CASCADE_WT:-.}
-	_ra_author='' _ra_file=''
+	_ra_author='' _ra_file='' _ra_ran=0
 	_ra_gd=$(cd "$_ra_wt" 2>/dev/null && git rev-parse --absolute-git-dir 2>/dev/null) &&
 		_ra_file="$_ra_gd/$CASCADE_AUTHOR_NAME"
+	# A cascade ran here when its hand-back state or its recorded author is
+	# left in the git dir — the state's name is the one _cascade stages.
+	[ -n "$_ra_file" ] && { [ -e "$_ra_gd/skill-cascade" ] || [ -f "$_ra_file" ]; } && _ra_ran=1
 	if [ -n "$_ra_file" ] && [ -f "$_ra_file" ]; then
 		_ra_model=$(sed -n 's/^model=//p' "$_ra_file" | head -n 1)
 		_ra_ticket=$(sed -n 's/^ticket=//p' "$_ra_file" | head -n 1)
@@ -380,7 +387,7 @@ if [ "${SKILL#/}" = review-pr ]; then
 		[ "$_ra_ticket" = "${TICKET:+#}${TICKET:-none}" ] && _ra_author=$_ra_model
 	fi
 	_ra_built=0
-	if [ -n "$CASCADE_TICKET" ]; then
+	if [ "$_ra_ran" = 1 ] && [ -n "$CASCADE_TICKET" ]; then
 		_fs_read_stamp
 		if [ "$_fs_tier" = mechanical ] &&
 			[ -n "$(sh -c '. "$1" >/dev/null 2>&1; printf "%s" "${AGENT_CASCADE_MECHANICAL:-}"' _ "$AGENTS_CONFIG")" ] &&
@@ -394,6 +401,12 @@ if [ "${SKILL#/}" = review-pr ]; then
 		echo "skill-dispatch: the diff's author is '$_ra_author', the model its cascade's passed verdict recorded; the reviewer is resolved against that author, not the session" >&2
 	elif [ "$_ra_built" = 1 ]; then
 		die "review refused — ticket ${TICKET:+#$TICKET }is cascade-built and '$_ra_wt' holds no rung author recorded for it; the reviewer is resolved from the author, never the session's own model. Judge the rung first — the cascade's own call with --rung-done records its verdict and its author — then dispatch the review again"
+	elif [ "$_ra_ran" = 0 ] && [ -n "$CASCADE_TICKET" ]; then
+		# Said, so a review dispatched from the wrong checkout is visible: the
+		# record is read from --worktree, or from the checkout this runs in.
+		_fs_read_stamp
+		[ "$_fs_tier" != mechanical ] ||
+			echo "skill-dispatch: no cascade record in '$_ra_wt' — a mechanical ticket no cascade ran for is reviewed from the author the session names (AGENT_SESSION_MODEL); if a cascade built it, dispatch with its --worktree" >&2
 	fi
 fi
 
@@ -618,7 +631,11 @@ _cascade_emit() {
 _cascade_verdict() {
 	_cascade_emit model="$2" outcome="$3" data.rung="$1" data.oracle_exit="$ORACLE_EXIT" \
 		data.guard_exit="$GUARD_EXIT" ${2:+data.author="$2"} reason="$4"
-	[ "$3" = passed ] && [ -n "$2" ] || return 0
+	# A passed rung that names no model still leaves its record, the author
+	# empty: the record is also the evidence a cascade ran (#881), and an
+	# empty author is no author, so its review is refused, never resolved
+	# from the session.
+	[ "$3" = passed ] || return 0
 	printf 'model=%s\nticket=%s\n' "$2" "${TICKET:+#}${TICKET:-none}" >"$CASCADE_AUTHOR"
 }
 

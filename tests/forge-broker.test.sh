@@ -1120,7 +1120,7 @@ AX2=$(printf '%s\n' "$VERDICTS" | grep -F '"axis":"2"')
 [ "$(printf '%s\n' "$VERDICTS" | grep -c '"kind":"review.verdict"')" = 2 ] &&
 	pass "exactly one review.verdict per axis" ||
 	fail "expected two review.verdict events for pr:#31, one per axis"
-for want in '"outcome":"confirm"' '"unspecified":"2"' '"mixed":"0"' '"missing":"1"' '"via":"broker"'; do
+for want in '"outcome":"confirm"' '"unspecified":"2"' '"outward":"2"' '"mixed":"0"' '"missing":"1"' '"via":"broker"'; do
 	case "$AX2" in
 	*"$want"*) pass "the axis-2 verdict carries $want" ;;
 	*) fail "the axis-2 verdict lacks $want: $AX2" ;;
@@ -1637,6 +1637,86 @@ for bad in 'APPROVE' 'six lenses' 'two findings, both medium' 'LGTM — ship it'
 	assert_mutating 0 "…and nothing is posted"
 	expect_err_has 'not blocking'
 done
+STUB_PR=12
+export STUB_PR
+
+# ---------------------------------------------------------------------------
+banner "26. Every ⚠️ item's scope is counted, and a missing or unknown one is outward (#873)"
+# ---------------------------------------------------------------------------
+# process/R53–R55, ADR-0038: the worker writes `scope: inside` or `scope:
+# outward` right after an UNSPECIFIED item's tag, on the item's own line —
+# the one line the broker keeps. The axis-2 verdict counts the items read as
+# outward as data.outward beside data.unspecified, and an item with no scope,
+# or a word the vocabulary's `scope` field does not hold, is outward: the
+# count fails closed to the operator. The scope moves no other count.
+SCOPED="$SCRATCH/scoped.md"
+cat >"$SCOPED" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: not blocking — four behavior items to confirm
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+#### HIGH
+— none found.
+#### MEDIUM
+— none found.
+#### LOW
+— none found.
+
+## Axis 2 — Behavior (for a human)
+
+⚠️ UNSPECIFIED  scope: inside — scripts/a.sh: a local variable is renamed.
+⚠️ UNSPECIFIED  scope: outward — scripts/a.sh: the exit code on a bad flag moved from 1 to 2.
+⚠️ UNSPECIFIED  scripts/a.sh: the help text gained a line.
+⚠️ UNSPECIFIED  scope: sideways — scripts/a.sh: the log line is reworded.
+✅ SPECIFIED    R8 — scripts/a.sh: the restatement names the covered ids.
+EOF
+STUB_PR=42
+export STUB_PR
+broker 42 "$SCOPED"
+expect_status 0 "process/R53: a report whose UNSPECIFIED items carry a scope passes the contract"
+COMMENT=$(payload issues/42/comments)
+case "$COMMENT" in
+*'UNSPECIFIED  scope: inside — scripts/a.sh: a local variable is renamed.'*) pass "process/R53: the comment carries the scoped item verbatim" ;;
+*) fail "process/R53: the comment lost the scoped item"; printf '%s\n' "$COMMENT" | sed 's/^/        | /' ;;
+esac
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#42' --kind review.verdict
+AX2=$(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"')
+for want in '"outcome":"confirm"' '"unspecified":"4"' '"outward":"3"' '"mixed":"0"' '"missing":"0"'; do
+	case "$AX2" in
+	*"$want"*) pass "process/R54–R55: the axis-2 verdict carries $want — one inside, one outward, a missing and an unknown scope read as outward" ;;
+	*) fail "process/R54–R55: the axis-2 verdict lacks $want: $AX2" ;;
+	esac
+done
+# Only `inside` lowers the count, and only as a whole word: a word that
+# merely begins with it is not the vocabulary's.
+STUB_PR=43
+export STUB_PR
+sed 's/scope: inside — /scope: insider — /' "$SCOPED" >"$SCRATCH/scoped-prefix.md"
+broker 43 "$SCRATCH/scoped-prefix.md"
+expect_status 0 "…a report with 'scope: insider' lands too"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#43' --kind review.verdict
+case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"') in
+*'"outward":"4"'*) pass "process/R54: 'scope: insider' is no scope the vocabulary holds — read as outward" ;;
+*) fail "process/R54: a word beginning with 'inside' lowered the outward count: $T_OUT" ;;
+esac
+# A vocabulary whose scope field holds no `inside` declares no inside item:
+# every one is outward, the count failing closed (review of #890).
+STUB_PR=44
+export STUB_PR
+sed "s/^VOCAB_SCOPE=.*/VOCAB_SCOPE='outward'/" "$KIT/scripts/vocab.config.sh" >"$SCRATCH/vocab-no-inside.sh"
+VOCAB_CONFIG="$SCRATCH/vocab-no-inside.sh"
+export VOCAB_CONFIG
+broker 44 "$SCOPED"
+unset VOCAB_CONFIG
+expect_status 0 "…a report lands under a vocabulary whose scope field holds no inside"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#44' --kind review.verdict
+case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"') in
+*'"outward":"4"'*) pass "process/R54: with no inside in the vocabulary, every UNSPECIFIED item is outward" ;;
+*) fail "process/R54: an inside item lowered the count under a vocabulary that holds no inside: $T_OUT" ;;
+esac
 STUB_PR=12
 export STUB_PR
 

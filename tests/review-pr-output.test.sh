@@ -102,6 +102,13 @@
 #      its summary marks a lens "run in this context instead" only for a
 #      context with no subagent tool, and the dispatched worker's contract
 #      carries the same bump rule.
+#  24. Every ⚠️ UNSPECIFIED item carries a scope (#873, process/R53–R55):
+#      Agent 7 writes `scope: inside` or `scope: outward`, the vocabulary's
+#      two words, as the first words of the item's arrow line, defined in the
+#      skill's two sentences; a missing or unknown scope reads as outward; the
+#      Axis-2 verdict records data.outward beside data.unspecified. The
+#      dispatched worker writes the scope right after the tag, in the same
+#      words. Each rule proved by a bait.
 #
 # Usage: sh tests/review-pr-output.test.sh
 
@@ -1793,5 +1800,61 @@ for b in \
 	bait_gap adr_rules_missing "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
 		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
 done
+
+# ---------------------------------------------------------------------------
+banner "24. Every ⚠️ item carries a scope, and a missing one is outward (#873)"
+# ---------------------------------------------------------------------------
+# process/R53–R55, ADR-0038: Agent 7 writes `scope: inside` or `scope:
+# outward` as the first words of an UNSPECIFIED item's arrow line, the two
+# words the vocabulary's `scope` field declares and the two definitions
+# that draw the line between them; every reader takes a missing or unknown
+# scope as outward; the Axis-2 verdict counts the outward items beside the
+# unspecified ones. The dispatched worker, whose tagged line is the only one
+# its broker keeps, writes the scope right after the tag, in the same words.
+SCOPE_WORDS=$(sh scripts/vocab.sh fields | sed -n 's/^scope: //p')
+[ "$SCOPE_WORDS" = 'inside outward' ] && pass "the vocabulary's scope field holds inside and outward" ||
+	fail "the vocabulary's scope field is '$SCOPE_WORDS', not 'inside outward' — the confirm-list's two words are undeclared"
+# scope_rules_missing <file> — the scope rules a skill or contract has lost.
+scope_rules_missing() {
+	_sc=$(tr '\n' ' ' <"$1" | tr -s ' ')
+	case "$_sc" in *"\`scope: inside\` when its effect stays inside the change — a name, a structure, internal error wording, a test's shape"*) ;; *) printf '%s\n' 'inside defined' ;; esac
+	case "$_sc" in *"\`scope: outward\` when a user, a consumer or another skill sees or relies on it — an output format, a flag, an exit code, a rule an agent obeys"*) ;; *) printf '%s\n' 'outward defined' ;; esac
+	case "$_sc" in *"an item with no scope, or a word the vocabulary's \`scope\` field does not hold, as \`outward\`"*) ;; *) printf '%s\n' 'outward default' ;; esac
+	case "$_sc" in *'Classify, never resolve'*) ;; *) printf '%s\n' 'never resolves' ;; esac
+}
+# skill_scope_missing <skill file> — the rules above, the arrow line's first
+# words in §5b's shape, and the verdict's outward count.
+skill_scope_missing() {
+	scope_rules_missing "$1"
+	region '^### 5b\. ' '^Rules: ' "$1" | grep -A1 '^⚠️ UNSPECIFIED ' | grep -qE '^ +→ scope: <inside\|outward> ' ||
+		printf '%s\n' 'arrow line opens with scope'
+	grep -qF 'data.unspecified=<count> data.outward=<count>' "$1" || printf '%s\n' 'verdict counts outward'
+}
+worker_scope_missing() {
+	scope_rules_missing "$1"
+	grep -qF '⚠️ UNSPECIFIED  scope: <inside|outward> — <observable change nobody asked for>' "$1" ||
+		printf '%s\n' 'tagged line opens with scope'
+}
+miss=$(skill_scope_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "process/R53–R55: Agent 7 scopes every ⚠️ item on its arrow line, a missing scope is outward, and the verdict counts data.outward" ||
+	fail "process/R53–R55: /review-pr's scope rules are missing: $miss"
+miss=$(worker_scope_missing "$WORKER_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "process/R53–R54: the dispatched worker scopes every ⚠️ item right after its tag, in the skill's words" ||
+	fail "process/R53–R54: $WORKER's scope rules are missing: $miss"
+for b in \
+	'inside defined|s/internal error wording, a test.s shape/internal error wording/' \
+	'outward defined|s/an exit code, a rule an agent obeys/an exit code/' \
+	'outward default|s/as `outward`\*\*/as `inside`**/' \
+	'never resolves|s/Classify, never resolve/Classify, and resolve where you can/' \
+	'arrow line opens with scope|s/^\( *→ \)scope: <inside|outward> — no spec reference found/\1no spec reference found/' \
+	'verdict counts outward|s/ data.outward=<count>//'; do
+	bait_gap skill_scope_missing "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
+done
+bait_copy "$WORKER_ABS" "$SCRATCH/bait873w.md" 's/UNSPECIFIED  scope: <inside|outward> — /UNSPECIFIED  /' &&
+	worker_scope_missing "$SCRATCH/bait873w.md" | grep -qxF 'tagged line opens with scope' &&
+	pass "bait: a worker contract whose ⚠️ line carries no scope goes red" ||
+	fail "bait: a worker contract whose ⚠️ line carries no scope was not caught — or the bait planted nothing"
+rm -f "$SCRATCH/bait873w.md"
 
 t_done "/review-pr output contract"

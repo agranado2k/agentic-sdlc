@@ -4,7 +4,7 @@
 - **Date**: 2026-10-14
 - **Deciders**: the planner session for #778, under the operator's delegation of rulings; the merge of its pull request is the operator's yes
 - **Supersedes / amends**: amends ADR-0027 clause 4 ("name the author, not the session") and closes the limitation its Consequences record ("no script can see who wrote a diff"), for a diff the cascade built; a new record because ADR-0027 is a record of its own and a partial replacement of a clause is not an in-place edit (`docs/adr/INDEX.md`, conventions)
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-10-25 for #881: a ticket is cascade-built only when a cascade ran for it — its hand-back state or its recorded author is in the worktree's git dir; the stamp alone proves nothing; see the amendment below)
 
 ## Context and problem statement
 
@@ -61,3 +61,41 @@ Chosen: **option 1.**
 
 - Implemented in: the PR for #778 (`feat/778-reviewer-from-rung-author`). Held by `tests/skill-cascade.test.sh` section 9: the passed verdict's `data.author`; a Sonnet rung's diff gets `opus` with the session naming `opus`, `sonnet`, a Fable id or nothing; the dry run; a record for another ticket (with or without `--ticket` on the review), no record, an unjudged rung, a cascade with no passed verdict and a restarted cascade are each refused; a ticket the cascade did not build resolves against the session; an escalated cascade whose rung 2 passes records rung 2's model, and its review resolves against that author; a ticketless cascade's record answers a ticketless review. Each case was shown failing before the record and the read existed.
 - Related: ADR-0007 (the refusal), ADR-0018 (the cascade rung), ADR-0024 clause 7 (the chain never reads the trace), ADR-0027 (a Sonnet author's diff is reviewed by Opus).
+
+## Amendment 2026-10-25 — a cascade-built ticket is one a cascade ran for (#881)
+
+Clause 4 read the stamp as proof: a `mechanical` ticket with an oracle line,
+under a policy that declares a cascade, was cascade-built whether or not a
+cascade ever ran for it. The 2026-10-23 wave found the cost — a session that
+built a mechanical ticket itself could never get it reviewed through the
+dispatcher, because no rung author could exist for work no rung did.
+
+1. **Clause 4 gains a fourth condition.** A ticket is cascade-built only when,
+   besides the three conditions above, a cascade actually ran for it in the
+   worktree the dispatch reads: its hand-back state (`skill-cascade`) or a
+   recorded author (`skill-cascade-author`, for any ticket) is in that
+   worktree's git dir. Such a ticket with no author recorded for its own
+   ticket is refused exactly as before, with the same message.
+2. **A mechanical ticket with no cascade record is reviewed like any
+   self-implemented diff** (clause 5): the reviewer resolves from the author
+   the session names in `AGENT_SESSION_MODEL`.
+3. **Two trade-offs above narrow with it.** A cascade that failed, and one
+   whose cheap rung fell through on exit 69, leave no record in the worktree,
+   so a fix on such a ticket is now reviewed from the author the session
+   names rather than refused. The session names that author honestly, as
+   ADR-0027 clause 4 already asks; the record is what removes the honour
+   system, and where there is no rung there is no record to read.
+
+4. **A passed verdict always leaves its record**, its author empty when the
+   rung named no model: the record is now also the evidence a cascade ran,
+   and an empty author is no author, so that review is refused as before. And
+   a mechanical ticket the dispatch finds no record for is said on stderr,
+   naming the checkout it read, so a review dispatched from the wrong one is
+   visible. Both from the review of #889 (findings M-1 and M-2).
+
+Held by `tests/skill-cascade.test.sh` section 9: a mechanical-stamped ticket
+with no cascade record dispatches a review resolved from the named author
+(an Opus author gets `sonnet`, a Sonnet author `opus`); a handed-back rung
+with no verdict is still refused with the existing message; a record with an empty author is
+refused; the fall-through names the missing record on stderr. Each case was
+shown failing before the condition existed.

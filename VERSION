@@ -3344,6 +3344,11 @@
 # runs `sh scripts/trace.sh record` and prints its rows before the
 # per-agent triage counts, saying `mistakes 0` is no clean history until
 # the outcome recorder lands; SKILL.md's question 2 names it first.
+# /review-pr (from #873, landed beside this release) — every UNSPECIFIED
+# confirm-list item carries `scope: inside` or `scope: outward` as the
+# first words of its arrow line, an item with none read as outward, and
+# the axis-2 verdict counts the outward items (data.outward); the offline
+# worker contract, .agents/prompts/review-worker.md, says the same.
 # Wiring (9b): none. Templates (9c): none. Config (9d): none.
 # Adapter (9e): none.
 # Kit-only, never shipped: docs/adr/0036, the glossary's Post-merge
