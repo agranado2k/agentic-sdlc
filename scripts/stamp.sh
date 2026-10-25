@@ -14,7 +14,7 @@
 # — a comma-separated list of bounded requirement ids, or `none
 # (prefactor|open-issue|release)` — read from req_covers_ids in
 # scripts/requirement.lib.sh beside it, the one definition both read, and
-# fails closed (exit 3) without that file. A ticket with no `Risk:`
+# fails closed (exit 3) without that file or that function. A ticket with no `Risk:`
 # line gets none printed: the reader that acts on risk reads the absence as
 # `high unclear`, and this script never writes a line the planner did not.
 # The checker is asked as the default writer, the planner, always: a ticket
@@ -213,6 +213,10 @@ if [ "$_covers" = 1 ]; then
 	fi
 	# shellcheck disable=SC1090
 	. "$_grammar"
+	command -v req_covers_ids >/dev/null 2>&1 || {
+		stamp_say "issue #$issue carries a Covers: line and the requirement grammar $_grammar defines no req_covers_ids — no stamp read, nothing unchecked printed"
+		exit 3
+	}
 	_cov_seen=
 	while IFS= read -r line; do
 		[ "$(stamp_key "$line")" = covers ] || continue

@@ -463,5 +463,10 @@ t_exec sh "$PROJ/scripts/coverage.sh" "$SCRATCH/cov.prd" "$SCRATCH/1"
 [ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && printf '%s' "$T_ERR" | grep -q 'requirement\.lib\.sh' &&
 	pass "the coverage check without its grammar refuses (exit 2), says why, prints nothing" ||
 	fail "the coverage check without its grammar: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
+sed '/^req_covers_ids() {/,/^}/d' "$ROOT/$MODULE" >"$PROJ/$MODULE"
+t_exec sh "$PROJ/scripts/coverage.sh" "$SCRATCH/cov.prd" "$SCRATCH/1"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && printf '%s' "$T_ERR" | grep -q 'defines no req_covers_ids' &&
+	pass "the coverage check with a grammar lacking req_covers_ids refuses (exit 2), names it, prints nothing" ||
+	fail "the coverage check with no req_covers_ids: exit $T_STATUS, stdout '$T_OUT', stderr '$T_ERR'"
 
 t_done "requirement grammar"

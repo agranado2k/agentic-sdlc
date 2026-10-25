@@ -71,10 +71,12 @@ grammar="$(dirname "$0")/requirement.lib.sh"
 }
 # shellcheck disable=SC1090
 . "$grammar"
-command -v req_prd_ids >/dev/null 2>&1 || {
-	cov_say "scripts/requirement.lib.sh defines no req_prd_ids — restore it from the kit"
-	exit 2
-}
+for fn in req_prd_ids req_covers_ids; do
+	command -v "$fn" >/dev/null 2>&1 || {
+		cov_say "scripts/requirement.lib.sh defines no $fn — restore it from the kit"
+		exit 2
+	}
+done
 
 [ $# -ge 2 ] || usage
 prd=$1

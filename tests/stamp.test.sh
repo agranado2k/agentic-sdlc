@@ -584,6 +584,15 @@ t_exec sh "$SCRATCH/nogrammar/scripts/stamp.sh" 900
 cd "$KIT" || exit 2
 expect_status 3 "process/R42: no requirement grammar beside the reader — a Covers: line cannot be read, exit 3"
 [ -z "$T_OUT" ] && pass "process/R42: …nothing on stdout" || fail "process/R42: …stdout should be empty, got '$T_OUT'"
+# …and a grammar that predates req_covers_ids is no grammar for a Covers: line.
+sed '/^req_covers_ids() {/,/^}/d' "$KIT/scripts/requirement.lib.sh" >"$SCRATCH/nogrammar/scripts/requirement.lib.sh"
+cd "$SCRATCH" || exit 2
+t_exec sh "$SCRATCH/nogrammar/scripts/stamp.sh" 900
+cd "$KIT" || exit 2
+rm -f "$SCRATCH/nogrammar/scripts/requirement.lib.sh"
+expect_status 3 "process/R42: a requirement grammar with no req_covers_ids — a Covers: line cannot be read, exit 3"
+[ -z "$T_OUT" ] && pass "process/R42: …nothing on stdout" || fail "process/R42: …stdout should be empty, got '$T_OUT'"
+expect_err_has "defines no req_covers_ids"
 
 # A consumer whose policy predates the contract declares none of its fields:
 # the new lines are dropped as undeclared, the Tier: line still read.
