@@ -616,8 +616,8 @@ for key in Risk Risk-confidence Covers; do
 	stamp 900
 	expect_status 5 "process/R43: nine $key: lines are past the bound of 8: exit 5"
 	[ -z "$T_OUT" ] && pass "process/R43: …nothing on stdout" || fail "process/R43: …stdout should be empty"
+	expect_err_has "9 $(printf '%s' "$key" | tr 'A-Z' 'a-z') lines"
 done
-expect_err_has "9 covers lines"
 # The bound is read from the policy, not spelled here: a policy that lowers
 # it is obeyed, and one that declares none keeps the reader's own 8.
 cat >"$SCRATCH/bound2.config.sh" <<'EOF'
