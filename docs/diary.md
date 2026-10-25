@@ -2777,3 +2777,15 @@ on the four blocking words, and lists `skipped:` ids at the top of its report.
 The first review caught the splice emptying a PR body on an empty rows file;
 the block is now one `&&` chain, run by section 25 with the forge stubbed.
 `/pr-iterate`'s skill file sits 65 bytes under its 38000-byte ceiling.
+
+## 2026-10-25 — the earned record shows misses and lens precision
+
+PRD-06 slice 4 of K1 (#877, ADR-0036, released as 0.96.0). `trace.sh record`
+now ends each review area's row with its misses and miss rate, and with how
+the lens findings on its counted landings held up: held up, not held up,
+unlabelled, precision, and the labels' sources. A ratio over nothing prints
+`n/a`. On the kit's own trace, every area reads `missed 0 of 20`, because
+only one revert has been recorded and it is older than every area's 20.
+Precision runs from 0.61 (`security`, `api-crud`) to 0.95 (`test-hygiene`).
+Every label comes from triage so far: no human dismissal or post-merge
+outcome falls in any window. The full run takes 3.2 s wall here.
