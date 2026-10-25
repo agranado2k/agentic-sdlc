@@ -4,11 +4,24 @@ type: ticket
 title: Suites pass with TRACE_HARNESS and TRACE_MODEL exported
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: done
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-25
 deps: []
 priority: 3
+links:
+  pr: "#866"
+approved_by: "agranado"
+approved_at: 2026-10-25
+review:
+  outcome: approved
+  commit: "63d3ab9"
+  by: "review-pr on #866"
+  at: 2026-10-25
+qa:
+  outcome: pass
+  by: "land.kit.sh (#866 landed, main workflows green)"
+  at: 2026-10-25
 ---
 
 # T-22 · Suites pass with TRACE_HARNESS and TRACE_MODEL exported

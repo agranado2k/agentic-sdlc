@@ -4,11 +4,24 @@ type: ticket
 title: The landing script re-runs a stuck in-progress job once
 parent: agentic-sdlc
 class: toil
-stage: proposed
+stage: done
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-25
 deps: []
 priority: 3
+links:
+  pr: "#857"
+approved_by: "agranado"
+approved_at: 2026-10-25
+review:
+  outcome: approved
+  commit: "a895888"
+  by: "review-pr on #857"
+  at: 2026-10-25
+qa:
+  outcome: pass
+  by: "land.kit.sh (#857 landed, main workflows green)"
+  at: 2026-10-25
 ---
 
 # T-20 · The landing script re-runs a stuck in-progress job once
