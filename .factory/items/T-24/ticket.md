@@ -4,7 +4,7 @@ type: ticket
 title: A stop priced past a half-written transcript line records data.partial
 parent: agentic-sdlc
 class: toil
-stage: review
+stage: done
 created: 2026-10-23
 updated: 2026-10-25
 deps: []
@@ -13,6 +13,15 @@ links:
   pr: "#868"
 approved_by: "agranado"
 approved_at: 2026-10-25
+review:
+  outcome: approved
+  commit: "6acaad1"
+  by: "review-pr on #868"
+  at: 2026-10-25
+qa:
+  outcome: pass
+  by: "land.kit.sh (#868 landed, main workflows green)"
+  at: 2026-10-25
 ---
 
 # T-24 · A stop priced past a half-written transcript line records data.partial

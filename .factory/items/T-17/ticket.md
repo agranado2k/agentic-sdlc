@@ -4,7 +4,7 @@ type: ticket
 title: A subagent stop with no run records its Trace-Spawn ticket
 parent: agentic-sdlc
 class: toil
-stage: review
+stage: done
 created: 2026-10-23
 updated: 2026-10-25
 deps: []
@@ -13,6 +13,15 @@ links:
   pr: "#856"
 approved_by: "agranado"
 approved_at: 2026-10-25
+review:
+  outcome: approved
+  commit: "a812a15"
+  by: "review-pr on #856"
+  at: 2026-10-25
+qa:
+  outcome: pass
+  by: "land.kit.sh (#856 landed, main workflows green)"
+  at: 2026-10-25
 ---
 
 # T-17 · A subagent stop with no run records its Trace-Spawn ticket

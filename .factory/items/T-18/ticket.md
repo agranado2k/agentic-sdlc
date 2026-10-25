@@ -4,7 +4,7 @@ type: ticket
 title: "/review-pr: lenses state the ADR-0025 bump rule; a failed lens is never audited"
 parent: agentic-sdlc
 class: toil
-stage: review
+stage: done
 created: 2026-10-23
 updated: 2026-10-25
 deps: []
@@ -13,6 +13,15 @@ links:
   pr: "#854"
 approved_by: "agranado"
 approved_at: 2026-10-25
+review:
+  outcome: approved
+  commit: "1302955"
+  by: "review-pr on #854"
+  at: 2026-10-25
+qa:
+  outcome: pass
+  by: "land.kit.sh (#854 landed, main workflows green)"
+  at: 2026-10-25
 ---
 
 # T-18 · /review-pr: lenses state the ADR-0025 bump rule; a failed lens is never audited

@@ -4,7 +4,7 @@ type: ticket
 title: The review-pr output suite bait cases share one copy-and-edit helper
 parent: agentic-sdlc
 class: toil
-stage: review
+stage: done
 created: 2026-10-23
 updated: 2026-10-25
 deps: []
@@ -13,6 +13,15 @@ links:
   pr: "#864"
 approved_by: "agranado"
 approved_at: 2026-10-25
+review:
+  outcome: approved
+  commit: "4de1b40"
+  by: "review-pr on #864"
+  at: 2026-10-25
+qa:
+  outcome: pass
+  by: "land.kit.sh (#864 landed, main workflows green)"
+  at: 2026-10-25
 ---
 
 # T-25 · The review-pr output suite bait cases share one copy-and-edit helper
