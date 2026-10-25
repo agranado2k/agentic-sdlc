@@ -882,22 +882,76 @@ review opus "$T_MECH_CASC" --ticket 999
 [ "$T_STATUS" = 2 ] && pass "a record for another ticket is no author: the cascade ticket's review is refused" ||
 	fail "a record for ticket #682 answered ticket #999: exit $T_STATUS, '$T_OUT'"
 
-# A cascade-built ticket whose worktree holds no recorded author is refused.
+# A mechanical-stamped ticket no cascade ran for is no cascade-built ticket
+# (#881): its worktree holds no cascade state and no recorded verdict, so the
+# session built it, and its review resolves from the author the session names.
 fresh_wt
 review opus "$T_MECH_CASC"
-[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
-	pass "a cascade ticket with no recorded author is refused, exit 2, no reviewer named" ||
-	fail "a cascade ticket with no author exited $T_STATUS with '$T_OUT': $T_ERR"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = sonnet ] &&
+	pass "a mechanical ticket no cascade built is reviewed: an Opus author gets the Sonnet reviewer" ||
+	fail "a mechanical ticket with no cascade record exited $T_STATUS with '$T_OUT': $T_ERR"
+review sonnet "$T_MECH_CASC"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = opus ] &&
+	pass "…and a Sonnet author the session names gets the Opus reviewer" ||
+	fail "a Sonnet-named mechanical review with no cascade record exited $T_STATUS with '$T_OUT': $T_ERR"
 case "$T_ERR" in
-*"no rung author"*--rung-done*) pass "…naming what is missing and the --rung-done call that records it" ;;
-*) fail "the refusal does not say what is missing: $T_ERR" ;;
+*"no rung author"*) fail "a ticket no cascade ran for was called cascade-built: $T_ERR" ;;
+*"no cascade record"*) pass "…nothing calls it cascade-built, and stderr says no cascade record was found there" ;;
+*) fail "the fall-through does not say no cascade record was found in the worktree: $T_ERR" ;;
 esac
-# A rung handed back and never judged has no author either.
+# A passed verdict with no model to name still leaves its record (review
+# finding M-1 on #889): an empty author is no author, and the review of the
+# ticket it ran for is refused, never resolved from the session.
+_ra_gd=$(cd "$WT" && git rev-parse --absolute-git-dir)
+printf 'model=\nticket=#682\n' >"$_ra_gd/skill-cascade-author"
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "a record with an empty author refuses the review: a cascade ran, and named nobody" ||
+	fail "an empty-author record let the review through: exit $T_STATUS, '$T_OUT': $T_ERR"
+rm -f "$_ra_gd/skill-cascade-author"
+# And the writer: a cascade whose passing rung names no model — rung 2 on an
+# unmapped mechanical and implementer tier, spawned inheriting — still leaves
+# its record, the author empty, and the review of its ticket is refused.
+_cfg9=$(cat "$STUBTREE/scripts/agents.kit.stub.config.sh")
+cat >"$STUBTREE/scripts/agents.kit.stub.config.sh" <<CFG
+AGENT_HARNESSES='stub'
+AGENT_HARNESS_STUB_CMD='$STUB --model-flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_REVIEWER='sonnet'
+AGENT_TIER_REVIEWER_FALLBACK='opus'
+AGENT_CASCADE_MECHANICAL='model-cheap-bare'
+CFG
+fresh_wt
+FIXTURE_ORACLE_GREEN=1 FIXTURE_GUARD_RED_ON=model-cheap
+export FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done
+spawn_in_session ''
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+_ra_gd=$(cd "$WT" && git rev-parse --absolute-git-dir)
+[ "$T_STATUS" = 0 ] && [ "$(sed -n 's/^model=//p' "$_ra_gd/skill-cascade-author" 2>/dev/null)" = '' ] &&
+	grep -qx 'model=' "$_ra_gd/skill-cascade-author" 2>/dev/null &&
+	pass "a passed rung that names no model still writes its record, the author empty" ||
+	fail "a model-less passed rung left no record: status $T_STATUS, record '$(cat "$_ra_gd/skill-cascade-author" 2>/dev/null)': $T_ERR"
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "…and its ticket's review is refused, never resolved from the session" ||
+	fail "a model-less cascade's review exited $T_STATUS with '$T_OUT': $T_ERR"
+printf '%s\n' "$_cfg9" >"$STUBTREE/scripts/agents.kit.stub.config.sh"
+# A rung handed back and never judged is a cascade record with no author:
+# still refused, with the existing message (ADR-0030).
 cascade_keep "$T_ORACLE"
 spawn_in_session sonnet
 review opus "$T_MECH_CASC"
-[ "$T_STATUS" = 2 ] && pass "a handed-back rung with no verdict records no author: refused" ||
-	fail "an unjudged rung's review exited $T_STATUS with '$T_OUT'"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "a handed-back rung with no verdict records no author: refused, exit 2, no reviewer named" ||
+	fail "an unjudged rung's review exited $T_STATUS with '$T_OUT': $T_ERR"
+case "$T_ERR" in
+*"is cascade-built and"*"no rung author"*--rung-done*) pass "…naming what is missing and the --rung-done call that records it" ;;
+*) fail "the refusal does not say what is missing: $T_ERR" ;;
+esac
 
 # A cascade with no passed verdict records no author for a review to use:
 # rung 1 escalated, rung 2 handed back and not yet judged.
