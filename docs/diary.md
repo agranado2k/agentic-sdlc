@@ -2789,3 +2789,16 @@ only one revert has been recorded and it is older than every area's 20.
 Precision runs from 0.61 (`security`, `api-crud`) to 0.95 (`test-hygiene`).
 Every label comes from triage so far: no human dismissal or post-merge
 outcome falls in any window. The full run takes 3.2 s wall here.
+
+## 2026-10-25 — the outcome recorder records fixes inside the fix window
+
+PRD-06 slice 4 of K1 (#878, ADR-0036, released as 0.97.0). `trace.sh
+outcomes` now also writes `merge.outcome outcome=fixed` against each landed
+PR whose lines a `fix` landing removed or rewrote, when the PR landed inside
+the fix window before it, with the whole days between the two merge commits
+in `data.days`. The window is 30 days unless `scripts/trace.config.sh` sets
+`TRACE_FIX_WINDOW_DAYS` to another whole number from 1; any other value is
+not used, said once on stderr, and `record` reads the same window. Run over a
+copy of the kit's own trace it wrote 24 `fixed` outcomes, every one 0 to 10
+days after its landing, in 10.7 s wall; the second run wrote 0. `/retro`'s
+question 2 now says a failed factory QA is the one outcome not recorded yet.
