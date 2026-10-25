@@ -909,9 +909,37 @@ review opus "$T_MECH_CASC"
 	pass "a record with an empty author refuses the review: a cascade ran, and named nobody" ||
 	fail "an empty-author record let the review through: exit $T_STATUS, '$T_OUT': $T_ERR"
 rm -f "$_ra_gd/skill-cascade-author"
-grep -q '\[ "\$3" = passed \] || return 0' "$ROOT/scripts/skill-dispatch.kit.sh" &&
-	pass "…and a passed verdict writes its record whether or not it names a model" ||
-	fail "a passed verdict with no model still writes no record"
+# And the writer: a cascade whose passing rung names no model — rung 2 on an
+# unmapped mechanical and implementer tier, spawned inheriting — still leaves
+# its record, the author empty, and the review of its ticket is refused.
+_cfg9=$(cat "$STUBTREE/scripts/agents.kit.stub.config.sh")
+cat >"$STUBTREE/scripts/agents.kit.stub.config.sh" <<CFG
+AGENT_HARNESSES='stub'
+AGENT_HARNESS_STUB_CMD='$STUB --model-flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_REVIEWER='sonnet'
+AGENT_TIER_REVIEWER_FALLBACK='opus'
+AGENT_CASCADE_MECHANICAL='model-cheap-bare'
+CFG
+fresh_wt
+FIXTURE_ORACLE_GREEN=1 FIXTURE_GUARD_RED_ON=model-cheap
+export FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+cascade_keep "$T_ORACLE"
+spawn_in_session model-cheap-bare
+cascade_keep "$T_ORACLE" --rung-done
+spawn_in_session ''
+cascade_keep "$T_ORACLE" --rung-done
+unset FIXTURE_ORACLE_GREEN FIXTURE_GUARD_RED_ON
+_ra_gd=$(cd "$WT" && git rev-parse --absolute-git-dir)
+[ "$T_STATUS" = 0 ] && [ "$(sed -n 's/^model=//p' "$_ra_gd/skill-cascade-author" 2>/dev/null)" = '' ] &&
+	grep -qx 'model=' "$_ra_gd/skill-cascade-author" 2>/dev/null &&
+	pass "a passed rung that names no model still writes its record, the author empty" ||
+	fail "a model-less passed rung left no record: status $T_STATUS, record '$(cat "$_ra_gd/skill-cascade-author" 2>/dev/null)': $T_ERR"
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "…and its ticket's review is refused, never resolved from the session" ||
+	fail "a model-less cascade's review exited $T_STATUS with '$T_OUT': $T_ERR"
+printf '%s\n' "$_cfg9" >"$STUBTREE/scripts/agents.kit.stub.config.sh"
 # A rung handed back and never judged is a cascade record with no author:
 # still refused, with the existing message (ADR-0030).
 cascade_keep "$T_ORACLE"
