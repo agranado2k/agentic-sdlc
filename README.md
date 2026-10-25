@@ -694,6 +694,18 @@ skeleton (K0).
   requirement never counts, area-qualified ids (`<area>/R<n>`) compare as
   written, CRLF bodies read, and hostile prose in either file reaches neither
   output stream.
+- `sh tests/check-table.test.sh` holds `scripts/check-table.sh`, the
+  check-table reader (PRD-07, the kit's ADR-0037 clause 9): a PR body and a
+  ticket body in, whether every requirement the ticket's `Covers:` line lists
+  has exactly one row in the PR's check table, passing, at the tier the
+  ticket's `Test-tier:` line stamps. Four statuses, each driven red first —
+  0 with nothing printed; 1 with `missing-row:`, `extra-row:`,
+  `tier-differs:`, `fail:` and `skipped:` lines, ids only; 2 for a row that
+  breaks the grammar or a table past 64 rows, naming the row number, and for
+  a refused ticket; 3 for a body with no table. The evidence grammar is held
+  cell by cell, a table below the explain-diff marker or inside a fence is no
+  table, and a canary string in every fixture body reaches neither output
+  stream.
 - `sh tests/requirement-grammar.test.sh` holds `scripts/requirement.lib.sh`,
   the requirement-line grammar's one home (#545), which the gate's POSIX twin,
   the coverage check and the suites source: the living spec's line, area and
@@ -996,6 +1008,7 @@ sh tests/task.test.sh                                  # task scope, baseline id
 sh tests/vocab.test.sh                                 # the vocabulary checker refuses what no vocabulary declares
 sh tests/vocab-policy.test.sh                          # the shipped vocabularies match the skills that spell them
 sh tests/coverage.test.sh                              # the coverage check names uncovered requirements and orphan tickets, ids only
+sh tests/check-table.test.sh                           # the check-table reader holds a PR's check table to its ticket, ids and tokens only
 sh tests/requirement-grammar.test.sh                   # the requirement-line grammar has one home, and no copy survives
 sh tests/typed-return.test.sh                          # /pr-iterate refuses an untrusted-read return that is not the declared shape
 sh tests/stamp.test.sh                                 # /implement reads its ticket's stamp through one script with four exit statuses

@@ -3387,6 +3387,7 @@ files:
   scripts/vocab.sh
   scripts/stamp.sh
   scripts/coverage.sh
+  scripts/check-table.sh
   scripts/failure-signature.sh
   scripts/requirement.lib.sh
   scripts/trace.sh

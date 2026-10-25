@@ -48,6 +48,7 @@ SKILL_ABS="$ROOT/$SKILL"
 # delta, and the dispatched review's composition.
 STAMP_ABS="$ROOT/.claude/skills/implement/STAMP.md"
 COVERS_ABS="$ROOT/.claude/skills/implement/COVERS.md"
+CHECKT_ABS="$ROOT/.claude/skills/implement/CHECK-TABLE.md"
 DISPATCH=".claude/skills/implement/DISPATCHED-REVIEW.md"
 DISPATCH_ABS="$ROOT/$DISPATCH"
 
@@ -83,7 +84,7 @@ banner "0. The file under test"
 }
 # One entry point (#593): every file beside SKILL.md is named from it by
 # relative path, so the branch that needs it can open it, and each is present.
-for f in "$STAMP_ABS" "$COVERS_ABS" "$DISPATCH_ABS"; do
+for f in "$STAMP_ABS" "$COVERS_ABS" "$CHECKT_ABS" "$DISPATCH_ABS"; do
 	[ -f "$f" ] && pass "${f##*/} sits beside SKILL.md" || fail "${f##*/} is missing — a moved branch with no file"
 done
 for f in "$ROOT"/.claude/skills/implement/*.md; do
@@ -97,6 +98,7 @@ _ptr() { grep -F -- "$1" "$SKILL_ABS" | grep -qF "($2)" && pass "SKILL.md opens 
 _ptr "**Read the \`Tier:\`, \`Confidence:\` and \`Domain:\` lines with one call" STAMP.md "the stamp bullet"
 _ptr "1. **Open by restating the ticket**" COVERS.md "step 1"
 _ptr "4. **Drive \`/tdd\` through each seam**" COVERS.md "step 4"
+_ptr "**the check table**, for a ticket with a \`Covers:\` line" CHECK-TABLE.md "step 8"
 _ptr "**(b) A \`/review-pr\` subagent in the agent harness" DISPATCHED-REVIEW.md "step 9(b)"
 
 # ---------------------------------------------------------------------------
@@ -853,6 +855,78 @@ tomb=$(printf '%s\n' "$step4" | grep -o '`~~R<n>\.~~ Removed by #<PRD>: <why>`' 
 for f in .agents/skills/to-prd/SKILL.md templates/docs/specs/README.md; do
 	assert_file_has "$f" '~~R<n>.~~ Removed by #<PRD>: <why>' "process/R11: $f spells the tombstone as step 4 writes it"
 done
+
+# ---------------------------------------------------------------------------
+banner "4g. The PR body carries a check table, one row per covered id (process/R45 process/R46)"
+# ---------------------------------------------------------------------------
+# PRD-07 slice 2, the kit's ADR-0037 clause 9. Step 8 writes, per covered
+# requirement, the tier that checked it, the result and the evidence, under a
+# marker the check-table reader finds, above the appendix marker the Axis-2
+# reviewer stops at. Step 8 opens the branch (section 0 holds the pointer);
+# the branch holds each rule, and a weakened wording of each is red.
+step8=$(awk '/^8\. \*\*Open the pull request/ { on = 1 } /^9\. / { on = 0 } on' "$SKILL_ABS")
+t_text_has "$step8" "**the check table**, for a ticket with a \`Covers:\` line" "process/R45: step 8 lists the check table among the body's parts" "step 8"
+ct=$(cat "$CHECKT_ABS")
+CT_WORDS='**Write the check table into the PR body, above the `<!-- explain-diff-appendix -->` marker**
+the table is placed above it and never below it
+a `<!-- check-table -->` marker on a line of its own
+the exact header on the next line, `| Requirement | Test tier | Result | Evidence |`
+a separator row on the line after, `| --- | --- | --- | --- |`
+**one row per covered id**, in the order the `Covers:` line lists them, at most 64 rows
+A row is never written for an id the line does not list
+the ticket'"'"'s `Test-tier:` line for that id, as `scripts/stamp.sh` printed it, where the ticket stamps one
+`pass`, `fail` or `skipped`, read from the full-suite run of step 4 at the commit you push
+a `<path>::<test>@<commit>` pin of the test that checked it
+7 to 40 hex digits
+an `https://` URL of at most 200 characters
+**A `manual` row no human has checked reads `skipped` with the evidence `-`.**
+you never mark it `pass` for them
+`-` belongs on a `skipped` row and nowhere else
+run `sh scripts/check-table.sh <body file> <ticket body file>`
+It reads both as data and prints only requirement ids, tokens and row numbers'
+while IFS= read -r word; do
+	t_text_has "$ct" "$word" "process/R45 process/R46: the check table, in CHECK-TABLE.md" "CHECK-TABLE.md"
+done <<WORDS
+$CT_WORDS
+WORDS
+weakened "process/R45: the table moved below the appendix marker" 's/above the `<!-- explain-diff-appendix -->` marker\*\*/below the `<!-- explain-diff-appendix -->` marker**/' "$ct" "$CT_WORDS"
+weakened "process/R45: one row per id loosened" 's/\*\*one row per covered id\*\*/**rows for the covered ids**/' "$ct" "$CT_WORDS"
+weakened "process/R46: the stamped tier no longer binds the row" 's/ as `scripts\/stamp.sh` printed it, where the ticket stamps one/ or any tier you choose/' "$ct" "$CT_WORDS"
+weakened "process/R46: an unchecked manual row marked pass" 's/reads `skipped` with the evidence `-`/reads `pass` with the evidence `-`/' "$ct" "$CT_WORDS"
+# The shipped PR template carries the section, and the kit's own copy is the
+# same file: the marker and the header exactly as the branch spells them, and
+# the section above the place the appendix is appended (the end of the body).
+for tpl in templates/docs/PULL_REQUEST_TEMPLATE.md .github/PULL_REQUEST_TEMPLATE.md; do
+	assert_file_has "$tpl" "## Check table" "process/R45: $tpl carries the Check table section"
+	assert_file_has "$tpl" "<!-- check-table -->" "process/R45: $tpl carries the marker line"
+	assert_file_has "$tpl" "| Requirement | Test tier | Result | Evidence |" "process/R45: $tpl carries the exact header"
+	assert_file_lacks "$tpl" "<!-- explain-diff-appendix -->" "process/R45: $tpl places no appendix marker above which the table could fall"
+done
+# EXECUTED: the template's table, filled the way the branch says, is a table
+# the reader passes — and the PRD's UC2 body (a manual row skipped with `-`)
+# reads as one skipped id. The skill text and the reader cannot drift apart.
+if [ -f "$ROOT/scripts/check-table.sh" ]; then
+	printf 'Covers: process/R45, process/R46, process/R47\nTest-tier: process/R45 unit\nTest-tier: process/R46 suite\nTest-tier: process/R47 manual\n' >"$SCRATCH/ct-ticket"
+	{
+		cat "$ROOT/templates/docs/PULL_REQUEST_TEMPLATE.md" |
+			awk '{ print } /^\| --- \| --- \| --- \| --- \|$/ {
+				print "| process/R45 | unit | pass | tests/check-table.test.sh::process/R45@3f9c2e1 |"
+				print "| process/R46 | suite | pass | tests/check-table.test.sh::process/R46@3f9c2e1 |"
+				print "| process/R47 | manual | skipped | - |"
+			}'
+		printf '\n<!-- explain-diff-appendix -->\n'
+	} >"$SCRATCH/ct-body"
+	t_exec sh "$ROOT/scripts/check-table.sh" "$SCRATCH/ct-body" "$SCRATCH/ct-ticket"
+	[ "$T_STATUS" = 1 ] && [ "$T_OUT" = "skipped: process/R47" ] &&
+		pass "process/R46: the template's table, filled per CHECK-TABLE.md, reads as one manual check awaiting the operator" ||
+		fail "process/R46: the filled template did not read as 'skipped: process/R47' (exit $T_STATUS, printed '$T_OUT')"
+	t_exec sh "$ROOT/scripts/check-table.sh" "$ROOT/templates/docs/PULL_REQUEST_TEMPLATE.md" "$SCRATCH/ct-ticket"
+	[ "$T_STATUS" = 1 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c '^missing-row: ')" = 3 ] &&
+		pass "process/R45: the template's empty table owes every covered id a row" ||
+		fail "process/R45: the empty template table did not name three missing rows (exit $T_STATUS)"
+else
+	fail "process/R47: scripts/check-table.sh is missing — the table the skill writes has no reader"
+fi
 
 # ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"

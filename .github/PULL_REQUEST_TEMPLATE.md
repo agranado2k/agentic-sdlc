@@ -8,6 +8,22 @@ One vertical slice per PR (shared invariant §2). If you cannot answer "what can
 I demo when this lands?", the slice is wrong.
 -->
 
+## Check table
+
+<!--
+One row per requirement the ticket's `Covers:` line lists: the test tier
+that checked it, the result (`pass`, `fail` or `skipped`) and the evidence
+(`<path>::<test>@<commit>`, an `https://` URL, or `-` on a `skipped` row).
+A `manual` row no human has checked reads `skipped` with `-`. Keep the
+marker line and the header exactly as they are; `sh scripts/check-table.sh`
+reads the table through them. A ticket that covers no requirement leaves
+the table with no rows.
+-->
+
+<!-- check-table -->
+| Requirement | Test tier | Result | Evidence |
+| --- | --- | --- | --- |
+
 ## Checklist
 
 - [ ] **One slice** — this PR does one thing; refactoring and behavior change are
