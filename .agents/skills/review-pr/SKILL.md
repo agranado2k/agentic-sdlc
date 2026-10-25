@@ -88,6 +88,7 @@ The one agent whose job is the question the other six never ask: **did anything 
 1. The whole diff (`merge-base...HEAD`) — the slicer's `behavior.diff`, never a lens's slice — read through the **contract artifacts** below first.
 2. The originating spec: the PRD/ticket issue body (from the branch name, PR description, or `Part of #N` references) and any decision records the diff touches. **When reading a PR description, stop at the marker line `<!-- explain-diff-appendix -->` where present**: `/implement` appends the author's `/explain-diff` narrative below it, and the implementer's narrative is exactly what this agent's context isolation exists to exclude. A body without the marker is read whole — an ordinary `---` rule is formatting, never a boundary.
 3. The output of `scripts/behavior-delta.sh` (the deterministic candidate list), and the mutation delta from `adapters/` if one is wired.
+4. The check-table reader's output, where the ticket carries a `Covers:` line — [`CHECK-TABLE.md`](CHECK-TABLE.md).
 
 It must **NOT** receive the other six agents' findings, the implementation conversation, or this skill's earlier summarization — anchoring on the implementer's narrative is exactly what it exists to avoid.
 
@@ -115,6 +116,8 @@ It must **NOT** receive the other six agents' findings, the implementation conve
 Missing requirements (spec asked, diff doesn't deliver) are also Axis-2 findings, tagged ❌ **MISSING**.
 
 **Where the spec carries requirement ids** — `R<n>` lines in a PRD's Requirements section, `<area>/R<n>` for a living spec's, and a ticket's `Covers:` line naming the ones it delivers — a ✅ SPECIFIED item cites the id of the requirement it delivers, and every id on the ticket's `Covers:` line that the diff does not deliver is a ❌ MISSING item naming that id, so a covered requirement left undone reaches the human on the confirm-list rather than passing in silence. **With no requirement ids in the spec**, both read as they always have: a ✅ SPECIFIED item cites the PRD, ticket or decision-record line it answers, and a ❌ MISSING item names the spec line the diff does not deliver. (the kit's ADR-0012 clause 6.)
+
+**Where you hold the check-table reader's output**, list each `<word>: <id>` line it holds as `❌ MISSING      <id> — <word>`, and on its `exit: 2` or `exit: 3` every id on the ticket's `Covers:` line, the word `refused` or `missing-row`; an id it lists is listed once, with the reader's word.
 
 **Commit separation** (shared invariant §10 — refactoring and behavior never share a commit) is the one Axis-2 finding class that is *about the history rather than the diff*, so it is classified per commit, not per surface. `scripts/behavior-delta.sh` emits it as its own **Commit separation** section: commits whose Conventional Commit type claims structure-only work (`refactor`, `style`) while that commit's own diff touches a contract artifact. Each listed commit is a confirm-list item tagged 🔀 **MIXED COMMIT**. The script has already established the fact — do not re-derive it and do not resolve it yourself; report the commit, the artifacts it touches, and let the human choose between splitting the commit and relabelling it. An empty section is the normal result and needs no mention.
 

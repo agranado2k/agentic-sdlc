@@ -3421,7 +3421,28 @@
 # step, tests/trace-skills.test.sh section 3, tests/retro-skill.test.sh
 # section 19.
 
-shared-layer: 0.94.0
+# 0.95.0 — the review lists a check table's gaps, and the iteration loop
+# keeps the table (ticket #871, PRD-07 K4, the kit's ADR-0037 clause 9). NO
+# file joins the shared layer and none leaves. One shared file changes
+# content: UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /review-pr — SKILL.md gives Agent 7 the check-table reader's
+# output as input 4 and its listing rule (each `<word>: <id>` line as
+# `❌ MISSING <id> — <word>`, every covered id on exit 2 `refused` or exit 3
+# `missing-row`); the new .agents/skills/review-pr/CHECK-TABLE.md is the
+# coordinator's step. /pr-iterate — SKILL.md points step 4, step 6 and the
+# Output format at the new .agents/skills/pr-iterate/CHECK-TABLE.md: the
+# row rewrite at the new head, never converged on a blocking word, the
+# skipped ids at the top of the report. /implement —
+# .agents/skills/implement/DISPATCHED-REVIEW.md appends the reader's
+# output to the offline reviewer's spec. The offline reviewer's contract,
+# .agents/prompts/review-worker.md, carries Agent 7's listing rule.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/process.md R48 to R51 and
+# tests/review-pr-output.test.sh section 25.
+
+shared-layer: 0.95.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

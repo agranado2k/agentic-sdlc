@@ -2764,3 +2764,16 @@ revert of 2026-10-01) against #416.
 landing, this machine): 1.3 s wall, 1.2 s user, for a run that writes
 nothing — the blame is redone on every run, and the idempotence check comes
 after it, so this is the full run's cost.
+
+## 2026-10-25 — the review reads the check table, the loop keeps it
+
+PRD-07 K4 (#871, ADR-0037 clause 9, released as 0.95.0). `/review-pr`'s
+coordinator runs `scripts/check-table.sh` on the PR and ticket bodies and
+hands Agent 7 its output; each gap reaches the confirm-list as `❌ MISSING
+<id> — <word>`, every covered id on the reader's exit 2 (`refused`) or 3
+(`missing-row`). `/pr-iterate` rewrites the rows at the new head with a
+guarded splice that leaves `manual` rows to the operator, holds convergence
+on the four blocking words, and lists `skipped:` ids at the top of its report.
+The first review caught the splice emptying a PR body on an empty rows file;
+the block is now one `&&` chain, run by section 25 with the forge stubbed.
+`/pr-iterate`'s skill file sits 65 bytes under its 38000-byte ceiling.
