@@ -204,6 +204,52 @@ t_exec sh -c 'cd "$1" && sh "$2" main' _ "$REPO" "$SLICER"
 t_exec sh -c 'cd "$1" && sh "$2" no-such-ref "$3"' _ "$REPO" "$SLICER" "$SCRATCH/out9"
 [ "$T_STATUS" = 2 ] && pass "an unresolvable base is a caller error (exit 2)" || fail "bad base: exit $T_STATUS"
 
+banner "--areas: the review areas each path on stdin belongs to, by the same rules (runtime/R45, #875)"
+# The trace's record reader counts a landing toward every review area a path
+# of it belongs to, and asks the slicer rather than reading the policy itself:
+# one parser of LENS_SLICE_RULES. Each lens names itself on a line of its own
+# first (`<lens><TAB>`), in roster order, so an area no path belongs to is
+# still an area; then one `<lens><TAB><path>` per pair the rules select.
+areas() { t_exec env "$@" sh -c 'printf "scripts/a.sh\ntests/a.test.sh\ntests/fixtures/x.jsonl\ndocs/g.md\n" | sh "$1" --areas' _ "$SLICER"; }
+TAB=$(printf '\t')
+areas LENS_SLICE_CONFIG="$SCRATCH/policy.sh"
+[ "$T_STATUS" = 0 ] && pass "--areas exits 0" || fail "--areas exited $T_STATUS: $T_ERR"
+want="security$TAB
+api-crud$TAB
+pattern$TAB
+simplicity$TAB
+reuse-dry$TAB
+test-hygiene$TAB
+security${TAB}docs/g.md
+api-crud${TAB}scripts/a.sh
+api-crud${TAB}tests/a.test.sh
+api-crud${TAB}tests/fixtures/x.jsonl
+api-crud${TAB}docs/g.md
+pattern${TAB}scripts/a.sh
+pattern${TAB}tests/a.test.sh
+pattern${TAB}tests/fixtures/x.jsonl
+pattern${TAB}docs/g.md
+simplicity${TAB}scripts/a.sh
+simplicity${TAB}tests/a.test.sh
+simplicity${TAB}tests/fixtures/x.jsonl
+simplicity${TAB}docs/g.md
+reuse-dry${TAB}scripts/a.sh
+reuse-dry${TAB}tests/a.test.sh
+reuse-dry${TAB}tests/fixtures/x.jsonl
+reuse-dry${TAB}docs/g.md
+test-hygiene${TAB}tests/a.test.sh
+test-hygiene${TAB}tests/fixtures/x.jsonl"
+[ "$T_OUT" = "$want" ] && pass "every lens named first, then each path in the areas its rule selects — a lens with no rule takes every path" ||
+	fail "--areas printed: $(printf '%s' "$T_OUT" | tr '\t\n' '>;')"
+areas
+printf '%s\n' "$T_OUT" | grep -qxF "security${TAB}scripts/a.sh" && ! printf '%s\n' "$T_OUT" | grep -qxF "test-hygiene${TAB}tests/fixtures/x.jsonl" &&
+	pass "the shipped policy's exclude holds: a generated fixture is in no test-hygiene area" ||
+	fail "--areas under the shipped policy printed: $(printf '%s' "$T_OUT" | tr '\t\n' '>;')"
+areas LENS_SLICE_CONFIG="$SCRATCH/typo.sh"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && pass "--areas refuses a policy the slicer refuses, printing nothing" || fail "--areas over a typo policy: exit $T_STATUS, out $T_OUT"
+t_exec sh "$SLICER" --areas extra
+[ "$T_STATUS" = 2 ] && pass "--areas takes no argument (exit 2)" || fail "--areas with an argument: exit $T_STATUS"
+
 banner "/review-pr hands each lens its slice (spend/R10), the behavior axis the whole diff (spend/R11)"
 for l in $LENSES; do
 	if grep -qF "Your diff is the slice \`$l.diff\`" "$SKILL_DIR/lens-$l.md"; then
