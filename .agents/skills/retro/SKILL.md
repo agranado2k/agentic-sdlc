@@ -62,8 +62,9 @@ The full form — what to read, what counts as a finding, where it goes — is i
    iterations to green, and cost. A tier that iterates or spends like the
    tier above it is mis-rubriced, and a quiz override that then paid for
    itself is evidence the rubric lags the human.
-2. **Review signal per sub-agent** — of each review sub-agent's findings, the
-   share later rejected with a policy citation. An agent that keeps asking
+2. **Review signal per sub-agent** — each review area's earned record first
+   (`sh scripts/trace.sh record`), then, of each review sub-agent's findings,
+   the share later rejected with a policy citation. An agent that keeps asking
    for what the repo decided against is a prompt to change.
 3. **Recurring failures** — the red iteration reasons and the triage classes
    that repeat across PRs. Each becomes a rule with a failing check.

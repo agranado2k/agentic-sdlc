@@ -1820,4 +1820,40 @@ for needle in 'the before-and-after section' 'by run id' '`Targets:` line' 'neve
 	case "$r28" in *"$needle"*) pass "process/R28: SKILL.md says: $needle" ;; *) fail "process/R28: SKILL.md does not say: $needle" ;; esac
 done
 
+# ---------------------------------------------------------------------------
+banner "19. Question 2 prints each review area's earned record before the per-lens counts (process/R37, #875)"
+# ---------------------------------------------------------------------------
+# PRD-06 slice 1 (ADR-0036): the record reader, `trace.sh record`, prints one
+# row per review area of the lens-slice policy, and question 2 puts those rows
+# in the report BEFORE its per-agent triage counts, which is where a reader
+# compares what a lens raised with what happened after the merge. The span is
+# RUN here over a fixture trace whose one landing is this checkout's HEAD.
+q2_sec() { awk '/^## 2\. Review signal/ { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+q2rec=$(q2_sec | grep -o '`sh scripts/trace\.sh record`' | tr -d '`' | head -1)
+[ -n "$q2rec" ] && pass "process/R37: question 2 runs the record reader, \`sh scripts/trace.sh record\`" ||
+	fail "process/R37: question 2 carries no \`sh scripts/trace.sh record\` span"
+q2_rec_at=$(q2_sec | grep -n 'sh scripts/trace\.sh record' | head -1 | cut -d: -f1)
+q2_join_at=$(q2_sec | grep -n 'Join raise to triage' | head -1 | cut -d: -f1)
+[ -n "$q2_rec_at" ] && [ -n "$q2_join_at" ] && [ "$q2_rec_at" -lt "$q2_join_at" ] &&
+	pass "process/R37: the record comes before the per-lens triage counts in question 2" ||
+	fail "process/R37: the record reader (line ${q2_rec_at:-none}) does not come before 'Join raise to triage' (line ${q2_join_at:-none})"
+q2prose=$(q2_sec | flat)
+for needle in 'before the per-agent counts below' '`<area>: landings <n> of 20, in the fix window <w>, mistakes <m>`' 'not cut to the window' '`mistakes 0` is not yet a clean history' 'never a finding on their own'; do
+	case "$q2prose" in *"$needle"*) pass "question 2 says: $needle" ;; *) fail "question 2 does not say: $needle" ;; esac
+done
+case "$(sed -n '/^2\. \*\*Review signal/,/^3\. /p' "$SKILL_ABS" | flat)" in
+*'earned record first'*'sh scripts/trace.sh record'*) pass "SKILL.md's question 2 names the earned record first" ;;
+*) fail "SKILL.md's question 2 does not name the earned record first" ;;
+esac
+if [ -n "$q2rec" ]; then
+	q2t="$SCRATCH/q2-record.retro"
+	mkdir -p "$q2t/events"
+	q2_head=$(git -C "$ROOT" rev-parse HEAD)
+	printf '{"v":1,"ts":"2026-10-25T10:00:00Z","id":"20261025T100000Z-1-0000abcd","kind":"merge.land","subject":"pr:#1","outcome":"landed","reason":"fixture","data":{"merge_sha":"%s"}}\n' "$q2_head" >"$q2t/events/2026-10-25.jsonl"
+	q2out=$( cd "$ROOT" && TRACE_DIR="$q2t" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$q2rec")" 2>/dev/null )
+	[ "$(printf '%s\n' "$q2out" | grep -c '^[a-z-]*: landings [0-9]* of 20, in the fix window [0-9]*, mistakes [0-9]*$')" = 6 ] &&
+		pass "process/R37: question 2's span prints one row per review area of the shipped lens-slice policy, six" ||
+		fail "process/R37: question 2's span printed: $(printf '%s' "$q2out" | tr '\n' ';')"
+fi
+
 t_done "/retro contract"

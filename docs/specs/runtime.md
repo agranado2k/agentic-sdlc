@@ -17,6 +17,10 @@ the merged family it also named. Outside this file a requirement is cited as
 names. The kit's own: bootstrap strips it, so no consumer inherits a spec
 whose tests it does not have.
 
+R31 and R43 to R45 joined from PRD-06 slice 1 (#875, ADR-0036), keeping the
+PRD's numbers. R43 names the record reader alone: the outcome recorder it
+also names in the PRD lands in a later slice, which restates it.
+
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
 R3. WHEN `trace.sh current` runs, the trace SHALL print `<run> [<parent>]`, the run and parent an emit from the same process would stamp, the environment taking precedence over this session's stack in this checkout.
@@ -47,3 +51,7 @@ R27. No file under `tests/` SHALL define or call `t_run`, `t_run_split`, the `as
 R28. WHEN `trace.sh begin` opens a run, its `run.start` SHALL carry `data.kit`, read from `VERSION`.
 R29. WHEN the harness exposes the session's model or its own name, `run.start` SHALL carry `model` and `harness`, and SHALL leave out a value the harness does not expose, never guessing it.
 R30. WHEN a spawn is recorded, its `spawn` event SHALL carry `data.tools`, the tool list of the agent type it spawned as.
+R31. The trace SHALL accept the kind `merge.outcome` with the outcomes `reverted`, `fixed` and `qa-failed`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 3]
+R43. IF the trace is unconfigured, THEN the record reader SHALL write nothing, print nothing on standard output, and exit 0. [UC1 2c]
+R44. WHEN the record reader runs, it SHALL print one row per review area of the lens-slice policy, holding the area's landed PRs counted (its most recent 20, or fewer, said as `<n> of 20`), how many of them landed inside the fix window, and how many carry a mistake. [UC1 4, UC4 1, 2, 1a]
+R45. The record reader SHALL count a landed PR toward every review area that one of the paths its merge commit changed against its first parent belongs to. [UC1 4]

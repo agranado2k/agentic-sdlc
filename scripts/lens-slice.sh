@@ -3,6 +3,7 @@
 # reads, and the whole diff the behavior axis reads.
 #
 # Usage:  sh scripts/lens-slice.sh <base-ref> <out-dir>
+#         sh scripts/lens-slice.sh --areas    < paths, one per line
 #
 # Writes, under <out-dir> (created if absent):
 #   <lens>.diff     for each standards lens of /review-pr's roster —
@@ -27,6 +28,12 @@
 # refused (exit 2) rather than ignored: a typo would otherwise widen a slice
 # in silence.
 #
+# --areas classifies instead of slicing: it reads paths on stdin, one per
+# line, and prints first one `<lens><TAB>` line per lens in roster order, then
+# one `<lens><TAB><path>` line per path each lens's rule selects — the review
+# areas a path belongs to (the trace's record reader counts a landing toward
+# each, #875). Same policy, same refusals, nothing written; it reads no git.
+#
 # Exit: 0 sliced; 2 caller error (arguments, base, policy) — nothing written.
 #
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
@@ -41,9 +48,19 @@ die() {
 	exit 2
 }
 
-[ $# -eq 2 ] || die "usage: sh scripts/lens-slice.sh <base-ref> <out-dir>"
-base_ref=$1
-out=$2
+usage="usage: sh scripts/lens-slice.sh <base-ref> <out-dir> | --areas"
+mode=slice
+case ${1:-} in
+--areas)
+	[ $# -eq 1 ] || die "$usage"
+	mode=areas
+	;;
+*)
+	[ $# -eq 2 ] || die "$usage"
+	base_ref=$1
+	out=$2
+	;;
+esac
 
 here=$(dirname "$0")
 if [ -n "${LENS_SLICE_CONFIG:-}" ]; then
@@ -68,6 +85,30 @@ if [ -n "$rules" ]; then
 	[ -z "$long" ] || die "LENS_SLICE_RULES has a record of more than three fields (lens include exclude): $(printf '%s' "$long" | tr '\n' ' ')"
 else
 	echo "lens-slice: no rules in LENS_SLICE_RULES — every lens gets the whole diff" >&2
+fi
+
+# lens_paths <lens> — the paths on stdin the lens's rule selects; every path when
+# the lens has no record.
+lens_paths() {
+	_s_record=$(printf '%s\n' "$rules" | awk -v l="$1" '$1 == l { print; exit }')
+	if [ -z "$_s_record" ]; then
+		awk NF
+		return
+	fi
+	_s_inc=$(printf '%s\n' "$_s_record" | awk '{ print $2 }')
+	_s_exc=$(printf '%s\n' "$_s_record" | awk '{ print $3 }')
+	# Through ENVIRON, not -v: awk -v processes escapes, turning `\.` into `.`.
+	LS_INC=$_s_inc LS_EXC=$_s_exc awk '
+		NF && $0 ~ ENVIRON["LS_INC"] && (ENVIRON["LS_EXC"] == "" || $0 !~ ENVIRON["LS_EXC"])'
+}
+
+if [ "$mode" = areas ]; then
+	paths=$(cat)
+	for lens in $ROSTER; do printf '%s\t\n' "$lens"; done
+	for lens in $ROSTER; do
+		printf '%s\n' "$paths" | lens_paths "$lens" | awk -v l="$lens" '{ print l "\t" $0 }'
+	done
+	exit 0
 fi
 
 base=$(git merge-base "$base_ref" HEAD 2>/dev/null) || die "cannot resolve merge-base($base_ref, HEAD)"
@@ -102,16 +143,6 @@ write() {
 }
 
 for lens in $ROSTER; do
-	record=$(printf '%s\n' "$rules" | awk -v l="$lens" '$1 == l { print; exit }')
-	if [ -z "$record" ]; then
-		write "$lens" "$changed"
-		continue
-	fi
-	inc=$(printf '%s\n' "$record" | awk '{ print $2 }')
-	exc=$(printf '%s\n' "$record" | awk '{ print $3 }')
-	# Through ENVIRON, not -v: awk -v processes escapes, turning `\.` into `.`.
-	sel=$(printf '%s\n' "$changed" | LS_INC=$inc LS_EXC=$exc awk '
-		NF && $0 ~ ENVIRON["LS_INC"] && (ENVIRON["LS_EXC"] == "" || $0 !~ ENVIRON["LS_EXC"])')
-	write "$lens" "$sel"
+	write "$lens" "$(printf '%s\n' "$changed" | lens_paths "$lens")"
 done
 write behavior "$changed"

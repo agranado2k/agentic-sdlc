@@ -404,6 +404,34 @@ Grouped by the seam each term belongs to. Entry shape:
   #385).
   - _Avoid_: "review" (a review is on a diff; feedback is on a slice);
     "rating".
+- **Post-merge outcome** — one `merge.outcome` event: what happened to a
+  landed PR after its merge, on subject `pr:#N`. Outcome one of `reverted`,
+  `fixed` or `qa-failed`; `related` names the evidence PR where there is
+  one, `data.by_sha` its merge commit, `data.files` the files of the PR's
+  lines it touched, `data.days` the days between the two landings, and
+  `data.ticket` the factory ticket a `qa-failed` comes from. Every field is
+  a sha, an id, a path from git's diff, digits or an outcome word, never
+  prose (ADR-0036).
+  - _Avoid_: "incident"; "regression" (a fix is counted whatever it fixed).
+- **Mistake** — a landed PR with at least one **post-merge outcome**: a later
+  `revert` landing removed lines it introduced or reverted it by sha, a
+  `fix` landing inside the **fix window** of 30 days removed or rewrote its
+  lines, or its factory ticket's QA reads `fail`. A revert has no window
+  (ADR-0036, PRD-06 decision Q2).
+  - _Avoid_: "bug" (a mistake is a fact about a PR, not a defect report).
+- **Review area** — one record of the lens-slice policy
+  (`scripts/lens-slice.config.sh`), named by its lens token. A path belongs
+  to every review area whose include pattern matches it and whose exclude
+  does not; `sh scripts/lens-slice.sh --areas` says which (ADR-0036).
+  - _Avoid_: bare "area", which is a **living spec**'s; "lane".
+- **Earned record** — per **review area**, computed on read and stored
+  nowhere: its most recent landings, at most 20, how many landed inside the
+  fix window, and how many carry a **mistake**. `sh scripts/trace.sh record`
+  prints it, one row per review area, for the operator and `/retro`'s
+  question 2, and no chain skill reads it. It compares nothing to a
+  threshold (ADR-0036).
+  - _Avoid_: "score", "trust level" (the record holds counts, never a
+    verdict).
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a
