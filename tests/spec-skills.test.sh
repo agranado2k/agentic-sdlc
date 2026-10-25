@@ -994,6 +994,42 @@ handoff=$(awk '/^## Procedure/ { on = 1; next } on && /^5\. / { print; exit }' "
 t_text_has "$handoff" 'rm -rf "${draft:?}"' "the draft files go when the decomposition ends" "step 5"
 
 # ---------------------------------------------------------------------------
+banner "4d. Test-tier: one line per covered id, checked before the quiz, shown beside Covers: (process/R52)"
+# ---------------------------------------------------------------------------
+# The ticket contract's keyed stamp: `Test-tier: <id> <tier>`, one line per id
+# on the Covers: line, the tier the planner chose. The vocabulary is the
+# checker's (scripts/vocab.config.sh); what is held here is that the skill
+# stamps it, hands every line to the checker before the quiz under the same
+# repair-and-recheck rule as the other stamps, shows it beside Covers:, and
+# publishes it — and that this skill stamps no Risk: line (later work).
+w="the Covers rule"
+t_text_has "$covers" '`Test-tier: <id> <tier>`' "process/R52: the keyed line's shape, spelled once" "$w"
+t_text_has "$covers" "one per id" "process/R52: one Test-tier: line per covered id" "$w"
+t_text_has "$covers" '`unit`, `suite`, `e2e` or `manual`' "process/R52: the four tiers, as the checker's vocabulary names them" "$w"
+t_text_has "$covers" "carries no \`Test-tier:\` line" "process/R52: an exempt ticket, or one with no Covers: line, carries none" "$w"
+t_text_has "$covers" "no \`Risk:\` line" "process/R52: this skill stamps no Risk: line" "$w"
+t_text_has "$draft" "its \`Test-tier:\` lines" "process/R52: the draft step stamps the test tiers beside Covers:" "step 2"
+t_text_has "$quiz" "\`'Test-tier: <id> <tier>'\` for each" "process/R52: every Test-tier: line goes to the checker" "the quiz step"
+in_order "$quiz" "process/R52: the test tiers are checked, refused lines repaired and re-checked, before the list is presented" \
+	"sh scripts/vocab.sh 'Tier: <tier>'" "'Test-tier: <id> <tier>'" "repaired and checked again, never shown" "present the draft"
+t_text_has "$quiz" "test tiers beside its \`Covers:\` line" "process/R52: the quiz shows each ticket's test tiers beside its Covers: line" "the quiz step"
+in_order "$publish" "process/R52: the published body carries the Test-tier: lines after the Covers: line" \
+	"a \`Covers:\` line" "its \`Test-tier:\` lines"
+case $publish in *'`Risk:'*) fail "process/R52: the publish step writes a Risk: line — that stamp is later work" ;;
+*) pass "process/R52: the publish step writes no Risk: line" ;; esac
+ex=$(printf '%s\n' "$covers" | grep -o '`Test-tier: [^`<]*`' | head -1 | tr -d '`')
+if [ -z "$ex" ]; then
+	fail "the Covers rule shows no concrete Test-tier: example line"
+else
+	printf 'Tier: implementer\nConfidence: medium\nCovers: R1\n%s\n' "$ex" >"$SCRATCH/tt-draft"
+	t_stub_gh "$SCRATCH/tt-bin" "$SCRATCH/tt-draft"
+	got=$(cd "$ROOT" && unset VOCAB_CONFIG && PATH="$SCRATCH/tt-bin:$PATH" sh scripts/stamp.sh 872 2>/dev/null); rc=$?
+	[ "$rc" -eq 0 ] && printf '%s\n' "$got" | grep -qxF "$ex" &&
+		pass "the rule's example line ('$ex') is lifted and passed by scripts/stamp.sh" ||
+		fail "scripts/stamp.sh did not pass the rule's example '$ex' (exit $rc, printed '$got')"
+fi
+
+# ---------------------------------------------------------------------------
 banner "5. Every slash command both skills name resolves to a skill on disk"
 # ---------------------------------------------------------------------------
 t_assert_skill_commands 5 "the pair should name at least /grill-me, /to-tickets, /implement, /prototype and /design-brief" "$PRD_ABS" "$TIX_ABS"
