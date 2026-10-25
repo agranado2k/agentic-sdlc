@@ -2717,3 +2717,19 @@ and four findings closed. They became #769–#778; building them found #782 and
 Usage limits stopped the parallel sessions twice more; the frontier cap of
 0.77.0 is the response. `/pr-iterate`'s skill file sits within 60 bytes of its
 37000-byte ceiling: its next addition needs a trim first.
+
+## 2026-10-25 — the earned record's first surface: `merge.outcome` and `trace.sh record`
+
+PRD-06 slice 1 (#875, ADR-0036, released as 0.92.0). The trace accepts the
+kind `merge.outcome` (`reverted`, `fixed`, `qa-failed`), and `sh
+scripts/trace.kit.sh record` prints one row per review area of the
+lens-slice policy: its latest 20 landed PRs, those inside the 30-day fix
+window, and those with a post-merge outcome. `/retro`'s question 2 prints
+the rows before its per-agent triage counts. Nothing writes an outcome yet
+but a hand emit: the outcome recorder is #876.
+
+**Baseline, the record reader over the kit's own trace** (2026-10-25, 234
+`merge.land` events with a merge sha, this machine): 3.2 s wall, 1.3 s user.
+Every area printed `landings 20 of 20, in the fix window 20, mistakes 0` —
+the six rules select overlapping paths and the kit lands 20 PRs in well under
+30 days, which is PRD-06 §9's open question with its first evidence in hand.

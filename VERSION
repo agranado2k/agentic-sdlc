@@ -3326,7 +3326,33 @@
 # hold them — tests/vocab.test.sh, tests/vocab-policy.test.sh section 13,
 # tests/stamp.test.sh.
 
-shared-layer: 0.91.0
+# 0.92.0 — the trace records a landed PR's post-merge outcomes, and /retro
+# prints each review area's earned record (ticket #875, PRD-06 slice 1, the
+# kit's ADR-0036). NO file joins the shared layer and none leaves. Three
+# shared files change content: scripts/trace.sh learns the kind
+# merge.outcome (outcomes reverted, fixed and qa-failed; the outcome
+# required; data.by_sha a 40-hex sha, required on reverted and fixed;
+# data.ticket required on qa-failed; data.days digits) and the record
+# reader, `trace.sh record`, one row per review area of the lens-slice
+# policy — its latest 20 landed PRs, those inside the 30-day fix window,
+# those with a merge.outcome — read from merge.land and git, writing
+# nothing; scripts/lens-slice.sh gains --areas, the review areas each path
+# on stdin belongs to, which the record reader calls; and UPDATING.md, the
+# arriving-from paragraph and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — .agents/skills/retro/QUESTIONS.md's question 2
+# runs `sh scripts/trace.sh record` and prints its rows before the
+# per-agent triage counts, saying `mistakes 0` is no clean history until
+# the outcome recorder lands; SKILL.md's question 2 names it first.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: docs/adr/0036, the glossary's Post-merge
+# outcome, Mistake, Review area and Earned record, docs/specs/runtime.md
+# R31 and R43 to R45, docs/specs/process.md R37, and the suites that hold
+# them — tests/trace.test.sh sections 22 and 42, tests/lens-slice.test.sh,
+# tests/trace-skills.test.sh section 3, tests/retro-skill.test.sh section 19.
+
+shared-layer: 0.92.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
