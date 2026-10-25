@@ -523,6 +523,87 @@ case "$T_STATUS:$T_ERR" in
 esac
 
 # ---------------------------------------------------------------------------
+banner "4f. An in-session reviewer is handed back with its staged contract (#880)"
+# ---------------------------------------------------------------------------
+# The manual's review one-liner redirects the dispatcher to a file and runs the
+# broker only on exit 0. A reviewer tier that names no agent harness is exit 3,
+# so the broker half never ran and every review was improvised by hand. Now the
+# dispatcher hands the review back as the cascade hands back a rung: exit 3,
+# the model on stdout, and the offline contract staged — Trace-Run and
+# Trace-Spawn first — under the checkout's git dir, never its working tree.
+# The reviewer agent type reads files and runs nothing, so the dispatcher pins
+# the branch's commit and stages its diff beside the prompt.
+HBTREE="$SCRATCH/handback-tree"
+cp -R "$STUBTREE" "$HBTREE"
+git -C "$HBTREE" init -q -b main
+git -C "$HBTREE" -c user.name=t -c user.email=t@t add -A
+git -C "$HBTREE" -c user.name=t -c user.email=t@t commit -qm base
+git -C "$HBTREE" checkout -qb feat/under-review
+printf 'a reviewed line\n' >"$HBTREE/reviewed.txt"
+git -C "$HBTREE" -c user.name=t -c user.email=t@t add reviewed.txt
+git -C "$HBTREE" -c user.name=t -c user.email=t@t commit -qm 'feat: under review'
+HB_SHA=$(git -C "$HBTREE" rev-parse HEAD)
+HB_STATE="$(git -C "$HBTREE" rev-parse --absolute-git-dir)/skill-review"
+printf 'the ticket body as spec\n' >"$SCRATCH/hb-spec.md"
+hb_dispatch() { t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBTREE" AGENT_HARNESS_SELF="$1" TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /review-pr --ticket 880 --set BRANCH=feat/under-review --set BASE=main --set-file "SPEC=$SCRATCH/hb-spec.md" ${2:+"$2"}; }
+
+hb_dispatch local
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = model-for-reviewing ] &&
+	pass "an in-session reviewer tier is handed back: exit 3, the model alone on stdout" ||
+	fail "the in-session review exited $T_STATUS with stdout '$T_OUT': $T_ERR"
+if [ -f "$HB_STATE/prompt" ]; then
+	pass "…and the contract is staged at <git dir>/skill-review/prompt, outside the working tree"
+	hb_p=$(cat "$HB_STATE/prompt")
+	[ "$(printf '%s\n' "$hb_p" | sed -n 1p)" = "Trace-Run: $RUN587" ] &&
+		[ "$(printf '%s\n' "$hb_p" | sed -n 2p)" = "Trace-Spawn: tier=reviewer domain=none skill=review-pr ticket=#880" ] &&
+		pass "…opening with the Trace-Run and Trace-Spawn lines" ||
+		fail "the staged prompt does not open with both lines: $(printf '%s\n' "$hb_p" | sed -n 1,2p)"
+	case "$hb_p" in
+	*'<!--'* | *'%%'[A-Z]*'%%'*) fail "…but the editor header or an unfilled marker reached it" ;;
+	*) pass "…its editor header stripped and every marker filled" ;;
+	esac
+	case "$hb_p" in
+	*'no network'*'feat/under-review'*'the ticket body as spec'*) pass "…the offline contract, the branch and the spec in it" ;;
+	*) fail "the staged prompt lacks the contract, the branch or the spec" ;;
+	esac
+	case "$hb_p" in
+	*"$HB_SHA"*"$HB_STATE/diff"*) pass "…naming the pinned commit and the staged diff it reads in place of git" ;;
+	*) fail "the staged prompt names neither the pinned commit $HB_SHA nor $HB_STATE/diff" ;;
+	esac
+	[ "$(cat "$HB_STATE/diff" 2>/dev/null)" = "$(git -C "$HBTREE" diff "main...$HB_SHA")" ] &&
+		[ -n "$(cat "$HB_STATE/diff")" ] &&
+		pass "…and the staged diff is the branch's diff against its base at that commit" ||
+		fail "the staged diff is missing or is not 'git diff main...$HB_SHA'"
+else
+	fail "no contract staged at $HB_STATE/prompt for the session to spawn"
+fi
+case "$T_ERR" in
+*"$HB_STATE/prompt"*broker*) pass "…and stderr names the prompt and sends the saved report to the broker" ;;
+*) fail "stderr does not name the staged prompt and the broker: $T_ERR" ;;
+esac
+[ -z "$(git -C "$HBTREE" status --porcelain)" ] &&
+	pass "…the working tree left clean" ||
+	fail "the hand-back dirtied the working tree: $(git -C "$HBTREE" status --porcelain)"
+
+rm -rf "$HB_STATE"
+hb_dispatch local --dry-run
+[ ! -e "$HB_STATE" ] && pass "a dry run stages nothing" ||
+	fail "a dry run staged a hand-back under $HB_STATE"
+
+hb_dispatch stub
+[ "$T_STATUS" = 0 ] && printf '%s\n' "$T_OUT" | grep -q 'model-for-reviewing' &&
+	printf '%s\n' "$T_OUT" | grep -q 'no network' &&
+	pass "a harness-backed reviewer is dispatched as before, the contract on the worker's stdin" ||
+	fail "the harness-backed review exited $T_STATUS: $T_ERR"
+[ ! -e "$HB_STATE" ] && pass "…and nothing is staged for a hand-back" ||
+	fail "a dispatched review staged a hand-back under $HB_STATE"
+
+t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBTREE" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh /review-pr --set BRANCH=no-such-branch --set BASE=main --prompt 'x'
+[ "$T_STATUS" = 2 ] && [ ! -e "$HB_STATE" ] &&
+	pass "a branch that names no commit is refused (exit 2), nothing staged" ||
+	fail "an unresolvable branch exited $T_STATUS: $T_ERR"
+
+# ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
 # ---------------------------------------------------------------------------
 # The declaration is only worth having if it ends in an executable spawn. For

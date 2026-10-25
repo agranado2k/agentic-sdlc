@@ -334,6 +334,24 @@ lacks_all "post the captured report" "the captured report is never the session's
 # the review — the skill names both as the working cases, and says so.
 assert_file_has "$DISPATCH" "not reachable from here"
 assert_file_has "$DISPATCH" "two working cases"
+# #880: the no-harness exit 3 of a review dispatch is a HAND-BACK, not a bare
+# model id — the staged contract and the pinned commit beside it — and the
+# report the session's reviewer returns still lands through the broker. The
+# skill's delivery step names the hand-back, and the kit manual's two rows
+# give a kit session the path.
+assert_file_has "$DISPATCH" "hands the review back"
+assert_file_has "$DISPATCH" '<git dir>/skill-review/prompt'
+assert_file_has "$DISPATCH" '--commit "$(cat <git dir>/skill-review/commit)"'
+assert_file_has "$SKILL" "hands an in-session reviewer back"
+case "$(grep -F '| Run a skill on the model its work deserves' AGENTS.md)" in
+*'review-pr'*'hands the review back'*'skill-review'*'#880'*) pass "the kit manual's dispatcher row names the review hand-back" ;;
+*) fail "the kit manual's dispatcher row does not name the review hand-back (#880)" ;;
+esac
+case "$(grep -F '| Land a dispatched reviewer' AGENTS.md)" in
+*'rc'*'3'*'skill-review/prompt'*'forge-broker.kit.sh <PR> <report file> --commit "$(cat <git dir>/skill-review/commit)"'*)
+	pass "the kit manual's broker row takes a handed-back review to the broker" ;;
+*) fail "the kit manual's broker row does not take a handed-back review (exit 3) to the broker" ;;
+esac
 # The shipped skill names no kit-only file: bootstrap deletes them, and a
 # consumer following the line would run nothing.
 lacks_all ".kit." "a shipped skill names no kit-only file — the root manual names the broker and the skill dispatcher"

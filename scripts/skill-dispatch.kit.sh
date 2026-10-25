@@ -940,6 +940,139 @@ dispatch_rewritten() {
 	_dispatch "$@"
 }
 
+# --- the in-session review (#880) -------------------------------------------
+# WHY. The manual's review one-liner redirects this dispatcher to a file and
+# runs the broker only on exit 0. A reviewer tier whose model names no agent
+# harness is agent-dispatch's in-session exit 3, so the broker half never ran:
+# the session got a model id and nothing to spawn, and every review in the
+# 2026-10-23 wave was improvised by hand. So the review is HANDED BACK the way
+# the cascade hands back a rung: exit 3, the model on stdout exactly as
+# agent-dispatch prints it, and the contract staged — Trace-Run and
+# Trace-Spawn first — at <git dir>/skill-review/prompt, never the working
+# tree. The session spawns the reviewer on the tier's agent type with that
+# prompt verbatim, saves the report it returns, and runs the broker on it.
+#
+# THE DIFF IS STAGED TOO. The reviewer agent type reads files and runs no
+# command, and the contract tells the worker to run `git rev-parse` and `git
+# diff`. So the hand-back pins the branch's commit and writes `git diff
+# <base>...<commit>` beside the prompt, and a preamble under the two trace
+# lines tells the reviewer to read those instead. The rendering below mirrors
+# agent-dispatch's header strip and one-pass marker fill: that script is
+# shared layer and exits 3 before it renders anything, and moving its renderer
+# into a shared helper is a release action, not a passenger on this ticket.
+#
+# A dry run stages nothing. A --prompt-file is the caller's own document and
+# is never rendered here: it keeps agent-dispatch's plain exit 3.
+
+# _review_handback <contract> <dispatch args…> — stage the review, exit 3.
+_review_handback() {
+	_rh_contract=$1
+	shift
+	_rh_n=0 _rh_branch='' _rh_base=''
+	_count=$#
+	while [ "$_count" -gt 0 ]; do
+		a=$1
+		shift
+		_count=$((_count - 1))
+		case "$a" in
+		--prompt | --set | --set-file)
+			[ "$_count" -gt 0 ] || die "$a needs a value"
+			_rh_v=$1
+			shift
+			_count=$((_count - 1))
+			case "$a" in
+			--prompt) _rh_k=SPEC _rh_f='' ;;
+			*)
+				case "$_rh_v" in *=*) ;; *) die "$a takes NAME=VALUE, got '$_rh_v'" ;; esac
+				_rh_k=${_rh_v%%=*} _rh_v=${_rh_v#*=} _rh_f=''
+				[ "$a" = --set ] || { _rh_f=$_rh_v _rh_v=''; }
+				;;
+			esac
+			case "$_rh_k" in
+			'' | [!A-Za-z_]* | *[!A-Za-z0-9_]*) die "a marker NAME must match [A-Za-z_][A-Za-z0-9_]*, got '$_rh_k'" ;;
+			esac
+			[ -z "$_rh_f" ] || [ -f "$_rh_f" ] || die "--set-file path is not a readable file: $_rh_f"
+			_rh_i=1
+			while [ "$_rh_i" -le "$_rh_n" ]; do
+				[ "$(eval "printf '%s' \"\$RH_K_$_rh_i\"")" != "$_rh_k" ] ||
+					die "marker '$_rh_k' is set twice — a NAME may appear in one --set or --set-file only"
+				_rh_i=$((_rh_i + 1))
+			done
+			_rh_n=$((_rh_n + 1))
+			eval "RH_K_$_rh_n=\$_rh_k RH_V_$_rh_n=\$_rh_v RH_F_$_rh_n=\$_rh_f"
+			eval "export RH_K_$_rh_n RH_V_$_rh_n RH_F_$_rh_n"
+			case "$_rh_k" in
+			BRANCH) _rh_branch=$_rh_v ;;
+			BASE) _rh_base=$_rh_v ;;
+			esac
+			;;
+		*) set -- "$@" "$a" ;;
+		esac
+	done
+	[ -n "$_rh_branch" ] && [ -n "$_rh_base" ] ||
+		die "an in-session review is handed back with its diff staged, so it needs --set BRANCH=<branch> and --set BASE=<base>"
+	for _rh_ref in "$_rh_branch" "$_rh_base"; do
+		case "$_rh_ref" in -*) die "BRANCH and BASE name refs; '$_rh_ref' opens with '-' and would read as an option" ;; esac
+	done
+	_rh_wt=${CASCADE_WT:-.}
+	_rh_sha=$(cd "$_rh_wt" && git rev-parse --verify -q "$_rh_branch^{commit}") ||
+		die "BRANCH '$_rh_branch' names no commit in '$_rh_wt' — the in-session review pins the commit it hands back"
+	(cd "$_rh_wt" && git rev-parse --verify -q "$_rh_base^{commit}" >/dev/null) ||
+		die "BASE '$_rh_base' names no commit in '$_rh_wt'"
+	_rh_state="$(cd "$_rh_wt" && git rev-parse --absolute-git-dir)/skill-review"
+	rm -rf "$_rh_state"
+	mkdir -p "$_rh_state" || die "cannot stage the in-session review under '$_rh_state'"
+	(cd "$_rh_wt" && git diff "$_rh_base...$_rh_sha") >"$_rh_state/diff" ||
+		{ rm -rf "$_rh_state"; die "cannot stage the diff of '$_rh_base...$_rh_sha'"; }
+	printf '%s\n' "$_rh_sha" >"$_rh_state/commit"
+	{
+		printf '%s' "$SPAWN_LINES"
+		printf 'You run in this session, on an agent type that reads files and runs no command, so the dispatcher ran git for you. The commit to review is %s — `git rev-parse %s` when this review was handed back — and `git diff %s...%s` is staged at %s. Wherever the text below tells you to run either command, read those instead, and report that sha as REVIEWED.\n\n' \
+			"$_rh_sha" "$_rh_branch" "$_rh_base" "$_rh_sha" "$_rh_state/diff"
+		RH_N=$_rh_n awk '
+			BEGIN {
+				n = ENVIRON["RH_N"] + 0
+				for (i = 1; i <= n; i++) {
+					k[i] = "%%" ENVIRON["RH_K_" i] "%%"
+					kl[i] = length(k[i])
+					path = ENVIRON["RH_F_" i]
+					if (path != "") {
+						s = ""
+						while ((getline ln < path) > 0) s = s ln "\n"
+						close(path)
+						v[i] = s
+					} else v[i] = ENVIRON["RH_V_" i]
+				}
+			}
+			NR == 1 && $0 == "<!--" { hdr = 1; next }
+			hdr { if ($0 == "-->") { hdr = 0; lead = 1 }; next }
+			lead && $0 == "" { next }
+			{
+				lead = 0; line = $0; out = ""; pos = 1; len = length(line)
+				while (pos <= len) {
+					hit = 0
+					for (i = 1; i <= n; i++)
+						if (substr(line, pos, kl[i]) == k[i]) { out = out v[i]; pos += kl[i]; hit = 1; break }
+					if (!hit) { out = out substr(line, pos, 1); pos++ }
+				}
+				print out
+			}
+			END { exit(hdr ? 1 : 0) }
+		' "$_rh_contract"
+	} >"$_rh_state/prompt" || { rm -rf "$_rh_state"; die "cannot render the worker contract into '$_rh_state/prompt'"; }
+	_rh_rc=0
+	# shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
+	_rh_model=$(sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@" --prompt-file "$_rh_state/prompt") || _rh_rc=$?
+	if [ "$_rh_rc" != 3 ]; then
+		rm -rf "$_rh_state"
+		[ -z "$_rh_model" ] || printf '%s\n' "$_rh_model"
+		exit "$_rh_rc"
+	fi
+	echo "skill-dispatch: the review is yours to spawn in-session — agent type '${TIER_ARGS%% *}', model '${_rh_model:-none: the spawn inherits}', its prompt verbatim from $_rh_state/prompt (commit $_rh_sha, its diff beside it). Save the report it returns to a file outside the working tree, then run the broker on that file with --commit $_rh_sha: the broker validates and posts it." >&2
+	[ -z "$_rh_model" ] || printf '%s\n' "$_rh_model"
+	exit 3
+}
+
 case "${SKILL#/}" in
 review-pr)
 	# The header above says why: the worker is offline, so it gets the
@@ -949,6 +1082,13 @@ review-pr)
 	if [ "$PROMPT_SEEN" != file ]; then
 		CONTRACT="$ROOT/.agents/prompts/review-worker.md"
 		[ -f "$CONTRACT" ] || die "no worker contract at .agents/prompts/review-worker.md — /review-pr cannot be dispatched without it"
+		_rh_dry=0
+		for a in "$@"; do [ "$a" != --dry-run ] || _rh_dry=1; done
+		# shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
+		if [ "$_rh_dry" = 0 ] &&
+			[ -z "$(AGENTS_TIER_QUIET=1 sh "$ROOT/scripts/agents.lib.sh" --harness $TIER_ARGS 2>/dev/null)" ]; then
+			_review_handback "$CONTRACT" "$@"
+		fi
 		if [ -n "$SPAWN_LINES" ]; then
 			# The two lines go under the contract's editor header, which the
 			# dispatcher strips, so they open what the worker reads. A copy,
