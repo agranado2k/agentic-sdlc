@@ -1844,7 +1844,7 @@ q2_out_at=$(q2_sec | grep -n 'sh scripts/trace\.sh outcomes' | head -1 | cut -d:
 	pass "process/R37: question 2 runs the outcome recorder, \`sh scripts/trace.sh outcomes\`, before the record reader" ||
 	fail "process/R37: question 2's outcome recorder (line ${q2_out_at:-none}) does not come before the record reader (line ${q2_rec_at:-none})"
 q2prose=$(q2_sec | flat)
-for needle in 'before the per-agent counts below' '`<area>: landings <n> of 20, in the fix window <w>, mistakes <m>`' '`missed <k> of <n>, miss rate <r>`' 'A ratio over nothing reads `n/a`' 'not cut to the window' 'a second run writes nothing' 'only reverts are recorded yet' 'never a finding on their own'; do
+for needle in 'before the per-agent counts below' '`<area>: landings <n> of 20, in the fix window <w>, mistakes <m>`' '`missed <k> of <n>, miss rate <r>`' 'A ratio over nothing reads `n/a`' 'not cut to the window' 'a second run writes nothing' 'reverts and fixes inside the fix window are recorded' 'a failed factory QA is not recorded yet' 'never a finding on their own'; do
 	case "$q2prose" in *"$needle"*) pass "question 2 says: $needle" ;; *) fail "question 2 does not say: $needle" ;; esac
 done
 case "$(sed -n '/^2\. \*\*Review signal/,/^3\. /p' "$SKILL_ABS" | flat)" in

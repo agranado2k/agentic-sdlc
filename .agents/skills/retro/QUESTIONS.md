@@ -51,7 +51,8 @@ reader, `merge.land` and `merge.outcome`.*
 
 - **The earned record comes first.** Run `sh scripts/trace.sh outcomes`, the
   outcome recorder: it writes one `merge.outcome` per landed PR a later
-  `revert` landing undid, read from git and the trace, and prints how many it
+  `revert` landing undid, and one per landed PR a `fix` landing inside the
+  fix window repaired, read from git and the trace, and prints how many it
   wrote. It is idempotent, so a second run writes nothing. Then run
   `sh scripts/trace.sh record` and
   put its rows in the report, as printed, before the per-agent counts below.
@@ -61,13 +62,14 @@ reader, `merge.land` and `merge.outcome`.*
   (`held up <h> of <l>, not held up <x>, unlabelled <u>, precision <p>,
   labels from triage <t>, human <d>, outcome <o>`) — the
   area's most recent landed PRs, at most 20, how many of them landed inside
-  the 30-day fix window, how many carry a post-merge outcome, how many
+  the fix window (30 days, unless the trace's policy file sets
+  `TRACE_FIX_WINDOW_DAYS`), how many carry a post-merge outcome, how many
   carry one no finding rejected at triage named a file of, and how the
   findings raised on them held up. A ratio over nothing reads `n/a`. The record
   is each area's last 20 landings as of now, not cut to the window. Only
-  reverts are recorded yet: a later fix and a failed factory QA are later
-  releases, so under the rows say that only reverts are recorded yet and
-  `mistakes 0` is not yet a clean history. The record compares nothing to a threshold, and neither does this
+  reverts and fixes inside the fix window are recorded: a failed factory QA
+  is a later release, so under the rows say that a failed factory QA is not
+  recorded yet and `mistakes 0` is not yet a clean history. The record compares nothing to a threshold, and neither does this
   question: the rows are reported, never a finding on their own.
 - Join raise to triage on `data.id` within one PR, and only the triages with
   `data.source=local` and a standards id (`C-`, `H-`, `M-` or `L-N`): a

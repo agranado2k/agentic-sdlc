@@ -201,7 +201,8 @@
 #
 # THE RECORD READER, `record`, prints each review area's earned record
 # (the kit's ADR-0036): one row per lens of the lens-slice policy, its most recent
-# 20 landed PRs, how many landed inside the 30-day fix window, how many
+# 20 landed PRs, how many landed inside the fix window (30 days, or the
+# policy file's TRACE_FIX_WINDOW_DAYS), how many
 # carry a `merge.outcome`, how many carry one the review missed, and how the
 # lens findings raised on them held up. It reads `merge.land`,
 # `merge.outcome`, the findings' raises, triages and dismissals, and git, and
@@ -209,8 +210,10 @@
 #
 # THE OUTCOME RECORDER, `outcomes`, writes the `merge.outcome` lines git and
 # the trace prove (the kit's ADR-0036): a `reverted` against each landed PR
-# whose lines a later `revert` landing removed, as git blame at that landing's
-# first parent says, mapped to the PR only through a `merge.land` merge sha.
+# whose lines a later `revert` landing removed, and a `fixed` against each
+# whose lines a `fix` landing removed or rewrote inside the fix window, as git
+# blame at that landing's first parent says, mapped to the PR only through a
+# `merge.land` merge sha.
 # It reads nothing from a commit message but the type token and, for a revert
 # that removes no line, a 40-hex sha. A second run writes nothing. The
 # operator and /retro run it, before `record`; no chain skill does.
@@ -2836,8 +2839,30 @@ trace_export() {
 
 # How many landings a review area's record counts, and the days after a
 # landing in which a fix still counts against it (PRD-06 decisions Q2, Q3).
+# The fix window is the policy file's TRACE_FIX_WINDOW_DAYS when that is a
+# whole number of days from 1, else 30; emptied here, before the policy file
+# is read, so an environment value is never the policy's.
 TRACE_RECORD_LANDINGS=20
-TRACE_FIX_WINDOW_DAYS=30
+TRACE_FIX_WINDOW_DEFAULT=30
+TRACE_FIX_WINDOW_DAYS=
+
+# trace_fix_window — sets TRACE_FIX_WINDOW to the fix window in days: the
+# policy's TRACE_FIX_WINDOW_DAYS when it is a whole number from 1, the 30-day
+# default when it is unset or empty, and the default with one note on stderr
+# for any other value — never a failure.
+trace_fix_window() {
+	TRACE_FIX_WINDOW=$TRACE_FIX_WINDOW_DEFAULT
+	_fw_v=${TRACE_FIX_WINDOW_DAYS:-}
+	case $_fw_v in
+	'') return 0 ;;
+	*[!0-9]*) ;;
+	*)
+		_fw_n=$(printf '%s' "$_fw_v" | sed 's/^0*//')
+		[ -n "$_fw_n" ] && TRACE_FIX_WINDOW=$_fw_n && return 0
+		;;
+	esac
+	echo "trace: TRACE_FIX_WINDOW_DAYS='$_fw_v' in ${TRACE_CONFIG_PATH:-the trace policy file} is not a whole number of days from 1 — the ${TRACE_FIX_WINDOW_DEFAULT}-day fix window holds" >&2
+}
 
 # trace_record — one row per review area of the lens-slice policy:
 #
@@ -2855,7 +2880,9 @@ TRACE_FIX_WINDOW_DAYS=30
 # paths belongs to, and the areas are the slicer's to say (`lens-slice.sh
 # --areas`, beside this file): one parser of the policy. An area counts its
 # most recent 20 landings, by the landing's `ts`; of those, the ones whose day
-# is under 30 days before today are in the fix window, and the ones with any
+# is under the fix window's days before today are in the fix window (30, or
+# the policy file's TRACE_FIX_WINDOW_DAYS when that is a whole number from
+# 1; any other value is not used, said once on stderr), and the ones with any
 # `merge.outcome` are mistakes. A mistake is MISSED unless a finding raised
 # on its PR and rejected at triage names a file in its `data.files`; a
 # `qa-failed` one always is (PRD-06 §3: the miss is then the triage's). A
@@ -2877,6 +2904,7 @@ trace_record() {
 		echo "trace: record: no lens-slice.sh beside this script — no review areas to count" >&2
 		return 0
 	}
+	trace_fix_window
 	# L <ts> <pr> <sha> per landing, the latest per PR; O <pr> <outcome>
 	# <files> per post-merge outcome; R <ts> <pr> <id> <path> <run> <where> per lens
 	# finding raised (its `data.where`, and that with the line cut off: the
@@ -2933,7 +2961,7 @@ trace_record() {
 		printf '%s\n' "$_rc_areas" | awk 'NF { print "A\t" $0 }'
 		printf '%s\n' "$_rc_files"
 		printf '%s\n' "$_rc_ev"
-	} | LC_ALL=C awk -F '\t' -v today="$(date -u +%Y-%m-%d)" -v window="$TRACE_FIX_WINDOW_DAYS" -v cap="$TRACE_RECORD_LANDINGS" '
+	} | LC_ALL=C awk -F '\t' -v today="$(date -u +%Y-%m-%d)" -v window="$TRACE_FIX_WINDOW" -v cap="$TRACE_RECORD_LANDINGS" '
 		function day(s,   y, m, d, a) {
 			y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0
 			a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3
@@ -3044,13 +3072,14 @@ trace_record() {
 TRACE_OUTCOME_FILES_BYTES=2000
 
 # trace_outcomes — one `merge.outcome outcome=reverted` per landed PR whose
-# lines a later `revert` landing removed.
+# lines a later `revert` landing removed, and one `outcome=fixed` per landed
+# PR whose lines a `fix` landing removed or rewrote inside the fix window.
 #
 # A LANDING is a `merge.land` with outcome `landed` and a 40-hex
 # `data.merge_sha`; that sha is the only way a commit maps to a PR. A landing
-# is a revert when its message's first non-blank line not opening `Merge `
-# (a squash subject, or the PR title GitHub writes under a merge commit's
-# "Merge pull request" line) opens with `revert`, as the anchored
+# is a revert or a fix when its message's first non-blank line not opening
+# `Merge ` (a squash subject, or the PR title GitHub writes under a merge
+# commit's "Merge pull request" line) opens with that type, as the anchored
 # `^(fix|revert)(\([^)]*\))?!?:` reads it. From a message the recorder reads
 # that type token and, for a revert that removes no line, a 40-hex sha —
 # nothing else, so a PR number written in prose is never read. The lines a
@@ -3062,9 +3091,14 @@ TRACE_OUTCOME_FILES_BYTES=2000
 # that lies on that first-parent history and that a `merge.land` names, and
 # nothing otherwise. The outcome names the reverting PR in `related`, its
 # merge sha in `data.by_sha`, and the files git's diff named in `data.files`
-# — never text from a message. An outcome the trace already holds for the
-# same PR and `data.by_sha` is not written again, so a second run writes 0
-# lines. Lines from a landing no `merge.land` names get no outcome, and their
+# — never text from a message. A FIX is read the same way, its rewritten
+# lines being removed ones in its diff, but takes no landing from a message:
+# a fix that removes no line names no PR. It writes `fixed` against a PR only
+# when the days between the two merge commits' committer dates, whole days
+# rounded down, are under the fix window (`trace_fix_window`), and puts them
+# in `data.days`; a PR landed before the window gets nothing from that fix.
+# An outcome the trace already holds for the same PR, outcome and
+# `data.by_sha` is not written again, so a second run writes 0 lines. Lines from a landing no `merge.land` names get no outcome, and their
 # count goes to stderr. Unconfigured: nothing on stdout, nothing written,
 # exit 0, like every reader.
 trace_outcomes() {
@@ -3087,21 +3121,25 @@ trace_outcomes() {
 			m = hex40(tr_data($0), "merge_sha")
 			if (m != "" && !(m in seen)) { seen[m] = 1; print "L\t" m "\t" s }
 		}
-		k == "merge.outcome" && tr_str(e, "outcome") == "reverted" {
+		k == "merge.outcome" && (o = tr_str(e, "outcome")) ~ /^(reverted|fixed)$/ {
 			b = hex40(tr_data($0), "by_sha")
-			if (b != "") print "K\t" s "\t" b
+			if (b != "") print "K\t" s "\t" b "\t" o
 		}')
 	_oc_have=$(printf '%s\n' "$_oc_ev" | awk -F '\t' '$1 == "L" { print $2 }' |
 		git cat-file --batch-check='%(objectname) %(objecttype)' 2>/dev/null | awk '$2 == "commit" { print $1 }')
-	_oc_reverts=
-	[ -z "$_oc_have" ] || _oc_reverts=$(printf '%s\n' "$_oc_have" |
+	trace_fix_window
+	# <type>:<sha> per landing typed revert or fix.
+	_oc_typed=
+	[ -z "$_oc_have" ] || _oc_typed=$(printf '%s\n' "$_oc_have" |
 		git log --stdin --no-walk=unsorted --format='%x01%H%n%B' 2>/dev/null | awk '
 			/^\001[0-9a-f]+$/ { c = substr($0, 2); done = 0; next }
 			c == "" || done || $0 ~ /^[ \t]*$/ || /^Merge / { next }
-			{ done = 1; if ($0 ~ /^revert(\([^)]*\))?!?:/) print c }')
+			{ done = 1; if (match($0, /^(fix|revert)(\([^)]*\))?!?:/)) print ($0 ~ /^revert/ ? "revert" : "fix") ":" c }')
 	_oc_written=0
 	_oc_lost=0
-	for _oc_s in $_oc_reverts; do
+	for _oc_e in $_oc_typed; do
+		_oc_type=${_oc_e%%:*}
+		_oc_s=${_oc_e#*:}
 		_oc_p=$(git rev-parse --verify -q "$_oc_s^1") || continue
 		_oc_by=$(printf '%s\n' "$_oc_ev" | awk -F '\t' -v s="$_oc_s" '$1 == "L" && $2 == s { print $3; exit }')
 		_oc_fp=$(git rev-list --first-parent "$_oc_p")
@@ -3138,10 +3176,10 @@ trace_outcomes() {
 				$1 == "L" { pr[$2] = $3; next }
 				$1 == "M" { land[$2] = $3; next }
 				$1 == "B" { l = land[$2]; print ((l != "" && (l in pr)) ? pr[l] : "-") "\t" $3 }')
-		else
+		elif [ "$_oc_type" = revert ]; then
 			# A pure-deletion revert: the reverted landing only by a sha its
 			# message names, and only one on the first-parent history that a
-			# merge.land names.
+			# merge.land names. A fix that removes no line names no PR.
 			_oc_files=$(git -c core.quotePath=false diff --name-only --no-renames "$_oc_p" "$_oc_s")
 			_oc_hits=$(git log -1 --format=%B "$_oc_s" | awk '{ gsub(/[^0-9A-Za-z]/, " "); for (i = 1; i <= NF; i++) if (length($i) == 40 && $i !~ /[^0-9a-f]/) print $i }' |
 				sort -u | while IFS= read -r _oc_n; do
@@ -3152,16 +3190,30 @@ trace_outcomes() {
 				done)
 		fi
 		_oc_lost=$((_oc_lost + $(printf '%s\n' "$_oc_hits" | grep -c "^-$_oc_tab")))
+		_oc_out=reverted
+		[ "$_oc_type" = fix ] && _oc_out=fixed && _oc_at=$(git log -1 --format=%ct "$_oc_s")
 		for _oc_pr in $(printf '%s\n' "$_oc_hits" | awk -F '\t' 'NF && $1 != "-" { print $1 }' | sort -u); do
 			[ "$_oc_pr" = "$_oc_by" ] && continue
-			printf '%s\n' "$_oc_ev" | awk -F '\t' -v p="$_oc_pr" -v b="$_oc_s" '$1 == "K" && $2 == p && $3 == b { f = 1 } END { exit !f }' && continue
+			printf '%s\n' "$_oc_ev" | awk -F '\t' -v p="$_oc_pr" -v b="$_oc_s" -v o="$_oc_out" '$1 == "K" && $2 == p && $3 == b && $4 == o { f = 1 } END { exit !f }' && continue
+			_oc_days=
+			if [ "$_oc_type" = fix ]; then
+				# The days from the PR's landing to the fix's, by the two merge
+				# commits' committer dates; inside the window, or nothing.
+				_oc_from=$(printf '%s\n' "$_oc_ev" | awk -F '\t' -v p="$_oc_pr" '$1 == "L" && $3 == p { print $2; exit }')
+				_oc_days=$(( ($_oc_at - $(git log -1 --format=%ct "$_oc_from")) / 86400 ))
+				[ "$_oc_days" -ge 0 ] && [ "$_oc_days" -lt "$TRACE_FIX_WINDOW" ] || continue
+			fi
 			_oc_list=$(printf '%s\n' "$_oc_hits" | awk -F '\t' -v p="$_oc_pr" '$1 == p { print $2 }' | sort -u |
 				awk -v cap="$TRACE_OUTCOME_FILES_BYTES" -v p="$_oc_pr" '{ if (length(out) + length($0) + 1 > cap) { cut++; next } out = out (out == "" ? "" : " ") $0 } END { print out; if (cut) printf "trace: outcomes: %d file(s) left off %s data.files, past its %d-byte cap\n", cut, p, cap > "/dev/stderr" }')
-			( trace_emit kind=merge.outcome subject="$_oc_pr" related="$_oc_by" outcome=reverted data.by_sha="$_oc_s" data.files="$_oc_list" reason='outcome recorder: a revert landing removed lines this PR introduced' ) || return 2
+			if [ "$_oc_type" = fix ]; then
+				( trace_emit kind=merge.outcome subject="$_oc_pr" related="$_oc_by" outcome=fixed data.by_sha="$_oc_s" data.files="$_oc_list" data.days="$_oc_days" reason='outcome recorder: a fix landing inside the fix window removed or rewrote lines this PR introduced' ) || return 2
+			else
+				( trace_emit kind=merge.outcome subject="$_oc_pr" related="$_oc_by" outcome=reverted data.by_sha="$_oc_s" data.files="$_oc_list" reason='outcome recorder: a revert landing removed lines this PR introduced' ) || return 2
+			fi
 			_oc_written=$((_oc_written + 1))
 		done
 	done
-	[ "$_oc_lost" -eq 0 ] || echo "trace: outcomes: $_oc_lost line(s) a revert removed came from a landing no merge.land with a merge sha names — no outcome for them" >&2
+	[ "$_oc_lost" -eq 0 ] || echo "trace: outcomes: $_oc_lost line(s) a revert or a fix removed came from a landing no merge.land with a merge sha names — no outcome for them" >&2
 	printf 'trace: outcomes: %d written\n' "$_oc_written"
 }
 

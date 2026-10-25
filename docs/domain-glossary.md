@@ -419,7 +419,9 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Outcome recorder** — `sh scripts/trace.sh outcomes`: reads git and the
   trace and writes the **post-merge outcomes** they prove, today a
   `reverted` against each landed PR whose lines a later `revert` landing
-  removed, as git blame at that landing's first parent says. A commit maps
+  removed, and a `fixed` against each whose lines a `fix` landing removed or
+  rewrote inside the **fix window**, with the days between in `data.days`,
+  as git blame at that landing's first parent says. A commit maps
   to a PR only through a `merge.land`'s merge sha, and from a commit message
   it reads only the Conventional Commit type and, for a revert that removes
   no line, a 40-hex sha. Idempotent: a second run writes nothing. Run by the
@@ -427,7 +429,8 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "backfill script" (its first run backfills; every run records).
 - **Mistake** — a landed PR with at least one **post-merge outcome**: a later
   `revert` landing removed lines it introduced or reverted it by sha, a
-  `fix` landing inside the **fix window** of 30 days removed or rewrote its
+  `fix` landing inside the **fix window** — 30 days, unless the trace's
+  policy file sets `TRACE_FIX_WINDOW_DAYS` to another whole number — removed or rewrote its
   lines, or its factory ticket's QA reads `fail`. A revert has no window
   (ADR-0036, PRD-06 decision Q2).
   - _Avoid_: "bug" (a mistake is a fact about a PR, not a defect report).
