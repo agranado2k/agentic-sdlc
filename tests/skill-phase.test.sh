@@ -625,6 +625,12 @@ hb_refused "a marker set twice is refused by the hand-back" \
 	"marker 'BASE' is set twice" --set BRANCH=feat/under-review --set BASE=main --set BASE=main --prompt x
 hb_refused "a --set with no NAME=VALUE is refused by the hand-back" \
 	"--set takes NAME=VALUE, got 'BASE'" --set BRANCH=feat/under-review --set BASE --prompt x
+hb_refused "a trailing --set with no value is refused by the hand-back" \
+	"--set needs a value" --set BRANCH=feat/under-review --set BASE=main --prompt x --set
+hb_refused "a marker NAME of the wrong shape is refused by the hand-back" \
+	"a marker NAME must match [A-Za-z_][A-Za-z0-9_]*, got '1BAD'" --set BRANCH=feat/under-review --set BASE=main --set 1BAD=x --prompt x
+hb_refused "a --set-file path that is no file is refused by the hand-back" \
+	"--set-file path is not a readable file: $SCRATCH/hb-no-such-file" --set BRANCH=feat/under-review --set BASE=main --set-file "SPEC=$SCRATCH/hb-no-such-file"
 
 # A --prompt-file is the caller's own document: no hand-back, the plain exit 3.
 printf 'my own contract\n' >"$SCRATCH/hb-own-prompt.md"
