@@ -1009,8 +1009,11 @@ _review_handback() {
 		*) set -- "$@" "$a" ;;
 		esac
 	done
-	[ -n "$_rh_branch" ] && [ -n "$_rh_base" ] ||
-		die "an in-session review is handed back with its diff staged, so it needs --set BRANCH=<branch> and --set BASE=<base>"
+	_rh_missing=''
+	[ -n "$_rh_branch" ] || _rh_missing='--set BRANCH=<branch>'
+	[ -n "$_rh_base" ] || _rh_missing="${_rh_missing:+$_rh_missing and }--set BASE=<base>"
+	[ -z "$_rh_missing" ] ||
+		die "missing $_rh_missing; an in-session review is handed back with its diff staged, so it needs both refs — repair the call and dispatch again"
 	for _rh_ref in "$_rh_branch" "$_rh_base"; do
 		case "$_rh_ref" in -*) die "BRANCH and BASE name refs; '$_rh_ref' opens with '-' and would read as an option" ;; esac
 	done

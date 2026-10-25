@@ -535,14 +535,11 @@ banner "4f. An in-session reviewer is handed back with its staged contract (#880
 # the branch's commit and stages its diff beside the prompt.
 HBTREE="$SCRATCH/handback-tree"
 cp -R "$STUBTREE" "$HBTREE"
-git -C "$HBTREE" init -q -b main
-git -C "$HBTREE" -c user.name=t -c user.email=t@t add -A
-git -C "$HBTREE" -c user.name=t -c user.email=t@t commit -qm base
+t_git_identity "$HBTREE" t t@t
+t_commit "$HBTREE" base >/dev/null
 git -C "$HBTREE" checkout -qb feat/under-review
 printf 'a reviewed line\n' >"$HBTREE/reviewed.txt"
-git -C "$HBTREE" -c user.name=t -c user.email=t@t add reviewed.txt
-git -C "$HBTREE" -c user.name=t -c user.email=t@t commit -qm 'feat: under review'
-HB_SHA=$(git -C "$HBTREE" rev-parse HEAD)
+HB_SHA=$(t_commit "$HBTREE" 'feat: under review')
 HB_STATE="$(git -C "$HBTREE" rev-parse --absolute-git-dir)/skill-review"
 printf 'the ticket body as spec\n' >"$SCRATCH/hb-spec.md"
 hb_dispatch() { t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBTREE" AGENT_HARNESS_SELF="$1" TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /review-pr --ticket 880 --set BRANCH=feat/under-review --set BASE=main --set-file "SPEC=$SCRATCH/hb-spec.md" ${2:+"$2"}; }
@@ -598,10 +595,56 @@ hb_dispatch stub
 [ ! -e "$HB_STATE" ] && pass "…and nothing is staged for a hand-back" ||
 	fail "a dispatched review staged a hand-back under $HB_STATE"
 
-t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBTREE" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh /review-pr --set BRANCH=no-such-branch --set BASE=main --prompt 'x'
-[ "$T_STATUS" = 2 ] && [ ! -e "$HB_STATE" ] &&
-	pass "a branch that names no commit is refused (exit 2), nothing staged" ||
-	fail "an unresolvable branch exited $T_STATUS: $T_ERR"
+# Each refusal is the hand-back's own — exit 2, its message on stderr, nothing
+# staged — so the assertion names the check that refused, never any exit 2.
+# Exit 2 here is a caller error to repair (DISPATCHED-REVIEW.md), not a stop.
+hb_refused() {
+	_hr_label=$1 _hr_msg=$2
+	shift 2
+	rm -rf "$HB_STATE"
+	t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBTREE" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh /review-pr "$@"
+	if [ "$T_STATUS" = 2 ] && [ ! -e "$HB_STATE" ] && _t_has "$T_ERR" "skill-dispatch: $_hr_msg"; then
+		pass "$_hr_label (exit 2, nothing staged)"
+	else
+		fail "$_hr_label — exit $T_STATUS, staged: $([ -e "$HB_STATE" ] && echo yes || echo no), stderr: $T_ERR"
+	fi
+}
+hb_refused "a branch that names no commit is refused by name" \
+	"BRANCH 'no-such-branch' names no commit" --set BRANCH=no-such-branch --set BASE=main --prompt x
+hb_refused "a base that names no commit is refused by name" \
+	"BASE 'no-such-base' names no commit" --set BRANCH=feat/under-review --set BASE=no-such-base --prompt x
+hb_refused "a missing BRANCH is named as the one thing missing" \
+	"missing --set BRANCH=<branch>;" --set BASE=main --prompt x
+hb_refused "a missing BASE is named as the one thing missing" \
+	"missing --set BASE=<base>;" --set BRANCH=feat/under-review --prompt x
+hb_refused "a missing BRANCH and BASE are both named" \
+	"missing --set BRANCH=<branch> and --set BASE=<base>;" --prompt x
+hb_refused "a ref opening with '-' is refused before git reads it as an option" \
+	"BRANCH and BASE name refs; '--all' opens with '-'" --set BRANCH=--all --set BASE=main --prompt x
+hb_refused "a marker set twice is refused by the hand-back" \
+	"marker 'BASE' is set twice" --set BRANCH=feat/under-review --set BASE=main --set BASE=main --prompt x
+hb_refused "a --set with no NAME=VALUE is refused by the hand-back" \
+	"--set takes NAME=VALUE, got 'BASE'" --set BRANCH=feat/under-review --set BASE --prompt x
+
+# A --prompt-file is the caller's own document: no hand-back, the plain exit 3.
+printf 'my own contract\n' >"$SCRATCH/hb-own-prompt.md"
+rm -rf "$HB_STATE"
+t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBTREE" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh /review-pr --set BRANCH=feat/under-review --set BASE=main --prompt-file "$SCRATCH/hb-own-prompt.md"
+[ "$T_STATUS" = 3 ] && [ ! -e "$HB_STATE" ] &&
+	pass "a --prompt-file keeps the plain exit 3 and stages nothing" ||
+	fail "a --prompt-file review exited $T_STATUS, staged: $([ -e "$HB_STATE" ] && echo yes || echo no): $T_ERR"
+
+# An agent-dispatch exit other than 3 is passed through, and the staged
+# hand-back is removed: a prompt left behind would be spawned as a review.
+HBX="$SCRATCH/handback-exit"
+cp -R "$HBTREE" "$HBX"
+printf '#!/bin/sh\nprintf "model-from-stub\\n"\nexit 5\n' >"$HBX/scripts/agent-dispatch.sh"
+HBX_STATE="$(git -C "$HBX" rev-parse --absolute-git-dir)/skill-review"
+rm -rf "$HBX_STATE"
+t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBX" AGENT_HARNESS_SELF=local sh scripts/skill-dispatch.kit.sh /review-pr --set BRANCH=feat/under-review --set BASE=main --prompt x
+[ "$T_STATUS" = 5 ] && [ "$T_OUT" = model-from-stub ] && [ ! -e "$HBX_STATE" ] &&
+	pass "a dispatch exit other than 3 is passed through, its stdout kept, the staged files removed" ||
+	fail "a dispatch exit 5 came back as $T_STATUS with stdout '$T_OUT', staged: $([ -e "$HBX_STATE" ] && echo yes || echo no): $T_ERR"
 
 # ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
