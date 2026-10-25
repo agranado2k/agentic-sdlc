@@ -61,11 +61,24 @@
 # vocabulary is open local policy, as the task domain's is. VOCAB_QUERY names
 # the fields whose value is a TRACE FILTER, held to a grammar the checker owns
 # rather than to tokens: such a field declares no VOCAB_<FIELD> and no rule
-# reads it.
+# reads it. VOCAB_QUALIFIED names the fields whose value is a LEVEL and, for
+# the levels VOCAB_<FIELD>_QUALIFIED names, exactly one REASON from
+# VOCAB_<FIELD>_REASONS — the reasons VOCAB_<FIELD>_RESERVED names written
+# only by a caller that declares itself the risk rule (`--writer risk-rule`).
+# VOCAB_KEYED names the fields whose value is a requirement id, then one
+# token: the line repeats once per id, one token per id. No rule reads a
+# qualified or a keyed field either.
+#
+# VOCAB_BOUND and VOCAB_BOUNDS are the LINE BOUNDS a stamp reader holds a
+# ticket to: at most VOCAB_BOUND lines of any one stamp key, and the
+# per-field exceptions as `<field>=<count>`. Published here, not hard-coded,
+# so a planner outside the kit reads them from the same file.
 
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class'
+VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier result scope'
 VOCAB_OPEN='domain class'
 VOCAB_QUERY='targets'
+VOCAB_QUALIFIED='risk'
+VOCAB_KEYED='test-tier'
 
 # tier — owned by scripts/agents.lib.sh (see above); stamped by /to-tickets
 # as `Tier:`, read by /implement.
@@ -134,6 +147,37 @@ VOCAB_AUTHOR_KIND='bot human'
 # like domain: the class is yours, and the kit names no class of its own, so
 # any token of the shape (64 bytes at most) is read. Name yours here, in
 # VOCAB_CLASS, for their canonical order if you like; the checker needs none.
+
+# risk — QUALIFIED: the ticket contract's risk stamp (the kit's ADR-0037),
+# `Risk: low` or `Risk: high <reason>`. `unlearned` and `outward` are the
+# risk rule's alone: a planner — a ticket, a stamp, a factory line — never
+# writes them. A ticket with no Risk: line is read as `high unclear` by the
+# reader that acts on risk, never written in by the stamp reader.
+VOCAB_RISK='low high'
+VOCAB_RISK_QUALIFIED='high'
+VOCAB_RISK_REASONS='irreversible security invisible shared-layer unclear unlearned outward'
+VOCAB_RISK_RESERVED='unlearned outward'
+
+# risk-confidence — the risk stamp's own confidence, a key of its own so the
+# body's one `Confidence:` line stays the tier's.
+VOCAB_RISK_CONFIDENCE='low medium high'
+
+# test-tier — KEYED: `Test-tier: <requirement id> <tier>`, one line per id on
+# the ticket's Covers: line; the tier of test that checks the requirement.
+VOCAB_TEST_TIER='unit suite e2e manual'
+
+# result — a check-table row's result, written by /implement into the PR
+# body: the test passed, failed, or was not run (a manual row no human has
+# checked yet).
+VOCAB_RESULT='pass fail skipped'
+
+# scope — the review's mark on an unspecified behavior item: its effect stays
+# inside the change, or a user, a consumer or another skill sees it.
+VOCAB_SCOPE='inside outward'
+
+# The line bounds: 8 lines of any one stamp key, 32 Test-tier: lines.
+VOCAB_BOUND='8'
+VOCAB_BOUNDS='test-tier=32'
 
 # ---------------------------------------------------------------------------
 # THE RULES. One per line: `<field>=<value> => <field>=<value>` demands the

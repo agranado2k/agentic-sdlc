@@ -46,7 +46,8 @@
 #      nothing to check, stderr says so, stdout empty.
 #
 # THE GRAMMAR is not spelled here: the PRD's requirement line, the bounds and
-# the bounded id are scripts/requirement.lib.sh's, sourced from beside this
+# the bounded id are scripts/requirement.lib.sh's, and so is a Covers: value
+# (req_covers_ids, which scripts/stamp.sh reads too), sourced from beside this
 # script, and without it the check refuses (exit 2) rather than read nothing.
 #
 # Shipped to every consumer beside scripts/vocab.sh: /to-tickets ships
@@ -70,10 +71,12 @@ grammar="$(dirname "$0")/requirement.lib.sh"
 }
 # shellcheck disable=SC1090
 . "$grammar"
-command -v req_prd_ids >/dev/null 2>&1 || {
-	cov_say "scripts/requirement.lib.sh defines no req_prd_ids — restore it from the kit"
-	exit 2
-}
+for fn in req_prd_ids req_covers_ids; do
+	command -v "$fn" >/dev/null 2>&1 || {
+		cov_say "scripts/requirement.lib.sh defines no $fn — restore it from the kit"
+		exit 2
+	}
+done
 
 [ $# -ge 2 ] || usage
 prd=$1
@@ -124,14 +127,11 @@ for t; do
 		;;
 	esac
 	value=$(printf '%s\n' "$lines" | sed 's/^Covers:[[:space:]]*//; s/[[:space:]]*$//')
-	if printf '%s\n' "$value" | grep -Eqx 'none \((prefactor|open-issue|release)\)'; then
-		continue
-	fi
-	printf '%s\n' "$value" | grep -Eqx "$REQ_BOUNDED_ID_ERE( *, *$REQ_BOUNDED_ID_ERE)*" || {
+	ids=$(req_covers_ids "$value") || {
 		cov_say "ticket $label: its Covers: line is neither a list of requirement ids nor none (prefactor|open-issue|release)"
 		exit 2
 	}
-	covered="$covered$(printf '%s\n' "$value" | tr ',' '\n' | tr -d ' ')
+	[ -z "$ids" ] || covered="$covered$ids
 "
 done
 

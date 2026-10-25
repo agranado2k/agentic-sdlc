@@ -3291,7 +3291,42 @@
 # Kit-only, never shipped: tests/trace-hooks.test.sh sections 57 to 59 and
 # tests/retro-skill.test.sh section 16 hold it.
 
-shared-layer: 0.90.0
+# 0.91.0 — a ticket's stamp carries Risk:, Risk-confidence: and Test-tier:
+# (ticket #869, PRD-07 slice 1, the kit's ADR-0037). NO file joins the
+# shared layer and none leaves. Five shared files change content:
+# scripts/vocab.sh learns the QUALIFIED field (`Risk: high <reason>`, the
+# reasons unlearned and outward written only under `--writer risk-rule`)
+# and the KEYED field (`Test-tier: <requirement id> <tier>`, one tier per
+# id, the id held to scripts/requirement.lib.sh), prints the published
+# line bounds under `fields`, and refuses at load a policy that names a
+# field qualified, keyed, bound or bounds, or <q>-qualified, <q>-reasons
+# or <q>-reserved for a qualified field <q>, that declares a field more
+# than one kind, or whose VOCAB_QUALIFIED, VOCAB_KEYED, VOCAB_<Q>_*,
+# VOCAB_BOUND or VOCAB_BOUNDS do not hold; scripts/stamp.sh lifts and
+# checks those lines and Covers:, and holds each key to the policy's bound
+# (32 Test-tier: lines, 8 of every other key); scripts/requirement.lib.sh
+# gains req_covers_ids, the one Covers: grammar, which scripts/coverage.sh
+# and scripts/stamp.sh both read (each fails closed without it); and
+# UPDATING.md, the arriving-from paragraph and both worked examples
+# re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /implement (from #880, landed beside this release) —
+# .agents/skills/implement/DISPATCHED-REVIEW.md says a skill dispatcher
+# that stages the worker contract hands an in-session review back: exit
+# 3, the model on stdout, the contract, the pinned commit and its diff
+# staged under <git dir>/skill-review/, and a refused hand-back's exit 2
+# a caller error to repair; SKILL.md step 9(b) points at that hand-back.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/vocab.config.sh declares risk, risk-confidence,
+# test-tier, result and scope, VOCAB_QUALIFIED, VOCAB_KEYED, VOCAB_BOUND
+# and VOCAB_BOUNDS — a consumer's own policy file is the whole policy, so
+# one that predates this release adds them by hand. Adapter (9e): none.
+# Kit-only, never shipped: docs/adr/0037, the glossary's Risk, Test tier
+# and Check table, docs/specs/process.md R38 to R44, and the suites that
+# hold them — tests/vocab.test.sh, tests/vocab-policy.test.sh section 13,
+# tests/stamp.test.sh.
+
+shared-layer: 0.91.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

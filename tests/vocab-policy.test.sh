@@ -271,4 +271,48 @@ printf '%s\n' "$FIELDS" | grep -qx 'targets (query):' && pass "targets is declar
 assert_file_has "$TICKETS" "\`'Targets: <query>'\`" "/to-tickets checks a Targets: line at the quiz"
 assert_file_has "$TICKETS" "a \`Targets:\` line on a ticket that edits a review lens or a skill" "/to-tickets writes one on a lens or skill edit"
 
+# ---------------------------------------------------------------------------
+banner "13. The ticket contract's five fields and the published line bounds (process/R41)"
+# ---------------------------------------------------------------------------
+# Section 1 holds the shipped file equal to the checker's built-in defaults
+# line for line, these lines included; here, the words themselves — the
+# kit's ADR-0037 fixes them, and the software factory stamps against them.
+for line in \
+	'risk (qualified): low high; reasons for high: irreversible security invisible shared-layer unclear unlearned outward; reserved: unlearned outward' \
+	'risk-confidence: low medium high' \
+	'test-tier (keyed): unit suite e2e manual' \
+	'result: pass fail skipped' \
+	'scope: inside outward' \
+	'bound: 8' \
+	'bound test-tier: 32'; do
+	printf '%s\n' "$FIELDS" | grep -qxF -- "$line" && pass "process/R41: the shipped policy declares '$line'" ||
+		fail "process/R41: the shipped policy does not declare '$line'"
+	printf '%s\n' "$DEFAULTS" | grep -qxF -- "$line" && pass "process/R41: the checker's defaults declare '$line'" ||
+		fail "process/R41: the checker's defaults do not declare '$line'"
+done
+# Every new token has the task domain's shape — the checker holds it at load,
+# and this holds the published words to it too, so a reader outside the kit
+# can interpolate one where a domain goes.
+new_tokens=$(printf '%s\n' "$FIELDS" | sed -n -e 's/^risk (qualified): //p' -e 's/^risk-confidence: //p' \
+	-e 's/^test-tier (keyed): //p' -e 's/^result: //p' -e 's/^scope: //p' |
+	sed -e 's/; reasons for [a-z -]*:/ /' -e 's/; reserved:/ /' | tr ' ' '\n' | grep -v '^$')
+bad=$(printf '%s\n' "$new_tokens" | grep -vxE '[a-z][a-z0-9-]*')
+[ -n "$new_tokens" ] && [ -z "$bad" ] && pass "process/R41: every new token has the shape [a-z][a-z0-9-]*" ||
+	fail "process/R41: tokens outside the shape: '$bad' (read: $(printf '%s' "$new_tokens" | tr '\n' ' '))"
+
+# process/R44: the release that ships the five fields tells a consumer whose
+# own policy file predates it to add them — a policy file that is found is the
+# whole policy, so an update that copies the checker and not the words leaves
+# the new lines undeclared. Read out of the recipe's arriving-from paragraph.
+UPDATING="$KIT/UPDATING.md"
+note=$(awk '/^\*\*Arriving from 0\.90\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$UPDATING" | tr '\n' ' ')
+[ -n "$note" ] && pass "process/R44: UPDATING.md carries the arriving-from-0.90.0 paragraph" ||
+	fail "process/R44: UPDATING.md has no 'Arriving from 0.90.0 or older' paragraph"
+for word in '`risk`' '`risk-confidence`' '`test-tier`' '`result`' '`scope`' 'scripts/vocab.config.sh' 'whole policy'; do
+	case $note in
+	*"$word"*) pass "process/R44: the paragraph names $word" ;;
+	*) fail "process/R44: the paragraph does not name $word" ;;
+	esac
+done
+
 t_done "vocab-policy"

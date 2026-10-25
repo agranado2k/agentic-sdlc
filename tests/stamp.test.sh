@@ -492,6 +492,171 @@ expect_err_lacks "touch PWN"
 no_pwn "nine illegal lines"
 
 # ---------------------------------------------------------------------------
+banner "The ticket contract's stamp lines: Risk:, Risk-confidence:, Test-tier:, Covers: (process/R42)"
+# ---------------------------------------------------------------------------
+# UC1: a ticket carrying the contract's seven lines — the stamp reader lifts
+# and checks them with the ticket's other stamp lines and prints them as the
+# ticket spells them (the kit's ADR-0037).
+UC1='Prose.\nTier: implementer\nConfidence: medium\nCovers: process/R41, process/R42\nRisk: high shared-layer\nRisk-confidence: medium\nTest-tier: process/R41 suite\nTest-tier: process/R42 unit\nMore prose.\n'
+body "$UC1"
+stamp 900
+expect_resolved "$(printf 'Tier: implementer\nConfidence: medium\nCovers: process/R41, process/R42\nRisk: high shared-layer\nRisk-confidence: medium\nTest-tier: process/R41 suite\nTest-tier: process/R42 unit')" \
+	"process/R42: the UC1 ticket — all seven stamp lines, as spelled, and nothing else"
+
+# UC1 3a: no Risk: line — none printed, none invented. The `high unclear`
+# reading belongs to the reader that acts on risk, never to this one.
+body 'Tier: implementer\nTest-tier: process/R41 suite\n'
+stamp 900
+expect_resolved "$(printf 'Tier: implementer\nTest-tier: process/R41 suite')" \
+	"process/R42: a ticket with no Risk: line prints none"
+expect_out_lacks "Risk" "process/R42: …and invents no Risk: line"
+expect_out_lacks "unclear" "process/R42: …and no high unclear"
+
+# UC1 2a: a reason only the risk rule writes. The stamp reader is never the
+# risk rule, so the checker refuses it: exit 2, the field named, the line not.
+body 'Tier: implementer\nRisk: high outward\n'
+stamp 900
+refused "process/R42: Risk: high outward" risk "high outward"
+body 'Tier: implementer\nRisk: high unlearned\n'
+stamp 900
+refused "process/R42: Risk: high unlearned" risk "high unlearned"
+body 'Tier: implementer\nRisk: high\n'
+stamp 900
+expect_status 2 "process/R42: Risk: high with no reason is refused, exit 2"
+expect_err_has "the risk line is refused"
+body "Tier: implementer\nRisk: low';touch PWN;'\n"
+stamp 900
+refused "process/R42: a payload on the Risk: line" risk "touch PWN"
+# The writer is a flag the stamp reader never passes — and no environment
+# variable stands in for it.
+body 'Tier: implementer\nRisk: high outward\n'
+cd "$SCRATCH" || exit 2
+t_exec env VOCAB_WRITER=risk-rule sh "$STAMP" 900
+cd "$KIT" || exit 2
+expect_status 2 "process/R42: no environment makes the stamp reader the risk rule"
+
+# UC1 2b: one id given two tiers — each line passes alone, so the lines are
+# refused together, neither value quoted.
+body 'Tier: implementer\nTest-tier: process/R41 suite\nTest-tier: process/R41 unit\n'
+stamp 900
+expect_status 2 "process/R42: one id given two tiers is refused, exit 2"
+expect_err_has "the stamp lines are refused together"
+[ -z "$T_OUT" ] && pass "process/R42: …nothing on stdout" || fail "process/R42: …stdout should be empty, got '$T_OUT'"
+body "Tier: implementer\nTest-tier: x;touch\$(id) suite\n"
+stamp 900
+refused "process/R42: a Test-tier: id outside the grammar" test-tier "touch"
+
+# The keys fold the way the checker folds them: case, and a space or an
+# underscore for the hyphen. A line the checker would read is never one the
+# lift missed.
+body 'Tier: implementer\nrisk confidence: low\nTEST_TIER: process/R1 e2e\n'
+stamp 900
+expect_resolved "$(printf 'Tier: implementer\nrisk confidence: low\nTEST_TIER: process/R1 e2e')" \
+	"process/R42: 'risk confidence:' and 'TEST_TIER:' are lifted as the checker reads them"
+body 'Tier: implementer\nrisk confidence: certain\n'
+stamp 900
+refused "process/R42: a folded risk-confidence key, refused" risk-confidence "certain"
+
+# Covers: is lifted and held to the coverage check's grammar — bounded ids,
+# comma-separated, or one of the three exemptions — and printed as spelled.
+for cov in 'none (prefactor)' 'none (open-issue)' 'none (release)' 'R1' 'process/R38,process/R39'; do
+	body "Tier: implementer\nCovers: $cov\n"
+	stamp 900
+	expect_resolved "$(printf 'Tier: implementer\nCovers: %s' "$cov")" "process/R42: 'Covers: $cov' is lifted and printed"
+done
+body "Tier: implementer\nCovers: process/R41; touch PWN\n"
+stamp 900
+refused "process/R42: a Covers: line that is no id list" covers "touch PWN"
+body 'Tier: implementer\nCovers: none (later)\n'
+stamp 900
+refused "process/R42: a Covers: exemption outside the three" covers "later"
+body 'Tier: implementer\nCovers: process/R41\nCovers: process/R42\n'
+stamp 900
+expect_status 2 "process/R42: two Covers: lines with two values are refused together, exit 2"
+expect_err_has "the stamp lines are refused together"
+# Without the requirement grammar beside it the reader cannot read a Covers:
+# line, and fails closed: exit 3, nothing printed.
+mkdir -p "$SCRATCH/nogrammar/scripts"
+cp "$STAMP" "$KIT/scripts/vocab.sh" "$KIT/scripts/vocab.config.sh" "$SCRATCH/nogrammar/scripts/"
+body 'Tier: implementer\nCovers: process/R41\n'
+cd "$SCRATCH" || exit 2
+t_exec sh "$SCRATCH/nogrammar/scripts/stamp.sh" 900
+cd "$KIT" || exit 2
+expect_status 3 "process/R42: no requirement grammar beside the reader — a Covers: line cannot be read, exit 3"
+[ -z "$T_OUT" ] && pass "process/R42: …nothing on stdout" || fail "process/R42: …stdout should be empty, got '$T_OUT'"
+# …and a grammar that predates req_covers_ids is no grammar for a Covers: line.
+sed '/^req_covers_ids() {/,/^}/d' "$KIT/scripts/requirement.lib.sh" >"$SCRATCH/nogrammar/scripts/requirement.lib.sh"
+cd "$SCRATCH" || exit 2
+t_exec sh "$SCRATCH/nogrammar/scripts/stamp.sh" 900
+cd "$KIT" || exit 2
+rm -f "$SCRATCH/nogrammar/scripts/requirement.lib.sh"
+expect_status 3 "process/R42: a requirement grammar with no req_covers_ids — a Covers: line cannot be read, exit 3"
+[ -z "$T_OUT" ] && pass "process/R42: …nothing on stdout" || fail "process/R42: …stdout should be empty, got '$T_OUT'"
+expect_err_has "defines no req_covers_ids"
+
+# A consumer whose policy predates the contract declares none of its fields:
+# the new lines are dropped as undeclared, the Tier: line still read.
+body 'Tier: implementer\nRisk: high security\nTest-tier: process/R41 suite\n'
+stamp_under "$SCRATCH/nodomain.config.sh"
+expect_resolved "Tier: implementer" "process/R42: under a policy that predates the contract, the new lines are not printed"
+expect_err_has "the risk line names a field this project's policy does not declare"
+expect_err_has "the test-tier line names a field this project's policy does not declare"
+
+# ---------------------------------------------------------------------------
+banner "The bound is the policy's: 32 Test-tier: lines, 8 of every other key (process/R43)"
+# ---------------------------------------------------------------------------
+tiers() { awk -v n="$1" 'BEGIN { print "Tier: implementer"; for (i = 1; i <= n; i++) printf "Test-tier: process/R%d suite\n", i }'; }
+body "$(tiers 32)\n"
+stamp 900
+expect_status 0 "process/R43: 32 Test-tier: lines are within the bound — checked, exit 0"
+[ "$(printf '%s\n' "$T_OUT" | grep -c '^Test-tier:')" = 32 ] && pass "process/R43: …all 32 printed" ||
+	fail "process/R43: …printed $(printf '%s\n' "$T_OUT" | grep -c '^Test-tier:') of 32"
+body "$(tiers 33)\n"
+stamp 900
+expect_status 5 "process/R43: 33 Test-tier: lines are past the bound: exit 5"
+body "$(tiers 40)\n"
+stamp 900
+expect_status 5 "process/R43: 40 Test-tier: lines (UC1 3b): exit 5, a stop"
+[ -z "$T_OUT" ] && pass "process/R43: …nothing on stdout" || fail "process/R43: …stdout should be empty"
+expect_err_has "40 test-tier lines"
+expect_err_lacks "process/R"
+for key in Risk Risk-confidence Covers; do
+	body "$(awk -v k="$key" 'BEGIN { print "Tier: implementer"; for (i = 0; i < 9; i++) print k ": low" }')\n"
+	stamp 900
+	expect_status 5 "process/R43: nine $key: lines are past the bound of 8: exit 5"
+	[ -z "$T_OUT" ] && pass "process/R43: …nothing on stdout" || fail "process/R43: …stdout should be empty"
+	expect_err_has "9 $(printf '%s' "$key" | tr 'A-Z' 'a-z') lines"
+done
+# The bound is read from the policy, not spelled here: a policy that lowers
+# it is obeyed, and one that declares none keeps the reader's own 8.
+cat >"$SCRATCH/bound2.config.sh" <<'EOF'
+VOCAB_FIELDS='tier test-tier'
+VOCAB_KEYED='test-tier'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_TEST_TIER='unit suite e2e manual'
+VOCAB_BOUND=2
+VOCAB_BOUNDS='test-tier=3'
+EOF
+body "$(tiers 3)\n"
+stamp_under "$SCRATCH/bound2.config.sh"
+expect_status 0 "process/R43: a policy bounding test-tier at 3: three lines pass"
+body "$(tiers 4)\n"
+stamp_under "$SCRATCH/bound2.config.sh"
+expect_status 5 "process/R43: …and four are past it — the bound is the policy's"
+body 'Tier: implementer\nTier: implementer\nTier: implementer\n'
+stamp_under "$SCRATCH/bound2.config.sh"
+expect_status 5 "process/R43: …and its every-key bound of 2 holds the Tier: lines"
+cat >"$SCRATCH/nobound.config.sh" <<'EOF'
+VOCAB_FIELDS='tier test-tier'
+VOCAB_KEYED='test-tier'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_TEST_TIER='unit suite e2e manual'
+EOF
+body "$(tiers 9)\n"
+stamp_under "$SCRATCH/nobound.config.sh"
+expect_status 5 "process/R43: a policy that publishes no bound: the reader's own 8 holds, even for Test-tier:"
+
+# ---------------------------------------------------------------------------
 banner "Exit 4 — the fetch failed: never read as a missing line"
 # ---------------------------------------------------------------------------
 body 'Tier: implementer\n' 1

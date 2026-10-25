@@ -1,9 +1,11 @@
 #!/bin/sh
 # vocab.sh — THE vocabulary checker. One implementation, every caller.
 #
-#   sh scripts/vocab.sh [check] [<line> …]     lines as arguments, or on stdin
-#                                              when none are given
-#   sh scripts/vocab.sh fields                 print the effective vocabularies
+#   sh scripts/vocab.sh [check] [--writer <w>] [<line> …]
+#                                   lines as arguments, or on stdin when none
+#                                   are given; <w> is planner (the default)
+#                                   or risk-rule
+#   sh scripts/vocab.sh fields      print the effective vocabularies
 #
 # WHAT IT ANSWERS. One question: "is this value legal for this field, given the
 # other fields?" The chain makes a closed-set judgment at every hand-off — a
@@ -25,6 +27,34 @@
 # values is refused — a body with two answers has none, and a line appended
 # to it cannot withdraw a rule — while the same value repeated is one answer.
 #
+# FOUR KINDS OF FIELD beside the closed one, each named by a policy list:
+#   OPEN       (VOCAB_OPEN) — the shape alone is held, never membership.
+#   QUERY      (VOCAB_QUERY) — a trace filter, held to vocab_query_ok.
+#   QUALIFIED  (VOCAB_QUALIFIED) — a LEVEL token, then, for the levels
+#              VOCAB_<FIELD>_QUALIFIED names, exactly one REASON token from
+#              VOCAB_<FIELD>_REASONS; a level not named takes none. The
+#              reasons VOCAB_<FIELD>_RESERVED names have ONE WRITER, the risk
+#              rule: refused unless the caller declares itself so with
+#              `--writer risk-rule`. The default writer is the planner, so a
+#              ticket, a stamp or a factory line can never name one — and the
+#              writer is a flag, never the environment, so no caller inherits
+#              it. `Risk: high shared-layer` is one.
+#   KEYED      (VOCAB_KEYED) — a requirement KEY, then one token: `Test-tier:
+#              process/R41 suite`. The key is held to the requirement
+#              library's bounded id (scripts/requirement.lib.sh beside this
+#              file, read only when a keyed line is checked, refused without
+#              it); the checker holds the token and never the id's meaning.
+#              The field repeats once per key: the same key with two tokens
+#              is refused, the same key with the same token is one answer.
+# A rule reads one token, so no rule may name a query, qualified or keyed
+# field. The kit's ADR-0037 fixes the ticket contract these serve.
+#
+# LINE BOUNDS are policy too, PUBLISHED here for every reader of a stamp:
+# VOCAB_BOUND is how many lines of one stamp key a reader lifts, VOCAB_BOUNDS
+# its per-field exceptions (`test-tier=32`). The checker validates them and
+# prints them under `fields`; scripts/stamp.sh enforces them. A policy that
+# declares none prints none, and that reader keeps its own bound of 8.
+#
 # The caller hands it BARE `Field: value` lines. A markdown-wrapped line —
 # `- Tier: implementer`, `**Tier:** implementer` — is not a decision line to
 # it: the key it reads is `- Tier` or `**Tier`, no declared field, so the line
@@ -35,7 +65,10 @@
 # STREAMS AND EXIT CODES. stdout carries the answer and nothing else: `check`
 # prints nothing, `fields` prints one field per line, an open one marked
 # `(open)`, a query one marked `(query)` with no tokens (its value is a trace
-# filter held to a grammar, VOCAB_QUERY), then one line per rule. Every reason is on
+# filter held to a grammar, VOCAB_QUERY), a qualified one marked
+# `(qualified)` with its levels, the reasons and the reserved reasons, a
+# keyed one marked `(keyed)` with its tokens, then a `bound:` line and a
+# `bound <field>:` line per exception, then one line per rule. Every reason is on
 # stderr, prefixed `x vocab:`, one line per violation naming the field, the
 # value and the vocabulary. Exit 0 is legal; exit 2 is a refused value, a
 # usage error, a policy file named explicitly and missing, or a policy file
@@ -92,9 +125,11 @@ VOCAB_TOKEN_MAX=64
 # file: a file is the whole policy, never a layer over these — a rule it
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
-	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class'
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier result scope'
 	VOCAB_OPEN='domain class'
 	VOCAB_QUERY='targets'
+	VOCAB_QUALIFIED='risk'
+	VOCAB_KEYED='test-tier'
 	VOCAB_TIER='planner implementer mechanical reviewer'
 	VOCAB_LABEL='ready-for-agent none'
 	VOCAB_DOMAIN='content code tests html-report self-implemented'
@@ -105,14 +140,28 @@ vocab_shipped_defaults() {
 	VOCAB_CONFIDENCE='low medium high'
 	VOCAB_COMMAND_SHAPED='yes no'
 	VOCAB_AUTHOR_KIND='bot human'
+	VOCAB_RISK='low high'
+	VOCAB_RISK_QUALIFIED='high'
+	VOCAB_RISK_REASONS='irreversible security invisible shared-layer unclear unlearned outward'
+	VOCAB_RISK_RESERVED='unlearned outward'
+	VOCAB_RISK_CONFIDENCE='low medium high'
+	VOCAB_TEST_TIER='unit suite e2e manual'
+	VOCAB_RESULT='pass fail skipped'
+	VOCAB_SCOPE='inside outward'
+	VOCAB_BOUND='8'
+	VOCAB_BOUNDS='test-tier=32'
 	VOCAB_RULES='command-shaped=yes => action!=apply'
 }
 
 usage() {
 	cat >&2 <<'USAGE'
-usage: sh scripts/vocab.sh [check] [<line> …]   lines as arguments, or on stdin
-       sh scripts/vocab.sh fields               print the effective vocabularies
+usage: sh scripts/vocab.sh [check] [--writer <w>] [<line> …]
+                                lines as arguments, or on stdin
+       sh scripts/vocab.sh fields
+                                print the effective vocabularies
   a line is `<Field>: <value>`; a field is one the policy file declares;
+  <w> is planner (the default) or risk-rule — the one writer of a reason
+  the policy reserves;
   the caller hands it bare `Field: value` lines: a markdown-wrapped line
   (`- Tier: …`, `**Tier:** …`) is not a decision line to it, and is ignored;
   a first argument with no colon is a subcommand, and only these two exist
@@ -134,6 +183,10 @@ vocab_load_config() {
 	VOCAB_FIELDS=
 	VOCAB_OPEN=
 	VOCAB_QUERY=
+	VOCAB_QUALIFIED=
+	VOCAB_KEYED=
+	VOCAB_BOUND=
+	VOCAB_BOUNDS=
 	VOCAB_RULES=
 	if [ -n "${VOCAB_CONFIG:-}" ]; then
 		[ -f "$VOCAB_CONFIG" ] || {
@@ -187,6 +240,30 @@ vocab_is_field() { vocab_in_list "$VOCAB_FIELDS" "$1"; }
 vocab_is_open() { vocab_in_list "${VOCAB_OPEN:-}" "$1"; }
 
 vocab_is_query() { vocab_in_list "${VOCAB_QUERY:-}" "$1"; }
+
+vocab_is_qualified() { vocab_in_list "${VOCAB_QUALIFIED:-}" "$1"; }
+
+vocab_is_keyed() { vocab_in_list "${VOCAB_KEYED:-}" "$1"; }
+
+# vocab_sub <field> <part> — a qualified field's own list: QUALIFIED,
+# REASONS or RESERVED, in VOCAB_<FIELD>_<PART>.
+vocab_sub() { eval "printf '%s' \"\${$(vocab_var "$1")_$2:-}\""; }
+
+# vocab_req_id_ok <id> — a bounded requirement id, in the requirement
+# library's grammar (REQ_BOUNDED_ID_ERE), the library sourced from beside
+# this file on first use. Returns 2 when the library is missing.
+_vocab_req_loaded=0
+vocab_req_id_ok() {
+	if [ "$_vocab_req_loaded" = 0 ]; then
+		[ -r "$_vocab_here/requirement.lib.sh" ] || return 2
+		# shellcheck disable=SC1091
+		. "$_vocab_here/requirement.lib.sh"
+		[ -n "${REQ_BOUNDED_ID_ERE:-}" ] || return 2
+		_vocab_req_loaded=1
+	fi
+	case $1 in *"$_vocab_nl"*) return 1 ;; esac
+	printf '%s\n' "$1" | LC_ALL=C grep -Eqx "$REQ_BOUNDED_ID_ERE"
+}
 
 # vocab_query_ok <field> <value> — a QUERY field's value is a trace filter,
 # held to a grammar because no token set can hold it: one to
@@ -350,6 +427,10 @@ vocab_rule_side_ok() {
 		vocab_refuse "policy: rule '$1' names '$2', a query field — a rule reads tokens, and a query has none"
 		return 1
 	fi
+	if vocab_is_qualified "$2" || vocab_is_keyed "$2"; then
+		vocab_refuse "policy: rule '$1' names '$2', a qualified or keyed field — a rule reads one token, and its value holds two"
+		return 1
+	fi
 	if vocab_is_open "$2"; then
 		vocab_shape_ok "$3" || {
 			vocab_refuse "policy: rule '$1' names '$3', which is not a well-formed token"
@@ -437,6 +518,8 @@ vocab_token_lines() {
 	for _tl_f in $VOCAB_FIELDS; do
 		vocab_is_open "$_tl_f" && continue
 		vocab_is_query "$_tl_f" && continue
+		vocab_is_qualified "$_tl_f" && continue
+		vocab_is_keyed "$_tl_f" && continue
 		printf 'T %s %s\n' "$_tl_f" "$(vocab_tokens "$_tl_f")"
 	done
 }
@@ -481,14 +564,27 @@ vocab_validate_policy() {
 		# own variables share: a field named `fields` would make the field
 		# list its own vocabulary, silently.
 		case $_vp_f in
-		fields | open | rules | token-shape | config)
+		fields | open | rules | token-shape | config | qualified | keyed | bound | bounds)
 			vocab_refuse "policy: field name '$_vp_f' is reserved — $(vocab_var "$_vp_f") is the checker's own variable"
 			continue
 			;;
 		esac
+		for _vp_q in ${VOCAB_QUALIFIED:-}; do
+			case $_vp_f in
+			"$_vp_q-qualified" | "$_vp_q-reasons" | "$_vp_q-reserved")
+				vocab_refuse "policy: field name '$_vp_f' is reserved — $(vocab_var "$_vp_f") is qualified field '$_vp_q''s own list"
+				continue 2
+				;;
+			esac
+		done
+		_vp_kinds=0
+		for _vp_k in open query qualified keyed; do
+			"vocab_is_$_vp_k" "$_vp_f" && _vp_kinds=$((_vp_kinds + 1))
+		done
+		[ "$_vp_kinds" -le 1 ] ||
+			vocab_refuse "policy: field '$_vp_f' is declared more than one of open, query, qualified and keyed — one kind per field"
 		_vp_tokens=$(vocab_tokens "$_vp_f")
 		if vocab_is_query "$_vp_f"; then
-			vocab_is_open "$_vp_f" && vocab_refuse "policy: field '$_vp_f' is declared both open and a query — one kind per field"
 			[ -z "$_vp_tokens" ] || vocab_refuse "policy: field '$_vp_f' is a query and declares tokens ($(vocab_var "$_vp_f")) — a query is held to its grammar, never to tokens"
 			continue
 		fi
@@ -504,14 +600,81 @@ vocab_validate_policy() {
 			vocab_neutral_ok "$_vp_t" ||
 				vocab_refuse "policy: $_vp_f token '$_vp_t' carries its answer in its spelling ('$_vocab_answer_word') — tokens are neutral names"
 		done
+		vocab_is_qualified "$_vp_f" && vocab_validate_qualified "$_vp_f"
 	done
-	for _vp_q in ${VOCAB_QUERY:-}; do
-		vocab_is_field "$_vp_q" || vocab_refuse "policy: VOCAB_QUERY names '$_vp_q', which is not a declared field"
+	for _vp_list in QUERY QUALIFIED KEYED; do
+		for _vp_q in $(eval "printf '%s' \"\${VOCAB_$_vp_list:-}\""); do
+			vocab_is_field "$_vp_q" || vocab_refuse "policy: VOCAB_$_vp_list names '$_vp_q', which is not a declared field"
+		done
 	done
+	vocab_validate_bounds
 	_vocab_rule_lines=
 	vocab_each_rule vocab_check_policy_rule
 	# Rules sharing an antecedent all fire together: hold each such group.
 	vocab_report_conflicts "$_vocab_rule_lines" by-antecedent
+	return 0
+}
+
+# vocab_validate_qualified <field> — the levels that take a reason are
+# levels; the reasons are well-formed, neutral and declared; the reserved
+# reasons are reasons.
+vocab_validate_qualified() {
+	_vq_levels=$(vocab_tokens "$1")
+	_vq_reasons=$(vocab_sub "$1" REASONS)
+	[ -n "$(vocab_sub "$1" QUALIFIED)" ] ||
+		vocab_refuse "policy: qualified field '$1' names no level that takes a reason ($(vocab_var "$1")_QUALIFIED is empty)"
+	[ -n "$_vq_reasons" ] ||
+		vocab_refuse "policy: qualified field '$1' declares no reasons ($(vocab_var "$1")_REASONS is empty)"
+	for _vq_l in $(vocab_sub "$1" QUALIFIED); do
+		vocab_in_list "$_vq_levels" "$_vq_l" ||
+			vocab_refuse "policy: $1 qualifies '$_vq_l', which is not one of its levels ($_vq_levels)"
+	done
+	for _vq_r in $_vq_reasons; do
+		vocab_shape_ok "$_vq_r" || {
+			vocab_refuse "policy: $1 reason '$_vq_r' is not a well-formed token — a token is a $VOCAB_TOKEN_SHAPE of at most $VOCAB_TOKEN_MAX bytes"
+			continue
+		}
+		vocab_neutral_ok "$_vq_r" ||
+			vocab_refuse "policy: $1 reason '$_vq_r' carries its answer in its spelling ('$_vocab_answer_word') — tokens are neutral names"
+	done
+	for _vq_r in $(vocab_sub "$1" RESERVED); do
+		vocab_in_list "$_vq_reasons" "$_vq_r" ||
+			vocab_refuse "policy: $1 reserves '$_vq_r', which is not one of its reasons ($_vq_reasons)"
+	done
+	return 0
+}
+
+# vocab_count_ok <n> — a count of lines: 1 to 999, digits only.
+vocab_count_ok() {
+	case $1 in
+	'' | 0* | *[!0123456789]* | ????*) return 1 ;;
+	esac
+	return 0
+}
+
+# vocab_validate_bounds — VOCAB_BOUND a count, each VOCAB_BOUNDS entry a
+# declared field and a count. Both may be empty: a policy that predates them.
+vocab_validate_bounds() {
+	if [ -n "${VOCAB_BOUND:-}" ] && ! vocab_count_ok "$VOCAB_BOUND"; then
+		vocab_refuse "policy: VOCAB_BOUND '$VOCAB_BOUND' is not a count of lines — 1 to 999"
+	fi
+	for _vb_e in ${VOCAB_BOUNDS:-}; do
+		_vb_f=${_vb_e%%=*}
+		_vb_n=${_vb_e#*=}
+		case $_vb_e in
+		*=*) ;;
+		*)
+			vocab_refuse "policy: VOCAB_BOUNDS entry '$_vb_e' is not <field>=<count>"
+			continue
+			;;
+		esac
+		vocab_is_field "$_vb_f" || {
+			vocab_refuse "policy: VOCAB_BOUNDS names '$_vb_f', which is not a declared field"
+			continue
+		}
+		vocab_count_ok "$_vb_n" ||
+			vocab_refuse "policy: VOCAB_BOUNDS gives $_vb_f '$_vb_n', which is not a count of lines — 1 to 999"
+	done
 	return 0
 }
 
@@ -557,6 +720,89 @@ vocab_check_value() {
 	return 0
 }
 
+# vocab_check_qualified <field> <value> — a level, then one reason for a
+# level that takes one; a reserved reason only from the risk rule. Leaves
+# the value with single blanks in $_vocab_norm, for the repeat check.
+vocab_check_qualified() {
+	_cq_f=$1
+	_cq_levels=$(vocab_tokens "$_cq_f")
+	_cq_reasons=$(vocab_sub "$_cq_f" REASONS)
+	set -f
+	# shellcheck disable=SC2086  # the split into level and reason is the point
+	set -- $2
+	set +f
+	if [ $# = 0 ]; then
+		vocab_refuse "$_cq_f: the value is empty; expected one of $_cq_levels"
+		return 1
+	fi
+	if ! vocab_in_list "$_cq_levels" "$1"; then
+		vocab_refuse "$_cq_f: '$1' is not one of $_cq_levels"
+		return 1
+	fi
+	if ! vocab_in_list "$(vocab_sub "$_cq_f" QUALIFIED)" "$1"; then
+		if [ $# != 1 ]; then
+			vocab_refuse "$_cq_f: '$1' takes no reason — the level stands alone"
+			return 1
+		fi
+		_vocab_norm=$1
+		return 0
+	fi
+	if [ $# != 2 ]; then
+		vocab_refuse "$_cq_f: '$1' takes exactly one reason, one of $_cq_reasons"
+		return 1
+	fi
+	if ! vocab_in_list "$_cq_reasons" "$2"; then
+		vocab_refuse "$_cq_f: '$2' is not one of $_cq_reasons"
+		return 1
+	fi
+	if vocab_in_list "$(vocab_sub "$_cq_f" RESERVED)" "$2" && [ "$_vocab_writer" != risk-rule ]; then
+		vocab_refuse "$_cq_f: the reason '$2' is reserved for the risk rule — this caller writes as the $_vocab_writer"
+		return 1
+	fi
+	_vocab_norm="$1 $2"
+	return 0
+}
+
+# vocab_check_keyed <field> <value> — a requirement id, then one token; one
+# token per id across the lines, in $_vocab_keyed as `<field> <id> <token>`.
+_vocab_keyed=
+vocab_check_keyed() {
+	_ck_f=$1
+	_ck_tokens=$(vocab_tokens "$_ck_f")
+	set -f
+	# shellcheck disable=SC2086  # the split into id and token is the point
+	set -- $2
+	set +f
+	if [ $# != 2 ]; then
+		vocab_refuse "$_ck_f: expected '<requirement id> <tier>', the tier one of $_ck_tokens"
+		return 1
+	fi
+	vocab_req_id_ok "$1"
+	case $? in
+	0) ;;
+	2)
+		vocab_refuse "$_ck_f: the requirement grammar $_vocab_here/requirement.lib.sh is missing beside the checker — no id can be read"
+		return 1
+		;;
+	*)
+		vocab_refuse "$_ck_f: the id is not a requirement id — R<n> or <area>/R<n>, the area at most 32 characters, n at most 6 digits"
+		return 1
+		;;
+	esac
+	if ! vocab_in_list "$_ck_tokens" "$2"; then
+		vocab_refuse "$_ck_f: '$2' is not one of $_ck_tokens"
+		return 1
+	fi
+	_ck_prev=$(printf '%s\n' "$_vocab_keyed" | awk -v f="$_ck_f" -v k="$1" '$1 == f && $2 == k { print $3; exit }')
+	if [ -n "$_ck_prev" ]; then
+		[ "$_ck_prev" = "$2" ] && return 0
+		vocab_refuse "$_ck_f: '$1' is given two tiers, '$2' after '$_ck_prev' — one per requirement id"
+		return 1
+	fi
+	_vocab_keyed="$_vocab_keyed${_vocab_keyed:+$_vocab_nl}$_ck_f $1 $2"
+	return 0
+}
+
 # The values seen so far, per field, for the rules: _vocab_val_<VAR>=<value>.
 # A remembered value is never empty — vocab_check_value refused it first —
 # so an empty answer from vocab_value_of means the field was not seen. The
@@ -577,7 +823,16 @@ vocab_check_line() {
 	_cl_key=$(vocab_field_key "${1%%:*}")
 	vocab_is_field "$_cl_key" || return 0
 	_cl_value=$(vocab_trim "${1#*:}")
-	vocab_check_value "$_cl_key" "$_cl_value" || return 0
+	if vocab_is_keyed "$_cl_key"; then
+		vocab_check_keyed "$_cl_key" "$_cl_value"
+		return 0
+	fi
+	if vocab_is_qualified "$_cl_key"; then
+		vocab_check_qualified "$_cl_key" "$_cl_value" || return 0
+		_cl_value=$_vocab_norm
+	else
+		vocab_check_value "$_cl_key" "$_cl_value" || return 0
+	fi
 	# A field said twice with two values has no value: refused, whichever
 	# line comes last, so one appended line cannot withdraw a firing rule's
 	# antecedent or replace its consequent in an untrusted body.
@@ -609,7 +864,16 @@ vocab_apply_rule() {
 	return 0
 }
 
+_vocab_writer=planner
 vocab_check() {
+	if [ "${1:-}" = --writer ]; then
+		[ $# -ge 2 ] || usage
+		case $2 in
+		planner | risk-rule) _vocab_writer=$2 ;;
+		*) usage ;;
+		esac
+		shift 2
+	fi
 	if [ $# -gt 0 ]; then
 		for _vc_line in "$@"; do
 			vocab_check_line "$_vc_line"
@@ -637,9 +901,20 @@ vocab_fields() {
 			printf '%s (query):\n' "$_vf_field"
 		elif vocab_is_open "$_vf_field"; then
 			printf '%s (open): %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
+		elif vocab_is_qualified "$_vf_field"; then
+			printf '%s (qualified): %s; reasons for %s: %s' "$_vf_field" "$(vocab_tokens "$_vf_field")" \
+				"$(vocab_sub "$_vf_field" QUALIFIED)" "$(vocab_sub "$_vf_field" REASONS)"
+			[ -z "$(vocab_sub "$_vf_field" RESERVED)" ] || printf '; reserved: %s' "$(vocab_sub "$_vf_field" RESERVED)"
+			printf '\n'
+		elif vocab_is_keyed "$_vf_field"; then
+			printf '%s (keyed): %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
 		else
 			printf '%s: %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
 		fi
+	done
+	[ -z "${VOCAB_BOUND:-}" ] || printf 'bound: %s\n' "$VOCAB_BOUND"
+	for _vf_b in ${VOCAB_BOUNDS:-}; do
+		printf 'bound %s: %s\n' "${_vf_b%%=*}" "${_vf_b#*=}"
 	done
 	vocab_each_rule vocab_print_rule
 	exit 0
@@ -661,6 +936,7 @@ fields)
 	[ $# -eq 1 ] || usage
 	vocab_fields
 	;;
+--writer) vocab_check "$@" ;;
 -*) usage ;;
 *)
 	# A bare line as the first argument — `sh scripts/vocab.sh 'Tier: x'` —

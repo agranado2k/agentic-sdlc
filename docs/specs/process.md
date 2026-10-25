@@ -48,3 +48,10 @@ R33. `/to-prd`'s template SHALL write each scenario as a use case: `UC<n>`, a na
 R34. `/to-prd` SHALL end each requirement a step checks with the steps it checks in brackets, as in `[UC1 3a]`, and MAY leave the brackets off a requirement no step reaches.
 R35. `/to-tickets` SHALL read each use case's main flow as a candidate tracer bullet.
 R36. A PRD written before this change SHALL keep its walkthrough scenarios, and no check SHALL refuse them.
+R38. The vocabulary checker SHALL accept a `Risk:` line whose value is `low` alone, or `high` followed by exactly one reason from the policy's risk reasons (`irreversible`, `security`, `invisible`, `shared-layer`, `unclear`, `unlearned`, `outward`), and SHALL refuse any other value, naming the field. [UC1 2]
+R39. IF a `Risk:` line names a reason the policy reserves for the risk rule (`unlearned`, `outward`), THEN the vocabulary checker SHALL refuse it unless its caller declares itself the risk rule. [UC1 2a]
+R40. The vocabulary checker SHALL accept a `Test-tier:` line whose value is one requirement id in the coverage check's bounded grammar followed by one of `unit`, `suite`, `e2e`, `manual`, SHALL accept one such line per distinct id, and SHALL refuse an id given two different tiers. [UC1 2, 2b]
+R41. The shipped vocabulary policy SHALL declare the fields `risk`, `risk-confidence` (`low`, `medium`, `high`), `test-tier`, `result` (`pass`, `fail`, `skipped`) and `scope` (`inside`, `outward`), and the checker's built-in defaults SHALL equal it.
+R42. WHEN a ticket carries `Risk:`, `Risk-confidence:` or `Test-tier:` lines, the stamp reader SHALL lift and check them with the ticket's other stamp lines and print them as spelled, and SHALL print no `Risk:` line for a ticket that carries none. [UC1 3, 3a]
+R43. IF a ticket carries more than 32 `Test-tier:` lines, or more than 8 lines of any other stamp key, THEN the stamp reader SHALL stop with exit 5 and print nothing. [UC1 3b]
+R44. WHEN the release that ships R38 to R43 lands, `UPDATING.md` SHALL tell a consumer whose own vocabulary policy file predates it to add the five new fields, because a policy file that is found is the whole policy.
