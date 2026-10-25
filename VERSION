@@ -3310,7 +3310,13 @@
 # UPDATING.md, the arriving-from paragraph and both worked examples
 # re-pinned.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
-# Skills (9a): none. Wiring (9b): none. Templates (9c): none.
+# Skills (9a): /implement (from #880, landed beside this release) —
+# .agents/skills/implement/DISPATCHED-REVIEW.md says a skill dispatcher
+# that stages the worker contract hands an in-session review back: exit
+# 3, the model on stdout, the contract, the pinned commit and its diff
+# staged under <git dir>/skill-review/, and a refused hand-back's exit 2
+# a caller error to repair; SKILL.md step 9(b) points at that hand-back.
+# Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/vocab.config.sh declares risk, risk-confidence,
 # test-tier, result and scope, VOCAB_QUALIFIED, VOCAB_KEYED, VOCAB_BOUND
 # and VOCAB_BOUNDS — a consumer's own policy file is the whole policy, so
