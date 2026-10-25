@@ -106,7 +106,9 @@ author is not the session's to name (ADR-0030, #778): the passed verdict
 records its rung's model, and the `review-pr` dispatch resolves against it
 whatever `AGENT_SESSION_MODEL` says. Hand it the ticket body as
 `--ticket-file`: a cascade-built ticket with no recorded author is refused,
-never reviewed on the session's model. The Codex policy keeps an
+never reviewed on the session's model. A mechanical ticket no cascade ran
+for — no hand-back state, no recorded author in its worktree — is not
+cascade-built, and is reviewed from the author the session names (#881). The Codex policy keeps an
 empty fallback: no Codex session is on the Sonnet family.
 
 ## The policy behind the mapping

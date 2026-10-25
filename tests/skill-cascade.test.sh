@@ -882,22 +882,34 @@ review opus "$T_MECH_CASC" --ticket 999
 [ "$T_STATUS" = 2 ] && pass "a record for another ticket is no author: the cascade ticket's review is refused" ||
 	fail "a record for ticket #682 answered ticket #999: exit $T_STATUS, '$T_OUT'"
 
-# A cascade-built ticket whose worktree holds no recorded author is refused.
+# A mechanical-stamped ticket no cascade ran for is no cascade-built ticket
+# (#881): its worktree holds no cascade state and no recorded verdict, so the
+# session built it, and its review resolves from the author the session names.
 fresh_wt
 review opus "$T_MECH_CASC"
-[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
-	pass "a cascade ticket with no recorded author is refused, exit 2, no reviewer named" ||
-	fail "a cascade ticket with no author exited $T_STATUS with '$T_OUT': $T_ERR"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = sonnet ] &&
+	pass "a mechanical ticket no cascade built is reviewed: an Opus author gets the Sonnet reviewer" ||
+	fail "a mechanical ticket with no cascade record exited $T_STATUS with '$T_OUT': $T_ERR"
+review sonnet "$T_MECH_CASC"
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = opus ] &&
+	pass "…and a Sonnet author the session names gets the Opus reviewer" ||
+	fail "a Sonnet-named mechanical review with no cascade record exited $T_STATUS with '$T_OUT': $T_ERR"
 case "$T_ERR" in
-*"no rung author"*--rung-done*) pass "…naming what is missing and the --rung-done call that records it" ;;
-*) fail "the refusal does not say what is missing: $T_ERR" ;;
+*"no rung author"*) fail "a ticket no cascade ran for was called cascade-built: $T_ERR" ;;
+*) pass "…and nothing calls it cascade-built" ;;
 esac
-# A rung handed back and never judged has no author either.
+# A rung handed back and never judged is a cascade record with no author:
+# still refused, with the existing message (ADR-0030).
 cascade_keep "$T_ORACLE"
 spawn_in_session sonnet
 review opus "$T_MECH_CASC"
-[ "$T_STATUS" = 2 ] && pass "a handed-back rung with no verdict records no author: refused" ||
-	fail "an unjudged rung's review exited $T_STATUS with '$T_OUT'"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "a handed-back rung with no verdict records no author: refused, exit 2, no reviewer named" ||
+	fail "an unjudged rung's review exited $T_STATUS with '$T_OUT': $T_ERR"
+case "$T_ERR" in
+*"is cascade-built and"*"no rung author"*--rung-done*) pass "…naming what is missing and the --rung-done call that records it" ;;
+*) fail "the refusal does not say what is missing: $T_ERR" ;;
+esac
 
 # A cascade with no passed verdict records no author for a review to use:
 # rung 1 escalated, rung 2 handed back and not yet judged.

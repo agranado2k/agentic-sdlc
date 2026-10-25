@@ -362,15 +362,22 @@ fi
 # back: for a review-pr dispatch, the recorded author is AGENT_SESSION_MODEL,
 # whatever the session named. A cascade-built ticket — a --ticket-file stamped
 # mechanical, whose oracle line selects a closed-list command, under a policy
-# that declares a cascade — with no author recorded for it is refused, exit 2:
-# the session's own model is the wrong answer, so no default stands in for it.
+# that declares a cascade, AND for which a cascade actually ran: its hand-back
+# state or a recorded verdict is in the worktree's git dir — with no author
+# recorded for it is refused, exit 2: the session's own model is the wrong
+# answer, so no default stands in for it. The stamp alone proves nothing
+# (#881): a mechanical ticket a session built itself leaves no cascade record,
+# and is reviewed like any self-implemented diff, from the author it names.
 # The record is the worktree's: --worktree, or the checkout this runs in.
 CASCADE_AUTHOR_NAME=skill-cascade-author
 if [ "${SKILL#/}" = review-pr ]; then
 	_ra_wt=${CASCADE_WT:-.}
-	_ra_author='' _ra_file=''
+	_ra_author='' _ra_file='' _ra_ran=0
 	_ra_gd=$(cd "$_ra_wt" 2>/dev/null && git rev-parse --absolute-git-dir 2>/dev/null) &&
 		_ra_file="$_ra_gd/$CASCADE_AUTHOR_NAME"
+	# A cascade ran here when its hand-back state or its recorded author is
+	# left in the git dir — the state's name is the one _cascade stages.
+	[ -n "$_ra_file" ] && { [ -e "$_ra_gd/skill-cascade" ] || [ -f "$_ra_file" ]; } && _ra_ran=1
 	if [ -n "$_ra_file" ] && [ -f "$_ra_file" ]; then
 		_ra_model=$(sed -n 's/^model=//p' "$_ra_file" | head -n 1)
 		_ra_ticket=$(sed -n 's/^ticket=//p' "$_ra_file" | head -n 1)
@@ -380,7 +387,7 @@ if [ "${SKILL#/}" = review-pr ]; then
 		[ "$_ra_ticket" = "${TICKET:+#}${TICKET:-none}" ] && _ra_author=$_ra_model
 	fi
 	_ra_built=0
-	if [ -n "$CASCADE_TICKET" ]; then
+	if [ "$_ra_ran" = 1 ] && [ -n "$CASCADE_TICKET" ]; then
 		_fs_read_stamp
 		if [ "$_fs_tier" = mechanical ] &&
 			[ -n "$(sh -c '. "$1" >/dev/null 2>&1; printf "%s" "${AGENT_CASCADE_MECHANICAL:-}"' _ "$AGENTS_CONFIG")" ] &&
