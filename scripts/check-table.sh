@@ -164,10 +164,10 @@ m=$(printf '%s\n' "$above" | grep -c "$marker")
 
 # The parse: `ok <id> <tier> <result>` per row, or one `bad <what>` line.
 rows=$(printf '%s\n' "$above" | awk -v marker="$marker" -v tiers=" $tiers " -v results=" $results " \
-	-v amax="$REQ_ID_AREA_MAX" -v nmax="$REQ_ID_NUM_MAX" '
+	-v area="$REQ_AREA_ERE" -v num="$REQ_PRD_ID_ERE" -v amax="$REQ_ID_AREA_MAX" -v nmax="$REQ_ID_NUM_MAX" '
 	function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 	function idok(s,    a, num) {
-		if (s !~ /^([a-z][a-z0-9-]*\/)?R[1-9][0-9]*$/) return 0
+		if (s !~ idre) return 0
 		a = s; if (!sub(/\/.*/, "", a)) a = ""
 		num = s; sub(/^.*R/, "", num)
 		return length(a) <= amax && length(num) <= nmax
@@ -181,6 +181,7 @@ rows=$(printf '%s\n' "$above" | awk -v marker="$marker" -v tiers=" $tiers " -v r
 		pin = "^[A-Za-z0-9._/-]+::[A-Za-z0-9._/-]+@[0-9a-fA-F]+$"
 		url = "^https://[A-Za-z0-9._/:#?=&%-]+$"
 		head = "| Requirement | Test tier | Result | Evidence |"
+		idre = "^(" area "/)?" num "$"
 	}
 	state == 0 { if ($0 ~ marker) state = 1; next }
 	state == 1 { if (trim($0) != head) { print "bad the header row"; exit } state = 2; next }

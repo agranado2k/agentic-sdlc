@@ -309,9 +309,11 @@ case $ALL_OUT in
 *"$CANARY"*) fail "process/R47: the canary reached an output stream — a body line leaked" ;;
 *) pass "process/R47: across every run above, the canary never reached stdout or stderr" ;;
 esac
-# Every stdout line of every run is one word and one bounded id.
+# Every stdout line of every run is one word and one bounded id, the id
+# shape read from the grammar's one home.
+. "$KIT/scripts/requirement.lib.sh"
 printf '%s\n' "$ALL_OUT" | grep -E '^(missing-row|extra-row|tier-differs|fail|skipped): ' |
-	grep -Evx "(missing-row|extra-row|tier-differs|fail|skipped): ([a-z][a-z0-9-]*/)?R[1-9][0-9]*" >"$SCRATCH/odd"
+	grep -Evx "(missing-row|extra-row|tier-differs|fail|skipped): $REQ_BOUNDED_ID_ERE" >"$SCRATCH/odd"
 [ ! -s "$SCRATCH/odd" ] && pass "process/R47: every verdict line is a word and a requirement id, nothing else" ||
 	fail "process/R47: a verdict line carried more than a word and an id: $(head -1 "$SCRATCH/odd")"
 
