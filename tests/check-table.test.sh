@@ -128,6 +128,13 @@ run
 expect_status 1 "process/R47: a skipped row exits 1 — a manual check awaits the operator"
 expect_out_is "skipped: process/R47" "process/R47: skipped: names the id"
 
+# A repeated covered id is judged by its first row, and named extra besides.
+body "$ROW45" "| process/R46 | suite | fail | $PIN |" "$ROW47" "$ROW46"
+run
+expect_status 1 "process/R47: a failing first row with a second row for the same id exits 1"
+expect_out_is "fail: process/R46
+extra-row: process/R46" "process/R47: … the first row's fail:, then extra-row: for the repeat"
+
 # All five at once: covered ids in the ticket's order, then the extra rows in
 # the table's order.
 body "| process/R47 | manual | skipped | - |" "| process/R9 | unit | pass | $PIN |" "| process/R45 | e2e | fail | $PIN |"
@@ -184,7 +191,7 @@ ok=$(printf 'https://example.com/%0180d' 0)
 body "$ROW45" "$ROW46" "| process/R47 | manual | pass | $ok |"
 run
 expect_resolved "" "process/R46: a URL of exactly 200 characters is evidence"
-body "$ROW45" "$ROW46" "| process/R47 | manual | pass | https://example.com/a-b_c.d/e:f#g?h=i&j=%%20 |"
+body "$ROW45" "$ROW46" "| process/R47 | manual | pass | https://example.com/a-b_c.d/e:f#g?h=i&j=%20 |"
 run
 expect_resolved "" "process/R46: a URL using every character of its plain set is evidence"
 body "$ROW45" "$ROW46" "| process/R47 | manual | pass | tests/a-b_c.sh::Some.test_name-1@0123456789abcdef0123456789abcdef01234567 |"
