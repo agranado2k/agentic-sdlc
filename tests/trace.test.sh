@@ -3749,12 +3749,12 @@ er_snap() { find "$ER_T" -type f -exec cksum {} + | sort; git -C "$ER" status --
 _er_before=$(er_snap)
 t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$ER" "$ER_ON" "$ER_POL" "$TRACE"
 [ "$T_STATUS" = 0 ] && pass "record exits 0" || fail "record exited $T_STATUS: $T_ERR"
-_er_want='security: landings 2 of 20, in the fix window 1, mistakes 1
-api-crud: landings 0 of 20, in the fix window 0, mistakes 0
-pattern: landings 1 of 20, in the fix window 1, mistakes 0
-simplicity: landings 1 of 20, in the fix window 1, mistakes 0
-reuse-dry: landings 0 of 20, in the fix window 0, mistakes 0
-test-hygiene: landings 1 of 20, in the fix window 1, mistakes 1'
+_er_want='security: landings 2 of 20, in the fix window 1, mistakes 1, missed 1 of 2, miss rate 0.50, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0
+api-crud: landings 0 of 20, in the fix window 0, mistakes 0, missed 0 of 0, miss rate n/a, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0
+pattern: landings 1 of 20, in the fix window 1, mistakes 0, missed 0 of 1, miss rate 0.00, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0
+simplicity: landings 1 of 20, in the fix window 1, mistakes 0, missed 0 of 1, miss rate 0.00, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0
+reuse-dry: landings 0 of 20, in the fix window 0, mistakes 0, missed 0 of 0, miss rate n/a, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0
+test-hygiene: landings 1 of 20, in the fix window 1, mistakes 1, missed 1 of 1, miss rate 1.00, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0'
 [ "$T_OUT" = "$_er_want" ] &&
 	pass "runtime/R44, runtime/R45: one row per review area; #2 counts in both areas its first-parent diff touches, with its mistake; #3's base-side docs change is #3's alone; a stopped landing, one with no sha and one not in the repository count nowhere" ||
 	fail "runtime/R44, runtime/R45: record printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
@@ -3776,7 +3776,7 @@ done
 ER2_ON=$(policy "$ER2_T")
 env TRACE_CONFIG="$ER2_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#101' outcome=reverted data.by_sha="$_er_s1" 2>/dev/null
 t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$ER2" "$ER2_ON" "$ER_POL" "$TRACE"
-printf '%s\n' "$T_OUT" | grep -qxF 'test-hygiene: landings 20 of 20, in the fix window 0, mistakes 0' &&
+printf '%s\n' "$T_OUT" | grep -qF 'test-hygiene: landings 20 of 20, in the fix window 0, mistakes 0, missed 0 of 20,' &&
 	pass "runtime/R44: 21 landings count as the most recent 20, and a mistake on the 21st-most-recent is outside them" ||
 	fail "runtime/R44: over 21 landings record printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
 
@@ -3792,5 +3792,117 @@ _er_adr=$(ls "$KIT"/docs/adr/0036-*.md 2>/dev/null | head -1)
 [ -n "$_er_adr" ] && grep -qF 'ADR-0024' "$_er_adr" && grep -qF 'merge.outcome' "$_er_adr" && grep -qF 'record reader' "$_er_adr" &&
 	pass "ADR-0036 records the kind and the record reader as an amendment of ADR-0024" ||
 	fail "no docs/adr/0036-*.md naming ADR-0024, merge.outcome and the record reader"
+
+
+banner "43. the earned record shows misses and lens precision (runtime/R46-R51, #877)"
+# PRD-06's UC4 fixture, and three areas beside it that each pin one rule. A
+# finding is a raw line, like a landing: its time and its run are the point.
+# pr_ev <trace> <ts> <kind> <subject> <outcome> <run> <data body> — one line;
+# the id's middle field is a counter, so no two fixture lines share an id.
+PR_N=0
+pr_ev() {
+	PR_N=$((PR_N + 1))
+	mkdir -p "$1/events"
+	printf '{"v":1,"ts":"%s","id":"%s-%d-0000abcd","kind":"%s","subject":"%s","run":"%s","outcome":"%s","reason":"fixture","data":{%s}}\n' \
+		"$2" "$(printf '%s' "$2" | tr -d ':-')" "$PR_N" "$3" "$4" "$6" "$5" "$7" >>"$1/events/${2%%T*}.jsonl"
+}
+PR_RA=20261001T000000Z-1-0000aaaa
+PR_RB=20261002T000000Z-1-0000bbbb
+# pr_raise <trace> <ts> <pr> <id> <where> [run] — a raise; pr_triage <trace> <ts> <pr> <id> <outcome>.
+pr_raise() { pr_ev "$1" "$2" finding.raise "pr:#$3" raised "${6:-$PR_RA}" "\"id\":\"$4\",\"severity\":\"medium\",\"agent\":\"test-hygiene\",\"where\":\"$5\",\"posted\":\"yes\""; }
+pr_triage() { pr_ev "$1" "$2" finding.triage "pr:#$3" "$5" "$PR_RA" "\"id\":\"$4\",\"source\":\"local\""; }
+PR_T="$SCRATCH/precision-trace"
+PR_SHA=1111111111111111111111111111111111111111
+t_repo
+PR=$REPO
+# The 21st-most-recent landing, with an accepted finding: outside the 20, so
+# neither it nor its finding counts.
+_pr_s=$(er_land "$PR" tests/old.sh 'pr 200')
+er_ev "$PR_T" 2025-01-01T00:00:00Z merge.land 'pr:#200' landed "$_pr_s"
+pr_raise "$PR_T" 2025-01-01T00:01:00Z 200 H-1 tests/old.sh:1
+pr_triage "$PR_T" 2025-01-01T00:02:00Z 200 H-1 accepted
+# 20 landings touching tests/: #201-#214 long ago, #215-#220 inside the fix window.
+_pr_i=1
+while [ "$_pr_i" -le 20 ]; do
+	_pr_s=$(er_land "$PR" "tests/t$_pr_i.sh" "pr $((200 + _pr_i))")
+	if [ "$_pr_i" -le 14 ]; then
+		_pr_ts=$(printf '2026-01-01T00:%02d:00Z' "$_pr_i")
+		er_ev "$PR_T" "$_pr_ts" merge.land "pr:#$((200 + _pr_i))" landed "$_pr_s"
+		# 14 accepted findings, one per old landing.
+		pr_raise "$PR_T" "$_pr_ts" "$((200 + _pr_i))" M-1 "tests/t$_pr_i.sh:1"
+		pr_triage "$PR_T" "$_pr_ts" "$((200 + _pr_i))" M-1 accepted
+	else
+		er_ev "$PR_T" "$NOW" merge.land "pr:#$((200 + _pr_i))" landed "$_pr_s"
+	fi
+	_pr_i=$((_pr_i + 1))
+done
+# #215 reverted, and its review's H-1 rejected on the very file the revert removed lines from.
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 215 H-1 tests/t15.sh:120
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 215 H-1 rejected
+pr_ev "$PR_T" 2026-01-03T00:00:00Z merge.outcome 'pr:#215' reverted "$PR_RB" "\"by_sha\":\"$PR_SHA\",\"files\":\"tests/t15.sh\""
+# Two more rejected, one dismissed by a human, two escalated.
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 216 L-1 tests/t16.sh:2
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 216 L-1 rejected
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 217 L-1 tests/t17.sh:2
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 217 L-1 rejected
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 218 M-1 tests/t18.sh:3
+pr_ev "$PR_T" 2026-01-02T00:02:00Z finding.dismiss 'pr:#218' dismissed "$PR_RB" '"via":"thread","where":"tests/t18.sh:3","thread":"T1"'
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 219 M-1 tests/t19.sh:4
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 219 M-1 escalated
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 220 M-1 tests/t20.sh:4
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 220 M-1 escalated
+# simplicity: a revert whose file only an ACCEPTED finding named, and a
+# rejected finding on another file — the mistake is missed.
+_pr_s=$(er_land "$PR" lib/l.sh 'pr 230')
+er_ev "$PR_T" "$NOW" merge.land 'pr:#230' landed "$_pr_s"
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 230 H-1 lib/other.sh:1
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 230 H-1 rejected
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 230 M-1 lib/l.sh:4
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 230 M-1 accepted
+pr_ev "$PR_T" 2026-01-03T00:00:00Z merge.outcome 'pr:#230' reverted "$PR_RB" "\"by_sha\":\"$PR_SHA\",\"files\":\"lib/l.sh\""
+# pattern: a failed factory QA, missed even though a rejected finding names
+# the PR's file; and one id raised by two reviews, each triage paired with the
+# latest raise of its id before it.
+_pr_s=$(er_land "$PR" docs/d.md 'pr 231')
+er_ev "$PR_T" "$NOW" merge.land 'pr:#231' landed "$_pr_s"
+pr_raise "$PR_T" 2026-01-02T00:00:00Z 231 H-1 docs/d.md:3
+pr_triage "$PR_T" 2026-01-02T00:01:00Z 231 H-1 rejected
+pr_raise "$PR_T" 2026-01-04T00:00:00Z 231 M-2 docs/d.md:9
+pr_triage "$PR_T" 2026-01-04T00:01:00Z 231 M-2 rejected
+pr_raise "$PR_T" 2026-01-05T00:00:00Z 231 M-2 docs/d.md:9 "$PR_RB"
+pr_triage "$PR_T" 2026-01-05T00:01:00Z 231 M-2 accepted
+pr_ev "$PR_T" 2026-01-06T00:00:00Z merge.outcome 'pr:#231' qa-failed "$PR_RB" '"ticket":"T-9","files":"docs/d.md"'
+# security: a landing with no finding at all.
+_pr_s=$(er_land "$PR" src/a.sh 'pr 232')
+er_ev "$PR_T" "$NOW" merge.land 'pr:#232' landed "$_pr_s"
+PR_ON=$(policy "$PR_T")
+( cd "$PR" && env TRACE_CONFIG="$PR_ON" sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the precision fixture is a trace verify accepts" ||
+	fail "the precision fixture does not verify — the reader would be judged over a damaged trace"
+
+pr_snap() { find "$PR_T" -type f -exec cksum {} + | sort; git -C "$PR" status --porcelain; }
+_pr_before=$(pr_snap)
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$PR" "$PR_ON" "$ER_POL" "$TRACE"
+[ "$T_STATUS" = 0 ] && pass "record exits 0 over the precision fixture" || fail "record exited $T_STATUS: $T_ERR"
+pr_row() { printf '%s\n' "$T_OUT" | grep "^$1: " ; }
+[ "$(pr_row test-hygiene)" = 'test-hygiene: landings 20 of 20, in the fix window 6, mistakes 1, missed 0 of 20, miss rate 0.00, held up 15 of 18, not held up 3, unlabelled 2, precision 0.83, labels from triage 17, human 1, outcome 1' ] &&
+	pass "runtime/R46, runtime/R47, runtime/R48, runtime/R49: UC4 — the revert a rejected finding named is the triage's miss (missed 0 of 20), the vindicated rejection holds up (15 of 18, precision 0.83), and the labels' sources are triage 17, human 1, outcome 1; the 21st landing's finding counts nowhere" ||
+	fail "runtime/R46-R49: the UC4 row read: $(pr_row test-hygiene)"
+[ "$(pr_row simplicity)" = 'simplicity: landings 1 of 20, in the fix window 1, mistakes 1, missed 1 of 1, miss rate 1.00, held up 1 of 2, not held up 1, unlabelled 0, precision 0.50, labels from triage 2, human 0, outcome 1' ] &&
+	pass "runtime/R46: a mistake whose file only an accepted finding named, and no rejected one, is missed" ||
+	fail "runtime/R46: the simplicity row read: $(pr_row simplicity)"
+[ "$(pr_row pattern)" = 'pattern: landings 1 of 20, in the fix window 1, mistakes 1, missed 1 of 1, miss rate 1.00, held up 1 of 3, not held up 2, unlabelled 0, precision 0.33, labels from triage 3, human 0, outcome 0' ] &&
+	pass "runtime/R46, runtime/R48: a qa-failed mistake is always missed and names no file, and a re-raised id's triage pairs with the latest raise before it" ||
+	fail "runtime/R46, runtime/R48: the pattern row read: $(pr_row pattern)"
+[ "$(pr_row security)" = 'security: landings 1 of 20, in the fix window 1, mistakes 0, missed 0 of 1, miss rate 0.00, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0' ] &&
+	pass "runtime/R50: an area with no labelled finding prints n/a for its precision, never 0 or 1" ||
+	fail "runtime/R50: the security row read: $(pr_row security)"
+[ "$(pr_row api-crud)" = 'api-crud: landings 0 of 20, in the fix window 0, mistakes 0, missed 0 of 0, miss rate n/a, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0' ] &&
+	pass "runtime/R50: an area with no landings prints n/a for its miss rate" ||
+	fail "runtime/R50: the api-crud row read: $(pr_row api-crud)"
+printf '%s\n' "$T_OUT" | grep -Eiqw 'low|high|risk|threshold' &&
+	fail "runtime/R51: a row carries a risk word or a threshold: $(printf '%s' "$T_OUT" | grep -Eiw 'low|high|risk|threshold' | head -1)" ||
+	pass "runtime/R51: no row carries low, high, risk or a threshold"
+[ "$(pr_snap)" = "$_pr_before" ] && pass "runtime/R51: the run leaves the trace and the working tree byte-identical" ||
+	fail "runtime/R51: record changed the trace or the repository"
 
 t_done "trace script"

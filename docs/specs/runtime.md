@@ -20,7 +20,8 @@ whose tests it does not have.
 R31 and R43 to R45 joined from PRD-06 slice 1 (#875, ADR-0036), keeping the
 PRD's numbers. R32, R33 and R39 to R42 joined with the outcome recorder
 (#876), which restated R43 to name the recorder beside the record reader, as
-the PRD writes it.
+the PRD writes it. R46 to R51 joined with the misses and lens precision
+(#877).
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
@@ -62,3 +63,9 @@ R42. IF a blamed line resolves to a landing that no `merge.land` with a merge sh
 R43. IF the trace is unconfigured, THEN the recorder and the record reader SHALL write nothing, print nothing on standard output, and exit 0. [UC1 2c]
 R44. WHEN the record reader runs, it SHALL print one row per review area of the lens-slice policy, holding the area's landed PRs counted (its most recent 20, or fewer, said as `<n> of 20`), how many of them landed inside the fix window, and how many carry a mistake. [UC1 4, UC4 1, 2, 1a]
 R45. The record reader SHALL count a landed PR toward every review area that one of the paths its merge commit changed against its first parent belongs to. [UC1 4]
+R46. The record reader SHALL count a mistake as missed unless a finding raised on that PR, not upheld at triage, names a file in the outcome's `data.files`, and SHALL always count a `qa-failed` mistake as missed. [UC4 3, 3a]
+R47. The record reader SHALL print, per review area, the PRs with a missed mistake and the miss rate over the PRs counted. [UC4 3]
+R48. The record reader SHALL count a finding toward every review area its `data.where` path belongs to, as held up when its triage is `accepted` or a mistake against its PR names its file, as not held up when it was rejected at triage or dismissed by a human with no such mistake, and as unlabelled otherwise. [UC4 4]
+R49. The record reader SHALL print, per review area, the findings held up, not held up and unlabelled, the precision (held up over labelled), and the count of labels from triage, from a human dismissal and from a post-merge outcome. [UC4 4]
+R50. IF a ratio's denominator is zero, THEN the record reader SHALL print `n/a` for it. [UC4 4a]
+R51. The record reader SHALL compare no number to a threshold, SHALL print no risk word, and SHALL write nothing to the trace or to any file. [UC4 5]

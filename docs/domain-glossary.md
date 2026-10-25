@@ -438,7 +438,14 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: bare "area", which is a **living spec**'s; "lane".
 - **Earned record** — per **review area**, computed on read and stored
   nowhere: its most recent landings, at most 20, how many landed inside the
-  fix window, and how many carry a **mistake**. `sh scripts/trace.sh record`
+  fix window, how many carry a **mistake**, how many a mistake the review
+  **missed** (any one that no finding rejected at triage named a file of; a
+  failed factory QA always), the miss rate over the landings counted, and
+  the lens findings on those landings at the area's paths: **held up**
+  (accepted at triage, or a mistake against its PR names its file), not
+  held up (rejected, or dismissed by a human, with no such mistake),
+  unlabelled, the precision (held up over labelled, `n/a` over none) and
+  the labels' sources. `sh scripts/trace.sh record`
   prints it, one row per review area, for the operator and `/retro`'s
   question 2, and no chain skill reads it. It compares nothing to a
   threshold (ADR-0036).

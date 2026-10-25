@@ -160,8 +160,8 @@ banner "4. /retro's question 2, end to end: the recorder, then the record reader
 
 record_cmd record
 REC1=$T_OUT
-printf '%s\n' "$REC1" | grep -qxF 'security: landings 2 of 20, in the fix window 2, mistakes 1' &&
-	printf '%s\n' "$REC1" | grep -qxF 'simplicity: landings 3 of 20, in the fix window 3, mistakes 0' &&
+printf '%s\n' "$REC1" | grep -qF 'security: landings 2 of 20, in the fix window 2, mistakes 1,' &&
+	printf '%s\n' "$REC1" | grep -qF 'simplicity: landings 3 of 20, in the fix window 3, mistakes 0,' &&
 	pass "process/R37: after one run the reverted PR's review area reads mistakes 1, an untouched one 0" ||
 	fail "process/R37: record printed: $(printf '%s' "$REC1" | tr '\n' ';')"
 _mid=$(count_in "$T")

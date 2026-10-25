@@ -56,9 +56,14 @@ reader, `merge.land` and `merge.outcome`.*
   `sh scripts/trace.sh record` and
   put its rows in the report, as printed, before the per-agent counts below.
   One row per review area of the lens-slice policy:
-  `<area>: landings <n> of 20, in the fix window <w>, mistakes <m>` — the
+  `<area>: landings <n> of 20, in the fix window <w>, mistakes <m>`, then
+  the misses (`missed <k> of <n>, miss rate <r>`) and the lens precision
+  (`held up <h> of <l>, not held up <x>, unlabelled <u>, precision <p>,
+  labels from triage <t>, human <d>, outcome <o>`) — the
   area's most recent landed PRs, at most 20, how many of them landed inside
-  the 30-day fix window, and how many carry a post-merge outcome. The record
+  the 30-day fix window, how many carry a post-merge outcome, how many
+  carry one no finding rejected at triage named a file of, and how the
+  findings raised on them held up. A ratio over nothing reads `n/a`. The record
   is each area's last 20 landings as of now, not cut to the window. Only
   reverts are recorded yet: a later fix and a failed factory QA are later
   releases, so under the rows say that only reverts are recorded yet and

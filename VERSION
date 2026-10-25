@@ -3442,7 +3442,30 @@
 # Kit-only, never shipped: docs/specs/process.md R48 to R51 and
 # tests/review-pr-output.test.sh section 25.
 
-shared-layer: 0.95.0
+# 0.96.0 — the earned record shows misses and lens precision (ticket
+# #877, PRD-06 slice 4 of K1, the kit's ADR-0036). NO file joins the shared
+# layer and none leaves. Two shared files change content: scripts/trace.sh,
+# whose record reader adds to each review area's row the PRs with a missed
+# mistake and the miss rate (a mistake is missed unless a finding raised on
+# its PR and rejected at triage names a file in the outcome's data.files; a
+# qa-failed one always is), then the lens findings on the area's counted
+# landings at its paths — held up (accepted at triage, or a mistake against
+# its PR names its file), not held up (rejected, or dismissed by a human,
+# with no such mistake), unlabelled, the precision, and the labels'
+# sources, triage, human and outcome — with n/a for a ratio over nothing,
+# no threshold and nothing written; and UPDATING.md, its entry and both
+# worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — .agents/skills/retro/QUESTIONS.md's question 2
+# describes the longer row and says a ratio over nothing reads n/a.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/runtime.md R46 to R51, the glossary's
+# Earned record, and the suites that hold them — tests/trace.test.sh
+# section 43 (section 42's rows lengthened), tests/outcome-recorder.test.sh
+# section 4 and tests/retro-skill.test.sh section 19.
+
+shared-layer: 0.96.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
