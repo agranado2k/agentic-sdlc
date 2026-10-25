@@ -8,8 +8,8 @@
 # ticket carries — `Targets:` a trace filter /retro's before-and-after check
 # reads (process/R25), held to its grammar rather than to tokens; `Class:`
 # the class /implement records as data.class (#819); `Risk:`,
-# `Risk-confidence:` and `Test-tier:` the ticket contract's (the kit's
-# ADR-0037) — and whether the vocabulary checker accepts them. `Covers:` is
+# `Risk-confidence:` and `Test-tier:` the ticket contract's, fixed by
+# the kit's ADR-0037 — and whether the vocabulary checker accepts them. `Covers:` is
 # no vocabulary field: this script holds it to the coverage check's grammar
 # itself — a comma-separated list of bounded requirement ids, or `none
 # (prefactor|open-issue|release)` — with scripts/requirement.lib.sh beside
