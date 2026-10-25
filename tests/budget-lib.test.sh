@@ -180,12 +180,21 @@ banner "3. budget_run runs the command under the record's rung"
 REC="$SCRATCH/record"
 V="$SCRATCH/verdict"
 LIMITS='echo "NPROC=$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null) DATA=$(ulimit -d)"; exit 7'
+# The rlimit rung's task ceiling comes from the host, never a fixed number.
+# RLIMIT_NPROC counts every task of the uid, so a fixed ceiling fails on a
+# busy host for a reason that is not the library's (#883): it sits the uid's
+# task count plus a margin, which a host's hard limit — the suite's own
+# outer budget's, when that fell to rlimits — still lets the library set.
+# It is never the limit the command would inherit, so a library that sets
+# no task rlimit still fails the legs that read it.
+RL_TASKS=$(($(t_uid_tasks) + 80))
+[ "$RL_TASKS" = "$(ulimit -u 2>/dev/null || ulimit -p 2>/dev/null)" ] && RL_TASKS=$((RL_TASKS + 1))
 # The rlimit rung: ulimit in the command's shell, the status passed back.
-PATH=$PATH_NOSD lib budget_derive --tasks 5000 --memory 128
+PATH=$PATH_NOSD lib budget_derive --tasks "$RL_TASKS" --memory 128
 printf '%s\n' "$T_OUT" >"$REC"
 PATH=$PATH_NOSD lib budget_run "$REC" "$V" -- sh -c "$LIMITS"
 expect_status 7 "budget_run returns the command's own status"
-expect_out_has "NPROC=5000" "…the task ceiling applied as the process-count rlimit"
+expect_out_has "NPROC=$RL_TASKS" "…the task ceiling applied as the process-count rlimit"
 expect_out_has "DATA=131072" "…and the memory ceiling as ulimit -d (128 MiB in KiB)"
 lib budget_verdict "$V"
 expect_status 0 "on the rlimit rung the verdict reads cleanly"
@@ -247,13 +256,17 @@ miscalled "--unit with no name" "$REC" "$V" --unit
 expect_err_has "--unit needs a name"
 miscalled "a call with no verdict file" "$REC"
 
-# A pre-flight refusal falls to rlimits, out loud, and the command runs once.
+# A pre-flight refusal falls to rlimits, out loud, and the command runs once
+# — under a scope record carrying the host-derived ceiling, so the fall's
+# rlimit leaves the uid room to fork.
+PATH="$SDYES:$PATH" lib budget_derive --tasks "$RL_TASKS" --memory 600
+printf '%s\n' "$T_OUT" >"$SCRATCH/fall-record"
 t_exec env PATH="$SDREFUSE:$PATH" BUDGET_WHO=dispatch \
-	sh -c '_budget_here="$1"; . "$1/budget.lib.sh"; shift; budget_run "$@"' lib "$LIBDIR" "$REC" "$V" -- sh -c "$LIMITS"
+	sh -c '_budget_here="$1"; . "$1/budget.lib.sh"; shift; budget_run "$@"' lib "$LIBDIR" "$SCRATCH/fall-record" "$V" -- sh -c "$LIMITS"
 expect_status 7 "a scope refused at the pre-flight still runs the command"
 expect_err_has "refused by fixture"
 expect_err_has "!  dispatch: the transient scope cannot open"
-expect_out_has "NPROC=300" "…under the rlimit rung's task ceiling"
+expect_out_has "NPROC=$RL_TASKS" "…under the rlimit rung's task ceiling"
 [ "$(printf '%s\n' "$T_OUT" | grep -c '^NPROC=')" = 1 ] && pass "…exactly once" || fail "the command ran $(printf '%s\n' "$T_OUT" | grep -c '^NPROC=') times"
 
 # An inherited record and a disabled one each open nothing: systemd-run is
