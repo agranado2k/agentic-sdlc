@@ -86,8 +86,16 @@ dispatcher, because no rung author could exist for work no rung did.
    ADR-0027 clause 4 already asks; the record is what removes the honour
    system, and where there is no rung there is no record to read.
 
+4. **A passed verdict always leaves its record**, its author empty when the
+   rung named no model: the record is now also the evidence a cascade ran,
+   and an empty author is no author, so that review is refused as before. And
+   a mechanical ticket the dispatch finds no record for is said on stderr,
+   naming the checkout it read, so a review dispatched from the wrong one is
+   visible. Both from the review of #889 (findings M-1 and M-2).
+
 Held by `tests/skill-cascade.test.sh` section 9: a mechanical-stamped ticket
 with no cascade record dispatches a review resolved from the named author
 (an Opus author gets `sonnet`, a Sonnet author `opus`); a handed-back rung
-with no verdict is still refused with the existing message. Each case was
+with no verdict is still refused with the existing message; a record with an empty author is
+refused; the fall-through names the missing record on stderr. Each case was
 shown failing before the condition existed.

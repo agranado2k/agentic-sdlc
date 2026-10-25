@@ -896,8 +896,22 @@ review sonnet "$T_MECH_CASC"
 	fail "a Sonnet-named mechanical review with no cascade record exited $T_STATUS with '$T_OUT': $T_ERR"
 case "$T_ERR" in
 *"no rung author"*) fail "a ticket no cascade ran for was called cascade-built: $T_ERR" ;;
-*) pass "…and nothing calls it cascade-built" ;;
+*"no cascade record"*) pass "…nothing calls it cascade-built, and stderr says no cascade record was found there" ;;
+*) fail "the fall-through does not say no cascade record was found in the worktree: $T_ERR" ;;
 esac
+# A passed verdict with no model to name still leaves its record (review
+# finding M-1 on #889): an empty author is no author, and the review of the
+# ticket it ran for is refused, never resolved from the session.
+_ra_gd=$(cd "$WT" && git rev-parse --absolute-git-dir)
+printf 'model=\nticket=#682\n' >"$_ra_gd/skill-cascade-author"
+review opus "$T_MECH_CASC"
+[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+	pass "a record with an empty author refuses the review: a cascade ran, and named nobody" ||
+	fail "an empty-author record let the review through: exit $T_STATUS, '$T_OUT': $T_ERR"
+rm -f "$_ra_gd/skill-cascade-author"
+grep -q '\[ "\$3" = passed \] || return 0' "$ROOT/scripts/skill-dispatch.kit.sh" &&
+	pass "…and a passed verdict writes its record whether or not it names a model" ||
+	fail "a passed verdict with no model still writes no record"
 # A rung handed back and never judged is a cascade record with no author:
 # still refused, with the existing message (ADR-0030).
 cascade_keep "$T_ORACLE"

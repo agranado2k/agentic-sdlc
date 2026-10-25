@@ -401,6 +401,12 @@ if [ "${SKILL#/}" = review-pr ]; then
 		echo "skill-dispatch: the diff's author is '$_ra_author', the model its cascade's passed verdict recorded; the reviewer is resolved against that author, not the session" >&2
 	elif [ "$_ra_built" = 1 ]; then
 		die "review refused — ticket ${TICKET:+#$TICKET }is cascade-built and '$_ra_wt' holds no rung author recorded for it; the reviewer is resolved from the author, never the session's own model. Judge the rung first — the cascade's own call with --rung-done records its verdict and its author — then dispatch the review again"
+	elif [ "$_ra_ran" = 0 ] && [ -n "$CASCADE_TICKET" ]; then
+		# Said, so a review dispatched from the wrong checkout is visible: the
+		# record is read from --worktree, or from the checkout this runs in.
+		_fs_read_stamp
+		[ "$_fs_tier" != mechanical ] ||
+			echo "skill-dispatch: no cascade record in '$_ra_wt' — a mechanical ticket no cascade ran for is reviewed from the author the session names (AGENT_SESSION_MODEL); if a cascade built it, dispatch with its --worktree" >&2
 	fi
 fi
 
@@ -625,7 +631,11 @@ _cascade_emit() {
 _cascade_verdict() {
 	_cascade_emit model="$2" outcome="$3" data.rung="$1" data.oracle_exit="$ORACLE_EXIT" \
 		data.guard_exit="$GUARD_EXIT" ${2:+data.author="$2"} reason="$4"
-	[ "$3" = passed ] && [ -n "$2" ] || return 0
+	# A passed rung that names no model still leaves its record, the author
+	# empty: the record is also the evidence a cascade ran (#881), and an
+	# empty author is no author, so its review is refused, never resolved
+	# from the session.
+	[ "$3" = passed ] || return 0
 	printf 'model=%s\nticket=%s\n' "$2" "${TICKET:+#}${TICKET:-none}" >"$CASCADE_AUTHOR"
 }
 
