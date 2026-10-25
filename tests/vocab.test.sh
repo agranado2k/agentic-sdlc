@@ -1129,4 +1129,239 @@ expect_status 2 "a class past 64 bytes is refused — the token is bounded"
 vocab "Class: $(printf '%064d' 0 | tr 0 a)"
 expect_resolved "" "a class of exactly 64 bytes is accepted"
 
+# ---------------------------------------------------------------------------
+banner "Risk: — a QUALIFIED field: a level, and one reason for the levels that take one (process/R38)"
+# ---------------------------------------------------------------------------
+# The ticket contract's risk stamp (the kit's ADR-0037). `low` stands alone;
+# `high` takes exactly one reason from the policy's risk reasons. The checker
+# refuses any other value and names the field.
+unset VOCAB_CONFIG
+vocab fields
+expect_out_has "risk (qualified): low high; reasons for high: irreversible security invisible shared-layer unclear unlearned outward; reserved: unlearned outward" \
+	"process/R38: fields prints risk as a qualified field — its levels, the reasons and the reserved ones"
+vocab 'Risk: low'
+expect_resolved "" "process/R38: 'Risk: low' is accepted — the level alone"
+vocab 'Risk: high shared-layer'
+expect_resolved "" "process/R38: 'Risk: high shared-layer' is accepted — a level and one reason"
+for reason in irreversible security invisible shared-layer unclear; do
+	vocab "Risk: high $reason"
+	expect_resolved "" "process/R38: 'Risk: high $reason' is accepted from the planner"
+done
+vocab 'Risk: high'
+expect_status 2 "process/R38: 'Risk: high' — a level that takes a reason, given none — is refused"
+expect_err_has "risk: 'high' takes exactly one reason"
+vocab 'Risk: low security'
+expect_status 2 "process/R38: 'Risk: low security' — a reason on a level that takes none — is refused"
+expect_err_has "risk: 'low' takes no reason"
+vocab 'Risk: high security invisible'
+expect_status 2 "process/R38: two reasons are refused — exactly one"
+expect_err_has "risk:"
+vocab 'Risk: high sloppy'
+expect_status 2 "process/R38: a reason the policy does not declare is refused"
+expect_err_has "risk: 'sloppy' is not one of irreversible security invisible shared-layer unclear unlearned outward"
+vocab 'Risk: medium'
+expect_status 2 "process/R38: a level the policy does not declare is refused"
+expect_err_has "risk: 'medium' is not one of low high"
+vocab 'Risk: High security'
+expect_status 2 "process/R38: a capitalised level is refused — tokens match whole"
+vocab 'Risk: high  security'
+expect_resolved "" "process/R38: blanks between the level and its reason are one separator"
+vocab 'Risk: high security' 'Risk: high security'
+expect_resolved "" "process/R38: the same risk said twice is one answer"
+vocab 'Risk: high security' 'Risk: low'
+expect_status 2 "process/R38: two different risks are refused — one value per field"
+expect_err_has "risk: 'low' repeats the field"
+
+# ---------------------------------------------------------------------------
+banner "Risk: — the reserved reasons have one writer, the risk rule (process/R39)"
+# ---------------------------------------------------------------------------
+# `unlearned` and `outward` are the risk rule's alone. The default writer is
+# the planner, so a ticket, a stamp or a factory line can never name one; a
+# caller that declares itself the risk rule may.
+for reason in unlearned outward; do
+	vocab "Risk: high $reason"
+	expect_status 2 "process/R39: 'Risk: high $reason' from the default (planner) writer is refused"
+	expect_err_has "risk: the reason '$reason' is reserved for the risk rule"
+	vocab check --writer planner "Risk: high $reason"
+	expect_status 2 "process/R39: 'Risk: high $reason' from a declared planner is refused"
+	vocab check --writer risk-rule "Risk: high $reason"
+	expect_resolved "" "process/R39: 'Risk: high $reason' from a caller declared as the risk rule is accepted"
+	vocab --writer risk-rule "Risk: high $reason"
+	expect_resolved "" "process/R39: --writer may open the command line, the check implied"
+	printf 'Risk: high %s\n' "$reason" >"$SCRATCH/risk-rule.lines"
+	t_exec sh "$VOCAB" check --writer risk-rule <"$SCRATCH/risk-rule.lines"
+	expect_resolved "" "process/R39: the risk rule's lines may come on stdin"
+done
+vocab check --writer risk-rule 'Risk: high'
+expect_status 2 "process/R39: the risk rule is held to the grammar like anyone — a reason is still owed"
+vocab check --writer judge 'Risk: low'
+expect_status 2 "process/R39: a writer the checker does not know is a usage error"
+expect_err_has "usage"
+vocab check --writer
+expect_status 2 "process/R39: --writer with no word is a usage error"
+# The writer is a flag, never the environment: a caller cannot inherit it.
+t_exec env VOCAB_WRITER=risk-rule sh "$VOCAB" 'Risk: high outward'
+expect_status 2 "process/R39: no environment variable makes a caller the risk rule"
+
+# ---------------------------------------------------------------------------
+banner "Test-tier: — a KEYED field: a requirement id, then one test tier (process/R40)"
+# ---------------------------------------------------------------------------
+vocab fields
+expect_out_has "test-tier (keyed): unit suite e2e manual" "process/R40: fields prints test-tier as a keyed field and its four tiers"
+vocab 'Test-tier: process/R41 suite'
+expect_resolved "" "process/R40: one Test-tier: line is accepted"
+vocab 'Test-tier: R7 manual'
+expect_resolved "" "process/R40: a PRD's plain id is an id too"
+vocab 'Test-tier: process/R41 suite' 'Test-tier: process/R42 unit'
+expect_resolved "" "process/R40: one line per distinct id is accepted"
+vocab 'Test-tier: process/R41 suite' 'Test-tier: process/R41 suite'
+expect_resolved "" "process/R40: the same id with the same tier is one answer"
+vocab 'Test-tier: process/R41 suite' 'Test-tier: process/R41 unit'
+expect_status 2 "process/R40: the same id given two tiers is refused"
+expect_err_has "test-tier: 'process/R41' is given two tiers"
+vocab 'Test-tier: process/R41 smoke'
+expect_status 2 "process/R40: a tier the policy does not declare is refused"
+expect_err_has "test-tier: 'smoke' is not one of unit suite e2e manual"
+vocab 'Test-tier: process/R41'
+expect_status 2 "process/R40: an id with no tier is refused"
+expect_err_has "test-tier:"
+vocab 'Test-tier: process/R41 suite unit'
+expect_status 2 "process/R40: an id with two tiers on one line is refused"
+vocab 'Test-tier: Process/R41 suite'
+expect_status 2 "process/R40: an id outside the requirement grammar is refused"
+expect_err_has "test-tier: the id is not a requirement id"
+vocab "Test-tier: $(printf '%033d' 0 | tr 0 a)/R1 suite"
+expect_status 2 "process/R40: an area past 32 characters is no id — the grammar is bounded"
+vocab 'Test-tier: process/R1234567 suite'
+expect_status 2 "process/R40: a number past 6 digits is no id"
+vocab 'Test-tier: process/R0 suite'
+expect_status 2 "process/R40: R0 is no PRD id"
+vocab "Test-tier: x;touch\$(id) suite"
+expect_status 2 "process/R40: an id shaped like a command is refused"
+# The id's grammar is the requirement library's: without it the checker
+# cannot read an id, and refuses rather than pass one unread.
+mkdir -p "$SCRATCH/nolib"
+cp "$VOCAB" "$SCRATCH/nolib/vocab.sh"
+t_exec sh "$SCRATCH/nolib/vocab.sh" 'Test-tier: process/R41 suite'
+expect_status 2 "process/R40: with no requirement library beside the checker, a Test-tier: line is refused"
+expect_err_has "requirement.lib.sh"
+t_exec sh "$SCRATCH/nolib/vocab.sh" fields
+expect_status 0 "…while fields still answers — the library is read only to check an id"
+
+# ---------------------------------------------------------------------------
+banner "The contract's new closed fields and the per-key line bounds (process/R41)"
+# ---------------------------------------------------------------------------
+vocab fields
+expect_out_has "risk-confidence: low medium high" "process/R41: risk-confidence is its own closed field"
+expect_out_has "result: pass fail skipped" "process/R41: a check-table row's result"
+expect_out_has "scope: inside outward" "process/R41: an unspecified item's scope"
+expect_out_has "bound: 8" "process/R41: every stamp key is bounded at 8 lines"
+expect_out_has "bound test-tier: 32" "process/R41: test-tier is bounded at 32"
+vocab 'Risk-confidence: medium' 'Confidence: high'
+expect_resolved "" "process/R41: Risk-confidence: and Confidence: are two fields — two answers, no conflict"
+vocab 'Risk confidence: medium'
+expect_resolved "" "process/R41: the key folds like every key — 'Risk confidence' names risk-confidence"
+vocab 'Risk-confidence: sure'
+expect_status 2 "process/R41: risk-confidence is closed"
+vocab 'Result: skipped' 'Scope: outward'
+expect_resolved "" "process/R41: result and scope accept their tokens"
+vocab 'Scope: elsewhere'
+expect_status 2 "process/R41: scope is closed"
+
+# ---------------------------------------------------------------------------
+banner "A qualified or keyed field in the policy file is held at load"
+# ---------------------------------------------------------------------------
+# policy_refused <label> <expected stderr> <config text>
+policy_refused() {
+	t_write "$SCRATCH" kind.config.sh "$3"
+	t_exec env VOCAB_CONFIG="$SCRATCH/kind.config.sh" sh "$VOCAB" fields
+	expect_status 2 "$1: a policy error, exit 2"
+	expect_err_has "$2"
+}
+policy_refused "a reserved reason the field does not declare" "policy: risk reserves 'judged', which is not one of its reasons" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='risk'
+VOCAB_QUALIFIED='risk'
+VOCAB_RISK='low high'
+VOCAB_RISK_QUALIFIED='high'
+VOCAB_RISK_REASONS='security'
+VOCAB_RISK_RESERVED='judged'
+EOFC
+)"
+policy_refused "a qualified level the field does not declare" "policy: risk qualifies 'medium', which is not one of its levels" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='risk'
+VOCAB_QUALIFIED='risk'
+VOCAB_RISK='low high'
+VOCAB_RISK_QUALIFIED='medium'
+VOCAB_RISK_REASONS='security'
+EOFC
+)"
+policy_refused "a qualified field with no reasons" "policy: qualified field 'risk' declares no reasons" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='risk'
+VOCAB_QUALIFIED='risk'
+VOCAB_RISK='low high'
+VOCAB_RISK_QUALIFIED='high'
+EOFC
+)"
+policy_refused "a reason carrying its answer" "policy: risk reason 'risky' carries its answer in its spelling" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='risk'
+VOCAB_QUALIFIED='risk'
+VOCAB_RISK='low high'
+VOCAB_RISK_QUALIFIED='high'
+VOCAB_RISK_REASONS='security risky'
+EOFC
+)"
+policy_refused "a field of two kinds" "one kind per field" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='test-tier'
+VOCAB_KEYED='test-tier'
+VOCAB_OPEN='test-tier'
+VOCAB_TEST_TIER='unit suite'
+EOFC
+)"
+policy_refused "a rule on a keyed field" "a rule reads one token" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='test-tier tier'
+VOCAB_KEYED='test-tier'
+VOCAB_TEST_TIER='unit suite'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_RULES='tier=planner => test-tier=unit'
+EOFC
+)"
+policy_refused "a bound on an undeclared field" "policy: VOCAB_BOUNDS names 'covers', which is not a declared field" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_BOUND=8
+VOCAB_BOUNDS='covers=32'
+EOFC
+)"
+policy_refused "a bound that is not a count" "policy: VOCAB_BOUND '0' is not a count of lines" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='tier'
+VOCAB_TIER='planner implementer mechanical reviewer'
+VOCAB_BOUND=0
+EOFC
+)"
+policy_refused "a field named for a qualified field's own variable" "is reserved" "$(
+	cat <<'EOFC'
+VOCAB_FIELDS='risk risk-reasons'
+VOCAB_QUALIFIED='risk'
+VOCAB_RISK='low high'
+VOCAB_RISK_QUALIFIED='high'
+VOCAB_RISK_REASONS='security'
+EOFC
+)"
+# A policy that predates the bound declares none: fields prints no bound
+# line, and the stamp reader falls back to its own 8 (tests/stamp.test.sh).
+t_write "$SCRATCH" nobound.config.sh "VOCAB_FIELDS='tier'
+VOCAB_TIER='planner implementer mechanical reviewer'
+"
+t_exec env VOCAB_CONFIG="$SCRATCH/nobound.config.sh" sh "$VOCAB" fields
+expect_status 0 "a policy with no bound loads"
+expect_out_lacks "bound" "…and prints no bound line"
+
 t_done "vocab"
