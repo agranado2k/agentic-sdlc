@@ -78,9 +78,10 @@ dl_write() {
 	}' "$2" "$1"
 }
 # dl_ids_for <body> <surface file> — the id of each unstruck row whose Surface
-# cell is the surface in the file, byte for byte; ids only, never a cell.
+# cell is the surface in the file, `|` read as `/` as dl_write writes it,
+# byte for byte; ids only, never a cell.
 dl_ids_for() {
-	awk -F'|' 'FILENAME == ARGV[1] { want = $0; gsub(/^[ \t]+|[ \t]+$/, "", want); next }
+	awk -F'|' 'FILENAME == ARGV[1] { want = $0; gsub(/\|/, "/", want); gsub(/^[ \t]+|[ \t]+$/, "", want); next }
 	/^<!-- decision-log -->$/ { t = 1; next }
 	t && !/^\|/ { t = 0 }
 	t { id = $2; s = $3; gsub(/^ +| +$/, "", id); gsub(/^ +| +$/, "", s); if (id ~ /^D-[0-9]+$/ && s == want) print id }' "$2" "$1"

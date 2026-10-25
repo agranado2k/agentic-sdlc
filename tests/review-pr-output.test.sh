@@ -2177,6 +2177,10 @@ if [ -s "$DLD/fns.sh" ] && . "$DLD/fns.sh"; then
 	[ "$(dl_next "$DLD/body3")" = D-3 ] && [ -z "$(dl_ids_for "$DLD/body3" "$DLD/surface")" ] &&
 		pass "process/R56 process/R59: a struck row keeps its number — the next row is D-3 — and is found no second time" ||
 		fail "process/R56 process/R59: after the strike the next id was '$(dl_next "$DLD/body3")'"
+	printf 'a|b.sh\nkept: x\ny\n' >"$DLD/row3"; printf 'a|b.sh\n' >"$DLD/surface3"
+	dl_write "$DLD/body3" "$DLD/row3" >"$DLD/body4"
+	[ "$(dl_ids_for "$DLD/body4" "$DLD/surface3")" = D-3 ] && pass "process/R59: a surface holding '|' finds the row dl_write wrote for it" ||
+		fail "process/R59: a surface holding '|' did not find its own row — the strike would silently not happen"
 	printf 'two\nlines\n' >"$DLD/short"
 	! dl_write "$DLD/body1" "$DLD/short" >"$DLD/body-short" 2>/dev/null && pass "process/R56: a row with a cell missing writes nothing" ||
 		fail "process/R56: a row with a cell missing was written"
