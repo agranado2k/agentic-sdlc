@@ -48,6 +48,7 @@ R33. `/to-prd`'s template SHALL write each scenario as a use case: `UC<n>`, a na
 R34. `/to-prd` SHALL end each requirement a step checks with the steps it checks in brackets, as in `[UC1 3a]`, and MAY leave the brackets off a requirement no step reaches.
 R35. `/to-tickets` SHALL read each use case's main flow as a candidate tracer bullet.
 R36. A PRD written before this change SHALL keep its walkthrough scenarios, and no check SHALL refuse them.
+R37. `/retro`'s question 2 SHALL print the record reader's rows before its existing per-lens triage counts. [UC1 4]
 R38. The vocabulary checker SHALL accept a `Risk:` line whose value is `low` alone, or `high` followed by exactly one reason from the policy's risk reasons (`irreversible`, `security`, `invisible`, `shared-layer`, `unclear`, `unlearned`, `outward`), and SHALL refuse any other value, naming the field. [UC1 2]
 R39. IF a `Risk:` line names a reason the policy reserves for the risk rule (`unlearned`, `outward`), THEN the vocabulary checker SHALL refuse it unless its caller declares itself the risk rule. [UC1 2a]
 R40. The vocabulary checker SHALL accept a `Test-tier:` line whose value is one requirement id in the coverage check's bounded grammar followed by one of `unit`, `suite`, `e2e`, `manual`, SHALL accept one such line per distinct id, and SHALL refuse an id given two different tiers. [UC1 2, 2b]
