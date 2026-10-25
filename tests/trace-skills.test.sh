@@ -162,7 +162,7 @@ for s in $CHAIN; do
 done
 
 # ---------------------------------------------------------------------------
-banner "3. The chain never reads the trace: no show, summary or export in any skill but the reader"
+banner "3. The chain never reads the trace: no show, summary, export or record in any skill but the reader"
 # ---------------------------------------------------------------------------
 # The exclusion is explicit and named: ADR-0008 clause 7 makes the
 # retrospective the reader, so /retro is held to reading and every other
@@ -171,16 +171,16 @@ banner "3. The chain never reads the trace: no show, summary or export in any sk
 READER=retro
 for d in "$SKILLS"/*/; do
 	s=$(basename "$d")
-	reads=$(grep -rnE "trace\.sh +(show|summary|export)\b" "$d" || true)
+	reads=$(grep -rnE "trace\.sh +(show|summary|export|record)\b" "$d" || true)
 	if [ "$s" = "$READER" ]; then
-		[ -n "$reads" ] && pass "/$s is the one sanctioned reader, and reads (show, summary, export)" ||
+		[ -n "$reads" ] && pass "/$s is the one sanctioned reader, and reads (show, summary, export, record)" ||
 			fail "/$s is the sanctioned reader and never reads the trace — the exclusion is dead"
 		continue
 	fi
 	if [ -z "$reads" ]; then
 		pass "/$s never reads the trace"
 	else
-		fail "/$s reads the trace — ADR-0008 clause 7, shared invariant §4: no skill calls show, summary or export; the trace is read after the fact, by the operator or the retrospective:"
+		fail "/$s reads the trace — ADR-0008 clause 7, shared invariant §4: no skill calls show, summary, export or record (ADR-0036); the trace is read after the fact, by the operator or the retrospective:"
 		printf '%s\n' "$reads" | sed 's/^/        | /'
 	fi
 done

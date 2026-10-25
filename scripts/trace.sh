@@ -19,6 +19,7 @@
 #   sh scripts/trace.sh current
 #   sh scripts/trace.sh id [--check <id>]
 #   sh scripts/trace.sh runs [<id>]
+#   sh scripts/trace.sh record
 #
 # WHAT IT IS. Every decision the chain makes — a tier stamped, a model resolved,
 # a finding raised or rejected, a PR iterated, a merge landed — is one JSON line
@@ -198,6 +199,12 @@
 # advisory, the way an empty TRACE_DIR is no trace) or when no dated line
 # exists. The JSONL `export` prices nothing, so it says nothing.
 #
+# THE RECORD READER, `record`, prints each review area's earned record (the
+# kit's ADR-0036): one row per lens of the lens-slice policy, its most recent
+# 20 landed PRs, how many landed inside the 30-day fix window, and how many
+# carry a `merge.outcome`. It reads `merge.land`, `merge.outcome` and git, and
+# writes nothing. The operator and /retro run it; no chain skill does.
+#
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
 # policy goes in scripts/trace.config.sh.
 
@@ -222,8 +229,8 @@ TRACE_EVENT_CAP=4000
 # on every kind but those TRACE_REQUIRED names (below, #832). The kind
 # list after it stays a literal line, because the skill suites read it as
 # one; the trace suite holds the two to the same kinds, row for row.
-TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
+TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567,
 # 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins
@@ -243,20 +250,24 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # pending-stuck check; and a review's verdict, when it counts its lenses,
 # counts them in digits — the lens agents that returned a report, and the
 # lenses the review planned; and a verdict's axis is 1 or 2, the two axes
-# /review-pr records (#832). `verify` advises on a raise and on a lens count
+# /review-pr records (#832); and a post-merge outcome's evidence is a commit
+# sha, 40 hex digits, or for a failed QA the factory ticket's id, required on
+# the outcomes it proves, and its days are digits (the kit's ADR-0036, #875).
+# `verify` advises on a raise and on a lens count
 # written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
 # from here).
-TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2'
+TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2 merge.outcome=by_sha:[0-9a-f]{40} merge.outcome=days:[0-9]+ merge.outcome/outcome~reverted|fixed=by_sha!:[0-9a-f]{40} merge.outcome/outcome~qa-failed=ticket!:[A-Za-z0-9._-]+'
 # THE REQUIRED KEYS (the kit's ADR-0034, amending the kit's ADR-0024 clause 1, #832):
 # a field or data key every line of a kind must carry, whatever its outcome.
 # Each entry is `<kind>=outcome` or `<kind>=data.<key>`. A raise names its
 # finding by id and severity, and a verdict its axis and outcome: a line
 # missing one joins no triage, falls out of every per-severity count, or is
-# no verdict a reader can count. An empty value is no value. The VALUE stays
-# the shape row's, the outcome table's, and for a raise's severity the
+# no verdict a reader can count; and a post-merge outcome names its outcome,
+# or it is nothing a reader can count (the kit's ADR-0036, #875). An empty
+# value is no value. The VALUE stays the shape row's, the outcome table's, and for a raise's severity the
 # vocabulary checker's (trace_check_severity). `verify` advises on a line
 # already written without one (TRACE_AWK_REQUIRED reads this table).
-TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis'
+TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -278,6 +289,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh current
        sh scripts/trace.sh id [--check <id>]
        sh scripts/trace.sh runs [<id>]
+       sh scripts/trace.sh record
          (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
 	exit 2
@@ -2808,6 +2820,114 @@ trace_export() {
 }
 
 # ---------------------------------------------------------------------------
+# The record reader (the kit's ADR-0036, #875): each review area's earned
+# record, computed on read and stored nowhere.
+
+# How many landings a review area's record counts, and the days after a
+# landing in which a fix still counts against it (PRD-06 decisions Q2, Q3).
+TRACE_RECORD_LANDINGS=20
+TRACE_FIX_WINDOW_DAYS=30
+
+# trace_record — one row per review area of the lens-slice policy:
+#
+#   <area>: landings <n> of 20, in the fix window <w>, mistakes <m>
+#
+# A LANDING is a `merge.land` with outcome `landed` and a `data.merge_sha`,
+# the latest one per PR subject. Its paths are its merge commit's diff against
+# its FIRST parent — a merge's combined diff shows nothing, its second parent
+# the base's own work — read from git in the current checkout; a landing whose
+# commit is not in this repository counts nowhere, and how many there were is
+# said once on stderr. A landing counts toward every review area one of its
+# paths belongs to, and the areas are the slicer's to say (`lens-slice.sh
+# --areas`, beside this file): one parser of the policy. An area counts its
+# most recent 20 landings, by the landing's `ts`; of those, the ones whose day
+# is under 30 days before today are in the fix window, and the ones with any
+# `merge.outcome` are mistakes. Nothing is compared to a threshold and nothing
+# is written. Unconfigured: nothing on stdout, exit 0, like every reader.
+trace_record() {
+	[ $# -eq 0 ] || usage
+	trace_dir || {
+		trace_unconfigured_note
+		return 0
+	}
+	[ -f "$_trace_here/lens-slice.sh" ] || {
+		echo "trace: record: no lens-slice.sh beside this script — no review areas to count" >&2
+		return 0
+	}
+	# L <ts> <pr> <sha> per landing, the latest per PR; O <pr> per PR that
+	# carries a post-merge outcome.
+	_rc_ev=$(trace_files | while IFS= read -r _rc_f; do cat "$_rc_f"; done | awk "$TRACE_AWK_LIB"'
+		{ e = tr_env($0); k = tr_str(e, "kind"); s = tr_str(e, "subject") }
+		k == "merge.land" && tr_str(e, "outcome") == "landed" {
+			d = tr_data($0)
+			m = match(d, /"merge_sha":"[0-9a-f]+"/) ? substr(d, RSTART + 13, RLENGTH - 14) : ""
+			t = tr_str(e, "ts")
+			if (m != "" && s != "" && t >= ts[s]) { ts[s] = t; sha[s] = m }
+		}
+		k == "merge.outcome" && s != "" { out[s] = 1 }
+		END {
+			for (s in sha) print "L\t" ts[s] "\t" s "\t" sha[s]
+			for (s in out) print "O\t" s
+		}')
+	_rc_shas=$(printf '%s\n' "$_rc_ev" | awk -F '\t' '$1 == "L" { print $4 }' | sort -u)
+	_rc_have=
+	if [ -n "$_rc_shas" ]; then
+		_rc_have=$(printf '%s\n' "$_rc_shas" | git cat-file --batch-check='%(objectname) %(objecttype)' 2>/dev/null | awk '$2 == "commit" { print $1 }')
+		_rc_gone=$(($(printf '%s\n' "$_rc_shas" | wc -l) - $(printf '%s' "$_rc_have" | grep -c .)))
+		[ "$_rc_gone" -eq 0 ] || echo "trace: record: $_rc_gone landing(s) whose merge commit is not in this repository — counted nowhere" >&2
+	fi
+	# F <sha> <path> per path each readable landing changed against its first parent.
+	_rc_files=
+	if [ -n "$_rc_have" ]; then
+		# shellcheck disable=SC2086 # one sha per word, each checked as a commit above
+		_rc_files=$(git -c core.quotePath=false log --no-walk=unsorted --diff-merges=first-parent --name-only --format='@%H' $_rc_have 2>/dev/null |
+			awk '/^@[0-9a-f]+$/ { c = substr($0, 2); next } NF { print "F\t" c "\t" $0 }')
+	fi
+	_rc_areas=$(printf '%s\n' "$_rc_files" | awk -F '\t' 'NF { print $3 }' | sort -u | sh "$_trace_here/lens-slice.sh" --areas) || return 2
+	# A then F then E: the areas (and every pair), the paths, the events.
+	{
+		printf '%s\n' "$_rc_areas" | awk 'NF { print "A\t" $0 }'
+		printf '%s\n' "$_rc_files"
+		printf '%s\n' "$_rc_ev"
+	} | awk -F '\t' -v today="$(date -u +%Y-%m-%d)" -v window="$TRACE_FIX_WINDOW_DAYS" -v cap="$TRACE_RECORD_LANDINGS" '
+		function day(s,   y, m, d, a) {
+			y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0
+			a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3
+			return d + int((153 * m + 2) / 5) + 365 * y + int(y / 4) - int(y / 100) + int(y / 400)
+		}
+		$1 == "A" && $3 == "" { if (!($2 in known)) { known[$2] = 1; order[++na] = $2 } next }
+		$1 == "A" { inarea[$3, $2] = 1; next }
+		$1 == "F" { paths[$2] = paths[$2] "\n" $3; next }
+		$1 == "L" { nl++; lts[nl] = $2; lpr[nl] = $3; lsha[nl] = $4; next }
+		$1 == "O" { mistake[$2] = 1; next }
+		END {
+			now = day(today)
+			for (i = 1; i <= na; i++) {
+				a = order[i]
+				# The area`s landings, most recent first: a selection by ts,
+				# ties broken by the subject, so the 20 counted are stable.
+				n = 0
+				for (j = 1; j <= nl; j++) {
+					np = split(paths[lsha[j]], p, "\n")
+					for (q = 1; q <= np; q++) if (p[q] != "" && ((p[q], a) in inarea)) { cand[++n] = j; break }
+				}
+				for (x = 2; x <= n; x++) {
+					v = cand[x]
+					for (y = x - 1; y >= 1 && (lts[cand[y]] < lts[v] || (lts[cand[y]] == lts[v] && lpr[cand[y]] > lpr[v])); y--) cand[y + 1] = cand[y]
+					cand[y + 1] = v
+				}
+				c = n < cap ? n : cap; w = 0; mk = 0
+				for (x = 1; x <= c; x++) {
+					j = cand[x]
+					if (now - day(lts[j]) < window) w++
+					if (lpr[j] in mistake) mk++
+				}
+				printf "%s: landings %d of %d, in the fix window %d, mistakes %d\n", a, c, cap, w, mk
+			}
+		}'
+}
+
+# ---------------------------------------------------------------------------
 
 [ $# -ge 1 ] || usage
 _trace_quiet_advice=
@@ -2828,5 +2948,6 @@ stack) trace_stack_of "$@" ;;
 current) trace_current "$@" ;;
 id) trace_id_cmd "$@"; exit $? ;;
 runs) trace_runs "$@"; exit $? ;;
+record) trace_record "$@"; exit $? ;;
 *) usage ;;
 esac

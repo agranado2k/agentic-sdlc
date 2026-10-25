@@ -1292,6 +1292,7 @@ finding.dismiss dismissed
 pr.open opened
 pr.iterate green red stopped
 merge.land landed skipped stopped
+merge.outcome reverted fixed qa-failed
 hypothesis proposed confirmed refuted inconclusive
 spike.verdict true false inconclusive
 brief.decide presented recorded
@@ -1332,7 +1333,15 @@ _ov_table=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d' | awk '{ print $1 }' | sort)
 # silent pass. ov_outcome_required <kind> says whether the kind's outcome is
 # required, so "no outcome writes" becomes "no outcome is refused" for it.
 ov_held() {
-	sed -n "s/^TRACE_SHAPES='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1/[^=]*=\([a-z_]*\)!:.*|data.\1=0|p" | sort -u
+	# A required row's fixture value fits its shape: digits, a commit sha
+	# (merge.outcome's evidence, #875), or a factory ticket's id.
+	sed -n "s/^TRACE_SHAPES='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1/[^=]*=\([a-z_]*\)!:.*|\1|p" | sort -u | while read -r _oh_s; do
+		case $_oh_s in
+		by_sha) echo data.by_sha=0123456789abcdef0123456789abcdef01234567 ;;
+		ticket) echo data.ticket=T-1 ;;
+		*) echo "data.$_oh_s=0" ;;
+		esac
+	done
 	for _oh_k in $(sed -n "s/^TRACE_REQUIRED='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1=data\.||p"); do
 		case $_oh_k in
 		id) echo data.id=H-1 ;;
@@ -1464,7 +1473,10 @@ done
 # spells every row, and the glossary's Event entry names the rule. The table
 # moved to ADR-0008's successor, clause 1 (#692): it reads the successor, the
 # table that binds, and no longer ADR-0008's #348 amendment.
-_ov_amend=$(adr8_clause 1)
+# ADR-0024 is at its amendment cap (ADR-0021), so a kind that joins later is
+# recorded in a new record that amends clause 1 (ADR-0036 for merge.outcome,
+# #875): the table that binds is the clause plus every such record.
+_ov_amend="$(adr8_clause 1) $(grep -l '^- \*\*Supersedes / amends\*\*: amends ADR-0024 clause' "$KIT"/docs/adr/[0-9]*.md 2>/dev/null | xargs cat 2>/dev/null)"
 _ov_miss=
 IFS='
 '
@@ -3658,5 +3670,127 @@ _mk_adr=$(ls "$KIT"/docs/adr/0034-*.md 2>/dev/null | head -1)
 [ -n "$_mk_adr" ] && grep -qF 'ADR-0024 clause 1' "$_mk_adr" && grep -qF 'data.severity' "$_mk_adr" && grep -qF 'data.axis' "$_mk_adr" &&
 	pass "ADR-0034 records the rule as an amendment of ADR-0024 clause 1" ||
 	fail "no docs/adr/0034-*.md naming ADR-0024 clause 1, data.severity and data.axis"
+
+# ---------------------------------------------------------------------------
+banner "42. merge.outcome is a kind, and the record reader prints each review area's earned record (runtime/R31, R43-R45, #875)"
+# ---------------------------------------------------------------------------
+# PRD-06 slice 1 (ADR-0036): the trace learns what happened to a landed PR
+# after its merge, and a reader run by the operator and /retro only prints,
+# per review area of the lens-slice policy, its most recent landings (up to
+# 20), how many landed inside the 30-day fix window, and how many carry a
+# mistake. Nothing writes a merge.outcome yet but a hand emit: the recorder is
+# the next ticket. The fixture is a real repository, because a landing's paths
+# are its merge commit's diff against its FIRST parent — a combined diff of a
+# merge shows nothing, and the second parent shows the base's own work.
+ER_T="$SCRATCH/earned-record-trace"
+NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# er_ev <trace> <ts> <kind> <subject> <outcome> [merge sha] — one raw line in
+# its day file: a fixture's times are the point, and emit stamps the clock's.
+er_ev() {
+	_er_day=${2%%T*}
+	mkdir -p "$1/events"
+	printf '{"v":1,"ts":"%s","id":"%s-1-0000abcd","kind":"%s","subject":"%s","outcome":"%s","reason":"fixture"%s}\n' \
+		"$2" "$(printf '%s' "$2" | tr -d ':-')" "$3" "$4" "$5" "${6:+,\"data\":{\"merge_sha\":\"$6\"\}}" >>"$1/events/$_er_day.jsonl"
+}
+# er_land <repo> <path> <subject> — one squash-style landing: a commit on main
+# writing <path>; prints its sha.
+er_land() {
+	mkdir -p "$(dirname "$1/$2")"
+	printf '%s\n' "$3" >>"$1/$2"
+	git -C "$1" add -A && git -C "$1" commit -q -m "feat: $3" && git -C "$1" rev-parse HEAD
+}
+ER_POL="$SCRATCH/earned-record-policy.sh"
+printf '%s\n' "LENS_SLICE_RULES='security ^src/" 'api-crud ^api/' 'test-hygiene ^tests/' 'pattern ^docs/' 'simplicity ^lib/' "reuse-dry ^none/'" >"$ER_POL"
+t_repo
+ER=$REPO
+S1=$(er_land "$ER" src/a.sh 'pr one')
+git -C "$ER" checkout -q -b two
+er_land "$ER" tests/t.sh 'pr two, a test' >/dev/null
+er_land "$ER" src/b.sh 'pr two, a script' >/dev/null
+git -C "$ER" checkout -q main
+S3=$(er_land "$ER" docs/d.md 'pr three')
+git -C "$ER" merge -q --no-ff two -m 'Merge pull request #2'
+S2=$(git -C "$ER" rev-parse HEAD)
+S4=$(er_land "$ER" lib/l.sh 'pr four')
+S5=$(er_land "$ER" api/x.sh 'pr five, stopped')
+er_ev "$ER_T" 2025-01-01T10:00:00Z merge.land 'pr:#1' landed "$S1"
+er_ev "$ER_T" "$NOW" merge.land 'pr:#3' landed "$S3"
+er_ev "$ER_T" "$NOW" merge.land 'pr:#2' landed "$S2"
+er_ev "$ER_T" "$NOW" merge.land 'pr:#4' landed "$S4"
+er_ev "$ER_T" "$NOW" merge.land 'pr:#5' stopped "$S5"
+er_ev "$ER_T" "$NOW" merge.land 'pr:#6' landed
+er_ev "$ER_T" "$NOW" merge.land 'pr:#7' landed aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ER_ON=$(policy "$ER_T")
+( cd "$ER" && env TRACE_CONFIG="$ER_ON" sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the record fixture is a trace verify accepts" ||
+	fail "the record fixture does not verify — the reader would be judged over a damaged trace"
+
+# runtime/R31: the kind, its three outcomes, and nothing else.
+for _er_o in reverted fixed qa-failed; do
+	t_exec env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit --dry-run kind=merge.outcome subject='pr:#2' outcome="$_er_o" data.by_sha="$S4" data.ticket=T-1
+	[ "$T_STATUS" = 0 ] && pass "runtime/R31: merge.outcome outcome=$_er_o is accepted" || fail "runtime/R31: merge.outcome outcome=$_er_o exited $T_STATUS: $T_ERR"
+done
+_er_n=$(cat "$ER_T"/events/*.jsonl | wc -l | tr -d ' ')
+for _er_o in landed missed 'reverted|fixed'; do
+	t_exec env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#2' outcome="$_er_o" data.by_sha="$S4"
+	[ "$T_STATUS" = 2 ] && pass "runtime/R31: merge.outcome outcome='$_er_o' is exit 2" || fail "runtime/R31: merge.outcome outcome='$_er_o' exited $T_STATUS"
+done
+[ "$(cat "$ER_T"/events/*.jsonl | wc -l | tr -d ' ')" = "$_er_n" ] && pass "runtime/R31: and a refused outcome writes nothing" || fail "runtime/R31: a refused merge.outcome was written"
+expect_exit 2 "a merge.outcome with no outcome is refused — it names no outcome a reader can count" -- env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#2' data.by_sha="$S4"
+expect_exit 2 "a reverted outcome carries its evidence, data.by_sha — the key a re-run is checked against" -- env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#2' outcome=reverted
+expect_exit 2 "data.by_sha is a 40-hex commit sha, never a prose reference" -- env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#2' outcome=fixed data.by_sha=HEAD
+expect_exit 2 "a qa-failed outcome carries its factory ticket" -- env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#2' outcome=qa-failed
+expect_exit 2 "data.days is digits" -- env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#2' outcome=fixed data.by_sha="$S4" data.days=twelve
+
+# The hand emit the ticket's acceptance names: one revert, against #2.
+t_exec env TRACE_CONFIG="$ER_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#2' related='pr:#9' outcome=reverted data.by_sha="$S4" data.files=tests/t.sh
+[ "$T_STATUS" = 0 ] && pass "runtime/R31: merge.outcome outcome=reverted is written" || fail "runtime/R31: the hand emit exited $T_STATUS: $T_ERR"
+
+er_snap() { find "$ER_T" -type f -exec cksum {} + | sort; git -C "$ER" status --porcelain; }
+_er_before=$(er_snap)
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$ER" "$ER_ON" "$ER_POL" "$TRACE"
+[ "$T_STATUS" = 0 ] && pass "record exits 0" || fail "record exited $T_STATUS: $T_ERR"
+_er_want='security: landings 2 of 20, in the fix window 1, mistakes 1
+api-crud: landings 0 of 20, in the fix window 0, mistakes 0
+pattern: landings 1 of 20, in the fix window 1, mistakes 0
+simplicity: landings 1 of 20, in the fix window 1, mistakes 0
+reuse-dry: landings 0 of 20, in the fix window 0, mistakes 0
+test-hygiene: landings 1 of 20, in the fix window 1, mistakes 1'
+[ "$T_OUT" = "$_er_want" ] &&
+	pass "runtime/R44, runtime/R45: one row per review area; #2 counts in both areas its first-parent diff touches, with its mistake; #3's base-side docs change is #3's alone; a stopped landing, one with no sha and one not in the repository count nowhere" ||
+	fail "runtime/R44, runtime/R45: record printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+case $T_ERR in *'1 landing'*'not in this repository'*) pass "and says on stderr how many landings' commits it could not read" ;;
+*) fail "record did not say on stderr that one landing's commit is not in the repository: $T_ERR" ;; esac
+[ "$(er_snap)" = "$_er_before" ] && pass "runtime/R44: record writes nothing — the trace and the repository are unchanged" || fail "record changed the trace or the repository"
+
+# runtime/R44: the most recent 20, said as `<n> of 20`.
+ER2_T="$SCRATCH/earned-record-cap"
+t_repo
+ER2=$REPO
+_er_i=1
+while [ "$_er_i" -le 21 ]; do
+	_er_s=$(er_land "$ER2" "tests/t$_er_i.sh" "pr $_er_i")
+	[ "$_er_i" = 1 ] && _er_s1=$_er_s
+	er_ev "$ER2_T" "$(printf '2026-01-01T00:%02d:00Z' "$_er_i")" merge.land "pr:#$((100 + _er_i))" landed "$_er_s"
+	_er_i=$((_er_i + 1))
+done
+ER2_ON=$(policy "$ER2_T")
+env TRACE_CONFIG="$ER2_ON" sh "$TRACE" emit kind=merge.outcome subject='pr:#101' outcome=reverted data.by_sha="$_er_s1" 2>/dev/null
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$ER2" "$ER2_ON" "$ER_POL" "$TRACE"
+printf '%s\n' "$T_OUT" | grep -qxF 'test-hygiene: landings 20 of 20, in the fix window 0, mistakes 0' &&
+	pass "runtime/R44: 21 landings count as the most recent 20, and a mistake on the 21st-most-recent is outside them" ||
+	fail "runtime/R44: over 21 landings record printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+
+# runtime/R43: unconfigured, the reader prints nothing, writes nothing, exits 0.
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$ER" "$OFF" "$ER_POL" "$TRACE"
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && [ -z "$(git -C "$ER" status --porcelain)" ] &&
+	pass "runtime/R43: an unconfigured record exits 0, prints nothing on stdout and writes nothing" ||
+	fail "runtime/R43: an unconfigured record exited $T_STATUS, printed '$T_OUT', left '$(git -C "$ER" status --porcelain)'"
+expect_exit 2 "record takes no argument" -- env TRACE_CONFIG="$ER_ON" sh "$TRACE" record --since 2026-01-01
+
+# The decision is recorded where decisions live.
+_er_adr=$(ls "$KIT"/docs/adr/0036-*.md 2>/dev/null | head -1)
+[ -n "$_er_adr" ] && grep -qF 'ADR-0024' "$_er_adr" && grep -qF 'merge.outcome' "$_er_adr" && grep -qF 'record reader' "$_er_adr" &&
+	pass "ADR-0036 records the kind and the record reader as an amendment of ADR-0024" ||
+	fail "no docs/adr/0036-*.md naming ADR-0024, merge.outcome and the record reader"
 
 t_done "trace script"
