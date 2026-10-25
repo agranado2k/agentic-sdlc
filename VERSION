@@ -3349,6 +3349,9 @@
 # first words of its arrow line, an item with none read as outward, and
 # the axis-2 verdict counts the outward items (data.outward); the offline
 # worker contract, .agents/prompts/review-worker.md, says the same.
+# /to-tickets (from #872, landed beside this release) — rule 15 stamps one
+# `Test-tier: <requirement id> <tier>` line per id a ticket covers, and
+# the quiz checks each through the vocabulary checker.
 # Wiring (9b): none. Templates (9c): none. Config (9d): none.
 # Adapter (9e): none.
 # Kit-only, never shipped: docs/adr/0036, the glossary's Post-merge
