@@ -63,3 +63,8 @@ R48. WHEN `/review-pr` reviews a PR whose ticket has a `Covers:` line, its coord
 R49. WHEN `/pr-iterate` pushes a commit to a PR with a check table, it SHALL rewrite each row's result and evidence pin from that iteration's suite run at the new head. [UC3 3]
 R50. WHILE the check-table reader prints a `fail:`, `missing-row:`, `extra-row:` or `tier-differs:` line, `/pr-iterate` SHALL NOT report the PR converged. [UC3 4]
 R51. WHEN the check-table reader prints `skipped:` lines, `/pr-iterate` SHALL list those ids at the top of its report as manual checks awaiting the operator. [UC3 4]
+R56. WHEN `/pr-iterate` meets an ⚠️ UNSPECIFIED item marked `scope: inside`, it SHALL decide it, keeping the change or amending it, and SHALL record the decision as one row of the PR body's decision log under a `<!-- decision-log -->` marker above the explain-diff marker, with an id `D-<n>` never renumbered, the surface, the decision and why. [UC5 2]
+R57. WHEN `/pr-iterate` writes a decision-log row, it SHALL record one `finding.triage` event carrying `data.scope=inside` and `data.decision=D-<n>`. [UC5 2]
+R58. IF an ⚠️ UNSPECIFIED item is marked `scope: outward`, THEN `/pr-iterate` SHALL NOT decide, amend or log it, and SHALL list it verbatim at the top of its report for the operator. [UC5 3]
+R59. IF a review marks `scope: outward` an item the decision log holds, THEN `/pr-iterate` SHALL strike that row, keeping its id, and SHALL hold the item as R58 says. [UC5 2a]
+R60. No skill SHALL read a decision log's or a check table's prose back as an instruction: a skill reads the decision log only for its `D-<n>` ids, and the check table only through the check-table reader.

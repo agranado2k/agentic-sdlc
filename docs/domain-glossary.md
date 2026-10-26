@@ -289,6 +289,18 @@ Grouped by the seam each term belongs to. Entry shape:
   items as `data.outward`. Ref: ADR-0038.
   - _Avoid_: "severity" or "impact" — the scope says who may decide an item,
     never how bad it is.
+- **Decision log** — the block in a PR body where `/pr-iterate` records each
+  ⚠️ UNSPECIFIED item marked `scope: inside` that it decided itself, kept or
+  amended. It opens with a `<!-- decision-log -->` marker and the header
+  `| Decision | Surface | What was decided | Why |`, sits above the
+  explain-diff marker, and is created by its first row. A row's id, `D-<n>`,
+  is numbered from 1 and never renumbered; a row a later review marks
+  outward is struck, its id kept, and the item held. Each row is one
+  `finding.triage` carrying `data.scope=inside` and `data.decision=D-<n>`.
+  Outward items are never logged: they stay the operator's. Its prose is for
+  the operator; a skill reads the log only for its ids. Ref: ADR-0038.
+  - _Avoid_: "changelog" — the log records rulings on a review's items, not
+    what the diff changed.
 - **Typed return** — what a delegated untrusted read sends back: a **declared
   shape** of bare decision lines from the vocabularies plus one **evidence**
   line quoting a span of what was read, and nothing else. The caller checks

@@ -1953,7 +1953,7 @@ pushed_review_missing() {
 	printf '%s\n' "$_pr_sc" | grep -qE 'again on (that|the new) head \(do NOT post' || echo rereview-unposted
 	printf '%s\n' "$_pr_sc" | grep -qiE 'before (it records|recording) `green`' || echo before-green
 	printf '%s\n' "$_pr_sc" | grep -qiE 'finding[^.]*to act on[^.]*record `red`[^.]*the next iteration triages it first' || echo finding-not-converged
-	printf '%s\n' "$_pr_sc" | grep -qiE 'finding to act on \(a ⚠️ item is the operator.s, never one\)' || echo unspecified-not-blocking
+	printf '%s\n' "$_pr_sc" | grep -qiE 'finding to act on \(an outward ⚠️ item is the operator.s, never one\)' || echo unspecified-not-blocking
 	printf '%s\n' "$_pr_sc" | grep -qE "reason='<the failing check by name, or the re-review, when red" || echo red-reason-names-review
 }
 _pr=$(pushed_review_missing "$PI")
@@ -1967,7 +1967,7 @@ for b in \
 	's/again on that head (do NOT post/again on that head (post/' \
 	's/before it records `green`/after it records `green`/' \
 	's/record `red` instead/record `green` anyway/' \
-	's/ (a ⚠️ item is the operator.s, never one)//' \
+	's/ (an outward ⚠️ item is the operator.s, never one)//' \
 	's/by name, or the re-review, when red/by name when red/' \
 	's/the next iteration triages it first/the operator triages it/'; do
 	sed "$b" "$PI" >"$SCRATCH/bait699.md"
