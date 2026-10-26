@@ -24,6 +24,19 @@ the table with no rows.
 | Requirement | Test tier | Result | Evidence |
 | --- | --- | --- | --- |
 
+## Decision log
+
+<!--
+One row per open point the iteration loop decided itself because its effect
+stays inside the change: a review's UNSPECIFIED item marked `scope: inside`.
+The loop creates the log with its first row, a decision-log marker comment
+line and the header `| Decision | Surface | What was decided | Why |`, under
+this heading. A row's id, `D-<n>`, is numbered from 1 and never renumbered;
+a row a later review marked outward is struck, its id kept, and the item is
+held for you. Outward items are never logged here. Read the log before
+merging; no skill reads its prose back.
+-->
+
 ## Checklist
 
 - [ ] **One slice** — this PR does one thing; refactoring and behavior change are
