@@ -3098,7 +3098,8 @@ TRACE_OUTCOME_FILES_BYTES=2000
 # rounded down, are under the fix window (`trace_fix_window`), and puts them
 # in `data.days`; a PR landed before the window gets nothing from that fix.
 # An outcome the trace already holds for the same PR, outcome and
-# `data.by_sha` is not written again, so a second run writes 0 lines. Lines from a landing no `merge.land` names get no outcome, and their
+# `data.by_sha` is not written again, so a second run writes 0 lines.
+# Lines from a landing no `merge.land` names get no outcome, and their
 # count goes to stderr. Unconfigured: nothing on stdout, nothing written,
 # exit 0, like every reader.
 trace_outcomes() {
