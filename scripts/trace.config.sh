@@ -245,3 +245,17 @@ TRACE_PRICES_STALE_DAYS=''
 #
 # Both of the first two rot on somebody else's schedule and neither is a
 # contract. Read two, believe the vendor, and write the date.
+
+# ---------------------------------------------------------------------------
+# TRACE_FIX_WINDOW_DAYS — how many days after a PR lands a later `fix` landing
+# still counts against it. The outcome recorder (`sh scripts/trace.sh
+# outcomes`) writes `merge.outcome outcome=fixed` only inside this window, and
+# the record reader (`record`) counts the landings still inside it.
+#
+#   ''     the 30-day window (the shipped default)
+#   '14'   any other whole number of days from 1
+#
+# Any other value — a fraction, a word, a sign, zero — is not used: the
+# 30-day window holds and the reader says so once on stderr, never a failure.
+# Only this file sets it: an environment value is ignored.
+TRACE_FIX_WINDOW_DAYS=''

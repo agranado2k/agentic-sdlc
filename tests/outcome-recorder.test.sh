@@ -1,11 +1,13 @@
 #!/bin/sh
 # tests/outcome-recorder.test.sh — self-tests for the outcome recorder,
-# `sh scripts/trace.sh outcomes` (PRD-06 slice 2 of K1, #876; the kit's ADR-0036).
+# `sh scripts/trace.sh outcomes` (PRD-06 slices 2 and 4 of K1, #876, #878;
+# the kit's ADR-0036).
 #
 # The recorder reads git and the trace, and writes one `merge.outcome
 # outcome=reverted` against each landed PR whose lines a later `revert`
-# landing removed, as git blame at that landing's first parent attributes
-# them. Its whole job is reading git, so the fixture is a REAL throwaway
+# landing removed, and one `outcome=fixed` against each whose lines a `fix`
+# landing removed or rewrote inside the fix window, as git blame at that
+# landing's first parent attributes them. Its whole job is reading git, so the fixture is a REAL throwaway
 # repository with scripted landings — squash-style commits on main and
 # merge commits whose PR title sits below the "Merge pull request" line —
 # and a fixture trace holding their `merge.land` events.
@@ -186,6 +188,121 @@ t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" sh "$3" outcomes' _ "$R" "$(polic
 outcomes_in "$T2" | grep -F '"subject":"pr:#31"' | grep -qF '"files":"src/a b.sh"' &&
 	pass "runtime/R32: a revert of lines in a path holding a space is blamed to the PR that wrote them" ||
 	fail "runtime/R32: no outcome for a spaced path: $T_OUT | $T_ERR"
+R=$R_MAIN
+
+banner "5. A fix landing counts against a PR only inside the fix window (runtime/R34, R35, R36)"
+
+# A throwaway history dated by GIT_COMMITTER_DATE: #41 lands on day 0, #42 on
+# day 29, #44 on day 35, and #43 — a merge commit typed `fix` on its PR
+# title's line, naming #44 in prose — on day 41, rewriting one line of #41
+# (41 days before it) and one of #42 (12 days before it).
+# at <day> <cmd…> — run the command with both git dates on that day.
+at() {
+	_at_d=$(printf '2026-01-%02dT12:00:00Z' $(($1 + 1)))
+	[ "$1" -lt 31 ] || _at_d=$(printf '2026-02-%02dT12:00:00Z' $(($1 - 30)))
+	shift
+	GIT_COMMITTER_DATE=$_at_d GIT_AUTHOR_DATE=$_at_d "$@"
+}
+R_MAIN=$R
+t_repo
+R=$REPO
+TF="$SCRATCH/trace-fix"
+put src/f.sh f1 f2
+F41=$(at 0 land 'feat: forty-one')
+put src/g.sh g1 g2
+F42=$(at 29 land 'feat: forty-two')
+put docs/h.md h1 h2
+F44=$(at 35 land 'feat: forty-four')
+git -C "$R" checkout -q -b fortythree
+put src/f.sh f1-fixed f2
+put src/g.sh g1-fixed g2
+at 41 land 'chore: repair' >/dev/null
+F43=$(at 41 merge_pr fortythree 43 'fix(src): repair the bug from #44')
+for _p in "41 $F41" "42 $F42" "43 $F43" "44 $F44"; do
+	land_ev "$TF" "pr:#${_p%% *}" "${_p#* }"
+done
+FON=$(policy "$TF")
+# fix_run <policy> — the recorder over the fix history, under that policy.
+fix_run() { t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" sh "$3" outcomes' _ "$R" "$1" "$TRACE"; }
+
+fix_run "$FON"
+FOUT=$(outcomes_in "$TF")
+printf '%s\n' "$FOUT" | grep -F '"subject":"pr:#42"' | grep -F '"outcome":"fixed"' | grep -F '"related":"pr:#43"' |
+	grep -F "\"by_sha\":\"$F43\"" | grep -F '"files":"src/g.sh"' | grep -qF '"days":"12"' &&
+	pass "runtime/R34: a fix 12 days after #42 gives fixed on #42, related #43, its merge sha, src/g.sh and data.days 12" ||
+	fail "runtime/R34: no fixed outcome on #42 by #43 with data.days 12: $FOUT | $T_ERR"
+[ "$(printf '%s\n' "$FOUT" | grep -c .)" = 1 ] && pass "runtime/R35: #41, landed 41 days before the fix, gets nothing — one outcome only" ||
+	fail "runtime/R35: expected one merge.outcome, got: $FOUT"
+printf '%s\n' "$FOUT" | grep -qF '"subject":"pr:#44"' && fail "runtime/R39: the fix's title names #44 in prose and #44 got an outcome" ||
+	pass "runtime/R39: a fix whose message names #44 in prose gives #44 nothing"
+_mid=$(count_in "$TF")
+fix_run "$FON"
+[ "$T_STATUS" = 0 ] && [ "$(count_in "$TF")" = "$_mid" ] && pass "runtime/R41: a second run over the fix writes 0 lines" ||
+	fail "runtime/R41: the second run exited $T_STATUS and the trace went $_mid -> $(count_in "$TF")"
+
+# window <value> — a fresh trace holding the four landings, its policy
+# setting TRACE_FIX_WINDOW_DAYS to the value; runs the recorder over it.
+window() {
+	TW=$(mktemp -d "$SCRATCH/trace-window.XXXXXX")
+	mkdir -p "$TW/events"
+	grep -h '"kind":"merge.land"' "$TF"/events/*.jsonl >"$TW/events/${NOW%%T*}.jsonl"
+	_wp=$(policy "$TW")
+	printf "TRACE_FIX_WINDOW_DAYS='%s'\n" "$1" >>"$_wp"
+	fix_run "$_wp"
+	WOUT=$(cat "$TW"/events/*.jsonl | grep '"kind":"merge.outcome"')
+}
+window 7
+[ "$T_STATUS" = 0 ] && [ -z "$WOUT" ] && pass "runtime/R36: a 7-day fix window in the policy file: the 12-day fix gives nothing" ||
+	fail "runtime/R36: under a 7-day window the recorder exited $T_STATUS and wrote: $WOUT"
+window 13
+printf '%s\n' "$WOUT" | grep -F '"subject":"pr:#42"' | grep -qF '"days":"12"' && [ -z "$T_ERR" ] &&
+	pass "runtime/R36: a 13-day fix window holds the 12-day fix, silently" ||
+	fail "runtime/R36: under a 13-day window: $WOUT | $T_ERR"
+window 12
+[ "$T_STATUS" = 0 ] && [ -z "$WOUT" ] && pass "runtime/R35: a 12-day fix window does not hold a fix 12 days later — the window's edge is outside it" ||
+	fail "runtime/R35: under a 12-day window the 12-day fix was recorded, or the recorder exited $T_STATUS: $WOUT"
+for _bad in 'two weeks' 7.5 -7 0; do
+	window "$_bad"
+	if printf '%s\n' "$WOUT" | grep -F '"subject":"pr:#42"' | grep -qF '"days":"12"'; then
+		case $T_ERR in *TRACE_FIX_WINDOW_DAYS*"$_bad"*30*) pass "runtime/R36: TRACE_FIX_WINDOW_DAYS='$_bad' is not used — the 30-day window holds, and stderr says so" ;;
+		*) fail "runtime/R36: TRACE_FIX_WINDOW_DAYS='$_bad' gave no note on stderr: $T_ERR" ;; esac
+	else
+		fail "runtime/R36: TRACE_FIX_WINDOW_DAYS='$_bad' was used, or the 30-day window did not hold: $WOUT | $T_ERR"
+	fi
+done
+_wp=$(policy "$TW")
+printf "TRACE_FIX_WINDOW_DAYS='thirty'\n" >>"$_wp"
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$R" "$_wp" "$POL" "$TRACE"
+case $T_ERR in *TRACE_FIX_WINDOW_DAYS*thirty*30*) pass "runtime/R36: the record reader reads the same window, and says so for a value it cannot use" ;;
+*) fail "runtime/R36: record gave no note for TRACE_FIX_WINDOW_DAYS='thirty': $T_ERR" ;; esac
+TE=$(mktemp -d "$SCRATCH/trace-env.XXXXXX")
+mkdir -p "$TE/events"
+grep -h '"kind":"merge.land"' "$TF"/events/*.jsonl >"$TE/events/${NOW%%T*}.jsonl"
+t_exec sh -c 'cd "$1" && env TRACE_FIX_WINDOW_DAYS=7 TRACE_CONFIG="$2" sh "$3" outcomes' _ "$R" "$(policy "$TE")" "$TRACE"
+cat "$TE"/events/*.jsonl | grep -F '"subject":"pr:#42"' | grep -qF '"days":"12"' &&
+	pass "runtime/R36: a 7-day TRACE_FIX_WINDOW_DAYS in the environment is not the policy file's — the 12-day fix is still recorded" ||
+	fail "runtime/R36: an environment window was read as the policy's: $T_ERR"
+grep -qx "TRACE_FIX_WINDOW_DAYS=''" "$KIT/scripts/trace.config.sh" &&
+	pass "runtime/R36: the shipped trace policy file names TRACE_FIX_WINDOW_DAYS, empty — the 30-day window" ||
+	fail "runtime/R36: scripts/trace.config.sh does not ship TRACE_FIX_WINDOW_DAYS=''"
+
+# A fix whose merge commit is dated before the landing it rewrites — a
+# skewed clock, a rebased history — is not inside the window: #51 lands on
+# day 20 and #52, typed `fix`, is dated day 10.
+t_repo
+R=$REPO
+TS="$SCRATCH/trace-skew"
+put src/s.sh s1 s2
+S51=$(at 20 land 'feat: fifty-one')
+git -C "$R" checkout -q -b fiftytwo
+put src/s.sh s1-fixed s2
+at 10 land 'chore: repair' >/dev/null
+S52=$(at 10 merge_pr fiftytwo 52 'fix: repair fifty-one')
+land_ev "$TS" pr:#51 "$S51"
+land_ev "$TS" pr:#52 "$S52"
+fix_run "$(policy "$TS")"
+[ "$T_STATUS" = 0 ] && [ -z "$(outcomes_in "$TS")" ] && pass "runtime/R34: a fix dated before the landing it rewrites gives that landing nothing" ||
+	fail "runtime/R34: a fix dated 10 days before #51 recorded: $(outcomes_in "$TS") | $T_ERR"
 R=$R_MAIN
 
 OFF=$(mktemp "$SCRATCH/off.XXXXXX")
