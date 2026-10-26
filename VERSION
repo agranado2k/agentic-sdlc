@@ -3497,8 +3497,29 @@
 # them — tests/outcome-recorder.test.sh section 5, tests/retro-skill.test.sh
 # section 19, tests/review-pr-output.test.sh section 26 and
 # tests/trace-skills.test.sh.
+# 0.98.0 — the outcome recorder records failed factory QA (ticket #879,
+# PRD-06 slice 5 of K1, the kit's ADR-0036). NO file joins the shared layer
+# and none leaves. Two shared files change content: scripts/trace.sh, whose
+# outcome recorder, where the repository holds a .factory/ folder, reads
+# each factory ticket's qa.outcome and links.pr from its front matter — no
+# other field and no body text, each held to its shape — and writes one
+# merge.outcome outcome=qa-failed against the PR links.pr names when QA
+# failed, the ticket's id in data.ticket, keyed on the PR and the ticket so
+# a second run writes nothing; a malformed links.pr, or one naming a PR with
+# no merge.land, gets nothing and the ticket's id on stderr; and UPDATING.md,
+# its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — .agents/skills/retro/QUESTIONS.md's question 2 says
+# failed factory QA is recorded where a .factory/ folder exists, and asks
+# for the ticket ids the recorder names on stderr beside the rows.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/runtime.md R37 and R38, the
+# glossary's Outcome recorder, and the suites that hold them —
+# tests/outcome-recorder.test.sh section 6 and tests/retro-skill.test.sh
+# section 19.
 
-shared-layer: 0.97.0
+shared-layer: 0.98.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
