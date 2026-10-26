@@ -258,6 +258,9 @@ window 13
 printf '%s\n' "$WOUT" | grep -F '"subject":"pr:#42"' | grep -qF '"days":"12"' && [ -z "$T_ERR" ] &&
 	pass "runtime/R36: a 13-day fix window holds the 12-day fix, silently" ||
 	fail "runtime/R36: under a 13-day window: $WOUT | $T_ERR"
+window 12
+[ "$T_STATUS" = 0 ] && [ -z "$WOUT" ] && pass "runtime/R35: a 12-day fix window does not hold a fix 12 days later — the window's edge is outside it" ||
+	fail "runtime/R35: under a 12-day window the 12-day fix was recorded, or the recorder exited $T_STATUS: $WOUT"
 for _bad in 'two weeks' 7.5 -7 0; do
 	window "$_bad"
 	if printf '%s\n' "$WOUT" | grep -F '"subject":"pr:#42"' | grep -qF '"days":"12"'; then
@@ -282,6 +285,24 @@ cat "$TE"/events/*.jsonl | grep -F '"subject":"pr:#42"' | grep -qF '"days":"12"'
 grep -qx "TRACE_FIX_WINDOW_DAYS=''" "$KIT/scripts/trace.config.sh" &&
 	pass "runtime/R36: the shipped trace policy file names TRACE_FIX_WINDOW_DAYS, empty — the 30-day window" ||
 	fail "runtime/R36: scripts/trace.config.sh does not ship TRACE_FIX_WINDOW_DAYS=''"
+
+# A fix whose merge commit is dated before the landing it rewrites — a
+# skewed clock, a rebased history — is not inside the window: #51 lands on
+# day 20 and #52, typed `fix`, is dated day 10.
+t_repo
+R=$REPO
+TS="$SCRATCH/trace-skew"
+put src/s.sh s1 s2
+S51=$(at 20 land 'feat: fifty-one')
+git -C "$R" checkout -q -b fiftytwo
+put src/s.sh s1-fixed s2
+at 10 land 'chore: repair' >/dev/null
+S52=$(at 10 merge_pr fiftytwo 52 'fix: repair fifty-one')
+land_ev "$TS" pr:#51 "$S51"
+land_ev "$TS" pr:#52 "$S52"
+fix_run "$(policy "$TS")"
+[ "$T_STATUS" = 0 ] && [ -z "$(outcomes_in "$TS")" ] && pass "runtime/R34: a fix dated before the landing it rewrites gives that landing nothing" ||
+	fail "runtime/R34: a fix dated 10 days before #51 recorded: $(outcomes_in "$TS") | $T_ERR"
 R=$R_MAIN
 
 OFF=$(mktemp "$SCRATCH/off.XXXXXX")
