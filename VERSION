@@ -3465,8 +3465,10 @@
 # section 43 (section 42's rows lengthened), tests/outcome-recorder.test.sh
 # section 4 and tests/retro-skill.test.sh section 19.
 # 0.97.0 — the outcome recorder records fixes inside the fix window (ticket
-# #878, PRD-06 slice 4 of K1, the kit's ADR-0036). NO file joins the shared
-# layer and none leaves. Two shared files change content: scripts/trace.sh,
+# #878, PRD-06 slice 4 of K1, the kit's ADR-0036), and the iteration loop
+# decides inside items into a decision log (ticket #874, PR #897, landed
+# untagged before this bump). NO file joins the shared layer and none
+# leaves. Two shared files change content: scripts/trace.sh,
 # whose outcome recorder also writes merge.outcome outcome=fixed against each
 # landed PR whose lines a fix landing removed or rewrote, as git blame at its
 # first parent says, when the PR landed inside the fix window before it — the
@@ -3479,13 +3481,22 @@
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
 # Skills (9a): /retro — .agents/skills/retro/QUESTIONS.md's question 2 says
 # reverts and fixes inside the fix window are recorded and a failed factory
-# QA is not yet. Wiring (9b): none. Templates (9c): none.
+# QA is not yet. /pr-iterate — SKILL.md and
+# .agents/skills/pr-iterate/CHECK-TABLE.md decide a review's UNSPECIFIED
+# item marked scope: inside into one D-<n> row of the PR body's decision
+# log, and hold an outward item for the human, listed verbatim. /review-pr
+# — SKILL.md's Agent 7 skips the PR body's check table and decision log.
+# Wiring (9b): none. Templates (9c): templates/docs/PULL_REQUEST_TEMPLATE.md
+# gains a Decision log section under the Check table.
 # Config (9d): scripts/trace.config.sh gains TRACE_FIX_WINDOW_DAYS='', the
 # 30-day window, optional. Adapter (9e): none.
-# Kit-only, never shipped: docs/specs/runtime.md R34 to R36, the glossary's
-# Outcome recorder and Mistake, AGENTS.md's trace row, README.md's suite
-# line, and the suites that hold them — tests/outcome-recorder.test.sh
-# section 5 and tests/retro-skill.test.sh section 19.
+# Kit-only, never shipped: docs/specs/runtime.md R34 to R36 and
+# docs/specs/process.md R56 to R60, the glossary's Outcome recorder,
+# Mistake and Decision log, the kit's own .github/PULL_REQUEST_TEMPLATE.md,
+# AGENTS.md's trace row, README.md's suite line, and the suites that hold
+# them — tests/outcome-recorder.test.sh section 5, tests/retro-skill.test.sh
+# section 19, tests/review-pr-output.test.sh section 26 and
+# tests/trace-skills.test.sh.
 
 shared-layer: 0.97.0
 

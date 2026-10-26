@@ -241,13 +241,20 @@ type token, the join through `merge.land`, the idempotence and the trust
 boundary are the revert path's, so its next run backfills every fix your trace
 holds a merge sha for, and a second run writes nothing. The window is 30 days;
 `sh scripts/trace.sh record` counts the landings inside the same window.
-**One skill moves (9a): `/retro`** — `QUESTIONS.md`'s question 2 says reverts
-and fixes are recorded and a failed factory QA is not yet. **One policy file
+**Three skills move (9a).** `/retro`: `QUESTIONS.md`'s question 2 says reverts
+and fixes are recorded and a failed factory QA is not yet. `/pr-iterate`
+(#874, landed before this bump): `SKILL.md` and `CHECK-TABLE.md` decide a
+review's ⚠️ UNSPECIFIED item marked `scope: inside` into one `D-<n>` row of
+the PR body's decision log, and hold an outward one for you, listed verbatim.
+`/review-pr`: `SKILL.md`'s Agent 7 skips the PR body's check table and
+decision log. **One template moves (9c):** `templates/docs/PULL_REQUEST_TEMPLATE.md`
+gains a Decision log section under the Check table; copy it into your PR
+template where you took that file. **One policy file
 moves (9d), optionally:** `scripts/trace.config.sh` gains
 `TRACE_FIX_WINDOW_DAYS=''` — empty is the 30-day window, a whole number of
 days from 1 sets another, and any other value is not used, said once on
 stderr. Your file without the line keeps 30 days; add it only to change the
-window. No wiring, template or adapter moves.
+window. No wiring or adapter moves.
 
 **Arriving from 0.95.0 or older, the earned record shows misses and lens
 precision.** No file joins or leaves at 0.96.0. One shared file changes
@@ -1724,10 +1731,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3427 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3434 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3581 insertions(+), 1 deletion(-)
+ 3 files changed, 3588 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
