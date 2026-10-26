@@ -2802,3 +2802,19 @@ not used, said once on stderr, and `record` reads the same window. Run over a
 copy of the kit's own trace it wrote 24 `fixed` outcomes, every one 0 to 10
 days after its landing, in 10.7 s wall; the second run wrote 0. `/retro`'s
 question 2 now says a failed factory QA is the one outcome not recorded yet.
+
+## 2026-10-26 — the outcome recorder records failed factory QA
+
+PRD-06 slice 5 of K1, its last (#879, ADR-0036, released as 0.98.0).
+Where the repository holds a `.factory/` folder, `trace.sh outcomes` reads
+each `.factory/items/<id>/ticket.md`'s front matter for `qa.outcome` and
+`links.pr`, nothing else, and writes `merge.outcome outcome=qa-failed`
+against the linked PR when QA failed, the directory's name in `data.ticket`.
+A malformed `links.pr` — an unquoted `#890` is a YAML comment, so empty —
+or one naming a PR with no `merge.land` gets the ticket's id on stderr. Run
+over a copy of the kit's trace with T-04 flipped to `fail` and T-05 linked to
+`#99999`, it wrote one `qa-failed` on #807 for T-04, named T-05 on stderr, and
+the second run wrote 0. Open from #898's demo: 6 of its 24 `fixed` outcomes
+were a release bump "fixing" the previous release PR by rewriting the
+VERSION, README and UPDATING.md pin lines — a candidate follow-up, not
+fixed here.

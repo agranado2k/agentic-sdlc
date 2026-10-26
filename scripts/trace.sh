@@ -213,9 +213,12 @@
 # whose lines a later `revert` landing removed, and a `fixed` against each
 # whose lines a `fix` landing removed or rewrote inside the fix window, as git
 # blame at that landing's first parent says, mapped to the PR only through a
-# `merge.land` merge sha.
+# `merge.land` merge sha; and, where the repository holds a `.factory/`
+# folder, a `qa-failed` against the PR each factory ticket whose QA failed
+# links, with the ticket's id in `data.ticket`.
 # It reads nothing from a commit message but the type token and, for a revert
-# that removes no line, a 40-hex sha. A second run writes nothing. The
+# that removes no line, a 40-hex sha, and nothing from a factory ticket but
+# `qa.outcome` and `links.pr`. A second run writes nothing. The
 # operator and /retro run it, before `record`; no chain skill does.
 #
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
@@ -3072,8 +3075,9 @@ trace_record() {
 TRACE_OUTCOME_FILES_BYTES=2000
 
 # trace_outcomes — one `merge.outcome outcome=reverted` per landed PR whose
-# lines a later `revert` landing removed, and one `outcome=fixed` per landed
-# PR whose lines a `fix` landing removed or rewrote inside the fix window.
+# lines a later `revert` landing removed, one `outcome=fixed` per landed
+# PR whose lines a `fix` landing removed or rewrote inside the fix window,
+# and one `outcome=qa-failed` per failed factory QA (trace_outcomes_qa).
 #
 # A LANDING is a `merge.land` with outcome `landed` and a 40-hex
 # `data.merge_sha`; that sha is the only way a commit maps to a PR. A landing
@@ -3125,6 +3129,9 @@ trace_outcomes() {
 		k == "merge.outcome" && (o = tr_str(e, "outcome")) ~ /^(reverted|fixed)$/ {
 			b = hex40(tr_data($0), "by_sha")
 			if (b != "") print "K\t" s "\t" b "\t" o
+		}
+		k == "merge.outcome" && tr_str(e, "outcome") == "qa-failed" && match(tr_data($0), /"ticket":"[A-Za-z0-9._-]+"/) {
+			print "Q\t" s "\t" substr(tr_data($0), RSTART + 10, RLENGTH - 11)
 		}')
 	_oc_have=$(printf '%s\n' "$_oc_ev" | awk -F '\t' '$1 == "L" { print $2 }' |
 		git cat-file --batch-check='%(objectname) %(objecttype)' 2>/dev/null | awk '$2 == "commit" { print $1 }')
@@ -3214,8 +3221,68 @@ trace_outcomes() {
 			_oc_written=$((_oc_written + 1))
 		done
 	done
+	trace_outcomes_qa || return 2
 	[ "$_oc_lost" -eq 0 ] || echo "trace: outcomes: $_oc_lost line(s) a revert or a fix removed came from a landing no merge.land with a merge sha names — no outcome for them" >&2
 	printf 'trace: outcomes: %d written\n' "$_oc_written"
+}
+
+# trace_outcomes_qa — the factory step of `outcomes` (#879): one
+# `merge.outcome outcome=qa-failed` per factory ticket whose QA failed,
+# against the PR its `links.pr` names, with the ticket's id in `data.ticket`.
+# Run from trace_outcomes, whose `$_oc_ev` and `$_oc_written` it shares.
+#
+# A FACTORY TICKET is `.factory/items/<id>/ticket.md` at the repository's
+# top level; its id is the directory's name, held to the `data.ticket` shape.
+# From the file the step reads two values of its front matter — the block
+# between the first two `---` lines — and nothing else: `outcome` nested
+# under a top-level `qa:` and `pr` nested under a top-level `links:`, each
+# a YAML scalar (quoted, or plain up to a comment), held whole to `pass|fail`
+# and `#[0-9]+`. Every other field, and the body, is never read, so a PR
+# number written in prose produces nothing. A ticket whose QA reads `fail`
+# and whose `links.pr` is not `#<digits>`, or names a PR no `merge.land`
+# landed with a merge sha, gets nothing written and its id on stderr. The
+# key is the PR and `data.ticket`: a second run writes 0 lines. No
+# `.factory/` folder: the step is skipped, silently.
+trace_outcomes_qa() {
+	_oq_top=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+	[ -d "$_oq_top/.factory" ] || return 0
+	_oq_bad=
+	_oq_odd=0
+	for _oq_f in "$_oq_top"/.factory/items/*/ticket.md; do
+		[ -f "$_oq_f" ] || continue
+		_oq_id=${_oq_f%/ticket.md}
+		_oq_id=${_oq_id##*/}
+		case $_oq_id in '' | *[!A-Za-z0-9._-]*) _oq_odd=$((_oq_odd + 1)) && continue ;; esac
+		# <qa outcome> <links.pr>, each the scalar's value or empty.
+		_oq_v=$(awk '
+			function scalar(v) {
+				sub(/^[ \t]+/, "", v)
+				if (v ~ /^"/) return match(v, /^"[^"]*"/) ? substr(v, 2, RLENGTH - 2) : ""
+				if (v ~ /^\047/) return match(v, /^\047[^\047]*\047/) ? substr(v, 2, RLENGTH - 2) : ""
+				sub(/(^|[ \t])#.*$/, "", v); sub(/[ \t]+$/, "", v)
+				return v
+			}
+			NR == 1 { if ($0 !~ /^---[ \t]*$/) exit; next }
+			/^---[ \t]*$/ { exit }
+			/^[^ \t#]/ { top = $0; sub(/:.*$/, "", top); next }
+			top == "qa" && /^[ \t]+outcome:/ { o = $0; sub(/^[ \t]+outcome:/, "", o); qa = scalar(o) }
+			top == "links" && /^[ \t]+pr:/ { p = $0; sub(/^[ \t]+pr:/, "", p); pr = scalar(p) }
+			END { printf "%s\t%s\n", qa, pr }' "$_oq_f")
+		[ "${_oq_v%%"$_oc_tab"*}" = fail ] || continue
+		_oq_pr=${_oq_v#*"$_oc_tab"}
+		case $_oq_pr in '#' | '#'*[!0-9]* | [!#]* | '') _oq_bad="$_oq_bad $_oq_id" && continue ;; esac
+		_oq_s="pr:$_oq_pr"
+		printf '%s\n' "$_oc_ev" | awk -F '\t' -v p="$_oq_s" '$1 == "L" && $3 == p { f = 1 } END { exit !f }' || {
+			_oq_bad="$_oq_bad $_oq_id"
+			continue
+		}
+		printf '%s\n' "$_oc_ev" | awk -F '\t' -v p="$_oq_s" -v t="$_oq_id" '$1 == "Q" && $2 == p && $3 == t { f = 1 } END { exit !f }' && continue
+		( trace_emit kind=merge.outcome subject="$_oq_s" outcome=qa-failed data.ticket="$_oq_id" reason='outcome recorder: the factory ticket that links this PR failed QA' ) || return 2
+		_oc_written=$((_oc_written + 1))
+	done
+	[ -z "$_oq_bad" ] || echo "trace: outcomes: factory ticket(s)$_oq_bad failed QA, but links.pr is not #<digits> or names a PR with no merge.land — no outcome for them" >&2
+	[ "$_oq_odd" -eq 0 ] || echo "trace: outcomes: $_oq_odd factory item folder(s) whose name is not a ticket id — not read" >&2
+	return 0
 }
 
 # ---------------------------------------------------------------------------

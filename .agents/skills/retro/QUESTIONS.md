@@ -66,10 +66,11 @@ reader, `merge.land` and `merge.outcome`.*
   `TRACE_FIX_WINDOW_DAYS`), how many carry a post-merge outcome, how many
   carry one no finding rejected at triage named a file of, and how the
   findings raised on them held up. A ratio over nothing reads `n/a`. The record
-  is each area's last 20 landings as of now, not cut to the window. Only
-  reverts and fixes inside the fix window are recorded: a failed factory QA
-  is a later release, so under the rows say that a failed factory QA is not
-  recorded yet and `mistakes 0` is not yet a clean history. The record compares nothing to a threshold, and neither does this
+  is each area's last 20 landings as of now, not cut to the window. Reverts,
+  fixes inside the fix window and, where the repository holds a `.factory/`
+  folder, failed factory QA are recorded; a ticket id the recorder names on
+  stderr is a failed QA it could not join to a landed PR — report it beside
+  the rows. The record compares nothing to a threshold, and neither does this
   question: the rows are reported, never a finding on their own.
 - Join raise to triage on `data.id` within one PR, and only the triages with
   `data.source=local` and a standards id (`C-`, `H-`, `M-` or `L-N`): a

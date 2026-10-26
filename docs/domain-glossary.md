@@ -429,14 +429,17 @@ Grouped by the seam each term belongs to. Entry shape:
   prose (ADR-0036).
   - _Avoid_: "incident"; "regression" (a fix is counted whatever it fixed).
 - **Outcome recorder** — `sh scripts/trace.sh outcomes`: reads git and the
-  trace and writes the **post-merge outcomes** they prove, today a
+  trace and writes the **post-merge outcomes** they prove: a
   `reverted` against each landed PR whose lines a later `revert` landing
-  removed, and a `fixed` against each whose lines a `fix` landing removed or
+  removed, a `fixed` against each whose lines a `fix` landing removed or
   rewrote inside the **fix window**, with the days between in `data.days`,
-  as git blame at that landing's first parent says. A commit maps
-  to a PR only through a `merge.land`'s merge sha, and from a commit message
+  as git blame at that landing's first parent says, and — where the
+  repository holds a `.factory/` folder — a `qa-failed` against the PR a
+  factory ticket whose QA failed links, its id in `data.ticket`. A commit maps
+  to a PR only through a `merge.land`'s merge sha; from a commit message
   it reads only the Conventional Commit type and, for a revert that removes
-  no line, a 40-hex sha. Idempotent: a second run writes nothing. Run by the
+  no line, a 40-hex sha, and from a factory ticket only `qa.outcome` and
+  `links.pr`. Idempotent: a second run writes nothing. Run by the
   operator and `/retro`'s question 2, before the record reader (ADR-0036).
   - _Avoid_: "backfill script" (its first run backfills; every run records).
 - **Mistake** — a landed PR with at least one **post-merge outcome**: a later

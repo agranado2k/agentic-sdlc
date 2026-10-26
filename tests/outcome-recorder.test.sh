@@ -1,13 +1,14 @@
 #!/bin/sh
 # tests/outcome-recorder.test.sh — self-tests for the outcome recorder,
-# `sh scripts/trace.sh outcomes` (PRD-06 slices 2 and 4 of K1, #876, #878;
-# the kit's ADR-0036).
+# `sh scripts/trace.sh outcomes` (PRD-06 slices 2, 4 and 5 of K1, #876,
+# #878, #879; the kit's ADR-0036).
 #
 # The recorder reads git and the trace, and writes one `merge.outcome
 # outcome=reverted` against each landed PR whose lines a later `revert`
 # landing removed, and one `outcome=fixed` against each whose lines a `fix`
 # landing removed or rewrote inside the fix window, as git blame at that
-# landing's first parent attributes them. Its whole job is reading git, so the fixture is a REAL throwaway
+# landing's first parent attributes them — and, from a fixture `.factory/`,
+# one `outcome=qa-failed` against the PR a ticket whose QA failed links. Its whole job is reading git, so the fixture is a REAL throwaway
 # repository with scripted landings — squash-style commits on main and
 # merge commits whose PR title sits below the "Merge pull request" line —
 # and a fixture trace holding their `merge.land` events.
@@ -303,6 +304,75 @@ land_ev "$TS" pr:#52 "$S52"
 fix_run "$(policy "$TS")"
 [ "$T_STATUS" = 0 ] && [ -z "$(outcomes_in "$TS")" ] && pass "runtime/R34: a fix dated before the landing it rewrites gives that landing nothing" ||
 	fail "runtime/R34: a fix dated 10 days before #51 recorded: $(outcomes_in "$TS") | $T_ERR"
+R=$R_MAIN
+
+banner "6. A failed factory QA is a qa-failed outcome on the PR its ticket links (runtime/R37, R38, R39, R41, R46)"
+
+# A fresh history: #890 brings src/q.sh, #891 tests/q.sh. Before any
+# .factory/ exists the recorder takes no step for it and says nothing.
+t_repo
+R=$REPO
+TQ="$SCRATCH/trace-qa"
+put src/q.sh q1 q2
+S890=$(land 'feat: eight-ninety')
+put tests/q.sh u1
+S891=$(land 'test: eight-ninety-one')
+land_ev "$TQ" pr:#890 "$S890"
+land_ev "$TQ" pr:#891 "$S891"
+QON=$(policy "$TQ")
+qa_run() { t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" "$5"' _ "$R" "$QON" "$POL" "$TRACE" "$1"; }
+_q0=$(count_in "$TQ")
+qa_run outcomes
+[ "$T_STATUS" = 0 ] && [ -z "$T_ERR" ] && [ "$(count_in "$TQ")" = "$_q0" ] && pass "runtime/R37: a repository with no .factory/ gives nothing and prints nothing on stderr" ||
+	fail "runtime/R37: with no .factory/ the recorder exited $T_STATUS, wrote $(($(count_in "$TQ") - _q0)) line(s), said: $T_ERR"
+
+# ticket <id> <frontmatter lines…> — a factory ticket under .factory/items/<id>/;
+# its body names #891 in prose and in a field-shaped line, neither read.
+ticket() {
+	_ti=$1
+	shift
+	mkdir -p "$R/.factory/items/$_ti"
+	{
+		printf '%s\n' --- "id: $_ti" 'type: ticket' "$@" 'notes:' '  pr: "#891"' ---
+		printf '%s\n' '' "# $_ti" '' 'Broke in staging on #891, see links:' 'pr: "#891"' 'qa:' '  outcome: fail'
+	} >"$R/.factory/items/$_ti/ticket.md"
+}
+ticket T-31 'links:' '  pr: "#890"' 'qa:' '  outcome: fail' '  by: "operator"'
+ticket T-32 'links:' '  pr: "890a"' 'qa:' '  outcome: fail'
+ticket T-33 'qa:' '  outcome: fail' 'links:' "  pr: '#999'"
+ticket T-34 'links:' '  pr: "#891"' 'qa:' '  outcome: pass'
+ticket T-35 'links:' '  pr: #891' 'qa:' '  outcome: fail'
+mkdir -p "$R/.factory/items/PRD-09"
+printf '%s\n' --- 'id: PRD-09' 'links:' '  pr: "#891"' 'qa:' '  outcome: fail' --- >"$R/.factory/items/PRD-09/prd.md"
+qa_run outcomes
+QOUT=$(outcomes_in "$TQ")
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$QOUT" | grep -c .)" = 1 ] &&
+	printf '%s\n' "$QOUT" | grep -F '"subject":"pr:#890"' | grep -F '"outcome":"qa-failed"' | grep -qF '"ticket":"T-31"' &&
+	pass "runtime/R37: T-31's qa.outcome fail and links.pr #890 give one merge.outcome outcome=qa-failed on #890, data.ticket T-31" ||
+	fail "runtime/R37: expected one qa-failed on #890 for T-31, got (exit $T_STATUS): $QOUT | $T_ERR"
+printf '%s\n' "$QOUT" | grep -qF '"subject":"pr:#891"' && fail "runtime/R39: #891, named only in prose, another field, a passed ticket or a prd, got an outcome" ||
+	pass "runtime/R39: a body, another field, a passed QA and a non-ticket item naming #891 give #891 nothing"
+case $T_OUT in *'1 written'*) pass "and says so: 1 written" ;; *) fail "the recorder did not say 1 written: $T_OUT" ;; esac
+for _id in T-32 T-33 T-35; do
+	case $T_ERR in *"$_id"*) pass "runtime/R38: $_id's links.pr (malformed, or naming a PR with no merge.land) is named on stderr" ;;
+	*) fail "runtime/R38: stderr does not name $_id: $T_ERR" ;; esac
+done
+case $T_ERR in *T-31* | *T-34*) fail "runtime/R38: stderr names a ticket that was recorded or passed: $T_ERR" ;;
+*) pass "runtime/R38: stderr names neither the recorded ticket nor the passed one" ;; esac
+printf '%s\n' "$QOUT" | grep -qiE 'operator|staging' && fail "a qa-failed line carries text from a factory ticket: $QOUT" ||
+	pass "no qa-failed field carries text from a factory ticket"
+
+_q1=$(count_in "$TQ")
+qa_run outcomes
+[ "$T_STATUS" = 0 ] && [ "$(count_in "$TQ")" = "$_q1" ] && pass "runtime/R41: a second run writes 0 lines — the PR and data.ticket are its key" ||
+	fail "runtime/R41: the second run exited $T_STATUS and the trace went $_q1 -> $(count_in "$TQ")"
+( cd "$R" && env TRACE_CONFIG="$QON" sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the trace holding the qa-failed line verifies" ||
+	fail "trace verify refuses the qa-failed line the recorder wrote"
+qa_run record
+printf '%s\n' "$T_OUT" | grep -qF 'security: landings 1 of 20, in the fix window 1, mistakes 1, missed 1 of 1,' &&
+	printf '%s\n' "$T_OUT" | grep -qF 'test-hygiene: landings 1 of 20, in the fix window 1, mistakes 0, missed 0 of 1,' &&
+	pass "runtime/R46: the record reader counts #890's area with one missed mistake, #891's with none" ||
+	fail "runtime/R46: record printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
 R=$R_MAIN
 
 OFF=$(mktemp "$SCRATCH/off.XXXXXX")
