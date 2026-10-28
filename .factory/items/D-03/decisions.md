@@ -1,0 +1,1 @@
+- 2026-10-28 **Discovery opened.** Topic: the code review process. The operator gave S-1 as a source to deep-read in phase 2.
