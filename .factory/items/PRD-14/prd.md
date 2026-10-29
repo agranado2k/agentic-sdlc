@@ -55,7 +55,7 @@ that builds from them.
 Acceptance tests are on by default, and there is no key that turns them off (D-08's operator,
 2026-10-29). The one exemption is a ticket created before the adoption date.
 
-**The test of done.** In a fixture repository with a `.factory/` folder, ticket T-90 covers
+**The test of done.** In a fixture factory project, ticket T-90 covers
 `report/R3`, carries `Accept-test: report/R3 tests/report.test.sh::totals by area`, and its
 front matter records `tests: {commit: 4b1c9e0, by: agranado, at: 2026-11-02}` at stage
 `build`. Then:
@@ -130,7 +130,7 @@ Extensions:
 - 1c. T-90's `tests.commit` names a commit this clone does not hold. The reader prints
   `fail-closed invalid .factory/items/T-90/ticket.md` and exits 3. `/implement` stops and
   reports the line.
-- 1d. The repository has no `.factory/` folder. `/implement` does not ask the reader and builds
+- 1d. The repository is not a factory project. `/implement` does not ask the reader and builds
   as it does today.
 - 3a. `empty window prints zero` already passes at the first commit. `/implement` stops and
   reports the test as green before the build: it does not test the change.
@@ -157,7 +157,7 @@ Extensions:
   `fail-closed invalid .factory/items/T-90/ticket.md` and exits 3.
 - 2e. The guards policy is missing at the base. The guard prints K2's
   `fail-closed missing scripts/guards.config.sh` and exits 3.
-- 2f. The repository has no `.factory/` folder. The guard prints nothing and exits 0.
+- 2f. The repository is not a factory project. The guard prints nothing and exits 0.
 - 3a. #995 deletes or renames `tests/report.test.sh`. The guard reports it as changed.
 - 3b. The operator agrees the assertion was wrong and runs `factory approve T-90 --tests
   <new commit>`, and that lands on `main`. The next run holds the new content, and #995 passes
@@ -198,9 +198,15 @@ Extensions:
   `check <base> <head>` (which held files a diff changed) and `tests <ticket> --base <ref>`
   (what a ticket's approved tests are, or that they are owed). It reads the guards policy and
   each factory ticket through the policy reader (PRD-08), and fails closed in K2's shape.
-- **Adoption date**: a date in the guards policy, `YYYY-MM-DD`. A ticket whose front matter
-  `created` is before it is exempt. Unset, no ticket is exempt. This is the one exemption;
-  there is no per-ticket opt-out.
+- **Factory project**: a repository whose git top level holds `.factory/project.yaml`, the
+  factory project manifest. A `.factory/` folder without that manifest is not one, and nothing
+  above the git top level is read, so the factory home (`~/.factory/`) never counts. Only a
+  factory project has approved acceptance tests (agranado, 2026-10-29).
+- **Adoption date**: the manifest's top-level `acceptance_tests_since`, a bare `YYYY-MM-DD`
+  scalar that `factory init` writes. A ticket whose front matter `created` is before it is
+  exempt. This is the one exemption; there is no per-ticket opt-out. Unset (the key absent, or
+  written with no value), no ticket is owed yet, as the factory's ready → build gate applies to
+  no ticket then (factory lifecycle/R151), while `factory check` fails on the missing key.
 - **Owed**: a ticket that is not exempt, has no approval record, and covers at least one id whose
   `Test-tier:` is not `manual`. A ticket whose ids are all `manual`, or that has no `Covers:`
   line, owes nothing, since there is no automated test to approve.
@@ -214,7 +220,7 @@ Extensions:
 |---|---|---|---|
 | stamp reader | `Accept-test:` lines | the tracker issue | vocabulary checker |
 | acceptance guard, `check` | approval records, stages, `Accept-test:` lines; the held files | factory tickets at the base; the files at the approval commit and the head | policy reader; git objects |
-| acceptance guard, `tests` | the above, plus `created`, `Test-tier:` lines and the adoption date | factory ticket and guards policy at the base | policy reader |
+| acceptance guard, `tests` | the above, plus `created`, `Test-tier:` lines and the adoption date | factory ticket and factory project manifest at the base | policy reader |
 | check-table reader | `Accept-test:` lines | the ticket body the caller fetched | its own parse, ids and pins only |
 
 ## 4. Rules
@@ -234,20 +240,20 @@ acceptance/R7. WHEN the release that ships acceptance/R1 to R6 lands, `UPDATING.
 acceptance/R8. WHEN asked to `check <base> <head>`, the acceptance guard SHALL print, sorted, one `changed: <ticket> <requirement-id> <path>` line for each `Accept-test:` path of a held ticket whose content at the head differs from its content at the ticket's approval commit, and SHALL exit 1 when it printed one and 0 when it printed none. [UC3 2, 3]
 acceptance/R9. The acceptance guard SHALL hold only tickets whose front matter at the base carries an approval record and whose stage is not `done`. [UC3 2a, 2b]
 acceptance/R10. A held path that is absent at the head SHALL count as changed. [UC3 3a]
-acceptance/R11. WHERE `POLICY_BASE` names a ref, the acceptance guard SHALL read the guards policy and every factory ticket through the policy reader at that ref, and SHALL read neither from the working tree. [UC3 1, 2, 2c]
-acceptance/R12. WHERE `POLICY_BASE` is unset, the acceptance guard SHALL read the guards policy and the factory tickets from the working tree.
+acceptance/R11. WHERE `POLICY_BASE` names a ref, the acceptance guard SHALL read the guards policy, the factory project manifest and every factory ticket through the policy reader at that ref, and SHALL read neither from the working tree. [UC3 1, 2, 2c]
+acceptance/R12. WHERE `POLICY_BASE` is unset, the acceptance guard SHALL read the guards policy, the factory project manifest and the factory tickets from the working tree.
 acceptance/R13. IF a held ticket's approval commit names no commit in the repository, its approval record lacks `commit`, `by` or `at`, one of its `Accept-test:` lines is refused by the checker, or an approved path is absent at the approval commit, THEN the acceptance guard SHALL print `fail-closed invalid <ticket path>` and exit 3. [UC3 2d; UC2 1c]
-acceptance/R14. IF the policy reader fails closed on the guards policy or on a factory ticket, THEN the acceptance guard SHALL print that fail-closed line and exit 3, and SHALL NOT pass. [UC3 2e]
-acceptance/R15. WHERE the repository has no `.factory/` folder, the acceptance guard SHALL print nothing on standard output and exit 0 for `check`. [UC3 2f]
+acceptance/R14. IF the policy reader fails closed on the guards policy, the factory project manifest or a factory ticket, THEN the acceptance guard SHALL print that fail-closed line and exit 3, and SHALL NOT pass. [UC3 2e]
+acceptance/R15. WHERE the repository is not a factory project, the acceptance guard SHALL print nothing on standard output and exit 0 for `check`. [UC3 2f]
 acceptance/R16. The acceptance guard SHALL print nothing read from a factory ticket except ticket ids, requirement ids, approval commits, and `Accept-test:` lines the checker accepted.
 acceptance/R17. WHEN asked for `tests <ticket> --base <ref>` on a ticket with an approval record, the acceptance guard SHALL print `approved <commit>` and then the ticket's `Accept-test:` lines as spelled, and exit 0. [UC2 1]
-acceptance/R18. IF a ticket without an approval record was created before the adoption date at the base — the factory project manifest's `acceptance_tests_since` where `.factory/` exists, else the guards policy's — THEN `tests` SHALL print `no-tests <ticket> created-before-adoption` and exit 0. [UC2 1b]
+acceptance/R18. IF a ticket without an approval record was created before the adoption date the factory project manifest names at the base, THEN `tests` SHALL print `no-tests <ticket> created-before-adoption` and exit 0. [UC2 1b]
 acceptance/R19. IF a ticket without an approval record covers no id whose `Test-tier:` is other than `manual`, THEN `tests` SHALL print `no-tests <ticket> no-automated-id` and exit 0.
 acceptance/R20. IF a ticket is owed (not exempt, no approval record, at least one covered id with a `Test-tier:` other than `manual`), THEN `tests` SHALL print `owed <ticket>` and exit 4. [UC2 1a]
-acceptance/R21. WHERE the adoption date's home (acceptance/R18) names no adoption date, no ticket SHALL be exempt, and a ticket whose `created` is missing or not a date SHALL NOT be exempt.
-acceptance/R22. IF the adoption date its home (acceptance/R18) sets is not a valid `YYYY-MM-DD` date, THEN the acceptance guard SHALL print `fail-closed invalid <that file's path>` and exit 3.
+acceptance/R21. IF the factory project manifest at the base names no adoption date, the key absent or written with no value, THEN `tests` SHALL print `no-tests <ticket> no-adoption-date` and exit 0 for a ticket without an approval record, and `check` SHALL still hold every ticket that has one.
+acceptance/R22. IF the factory project manifest's `acceptance_tests_since` at the base is not a valid `YYYY-MM-DD` date, THEN the acceptance guard SHALL print `fail-closed invalid .factory/project.yaml` and exit 3.
 acceptance/R23. The shipped TDD pairing workflow, and the kit's own guards workflow, SHALL run the acceptance guard's `check` on every pull request from its base commit to its head, with `POLICY_BASE` set to the base commit, and fail on a non-zero exit. [UC3 1]
-acceptance/R24. WHERE the repository holds a `.factory/` folder, `/implement` SHALL ask the acceptance guard for the ticket's tests at the base before its first edit. [UC2 1, 1d]
+acceptance/R24. WHERE the repository is a factory project, `/implement` SHALL ask the acceptance guard for the ticket's tests at the base before its first edit. [UC2 1, 1d]
 acceptance/R25. IF the acceptance guard prints `owed`, THEN `/implement` SHALL stop before its first commit and report that the ticket's acceptance tests are owed. [UC2 1a]
 acceptance/R26. IF the acceptance guard exits 3 for `tests`, THEN `/implement` SHALL stop before its first commit and report the fail-closed line. [UC2 1c]
 acceptance/R27. WHEN the acceptance guard prints approved tests, `/implement` SHALL bring each approved file into its worktree at its content at the approval commit and commit those files alone, unchanged, as the build's first commit. [UC2 2]
@@ -255,9 +261,10 @@ acceptance/R28. WHEN the first commit holds the approved tests, `/implement` SHA
 acceptance/R29. WHILE building a ticket with approved tests, `/implement` SHALL NOT edit, move or delete an approved test file. [UC2 4]
 acceptance/R30. IF an approved test cannot pass without a change to it, THEN `/implement` SHALL stop, leave the file unchanged, and report the test and the change it would need for the operator to approve again. [UC2 4a]
 acceptance/R31. `/implement` SHALL NOT open the pull request of a ticket with approved tests until every approved test passes at the head and the full suite passes. [UC2 5]
-acceptance/R32. WHEN `/review-pr` reviews a pull request in a repository with a `.factory/` folder, its coordinator SHALL run the acceptance guard's `check` from the review's base to the head with `POLICY_BASE` set to that base, and hand the output to Agent 7. [UC4 1]
+acceptance/R32. WHEN `/review-pr` reviews a pull request in a factory project, its coordinator SHALL run the acceptance guard's `check` from the review's base to the head with `POLICY_BASE` set to that base, and hand the output to Agent 7. [UC4 1]
 acceptance/R33. Agent 7 SHALL list each `changed:` line as a ❌ MISSING item naming the requirement id and `approved test changed`. [UC4 2]
 acceptance/R34. IF the acceptance guard exits 3 during a review, THEN Agent 7 SHALL list every id on the ticket's `Accept-test:` lines as ❌ MISSING, and the report's summary SHALL print the fail-closed line. [UC4 1a]
+acceptance/R35. IF a ticket's front matter `created` is missing or not a date, THEN the adoption date SHALL NOT exempt it.
 
 ### Deltas against `docs/specs/process.md`
 
@@ -305,21 +312,22 @@ release factory PRD-17 starts on.
 
 **Slice 2 — the acceptance guard (shared-layer release).** The tracer bullet of the hold: one
 approved file, judged at the base, failing closed.
-- *Covers:* acceptance/R8, acceptance/R9, acceptance/R10, acceptance/R11, acceptance/R12, acceptance/R13, acceptance/R14, acceptance/R15, acceptance/R16, acceptance/R17, acceptance/R18, acceptance/R19, acceptance/R20, acceptance/R21, acceptance/R22, acceptance/R23, policy/R9.
+- *Covers:* acceptance/R8, acceptance/R9, acceptance/R10, acceptance/R11, acceptance/R12, acceptance/R13, acceptance/R14, acceptance/R15, acceptance/R16, acceptance/R17, acceptance/R18, acceptance/R19, acceptance/R20, acceptance/R21, acceptance/R22, acceptance/R23, acceptance/R35, policy/R9.
 - *Blocked by:* slice 1, and PRD-08 slices 1 and 2.
 - *Also:* the new decision record (§8). The glossary gains approval record, approval commit,
-  held ticket, acceptance guard, adoption date and owed. The guards policy gains the adoption
-  date for a project with no `.factory/`, commented out in the shipped file; the kit, a factory
+  held ticket, acceptance guard, factory project, adoption date and owed. The kit, a factory
   project, sets `acceptance_tests_since` in its factory project manifest to the day this slice
-  lands. The new guard joins `VERSION`'s files and bootstrap's copy, and AGENTS.md gains a
+  lands; the guards policy gains no date. The new guard joins `VERSION`'s files and bootstrap's copy, and AGENTS.md gains a
   quick-reference row.
-- *Accept:* in throwaway repositories with a `main`, a branch and a `.factory/` folder, UC3's
+- *Accept:* in throwaway factory projects with a `main` and a branch, UC3's
   fixture fails with the `changed:` line and passes with the file left at its approval content,
   including when the approval commit is not on `main`. A rewrite of the branch's own
   `tests.commit` still fails. A deleted file is changed; a `done` or unapproved ticket is not
   held; an unknown approval commit gives `invalid`; a missing guards policy at `main` gives
-  K2's line; no `.factory/` exits 0. `tests` gives `approved`, `owed`, both `no-tests` reasons,
-  and `invalid` for a bad adoption date. The workflow template's suite asserts the guard runs
+  K2's line; no `.factory/project.yaml` at the top level (no `.factory/`, a bare `.factory/`, or a
+  manifest only above the top level) exits 0. `tests` gives `approved`, `owed`, all three
+  `no-tests` reasons, and `invalid` for a bad adoption date; an unset date owes nothing and
+  still holds. The workflow template's suite asserts the guard runs
   with `POLICY_BASE` set.
 
 **Slice 3 — tests-first mode in `/implement`.**
@@ -327,7 +335,7 @@ approved file, judged at the base, failing closed.
 - *Blocked by:* slice 2.
 - *Also:* the glossary gains tests-first mode.
 - *Accept:* `/implement`'s skill-text suite holds each step: the reader asked before the first
-  edit where `.factory/` exists, the stop on `owed` and on exit 3, the first commit of the
+  edit in a factory project, the stop on `owed` and on exit 3, the first commit of the
   approved files alone, the red check and its stop, the never-edit rule and its stop, and the
   done rule. A fixture run of the steps' commands on UC2's repository shows the first commit's
   files byte-equal to the approval commit's.
@@ -352,8 +360,8 @@ approved file, judged at the base, failing closed.
 - **A per-ticket or per-project opt-out key.** *Never*: D-08's operator ruled it out
   (2026-10-29). The adoption date is the only exemption.
 - **Writing the acceptance tests, or an approval record, in a repository with no `.factory/`
-  folder.** *Later*, open (§9, first question). Reopen when a consumer without the factory asks
-  for acceptance tests.
+  folder.** *Never*: such a repository is not a factory project, so it has nothing to approve
+  with (agranado, 2026-10-29; §8).
 - **Checking that a named test still exists in its file, or still asserts what it did.**
   *Later*. The guard is file-level: any byte change fails. Reopen if the file-level hold blocks
   too much honest work, which `/retro` would see as re-approvals.
@@ -384,7 +392,7 @@ approved file, judged at the base, failing closed.
 - A ticket's id in `changed:`, `owed` and `no-tests` lines is the factory ticket directory's
   name, held to the outcome recorder's `data.ticket` shape.
 - **Tests** drive the guard from outside, in throwaway git repositories with a `main`, a branch
-  and a `.factory/` folder, asserting exit codes and exact lines. Prior art: the pairing guard's
+  and a factory project manifest, asserting exit codes and exact lines. Prior art: the pairing guard's
   CI suite, the outcome recorder's factory fixtures in the trace suite, PRD-08's policy reader
   suite, and the stamp and check-table suites. Every fail-closed cause has a fixture.
 - **Numbers, not quality words:** a test pin is at most 200 bytes; a ticket carries at most 32
@@ -423,7 +431,20 @@ maintainer confirms them at approval):
 - **One reader with two questions and K2's failure shape.** `tests` prints `approved <commit>`
   and the lines (exit 0), `no-tests <ticket> <reason>` (exit 0), `owed <ticket>` (exit 4), or a
   fail-closed line (exit 3). `/implement` and later K5 read these shapes, so they are fixed here.
-- **The adoption date has one home per project** (this session under the operator's delegation, 2026-10-29, on D-08's recommendation (a)): where `.factory/` exists, the factory project manifest's `acceptance_tests_since`, which `factory init` writes; only where it does not, the guards policy. Both are judging files read at the base (policy/R9), so a PR cannot move its own ticket before the date. Unset means no exemption, which is "on by default"; a malformed date fails closed. This follows K7's defer-to-the-factory rule and leaves nothing to mirror or drift.
+- **The adoption date has one home: the factory project manifest's `acceptance_tests_since`**
+  (this session under the operator's delegation, 2026-10-29, on D-08's recommendation (a); D-08
+  confirmed the shape the same day). Since only a factory project has approved tests (below),
+  the guards policy carries no date. The manifest joins the judging set read at the base
+  (policy/R9), so a PR cannot move its own ticket before the date. A malformed date fails
+  closed, as the factory's `invalid-manifest` does. **An unset date owes nothing and still
+  holds** (agranado, 2026-10-29, matching factory lifecycle/R151): the factory then lets every
+  ticket into build and fails `factory check` with `missing-acceptance-tests-since`, so the kit
+  does not block a PR the factory let through, yet an approval already recorded is still held.
+- **Approved acceptance tests exist only in a factory project** (agranado, 2026-10-29): one
+  whose git top level holds `.factory/project.yaml`, the factory's own test (`find_root`, per
+  D-08). Without it there is no approval to read, and `/implement` and the guard behave as today
+  (UC2 1d, UC3 2f). The kit adds no approval record of its own, and never reads above the git
+  top level, so the factory home is never taken for a project.
 - **Approved tests live on the ticket's own branch, cut from `main`, at the approval commit** recorded in the ticket's `tests.commit`; they are not merged to `main` before the build. A test-first session on that branch writes the tests and stops at red (factory PRD-17's decided answer: D-08's operator, 2026-10-29, option (a)).
 - **A ticket with only `manual` ids, or no `Covers:` line, owes nothing.** `Accept-test:` is
   keyed by a covered id, and a manual id has no automated test to approve.
@@ -459,16 +480,7 @@ maintainer confirms them at approval):
 
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
-One would change a ticket's shape and goes first, as an open-issue ticket:
-
-- **How a repository with no `.factory/` folder gets approved acceptance tests.** *Shapes
-  tickets.*
-  - Options: K9 binds only where a factory writes approval records (this PRD); or the kit's
-    `/to-tickets` writes the red tests and the kit records its own approval (a front matter it
-    does not have, or a tracker label), adding at least two slices.
-  - Next step: question to agranado before `/to-tickets` runs on this PRD. MVP default: binds
-    only with a `.factory/` folder; without one, `/implement` and the guard behave as today.
-The rest keep the shapes above:
+None changes a ticket's shape. These keep the shapes above:
 
 - **How `/implement` finds the factory ticket for the issue it builds.**
   - Options: the reader takes `#<N>` and picks the one factory ticket whose body holds the line
@@ -499,7 +511,7 @@ The rest keep the shapes above:
 
 Four tickets in slice order, three of them releases chained one per frontier (ADR-0033). After
 slice 1's tag, the factory starts PRD-17 and stamps `Accept-test:` lines on the kit's own
-tickets. After slice 2, the kit's own CI holds every approved test, and its guards twin's
+tickets. After slice 2, the kit's own CI holds every approved test, and its manifest's
 adoption date exempts the tickets planned before it. The first kit ticket planned after that
 date is the live demo: the factory approves its tests, `/implement` (slice 3) brings them in
 red and builds to green, and a deliberate edit to one on a scratch branch fails the guard.
