@@ -3,12 +3,15 @@ id: PRD-11
 type: prd
 title: "The closed loop: retro to ticket to lane to a before-and-after check"
 parent: D-02
-stage: review
+stage: approved
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 stages:
   - {stage: draft, at: 2026-10-28T12:26Z}
   - {stage: review, at: 2026-10-28T12:50Z}
+  - {stage: approved, at: 2026-10-29T12:08Z}
+approved_by: "agranado"
+approved_at: 2026-10-29T12:08Z
 ---
 
 # PRD-11 · The closed loop: retro to ticket to lane to a before-and-after check

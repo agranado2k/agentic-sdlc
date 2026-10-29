@@ -3,12 +3,15 @@ id: PRD-13
 type: prd
 title: A cross-provider verifier reviews each PR beside the kit's own review
 parent: D-02
-stage: review
+stage: approved
 created: 2026-10-28
-updated: 2026-10-28
+updated: 2026-10-29
 stages:
   - {stage: draft, at: 2026-10-28T12:26Z}
   - {stage: review, at: 2026-10-28T12:50Z}
+  - {stage: approved, at: 2026-10-29T12:08Z}
+approved_by: "agranado"
+approved_at: 2026-10-29T12:08Z
 ---
 
 # PRD-13 · A cross-provider verifier reviews each PR beside the kit's own review
