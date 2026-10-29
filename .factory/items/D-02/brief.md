@@ -48,4 +48,7 @@ In order (decisions.md Q7). Each is one /to-tickets run.
 6. **K6 · The closed loop.** Retro → ticket → lane → before/after check, eval-gated (three repeats, pooled SD); recurring operator rulings become proposed policy defaults. Order 5. Depends on K5.
 7. **K7 · Planning skills defer to the factory.** The kit's generic planning skills defer to the factory's where `.factory/` exists, and `scripts/stamp.sh` reads a factory ticket. Outside the order. Depends on IN-01 (factory).
 
+8. **K8 · A cross-provider verifier beside the kit's own review.** D-08's C5, placed in the kit after K4 (decisions.md, 2026-10-23). Written as PRD-13.
+9. **K9 · Acceptance tests approved with the ticket.** A ticket's acceptance tests are written first and approved with it (`Accept-test: <requirement-id> <path>::<test-name>` stamp lines, a shared-layer vocabulary release); a guard fails when an approved test file changed after its approval commit; `/implement` starts from the approved red tests; `/review-pr` reads the diff against them; the check table cites them. No opt-out: only tickets created before the adoption date are exempt. The kit side of D-08's stage 2 (factory PRD-17). Depends on K2 and K4.
+
 Raised to D-08 (not edited here): the factory's PRDs A–D depend on K1, K3, K4 and K5; the `Risk:` contract settled with D-08 (decisions.md, 2026-10-23).
