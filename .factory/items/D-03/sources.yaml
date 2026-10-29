@@ -1,0 +1,9 @@
+# Evidence behind D-03. One entry per source; `claim` is what we take from it.
+
+# --- The operator's sources (phase 2) ---
+- id: S-1
+  url: https://claude.dev/blog/solving-code-review-at-anthropic
+  title: Solving code review at Anthropic (claude.dev blog)
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
