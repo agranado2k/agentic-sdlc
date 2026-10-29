@@ -5,7 +5,9 @@ title: Outside reading on AI-native SDLC practice
 parent: agentic-sdlc
 stage: shaped
 created: 2026-10-22
-updated: 2026-10-23
+updated: 2026-10-26
+closed_by: "agranado"
+closed_at: 2026-10-26T18:40Z
 ---
 
 ## Problem

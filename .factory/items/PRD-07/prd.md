@@ -3,11 +3,15 @@ id: PRD-07
 type: prd
 title: The PR's decision log and check table, and the ticket contract's vocabularies
 parent: D-02
-stage: approved
+stage: done
 created: 2026-10-23
-updated: 2026-10-25
+updated: 2026-10-26
 approved_by: "agranado"
 approved_at: 2026-10-25
+closed_by: "agranado"
+closed_at: 2026-10-26T18:40Z
+stages:
+  - {stage: done, at: 2026-10-26T18:40Z}
 ---
 
 # PRD-07 · The PR's decision log and check table, and the ticket contract's vocabularies

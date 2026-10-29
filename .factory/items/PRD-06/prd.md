@@ -3,11 +3,15 @@ id: PRD-06
 type: prd
 title: Post-merge outcomes in the trace, and each area's earned record
 parent: D-02
-stage: approved
+stage: done
 created: 2026-10-23
-updated: 2026-10-25
+updated: 2026-10-26
 approved_by: "agranado"
 approved_at: 2026-10-25
+closed_by: "agranado"
+closed_at: 2026-10-26T18:40Z
+stages:
+  - {stage: done, at: 2026-10-26T18:40Z}
 ---
 
 # PRD-06 · Post-merge outcomes in the trace, and each area's earned record
