@@ -176,6 +176,19 @@ Extensions:
 - 1a. The guard exits 3. Agent 7 lists every id on the ticket's `Accept-test:` lines as ❌
   MISSING, and the report's summary prints the fail-closed line.
 
+**UC5 — An agent tries to edit an approved test.** Actor: the session building T-90 on its
+branch, whose build cannot make `totals by area` pass. Goal: the attempt stops at the edit, long
+before CI.
+1. The session calls its edit tool on `tests/report.test.sh`. The pre-tool hook asks the guard
+   for the held files, finds the path, and refuses: `held: T-90 tests/report.test.sh`.
+2. The session rewrites the file through its shell and runs `git commit`. The commit hook finds
+   the staged path held and refuses with the same line.
+
+Extensions:
+- 2a. The session commits with the hook skipped. Nothing local stops it; CI's `check` (UC3)
+  fails the PR, and the ruleset's required check keeps it off `main`. The hooks are tripwires
+  for an honest build; CI is the judge.
+
 ## 3. Model
 
 - **Acceptance test**: a test named on a ticket, before the build, as part of the definition of
@@ -265,6 +278,10 @@ acceptance/R32. WHEN `/review-pr` reviews a pull request in a factory project, i
 acceptance/R33. Agent 7 SHALL list each `changed:` line as a ❌ MISSING item naming the requirement id and `approved test changed`. [UC4 2]
 acceptance/R34. IF the acceptance guard exits 3 during a review, THEN Agent 7 SHALL list every id on the ticket's `Accept-test:` lines as ❌ MISSING, and the report's summary SHALL print the fail-closed line. [UC4 1a]
 acceptance/R35. IF a ticket's front matter `created` is missing or not a date, THEN the adoption date SHALL NOT exempt it.
+acceptance/R36. The shipped TDD pairing workflow, and the kit's own guards workflow, SHALL run the acceptance guard's script as it is at the base commit, read from git's objects, and never the copy in the pull request's head. [UC3 1]
+acceptance/R37. WHEN asked for `held --base <ref>`, the acceptance guard SHALL print one line `<ticket> <path>` per file a held ticket's `Accept-test:` lines name, and exit 0.
+acceptance/R38. WHEN an agent's edit or write tool targets a path `held` lists, the agent harness adapter's pre-tool hook SHALL refuse it, naming the ticket and the path. [UC5 1]
+acceptance/R39. WHEN a commit stages a change to a path `held` lists, the commit hook SHALL refuse it, naming the ticket and the path. [UC5 2]
 
 ### Deltas against `docs/specs/process.md`
 
@@ -312,7 +329,7 @@ release factory PRD-17 starts on.
 
 **Slice 2 — the acceptance guard (shared-layer release).** The tracer bullet of the hold: one
 approved file, judged at the base, failing closed.
-- *Covers:* acceptance/R8, acceptance/R9, acceptance/R10, acceptance/R11, acceptance/R12, acceptance/R13, acceptance/R14, acceptance/R15, acceptance/R16, acceptance/R17, acceptance/R18, acceptance/R19, acceptance/R20, acceptance/R21, acceptance/R22, acceptance/R23, acceptance/R35, policy/R9.
+- *Covers:* acceptance/R8, acceptance/R9, acceptance/R10, acceptance/R11, acceptance/R12, acceptance/R13, acceptance/R14, acceptance/R15, acceptance/R16, acceptance/R17, acceptance/R18, acceptance/R19, acceptance/R20, acceptance/R21, acceptance/R22, acceptance/R23, acceptance/R35, acceptance/R36, acceptance/R37, policy/R9.
 - *Blocked by:* slice 1, and PRD-08 slices 1 and 2.
 - *Also:* the new decision record (§8). The glossary gains approval record, approval commit,
   held ticket, acceptance guard, factory project, adoption date and owed. The kit, a factory
@@ -328,7 +345,10 @@ approved file, judged at the base, failing closed.
   manifest only above the top level) exits 0. `tests` gives `approved`, `owed`, all three
   `no-tests` reasons, and `invalid` for a bad adoption date; an unset date owes nothing and
   still holds. The workflow template's suite asserts the guard runs
-  with `POLICY_BASE` set.
+  with `POLICY_BASE` set and from the base's copy of its script: a fixture PR that edits the
+  guard to always pass still fails. `held` lists exactly the held files.
+- *Operator setup (not a ticket):* the `main` ruleset requires the acceptance guard's check,
+  with no bypass actors, so a red check cannot be merged by anyone holding the token.
 
 **Slice 3 — tests-first mode in `/implement`.**
 - *Covers:* acceptance/R24, acceptance/R25, acceptance/R26, acceptance/R27, acceptance/R28, acceptance/R29, acceptance/R30, acceptance/R31.
@@ -352,6 +372,16 @@ approved file, judged at the base, failing closed.
   listing. A skill-text suite holds `/review-pr`'s coordinator step and `/implement`'s
   check-table citation.
 
+**Slice 5 — the edit-time tripwires (shared-layer release).**
+- *Covers:* acceptance/R38, acceptance/R39.
+- *Blocked by:* slice 4 (one release per frontier, ADR-0033).
+- *Also:* the adapter's README and the hook's comment say what it is: a tripwire for an honest
+  build, bypassable through the shell or a skipped commit hook, never the judge. Like the root
+  guard, it fails open when the guard is missing or errors, since CI fails closed behind it.
+- *Accept:* the hook's suite, with a fixture factory project holding T-90's approval, refuses an
+  edit and a write payload on `tests/report.test.sh` and passes one on another file. The commit
+  hook's suite refuses a commit staging the held file and passes one that does not.
+
 ## 6. Non-goals (this PRD)
 
 - **`factory approve --tests`, the refused ready → build move, and `factory tests T-nn`.**
@@ -370,6 +400,13 @@ approved file, judged at the base, failing closed.
 - **Making the low-risk lane (K5) require approved tests.** *Later*, K5's grill. K9 gives it the
   approval record to read.
 - **Rewriting tickets created before the adoption date.** *Never*: they are exempt.
+- **CI proving the approved tests fail at the base and pass at the head** (fail-to-pass).
+  *Later*, a research question (agranado, 2026-10-30). Today `/implement` confirms red at the
+  base (slice 3) and the check table records green, both the build's own word; the guard only
+  proves the files are unchanged. A CI job that runs the approved tests against the base's code
+  and the head's would make red-then-green a fact CI holds, not the agent's claim. Open: how one
+  test is run per language (§9), the cost of running the base, and flaky tests. Reopen through
+  research, then its own PRD.
 - **A new trace kind for the guard or tests-first mode.** *Later*. The guard reads no trace
   (ADR-0024 clause 7), and `/retro` can count re-approvals from the factory's records. Reopen if
   `/retro` needs the owed stops as events.
@@ -446,6 +483,18 @@ maintainer confirms them at approval):
   (UC2 1d, UC3 2f). The kit adds no approval record of its own, and never reads above the git
   top level, so the factory home is never taken for a project.
 - **Approved tests live on the ticket's own branch, cut from `main`, at the approval commit** recorded in the ticket's `tests.commit`; they are not merged to `main` before the build. A test-first session on that branch writes the tests and stops at red (factory PRD-17's decided answer: D-08's operator, 2026-10-29, option (a)).
+- **The judge cannot be edited by the PR it judges** (agranado, 2026-10-30). CI runs the
+  acceptance guard's script from the base's objects (acceptance/R36), not the head's. This
+  narrows PRD-08's "the PR's own scripts run" for this one guard: a release that changes the
+  guard is judged by the old one, and its new rule binds from the next PR. A PR that edits the
+  workflow step that runs it is in K2's judging set (`.github/workflows/`), so `touched` reports
+  it and K3 holds it high risk; a PR that drops the job leaves the ruleset's required check
+  unreported, and so unmergeable.
+- **Guarantee at merge, tripwires at edit** (agranado, 2026-10-30). An agent can write any file
+  through its shell and skip any local hook, so no edit-time hook is a guarantee. The guarantee
+  is that a PR changing an approved test cannot reach `main`: the approval lives on `main` and
+  only the operator writes it, the guard judges from the base, and the ruleset requires its
+  check with no bypass. The pre-tool and commit hooks (slice 5) stop an honest build early.
 - **A ticket with only `manual` ids, or no `Covers:` line, owes nothing.** `Accept-test:` is
   keyed by a covered id, and a manual id has no automated test to approve.
 - **The test pin's extra limits** (relative path, no `..`, no `|`) are the session's, beyond the
@@ -509,12 +558,13 @@ None changes a ticket's shape. These keep the shapes above:
 
 ## 10. Dogfood plan
 
-Four tickets in slice order, three of them releases chained one per frontier (ADR-0033). After
+Five tickets in slice order, four of them releases chained one per frontier (ADR-0033). After
 slice 1's tag, the factory starts PRD-17 and stamps `Accept-test:` lines on the kit's own
 tickets. After slice 2, the kit's own CI holds every approved test, and its manifest's
 adoption date exempts the tickets planned before it. The first kit ticket planned after that
 date is the live demo: the factory approves its tests, `/implement` (slice 3) brings them in
 red and builds to green, and a deliberate edit to one on a scratch branch fails the guard.
 After slice 4, `/review-pr` on the kit lists that edit as ❌ MISSING, and the check table cites
-the approved test. `/retro` can then compare that wave's `fail` rows and re-approvals with the
+the approved test. After slice 5, the same edit made through the edit tool is refused before
+it is written. `/retro` can then compare that wave's `fail` rows and re-approvals with the
 wave before.
