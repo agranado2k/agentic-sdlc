@@ -451,6 +451,36 @@ the maintainer confirms them at approval):
   `.factory/project.yaml` in its judging set and honour the rule. Slice 4 delivers it, as
   T-86 (#959).
 
+**Settled after approval** (§9's remaining questions, closed 2026-10-31):
+
+- **K7b · A follow-up PRD makes the chain accept `T-<n>`; until it lands, the kit keeps
+  mirroring issues** (operator, 2026-10-31, the D-08 session's question; option (b)). The chain
+  beyond the stamp still names a ticket by issue number: the trace subject `ticket:#<N>`, the
+  PR's `<!-- implement: ticket=#<N> -->` line, the landing script's `--ticket` and the PR's
+  closing reference. A follow-up planner PRD, K7b, makes each of them accept `T-<n>`: the PR
+  marker line, the landing script's `--ticket`, closing through the factory item's `links.pr`
+  and `factory move` instead of a closing reference, and the trace subjects `ticket:T-<n>` and
+  `prd:PRD-<n>` with `/retro`'s joins on them. T-74 (#937) is that last part: its requirement
+  lines are written into K7b's PRD, not into this one's §4, so this PRD adds no trace-subject
+  ids. Until K7b lands, every factory ticket in this repository keeps a mirrored forge issue
+  (its `GitHub issue:` line), and the chain builds and lands by that issue; once it lands, the
+  kit stops mirroring. Alternatives: (a) mirror everywhere, which makes a factory consumer
+  create the issues the factory forbids and keeps the duplicates D-08 proposals.md item 6
+  names; (c) stop mirroring now, which breaks the kit's chain until K7b's work is done. Only
+  (b) serves a consumer factory project and keeps the kit working meanwhile.
+- **This repository defers like any factory project, with no kit-only opt-out** (the session
+  under the operator's delegation, 2026-10-31, on D-02's accepted boundary, the operator's K7
+  rulings of 2026-10-29 and 2026-10-31 and D-08 proposals.md item 6; also the D-08 session's
+  recommendation). "Factory project, factory wins" is general. The operator's per-run override
+  (the forge override in §3) stays for the operator's own exceptions, and the generic skills
+  stay proven by the suites on throwaway non-factory projects. While K7b is open, the factory's
+  skills still mirror each ticket to a forge issue here, so the chain keeps landing by number.
+- **Retro candidates defer as for a PRD** (the session under the operator's delegation,
+  2026-10-31, on factory PRD-16 §3 and UC3, built by factory T-101). In a factory project,
+  `/to-tickets` given a `/retro` report defers like any other input, and its hand-off names
+  `/factory-tickets <retro report>`, not `factory inbox add`. The candidate block stays the
+  retro → ticket contract (PRD-11 §8) that the factory reads.
+
 **Alternatives considered:**
 
 - **Make every pre-ticket skill defer** (the grilling skills, `/design-brief`). This lost: they
@@ -463,38 +493,17 @@ the maintainer confirms them at approval):
   point the reader at any file, while an id resolves only inside the factory folder. The id is
   also what the factory and its tickets name.
 
-## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
+## 9. Unresolved questions
 
-- **~~What the factory's IN-01 settles.~~** Settled 2026-10-31 (T-69, #932): IN-01 shipped as
-  `factory stamp`, and the kit runs it rather than parsing the file. See §8.
-- **~~The factory ships no PRD- or ticket-writing skill yet.~~** Settled 2026-10-31 (T-70,
-  #933): the planning skills do not wait; they defer by name to `factory-prd` or
-  `factory-tickets` where that skill is installed, and name `factory install-skill` once where
-  it is not. See §8.
-- **The chain beyond the stamp names a ticket by issue number.** The trace subject
-  `ticket:#<N>`, the PR's `<!-- implement: ticket=#<N> -->` line, the landing script's
-  `--ticket` and a PR's closing reference all expect `#<N>`.
-  - Options: accept `T-<n>` in each of them, as a follow-up PRD; or keep a mirrored forge issue
-    per factory ticket, as this repository does today.
-  - Next step: a `planner` ticket after slice 1 lands. MVP default: the mirrored issue.
-- **This repository is itself a factory project.** Once slice 2 lands and `factory-tickets` is
-  installed here, `/to-tickets` defers here, while the kit's chain still lands by issue number (previous question).
-  - Options: the operator's override on each run; a kit-only opt-out; or answer the previous
-    question first.
-  - Next step: a question to agranado at approval. MVP default: the operator's override.
-- **Retro candidates in a factory project** (condition (3), the retro → to-tickets handoff
-  format as a contract). A retro's candidates have no PRD. The factory has `factory inbox add`
-  and toil tickets.
-  - Options: `/to-tickets` defers as for a PRD; or the hand-off names `factory inbox add` for
-    each candidate.
-  - Next step: settle it with the handoff contract in the D-08 session. MVP default: defer as
-    for a PRD.
+None. T-69 and T-70 settled the first two questions, and the rest were settled after approval
+on 2026-10-31 (§8).
 
 ## 10. Dogfood plan
 
 Four build tickets in slice order, slice 4's being T-86 (#959). Slice 1's tag lets the factory's tickets in this repository be
-built by their `T-<n>` id rather than by a mirrored issue, once the chain's naming question (§9)
-is answered. Slices 2 and 3 are first run here under the operator's override (§9). The first
+built by their `T-<n>` id rather than by a mirrored issue once K7b lands (§8); until then
+they are built and landed by their mirrored issue. Slices 2 and 3 are first run here as in any
+factory project, with the operator's per-run override for exceptions (§8). The first
 factory ticket built through `sh scripts/stamp.sh T-<n>` is the measure.
 
 ## 11. Further notes
@@ -503,5 +512,5 @@ Requirement ids start at process/R120 so that they do not collide with the sibli
 (PRD-08 to PRD-13 hold process/R61 upward and runtime/R52 upward). They are re-based at
 approval if they collide with whatever has landed by then. The 2026-10-31 amendment added
 R138 and R139, then R222 to R227, because PRD-11 holds process/R140 to R160, PRD-13 holds
-R200 to R208 and PRD-14 holds R220 and R221. The next free id, for T-74's trace-subject
-requirements, is R228.
+R200 to R208 and PRD-14 holds R220 and R221. T-74's trace-subject requirements are
+written into K7b's PRD, not here (§8); the next free process id is R228.
