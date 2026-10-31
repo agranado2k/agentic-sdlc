@@ -397,12 +397,35 @@ maintainer confirms them at approval):
   (story 5). The landing script and the train run from the root checkout on the base branch, so
   they read the base's policy already.
 - **What K3 does with K2's answers** (a constraint handed to PRD-09, which writes the
-  requirement): a fail-closed answer on the risk policy makes the PR `high unlearned`, since the
-  rule cannot show the area learned; a PR that `touched` reports makes it `high shared-layer`,
+  requirement; its second half superseded, see "Settled after approval" below): a fail-closed
+  answer on the risk policy makes the PR `high unlearned`, since the rule cannot show the area
+  learned; a PR that `touched` reports makes it `high shared-layer`,
   the reason the `Risk:` contract already gives policy, guard and gate files. Neither needs a new
   reason token, so the contract with the factory (D-08) does not move.
 - **The thresholds are whole percents.** POSIX `sh` compares integers natively. "Fewer than 1 in
   20" is `miss-rate-below 5`, and "at least 80%" is `precision-floor 80`.
+
+**Settled after approval** (the 2026-10-31 grill of D-02's open questions; these were §9's):
+
+- **The earned record's window stays a fixed 20, in the record reader** (operator, 2026-10-31).
+  The risk policy holds the two thresholds only, and runtime/R44 is unchanged. A fixed 20 keeps
+  Q3's "one escaped mistake demotes at once" true by construction: one miss in 20 is 5%, not
+  below `miss-rate-below 5`, where a movable window of 40 would make it 2.5% and need a
+  cross-check (`window × miss-rate-below ≤ 100`). Tightening the window is a kit change. T-41
+  (#904) is unchanged.
+- **`touched` reports judging files only** (the session under the operator's delegation,
+  2026-10-31). No reader needs the second answer: K3 reads no paths (PRD-09 §6), and K5's lane
+  reads `VERSION`'s `files:` list itself (PRD-10 runtime/R85 and its hold list).
+- **PRD-14's MODIFIED policy/R9 does not change what T-41 (#904) delivers** (the session under
+  the operator's delegation, 2026-10-31). It is PRD-14 slice 2's own delta, blocked by this
+  PRD's slices 1 and 2. The factory defines no risk threshold or lane key, so a factory
+  manifest key never overrides the risk policy. T-41 only needs the judging set kept as a
+  place-and-suffix rule plus a list that can grow, as above.
+- **Superseded in part: "What K3 does with K2's answers".** The rule does not make a PR that
+  `touched` reports `high shared-layer`: PRD-09 leaves `shared-layer` to the planner, and the
+  lane holds those paths by path with `path` (PRD-10 §8). A fail-closed answer on the risk
+  policy still makes the PR `high unlearned` (the session under the operator's delegation,
+  2026-10-31).
 
 **Decision records:**
 - **Needed at slice 1:** one record, "a judge reads its policy from the base branch, failing
@@ -426,16 +449,7 @@ maintainer confirms them at approval):
 
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
-- **Is the earned record's 20-landing window one of Q3's "numbers"?**
-  - Options: keep it fixed at 20 in the record reader (ADR-0036 as built), with the risk policy
-    holding the two thresholds; or move it into the risk policy, with a MODIFIED runtime/R44 so
-    the record reader reads it.
-  - Next step: question to agranado at K3's grill, where the comparison is designed. MVP default:
-    fixed at 20; K2 holds two thresholds.
-- **Should `touched` also report `VERSION`-listed files?**
-  - Options: K2 reports judging files only, and K3 reads `VERSION`'s list through the landing
-    script's existing read (ADR-0025); or `touched` reports both, so K3 has one query.
-  - Next step: question to agranado at K3's grill. MVP default: judging files only.
+None open. Both questions this section held were settled after approval (§8).
 
 ## 10. Dogfood plan
 
