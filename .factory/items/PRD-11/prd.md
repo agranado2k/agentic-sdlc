@@ -60,6 +60,7 @@ scope. K2 (PRD-08) gives the base-branch risk policy. K3 (PRD-09) gives the risk
   the pooled SD. It reads `no drop` when the after-mean is not below the before-mean, which is a
   finding, as today. Anything between reads `within noise`, which is reported and is not a
   finding. A `drop` records one note that closes the loop for that ticket.
+  It is a post-landing noise check, not D-08's pre-landing eval gate, which is *later* (§6, §8).
 - **Every candidate that edits something carries its measure.** `Edits:` widens from `lens` and
   `skill` to `check` and `policy`. Each such candidate carries `Runs:` and `Targets:`, checked by
   the vocabulary checker, or it stays an observation. The candidate block is the retro → ticket
@@ -419,9 +420,13 @@ judged against noise, end to end, from the trace a retro already reads.
 
 ## 6. Non-goals (this PRD)
 
-- **A pre-landing eval that replays a fixed task set three times on the base and on the head.**
-  *Later*. It needs an eval harness the kit does not have, and it is the other reading of
-  "three repeats" (§9).
+- **D-08's eval gate: a pre-landing eval of a skill or lens change.** *Later*, as its own PRD
+  (operator, 2026-10-31). It runs before the change lands, solves a fixed task set at least 3
+  times with the change and at least 3 times without it, and accepts the change only when the
+  gap exceeds the pooled SD (D-08 research.md lines 45–47, 421–423 and 666–667; proposals.md
+  lines 153 and 226–228). It needs an eval harness the kit does not have. What reopens it: a
+  PRD of its own, written once the low-risk lane has a record; until then process/R146 keeps
+  every lens edit with the operator. This PRD's check is not that gate (§8).
 - **Publishing a retro's candidates without the `/to-tickets` quiz.** *Not here*. The quiz stays
   the checkpoint between a retro's reading and the tracker. The operator can already delegate it
   by instruction, and "automatic" here means no new human step after it (§8).
@@ -434,7 +439,7 @@ judged against noise, end to end, from the trace a retro already reads.
 - **Defaults that raise risk, or that turn an outward item into an inside one at review.**
   *Later*. A default only records a `keep` ruling. Agent 7's scope words are unchanged.
 - **Counting the session's delegated rulings toward a default or toward risk.** *Later*, if ever
-  (§9). They share the judge's model family (D-02, "who labels lens findings").
+  (§8). They share the judge's model family (D-02, "who labels lens findings").
 - **A default for surface `other`.** *Never*: it names no kind of change.
 - **Summed measures (tokens, cost) in the `Targets:` grammar.** *Not here*: the two summed
   measures are reported beside the counts, per wave (process/R158–R160), and `Targets:` stays a
@@ -502,6 +507,33 @@ the counts, and never a single combined score. `Targets:` stays a count query, s
 still enters as a loop ticket through a count proxy (UC5 1a). This closes §9's question and
 adds process/R158–R160 to slice 1.
 
+**Settled after approval** (the rest of §9's questions, closed 2026-10-31):
+
+- **T-60's check is a post-landing noise check, not D-08's eval gate** (operator, 2026-10-31).
+  "Eval-gated, three repeats, pooled SD" is defined nowhere in D-02; D-08 defines it as a
+  pre-landing eval of a skill or lens change, solved at least 3 times with the change and at
+  least 3 times without it, accepted only when the gap exceeds the pooled SD (D-08 research.md
+  lines 45–47 and 421–423; proposals.md line 153). This PRD's three sub-windows a side read the
+  trace after the landing and gate nothing: they say whether a landed fix moved its count beyond
+  noise. T-60 (#923) is kept as written. D-08's eval gate is §6's *later* item, a PRD of its own;
+  meanwhile process/R146 keeps every lens edit with the operator.
+- **Preference learning counts operator rulings only, and stays idle while the operator
+  delegates** (the session under the operator's delegation, 2026-10-31, on D-02's record and
+  the D-08 session's recommendation). D-02 decisions.md, "who labels lens findings", excludes the
+  session's rulings because they share the judge's model family; runtime/R145 and process/R157
+  already count only `operator`. The operator can rule any item at any time with the commands
+  `/pr-iterate` prints (process/R150). Counting a session ruling after a clean fix window would
+  label the PR's outcome, not the operator's preference.
+- **`within noise` stays report-only** (the session under the operator's delegation,
+  2026-10-31). Nothing argues for acting before real rows exist; revisit at the first `/retro`
+  after slice 1.
+- **The numbers stay fixed in the skill** (the session under the operator's delegation,
+  2026-10-31). Revisit if the first real rows are mostly `inconclusive`. The factory defines no
+  such key, so K7's manifest rule does not apply.
+- **A ruling counts only at the head it names** (the session under the operator's delegation,
+  2026-10-31). Carrying a ruling forward would let a later diff inherit a `keep` it never got;
+  re-rulings are counted in the first waves after slice 3 before anything changes.
+
 **Derived while writing** (the session, under the operator's standing delegation of rulings;
 the maintainer confirms them at approval):
 
@@ -510,7 +542,8 @@ the maintainer confirms them at approval):
   replay a task three times, so the reading that uses the trace `/retro` already reads is: three
   equal repeats a side, and a drop that has to beat one pooled SD. With n = 3 this is a coarse
   gate. It is chosen because it is cheap, it can be checked against a fixture, and it stops the
-  commonest false result, a single quiet window (§9 keeps the other reading open).
+  commonest false result, a single quiet window. The other reading was settled after approval:
+  it is D-08's pre-landing eval gate, deferred (see "Settled after approval" and §6).
 - **`within noise` is reported, not a finding.** A fix that did no measurable harm is not
   reopened on noise. Its loop simply stays open, with no closed note.
 - **A loop ticket is keyed on its `Targets:` line, not on where it came from.** This is how
@@ -529,7 +562,7 @@ the maintainer confirms them at approval):
   landing a policy file that the lane always holds for them. A delegated session's ruling would
   let the chain lower its own risk, which Q6 forbids.
 - **A ruling counts only at the head it names.** It is the conservative choice. Carrying rulings
-  across heads is in §9.
+  across heads was settled after approval (per head; see "Settled after approval").
 - **A default is per review area, and it must cover every area the PR touches.** This follows
   Q4: the riskiest area judges.
 - **Five rulings in a row.** This is a quarter of Q3's 20-landing window. Mixed outcomes reset
@@ -555,43 +588,9 @@ PRD-13 took runtime/R31–R69, R80–R103 and R200+, process/R37–R68, R80–R8
 policy/R1–R33. These ids are re-based at approval if they collide. The MODIFIED runtime/R59
 follows PRD-09's final id.
 
-## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
+## 9. Unresolved questions
 
-- **What D-02 meant by "eval-gated, three repeats, pooled SD".**
-  - Problem: D-02 names the phrase only in brief.md, and decisions.md, proposals.md and
-    research.md never define it. It may come from D-08's efficiency proposals, which this
-    repository does not hold.
-  - Options seen: three sub-windows a side of the existing trace check (this PRD); a pre-landing
-    eval that replays a fixed task set three times at the base and at the head, gating the
-    landing; both.
-  - Next step: question to agranado at approval, and to the D-08 session through them. MVP
-    default: sub-windows, post-landing.
-- **Preference learning is idle while the operator delegates confirm-list rulings.**
-  - Problem: since 2026-10-11 the session rules every confirm-list. Those rulings record
-    `by=session`, and they count toward neither risk nor proposals, so no default is ever
-    proposed.
-  - Options seen: accept that it stays idle until the operator rules; the operator rules a
-    sample of outward items; count a session ruling once the PR has passed its fix window with
-    no mistake (an outcome label, as D-02 prefers).
-  - Next step: question to agranado at approval. MVP default: operator rulings only.
-- **`within noise` never becomes a finding.**
-  - Problem: an edit that never shows a drop beyond noise stays landed, and its loop stays open
-    with nothing to prompt anyone.
-  - Options seen: report only (this PRD); make it a finding after two retros read it so; list
-    open loops older than a set age in the count line.
-  - Next step: decide at the first `/retro` after slice 1, from the real rows. MVP default:
-    report only.
-- **The numbers are fixed in the skill.** Three repeats, three PRs per repeat and five rulings
-  live in `/retro`'s text, not in a policy.
-  - Options seen: keep them fixed; move them to the risk policy, read at the base like Q3's
-    thresholds.
-  - Next step: revisit if the first real rows are mostly `inconclusive`. MVP default: fixed.
-- **Rulings are lost when the head moves.**
-  - Problem: one push after a ruling makes the operator rule again on a re-numbered item.
-  - Options seen: per head (this PRD); carry a ruling forward when the new verdict lists the
-    same surface the same number of times; carry it forward only when the item's diff hunk is
-    unchanged.
-  - Next step: count re-rulings in the first waves after slice 3. MVP default: per head.
+None. Every question was settled after approval (§8, 2026-10-31).
 
 ## 10. Dogfood plan
 
