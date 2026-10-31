@@ -210,7 +210,7 @@ D-02 drafts hold R61 upward (§11).
 
 Amended 2026-10-31 by T-69 (#932), T-70 (#933) and the operator's configuration ruling (§8):
 R120 to R125 and R128 to R135 are reworded in place to the factory's shipped contract, and
-R138, R139 and R160 to R165 are added. No published id is renumbered or reused.
+R138, R139 and R222 to R227 are added. No published id is renumbered or reused.
 
 process/R120. WHERE the repository's git top level holds the factory's project manifest and the `factory-prd` skill is installed, WHEN `/to-prd` starts, it SHALL publish nothing to the forge's issue tracker, SHALL write no `prd.write` event, and SHALL end with a hand-off naming `/factory-prd` as where PRDs are written. [UC2 2, 3]
 process/R121. WHERE the repository's git top level holds the factory's project manifest and the `factory-tickets` skill is installed, WHEN `/to-tickets` starts, it SHALL publish no issue, merge no section, close no twin, write no `ticket.write` event, and SHALL end with a hand-off naming `/factory-tickets` as where tickets are written. [UC1 2, 3, 4]
@@ -232,12 +232,12 @@ process/R136. WHEN bootstrap stamps a project that holds no `.factory/` folder, 
 process/R137. WHEN the release that ships R128 to R134 lands, `UPDATING.md` SHALL tell a consumer that the stamp reader now accepts a factory ticket id, that it runs `factory stamp` in a factory project, and that its behaviour for an issue number is unchanged.
 process/R138. IF the stamp reader is given a factory ticket id in a factory project and no `factory` binary is on `PATH`, THEN it SHALL exit 3, print nothing on stdout, and write one stderr line naming the absent binary and the forge-issue form, `sh scripts/stamp.sh <issue-number>`. [UC3 2f]
 process/R139. WHEN the stamp reader exits 3 for an absent `factory` binary and `/implement` holds the ticket's forge issue number from its hand-off, `/implement` SHALL say once that it fell back to the forge issue and SHALL read the stamp with `sh scripts/stamp.sh <N>`; holding none, it SHALL take exit 3's path as for an issue. [UC3 2f]
-process/R160. WHEN `/implement` is handed a temporary factory id, `T-~` followed by hex, it SHALL refuse it, read no stamp, and name `factory renumber` as what makes it stampable. [UC3 2g]
-process/R161. IF the repository's git top level holds the project manifest and the factory skill for the planning skill's item is not installed, THEN `/to-prd` or `/to-tickets` SHALL run its forge flow as today and SHALL say once, at its start, that `factory install-skill` would add that factory skill. [UC1 2e, UC2 2c]
-process/R162. `/to-prd` and `/to-tickets` SHALL decide the deferral without running any `factory` subcommand, so that a factory project without the `factory` binary runs them as R123 or R161 says.
-process/R163. A factory skill SHALL count as installed when its `SKILL.md` exists under the user's `~/.claude/skills/<name>/` or the project's `.claude/skills/<name>/`, and under no other path.
-process/R164. WHERE the repository's git top level holds the project manifest, every configuration value the kit reads that the factory also defines SHALL be read from the factory's key in `.factory/project.yaml`, and the kit's own policy file SHALL be read for that value only where the repository is not a factory project.
-process/R165. WHERE the kit's policy reader reads a configuration value at a base ref, and R164 sends that value to `.factory/project.yaml`, the value SHALL be read from `.factory/project.yaml` at the same base ref through the policy reader, failing closed as the policy reader does.
+process/R222. WHEN `/implement` is handed a temporary factory id, `T-~` followed by hex, it SHALL refuse it, read no stamp, and name `factory renumber` as what makes it stampable. [UC3 2g]
+process/R223. IF the repository's git top level holds the project manifest and the factory skill for the planning skill's item is not installed, THEN `/to-prd` or `/to-tickets` SHALL run its forge flow as today and SHALL say once, at its start, that `factory install-skill` would add that factory skill. [UC1 2e, UC2 2c]
+process/R224. `/to-prd` and `/to-tickets` SHALL decide the deferral without running any `factory` subcommand, so that a factory project without the `factory` binary runs them as R123 or R223 says.
+process/R225. A factory skill SHALL count as installed when its `SKILL.md` exists under the user's `~/.claude/skills/<name>/` or the project's `.claude/skills/<name>/`, and under no other path.
+process/R226. WHERE the repository's git top level holds the project manifest, every configuration value the kit reads that the factory also defines SHALL be read from the factory's key in `.factory/project.yaml`, and the kit's own policy file SHALL be read for that value only where the repository is not a factory project.
+process/R227. WHERE the kit's policy reader reads a configuration value at a base ref, and R226 sends that value to `.factory/project.yaml`, the value SHALL be read from `.factory/project.yaml` at the same base ref through the policy reader, failing closed as the policy reader does.
 
 ## 5. Slices (vertical, demoable, in order)
 
@@ -245,7 +245,7 @@ Slice 1 moves `scripts/stamp.sh`, which `VERSION` lists, so it is a shared-layer
 Slices 2 and 3 move skills only, which belong to the release's non-manifest half: the next
 release's `VERSION` history note lists them. §9's first two questions are settled (§8,
 2026-10-31), so no slice waits on the factory: slice 1 needs only `factory stamp`, which has
-shipped, and slices 2 and 3 need no factory skill to exist, because a missing one is R161's
+shipped, and slices 2 and 3 need no factory skill to exist, because a missing one is R223's
 path. Slice 4 waits on PRD-08's policy reader.
 
 **Slice 1 — the stamp reader runs `factory stamp` for a factory ticket, and `/implement` uses
@@ -253,7 +253,7 @@ it (shared-layer release).** The receiving end first: the kit can build a factor
 anything sends planning there.
 - *Covers:* process/R128, process/R129, process/R130, process/R131, process/R132,
   process/R133, process/R134, process/R135, process/R137, process/R138, process/R139,
-  process/R160.
+  process/R222.
 - *Also:* the glossary gains factory project and factory ticket. The release bumps `VERSION`'s
   minor, writes `UPDATING.md`'s entry, re-captures the transcripts `tests/docs-demo.sh` quotes,
   and lands only once its merge commit carries the `v<version>` tag (the kit's ADR-0015,
@@ -274,7 +274,7 @@ anything sends planning there.
 
 **Slice 2 — `/to-tickets` defers by name in a factory project.**
 - *Covers:* process/R121, process/R122, process/R123, process/R124, process/R125,
-  process/R126, process/R127, process/R136, process/R161, process/R162, process/R163.
+  process/R126, process/R127, process/R136, process/R223, process/R224, process/R225.
 - *Blocked by:* slice 1.
 - *Also:* one decision record: where a factory project exists and its factory skill is
   installed, the kit's planning skills defer to that skill by name, and only the operator's own
@@ -282,7 +282,7 @@ anything sends planning there.
   `factory install-skill` once. The glossary gains deferral and factory skill.
 - *Accept:* `tests/spec-skills.test.sh` holds `/to-tickets`' deferral as its first step,
   before the pre-screen: its two presence checks (the manifest at the git top level, and
-  `factory-tickets/SKILL.md` under the two skill roots of R163), the hand-off naming
+  `factory-tickets/SKILL.md` under the two skill roots of R225), the hand-off naming
   `/factory-tickets`, the once-said `factory install-skill` line for a missing skill, the
   override's "operator's own message", no `factory` subcommand anywhere on the path, and no
   publish or trace call on the deferring path. It also holds that `/grill-me`,
@@ -291,7 +291,7 @@ anything sends planning there.
 
 **Slice 3 — `/to-prd` defers by name in a factory project.**
 - *Covers:* process/R120, process/R122, process/R123, process/R125, process/R126,
-  process/R161, process/R162.
+  process/R223, process/R224.
 - *Blocked by:* slice 2.
 - *Accept:* `tests/spec-skills.test.sh` holds `/to-prd`'s deferral ahead of its grilling
   question, its two presence checks, its hand-off naming `/factory-prd`, its once-said
@@ -299,9 +299,9 @@ anything sends planning there.
   subcommand on that path.
 
 **Slice 4 — in a factory project, a value the factory defines is read from its manifest.**
-- *Covers:* process/R164, process/R165.
+- *Covers:* process/R226, process/R227.
 - *Blocked by:* PRD-08's policy reader (T-41), which must carry `.factory/project.yaml` in its
-  judging set before R165 can read it at a base.
+  judging set before R227 can read it at a base.
 - *Accept:* a suite over the kit's configuration reads holds that, in a fixture factory
   project whose manifest and kit policy file disagree on a value both define, the kit reads the
   manifest's, at the working tree with no base and at the base ref with one; that the same
@@ -318,7 +318,7 @@ anything sends planning there.
 - **The stamp reader parsing a factory ticket's file**: *never*. The layout is the factory's,
   and `factory stamp` is its one reader (§8, 2026-10-31). This reverses the earlier non-goal
   "the stamp reader calling `factory stamp`".
-- **Probing for the factory with a `factory` subcommand** in a planning skill: *never* (R162).
+- **Probing for the factory with a `factory` subcommand** in a planning skill: *never* (R224).
 - **A trace event for a deferral**: *later*. A new outcome on `prd.write` or `ticket.write` is a
   change to the trace's kind table, and ADR-0024 is at its amendment cap. Reopen when `/retro`'s
   chain-health question needs to count deferrals.
@@ -347,7 +347,7 @@ anything sends planning there.
   the kit's checker passed it. Its stderr is discarded, and the reader names each case itself
   from the exit status, so none reaches the reader's stderr. `factory stamp` runs the
   project's own `scripts/vocab.sh`, as the kit's reader does. The deferral reads no file's
-  contents and runs no `factory` subcommand (R124, R162).
+  contents and runs no `factory` subcommand (R124, R224).
 - **Tests** drive behaviour from outside. The stamp suite builds a throwaway repository with a
   factory manifest, puts a stand-in `factory` first on `PATH` that answers by exit and records
   its arguments, and a stand-in tracker that fails the test if it is called. The skills are
@@ -403,7 +403,7 @@ the maintainer confirms them at approval):
   or no checker, 5 too many lines; no 4, because nothing is fetched. Layout, for reference
   only: `.factory/items/T-nn/ticket.md`, YAML front matter, then a body of bare `Key: value`
   stamp lines. Id shape `T-[0-9]+`; a temporary `T-~<hex>` id (before `factory renumber`) is
-  not stampable, and `/implement` refuses it (R160). Keys read today: Tier, Confidence, Label,
+  not stampable, and `/implement` refuses it (R222). Keys read today: Tier, Confidence, Label,
   Domain, Risk, Risk-confidence, Test-tier, Covers; Accept-test later (factory T-94, after the
   kit's Accept-test release); `Class` is written but not read by `factory stamp`; undeclared
   fields are dropped and named in `undeclared`. A factory project is one whose git top level
@@ -426,16 +426,17 @@ the maintainer confirms them at approval):
   are `factory-prd` and `factory-tickets`, which `factory install-skill` writes to
   `~/.claude/skills/<name>/SKILL.md` (not landed yet: factory T-93 and T-96). `/to-prd` and
   `/to-tickets` defer by name when the project is a factory project and that factory skill's
-  `SKILL.md` exists (R120, R121, R163). In a factory project with the skill missing they run
+  `SKILL.md` exists (R120, R121, R225). In a factory project with the skill missing they run
   the generic skill as today and say once that `factory install-skill` would add the factory
-  one (R161). They never probe with a `factory` subcommand: a skill directory is what the
-  harness discovers, and a project without the binary still works (R162). Hand-off words, for
+  one (R223). They never probe with a `factory` subcommand: a skill directory is what the
+  harness discovers, and a project without the binary still works (R224). Hand-off words, for
   the skill-text suites: deferring, "This repository plans in the software factory: write
   tickets with `/factory-tickets` (PRDs with `/factory-prd`). `/to-tickets` (`/to-prd`)
   publishes nothing to the tracker here."; skill missing, "This is a factory project, and the
   factory's `factory-tickets` (`factory-prd`) skill is not installed: running the generic
   skill. `factory install-skill` would add the factory one."
-- **R163's project root is the session's reading** (derived, under delegation): the ruling
+- **R225's project root is the session's reading, confirmed** (derived under delegation,
+  confirmed by the coordinator's ruling of 2026-10-31): the ruling
   names `~/.claude/skills/`, where `factory install-skill` writes; a project's own
   `.claude/skills/<name>/SKILL.md` is also a directory the harness discovers, so it counts the
   same. No other path does.
@@ -443,12 +444,12 @@ the maintainer confirms them at approval):
   manifest** (the operator's own yes, 2026-10-31, on the D-08 factory operator's widened
   option (a)). Every configuration value the kit reads that the factory also defines is read
   from the factory's key in `.factory/project.yaml`, and the kit's own policy file is read only
-  where the project is not a factory project (R164). The factory's operator ruled this for
+  where the project is not a factory project (R226). The factory's operator ruled this for
   every configuration check, not only `acceptance_tests_since`; PRD-14's adoption date is its
   first instance. Wherever the kit's policy reader (PRD-08, K2) reads such a key at the base,
-  the read happens at the base too (R165), so PRD-08's reader (T-41) must carry
-  `.factory/project.yaml` in its judging set and honour the rule. Slice 4 delivers it; no
-  existing PRD-12 ticket does.
+  the read happens at the base too (R227), so PRD-08's reader (T-41) must carry
+  `.factory/project.yaml` in its judging set and honour the rule. Slice 4 delivers it, as
+  T-86 (#959).
 
 **Alternatives considered:**
 
@@ -491,7 +492,7 @@ the maintainer confirms them at approval):
 
 ## 10. Dogfood plan
 
-Four build tickets in slice order, the fourth not yet drafted (slice 4). Slice 1's tag lets the factory's tickets in this repository be
+Four build tickets in slice order, slice 4's being T-86 (#959). Slice 1's tag lets the factory's tickets in this repository be
 built by their `T-<n>` id rather than by a mirrored issue, once the chain's naming question (§9)
 is answered. Slices 2 and 3 are first run here under the operator's override (§9). The first
 factory ticket built through `sh scripts/stamp.sh T-<n>` is the measure.
@@ -501,5 +502,6 @@ factory ticket built through `sh scripts/stamp.sh T-<n>` is the measure.
 Requirement ids start at process/R120 so that they do not collide with the sibling D-02 drafts
 (PRD-08 to PRD-13 hold process/R61 upward and runtime/R52 upward). They are re-based at
 approval if they collide with whatever has landed by then. The 2026-10-31 amendment added
-R138 and R139, then jumped to R160 because PRD-11 holds process/R140 to R157; R158, R159 and
-R166 upward stay free for T-74's trace-subject requirements.
+R138 and R139, then R222 to R227, because PRD-11 holds process/R140 to R160, PRD-13 holds
+R200 to R208 and PRD-14 holds R220 and R221. The next free id, for T-74's trace-subject
+requirements, is R228.
