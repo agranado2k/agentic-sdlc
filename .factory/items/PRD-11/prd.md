@@ -51,7 +51,7 @@ scope. K2 (PRD-08) gives the base-branch risk policy. K3 (PRD-09) gives the risk
   judgement eval-gated.
 - **Two summed measures beside the count.** Per landed ticket, `/retro` measures the tokens
   priced per model under the run the ticket's `/implement` opened, and the agent wall-clock
-  from that run's begin to the ticket's landing. The section prints the median of each over the
+  of that run, from its `run.start` to its `run.end` at the open, reviewed PR. The section prints the median of each over the
   wave next to the loop tickets' counts, each on its own, never as one combined score. This is
   how a D-08 efficiency proposal measured in tokens or time is read.
 - **The eval gate.** Each side of the landing is split into three equal **repeats**. The query's
@@ -236,15 +236,16 @@ D-08's efficiency proposals. Goal: the proposal is judged like any retro fix.
 3. `/retro`'s before-and-after section judges it as in UC1 5–6, since it judges every landed
    ticket with a `Targets:` line.
 4. Beside the rows, the section prints the wave's two summed measures: the median tokens priced
-   per model, and the median agent wall-clock from `/implement`'s run begin to `merge.land`, over
-   the wave's landed tickets. A proposal that aims at tokens or time is read there, next to its
+   per model, and the median agent wall-clock of `/implement`'s run, from its `run.start` to its
+   `run.end` at the open, reviewed PR, over the wave's landed tickets. The time the PR then waits
+   for a human is not in it. A proposal that aims at tokens or time is read there, next to its
    count.
 
 Extensions:
 - 1a. The proposal's measure is tokens or cost per PR, which a count query cannot express. Its
   `Targets:` line counts the events it should reduce (spawns, re-reviews, iterations), and its
   effect on the sums is read on the summed-measures line of step 4 (§8).
-- 4a. A landed ticket has no `/implement` run, or no `merge.land`. It is left out of both
+- 4a. A landed ticket has no `/implement` run, or its run has no `run.end`. It is left out of both
   medians, and the line counts how many were left out. A ticket whose tokens hold an unpriced
   model is left out of the token median the same way.
 
@@ -265,7 +266,8 @@ Extensions:
 - **Summed measures**: per landed ticket, its **priced tokens**, the cost, priced per model as
   the trace's summary prices it, of the token-bearing events of the run the ticket's
   `/implement` opened and the runs beneath it; and its **agent wall-clock**, from that run's
-  begin to the ticket's `merge.land`. Reported per wave as two medians, never combined.
+  `run.start` to its `run.end`, where the run ends at the open, reviewed PR, so no human wait
+  after it counts. Reported per wave as two medians, never combined.
 - **Loop closed**: a ticket with a `drop` row. It gets one `note outcome=closed`, and later
   retros record nothing more for it.
 - **Candidate block**: the retro → ticket handoff contract, a blank-line-separated block in the
@@ -342,8 +344,8 @@ process/R154. WHEN those 5 rulings all read `change`, `/retro` SHALL file one ca
 process/R155. `/retro` SHALL propose no ruling default for a pair with fewer than 5 operator rulings, with mixed outcomes among its latest 5, of surface `other`, or already in the risk policy's ruling defaults at the base branch. [UC3 2a, 2b]
 process/R156. IF the tracker holds a proposal for the same pair closed as not planned, THEN `/retro` SHALL NOT propose it again, and SHALL name that ticket in its report. [UC3 3a]
 process/R157. `/retro` SHALL count only `operator` rulings toward process/R153 and R154, and SHALL print the window's rulings counted by `by`. [UC3 3]
-process/R158. For each ticket landed in its window, `/retro` SHALL measure its priced tokens, the cost the trace's summary prices, per model, for the token-bearing events of the run the ticket's `/implement` opened and the runs beneath it, and its agent wall-clock, from that run's begin to the ticket's `merge.land`. [UC5 4]
-process/R159. The before-and-after section SHALL print one line holding the median priced tokens and the median agent wall-clock over the window's landed tickets, beside its rows' counts, each measure on its own and never folded with the other or with a count into one score, and SHALL leave out of a median, and count on that line, a ticket with no `/implement` run, no `merge.land`, or, for the token median, an unpriced model. [UC5 4, 4a]
+process/R158. For each ticket landed in its window, `/retro` SHALL measure its priced tokens, the cost the trace's summary prices, per model, for the token-bearing events of the run the ticket's `/implement` opened and the runs beneath it, and its agent wall-clock, from that run's `run.start` to its `run.end`, the run ending at the open, reviewed PR, and SHALL NOT run the wall-clock to the ticket's `merge.land`. [UC5 4]
+process/R159. The before-and-after section SHALL print one line holding the median priced tokens and the median agent wall-clock over the window's landed tickets, beside its rows' counts, each measure on its own and never folded with the other or with a count into one score, and SHALL leave out of a median, and count on that line, a ticket with no `/implement` run, a run with no `run.end`, or, for the token median, an unpriced model. [UC5 4, 4a]
 process/R160. `/retro` SHALL report no operator wait (approve, review or QA) as a measure of a loop ticket or of a wave: those waits are the factory's gate-time metrics and measure the operator, not the change. [UC5 4]
 
 ### MODIFIED
@@ -370,9 +372,9 @@ judged against noise, end to end, from the trace a retro already reads.
   within noise` with no finding. A fixture with equal means prints `no drop` and a finding. A
   repeat holding 2 landed PRs prints `inconclusive — fewer than 3 landed PRs in a repeat`. The
   count line matches the fixtures. A fixture wave of three landed tickets with known token
-  events and run and landing times prints the median priced tokens and the median agent
-  wall-clock as two separate values. A ticket with no `/implement` run, and one whose tokens
-  hold an unpriced model, are left out of the median they cannot enter and counted on the line.
+  events and `/implement` run start and end times, each landed later, prints the median priced tokens and the median agent
+  wall-clock as two separate values. The wall-clock median ignores the time from a run's end to its
+  landing. A ticket with no `/implement` run, and one whose tokens hold an unpriced model, are left out of the median they cannot enter and counted on the line.
   No line prints an operator wait or a combined score.
 
 **Slice 2 — every edit carries its measure, and lens edits wait for the operator.**
@@ -491,7 +493,9 @@ session under the operator's delegation, 2026-10-31, on D-08's recommendation). 
 measure exists beside the findings-per-proposal count, as two metrics per landed ticket: the
 tokens priced per model, from the kit's own trace (the session hooks' token records, as the
 trace's summary reads them), grouped by the run the ticket's `/implement` opened; and the agent
-wall-clock, from that run's begin to the ticket's `merge.land`. The operator's waits (approve,
+wall-clock of that run, from its `run.start` to its `run.end`, the run ending at the open,
+reviewed PR, and never to `merge.land`, so the human's time after the PR opens is left out
+(the session under the operator's delegation, 2026-10-31, on review of T-59). The operator's waits (approve,
 review and QA) are excluded: they are the factory's gate-time metrics (`factory stats`) and
 measure the operator, not the proposal. `/retro` reports the median of each per wave next to
 the counts, and never a single combined score. `Targets:` stays a count query, so a proposal
