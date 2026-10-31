@@ -23,9 +23,11 @@ that wrote the diff, review each pull request head beside the kit's own `/review
 judges whether each passing row of the PR's check table is backed by a test that really checks
 the requirement, and whether each finding the kit's review raised is real, with its evidence. Its
 verdicts are recorded in the trace and counted against post-merge outcomes,
-so the operator can see what a second model family catches that the kit's review misses. In
-this PRD it only reports: it never blocks, never counts as the review a landing requires, and
-never decides anything.
+so the operator can see what a second model family catches that the kit's review misses. Its
+model is resolved by a walk: a model from another provider first, else a model of the author's
+provider but another family, else none (`unavailable`). It never counts as the review a landing
+requires and never decides anything. Its one gating use is PRD-10's: the low-risk lane lands a PR
+only on the verifier's `pass` at its head (operator, 2026-10-31; PRD-10 runtime/R104; §8).
 
 **Problem.** Every reviewer the kit runs on its own PRs is from one provider. ADR-0027 makes
 sure a diff is never reviewed by its author's model family, but all of those families come from
@@ -45,8 +47,10 @@ test, but nothing asks whether that test checks the requirement it is pinned to 
 
 **Solution, from the user's side.**
 - After `/implement` asks for the kit's review, it asks for the verifier on the same head. The
-  kit's resolver picks a verifier model whose declared provider differs from the author's. When
-  no such model is reachable, the PR records that no verifier ran.
+  kit's resolver walks two rungs: a verifier model whose declared provider differs from the
+  author's, and, when none is reachable, a model of the author's provider whose family differs
+  from the author's. The verdict records which rung verified. When neither rung has a reachable
+  model, the PR records that no verifier ran.
 - The verifier works offline and is given files only. It writes the review worker's report,
   plus one line per passing check-table row, `upheld` or `disputed`, and one line per finding
   the kit's review raised at that head, `confirmed` or `disputed`, with its evidence.
@@ -108,18 +112,24 @@ PR #971. The author is `sonnet`. Goal: a verifier's report on the PR and its ver
    validates it, then posts one review (event COMMENT, findings inline) and one comment, both
    under the verifier's markers. The comment shows each finding verdict with its evidence.
 4. The broker records `verify.verdict outcome=pass`, with `data.reviewed`, `data.provider` and
-   `data.disputed=0`, on `pr:#971`, and raises each finding as `finding.raise` with a `V-` id
+   `data.disputed=0` and `data.rung=cross-provider`, on `pr:#971`, and raises each finding as `finding.raise` with a `V-` id
    and `data.agent=verifier`. It records one `finding.verify` per finding verdict line:
    `outcome=confirmed data.id=H-1` and `outcome=disputed data.id=M-2`.
 
 Extensions:
 - 0a. The kit's review has recorded no Axis-1 verdict at the head yet. The dispatcher records
   `verify.verdict outcome=unavailable` with that reason, and nothing is posted.
-- 1a. The policy declares no candidate from a provider other than the author's, or declares no
-  provider for the author. The resolver prints nothing and warns. The dispatcher records
-  `verify.verdict outcome=unavailable` with the reason, and nothing is posted.
+- 1a. The policy declares no provider for the author, or neither rung leaves a candidate. The
+  resolver prints nothing and warns. The dispatcher records `verify.verdict
+  outcome=unavailable` with the reason, and nothing is posted.
+- 1b. No candidate from a provider other than the author's is declared or reachable. The
+  resolver takes the second rung: the first model of the reviewer tier's ordered walk whose
+  family differs from the author's, `opus` for this Sonnet author, and names the rung
+  `same-provider`. The run goes on as in steps 2 to 4, and the verdict carries
+  `data.rung=same-provider`.
 - 2a. The spawn fails on its first call. The session re-resolves once with that model named
-  unreachable. When nothing remains, the dispatcher records `outcome=unavailable` as in 1a.
+  unreachable, which may fall to the second rung (1b). When nothing remains on either rung, the
+  dispatcher records `outcome=unavailable` as in 1a.
 - 3a. The report disputes `process/R46`. The broker records `outcome=blocked
   data.disputed=1`. A CRITICAL or HIGH finding gives `blocked` the same way.
 - 3b. The report has no pin line for one `pass` row, or uses a word other than `upheld` or
@@ -159,6 +169,11 @@ Extensions:
   refuses with exit 2, as it refuses a head with no review (ADR-0032).
 - 1b. The PR has no `verify.verdict` at or after its head commit. The script lands it with
   `data.verified=none`.
+- 1c. The script runs in the low-risk lane (PRD-10), not on the operator's command. A disputed
+  row, a `blocked` verdict, `unavailable`, or no verdict at the head holds the PR for the
+  operator with `lane: held verifier <reason>`; only a `pass` lets the lane land it. That hold is
+  PRD-10's runtime/R104 (T-52, #915), and PRD-10 modifies this PRD's runtime/R215 to make it the
+  one exception; both are cited here and not restated.
 
 **UC4 — Read what the verifier adds.** Actor: `/retro`, running the record reader. Goal: the
 verifier's record per review area, apart from the lenses'.
@@ -170,6 +185,8 @@ verifier's record per review area, apart from the lenses'.
 3. The same row prints the kit findings the verifier confirmed and the ones it disputed, each
    split into held up, not held up and unlabelled. The lenses' own counts are what they would
    be with no `finding.verify` in the trace.
+4. The verifier row is printed once per rung, `cross-provider` and `same-provider`, from the
+   verdicts' `data.rung`, so the two rungs' records can be compared.
 
 Extensions:
 - 2a. No PR in the area's window carries a verifier finding. The verifier's ratios print `n/a`
@@ -186,13 +203,18 @@ and the pin judgements.
 ## 3. Model
 
 - **Verifier**: a reviewer-tier spawn in the `cross-provider` domain. Its model's provider
-  differs from the provider of the model that wrote the diff. It reviews one PR head on both
+  differs from the provider of the model that wrote the diff where the policy has one reachable;
+  otherwise its model is of the author's provider and another family. It reviews one PR head on both
   axes, with the review worker's contract, and judges each `pass` check-table row. It is
   advisory: its verdict is never the review a landing requires, and it decides nothing.
 - **Provider**: the vendor behind a model, as the glossary's agent-harness entry already uses
   the word. The kit policy declares one provider per agent harness, and one for the session's
   own. A model's provider is its harness's provider. Comparing families (ADR-0027) is a
-  different and finer test, and this PRD does not change it.
+  different and finer test, and this PRD does not change it; the walk's second rung reuses it.
+- **Rung**: which step of the verifier's resolution walk answered. `cross-provider` when the
+  model's declared provider differs from the author's; `same-provider` when it is the author's
+  provider and another family. A `verify.verdict` that ran records it as `data.rung`, so
+  `/retro` can compare the two rungs.
 - **Pin judgement**: `upheld` when the pinned test, read at its pinned commit, exercises the
   behavior the requirement line states. Otherwise `disputed`. It is given only on `pass` rows.
 - **`verify.verdict`**: a new trace kind. Its outcomes are `pass`, `blocked` and `unavailable`.
@@ -223,7 +245,7 @@ runtime/R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pas
 runtime/R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]
 runtime/R203. WHEN the kit's tier resolver is asked for the reviewer tier in the `cross-provider` domain with the diff's author named, it SHALL print the first of the policy's verifier candidates, in policy order, whose declared provider differs from the author's and which the caller has not named unreachable. [UC1 1]
 runtime/R204. The resolver SHALL take an unprefixed model's provider from the provider the policy declares for the session's own agent harness, and a `<harness>:<model>` value's provider from the one declared for that harness. [UC1 1]
-runtime/R205. IF the author's provider is not declared, or no candidate with a declared provider other than the author's remains, THEN the resolver SHALL print nothing on standard output, warn naming the reason, and exit 0. [UC1 1a]
+runtime/R205. IF the author's provider is not declared, or neither rung of the walk (runtime/R203, runtime/R224) leaves a candidate, THEN the resolver SHALL print nothing on standard output, warn naming the reason, and exit 0. [UC1 1a]
 runtime/R206. WHEN the skill dispatcher runs the verifier on a pull request's head, it SHALL stage the verifier contract, the head commit's diff against its base, and the ticket body as files, and SHALL give the worker no network and no forge credential. [UC1 2]
 runtime/R207. WHEN the dispatcher runs the verifier on a PR whose body carries a check table, it SHALL also stage, for each `pass` row, the line of the head's living spec that carries the row's id, and the pinned test file as it stood at the pinned commit. [UC1 2]
 runtime/R208. IF the resolver prints no verifier, or the verifier's spawn still fails after one re-resolve with the failed model named unreachable, THEN the dispatcher SHALL record one `verify.verdict outcome=unavailable` on the PR with the reason, and nothing SHALL be posted. [UC1 1a, 2a]
@@ -242,6 +264,11 @@ runtime/R220. IF a verifier's report lacks a finding verdict line for a staged f
 runtime/R221. The trace SHALL accept the kind `finding.verify` with the outcomes `confirmed` and `disputed`, carrying a lens finding `data.id` and a `data.where` place, and SHALL refuse, exit 2, writing nothing, any other outcome, a `V-` id, or a missing `data.id` or `data.where`. [UC1 4]
 runtime/R222. WHEN the broker posts a verifier's report, it SHALL record one `finding.verify` on `pr:#<N>` per finding verdict line, with `data.agent=verifier` and the evidence place as `data.where`, SHALL show each verdict with its evidence in the posted comment, and SHALL set the `verify.verdict` outcome by runtime/R211 alone, unmoved by any finding verdict. [UC1 3, 4]
 runtime/R223. The record reader SHALL print, in each area's verifier row, the kit findings the verifier confirmed and those it disputed, each split into held up, not held up and unlabelled, and SHALL count no `finding.verify` toward a lens's counts or a finding's label. [UC4 3]
+runtime/R224. IF no verifier candidate with a declared provider other than the author's remains, THEN the resolver SHALL print, as the walk's second rung, the first model of the reviewer tier's ordered walk (the tier, then its ordered fallback) whose family differs from the author's family and which the caller has not named unreachable. [UC1 1b]
+runtime/R225. The resolver SHALL take both rungs from the kit's agents policy as data: the first from the ordered verifier candidates and each agent harness's declared provider, the second from the reviewer tier's ordered walk and the family test the kit wrapper already applies (ADR-0020, ADR-0027); the walk's order is fixed by rule, and no model, provider or family SHALL be named outside the policy. [UC1 1, 1b]
+runtime/R226. WHEN the resolver prints a verifier, it SHALL also name the rung that answered, `cross-provider` or `same-provider`, apart from the model on standard output, so that a caller reads the model unchanged. [UC1 1, 1b]
+runtime/R227. WHEN the broker records a `verify.verdict` of outcome `pass` or `blocked`, it SHALL carry `data.rung` as the rung the resolver named for that run, and SHALL exit 65, posting nothing and recording nothing, when the dispatcher passed no rung or a word other than `cross-provider` or `same-provider`. [UC1 4, 1b]
+runtime/R228. The record reader SHALL print each area's verifier row once per rung, from the `verify.verdict` events' `data.rung`, and SHALL count a verifier finding or finding verdict in the row of the rung its PR's verdict at that head names. [UC4 4]
 
 #### MODIFIED
 
@@ -272,7 +299,7 @@ release ticket in its own frontier, and slice 4 is `Blocked by:` slice 1 (`/to-t
 the kit's ADR-0033).
 
 **Slice 1 — one verifier review, posted and recorded (shared-layer release).**
-- *Covers:* runtime/R200, R201, R202, R203, R204, R205, R206, R208, R209, R210, R211, R213, R221; process/R200.
+- *Covers:* runtime/R200, R201, R202, R203, R204, R205, R206, R208, R209, R210, R211, R213, R221, R224, R225, R226, R227; process/R200.
 - *Also:* the decision record for the verifier (needed, §8). The glossary gains Verifier and
   Provider. The kit's agents policy declares one provider per agent harness and the verifier
   candidates. The verifier contract is a new kit prompt beside the review worker's, adding only
@@ -284,9 +311,12 @@ the kit's ADR-0033).
   `confirmed` and `disputed` on `H-1`, and refuses another outcome, a `V-H-1` id and a missing
   `data.where`. The tier suite resolves a
   Sonnet author to the other provider's candidate, an author on that other provider to the
-  session harness's candidate, and prints nothing for an undeclared author. The broker suite
+  session harness's candidate, a Sonnet author with no other-provider candidate to `opus` and an
+  Opus author to `sonnet` on the `same-provider` rung, and prints nothing for an undeclared
+  author or when both rungs are spent. The broker suite
   posts a fixture verifier report under its own markers beside an already posted kit review,
-  and records `pass`, then `blocked` for a report with a HIGH finding. A landing-script fixture
+  and records `pass` with its `data.rung`, then `blocked` for a report with a HIGH finding, and
+  exits 65 with nothing posted when no rung was passed. A landing-script fixture
   with only a `verify.verdict outcome=pass` is refused with exit 2.
 
 **Slice 2 — the check table's passing rows and the review's findings judged.**
@@ -314,7 +344,7 @@ the kit's ADR-0033).
   with its evidence and never rejected on the verifier's word alone.
 
 **Slice 4 — what the verifier adds, measured (shared-layer release).**
-- *Covers:* runtime/R46 (modified), R48 (modified), R214, R215, R216, R223.
+- *Covers:* runtime/R46 (modified), R48 (modified), R214, R215, R216, R223, R228.
 - *Blocked by:* slice 1.
 - *Also:* the second release: bump, `UPDATING.md`, re-captures, tag. Its `VERSION` history note
   lists the skill and template movements landed since slice 1.
@@ -322,7 +352,8 @@ the kit's ADR-0033).
   kit's review and caught by the verifier. It prints the verifier row's counts and one
   blocked-versus-pass landing, and a lens precision equal to the one it printed before the
   verifier findings were added. With `finding.verify` events added, it prints the confirmed and
-  disputed kit findings split by label, and every lens count is unchanged. A landing-script fixture records `data.verified=blocked`, and
+  disputed kit findings split by label, and every lens count is unchanged. With verdicts on both
+  rungs, it prints one verifier row per rung. A landing-script fixture records `data.verified=blocked`, and
   `data.verified=none` when no verdict is at the head.
 
 **Slice 5 — the CI review prompt writes the same shape.**
@@ -334,9 +365,10 @@ the kit's ADR-0033).
 
 ## 6. Non-goals (this PRD)
 
-- **A verifier verdict that blocks a landing or holds the low-risk lane.** *Later*, K5. Whether
-  the lane requires `verify.verdict outcome=pass` is open (§9). Until then the verdict is
-  advisory, as the CI review workflow's jobs are.
+- **A verifier verdict that blocks a landing the operator runs.** *Never* here: outside the
+  low-risk lane the verdict is advisory, as the CI review workflow's jobs are (runtime/R215).
+  The lane's hold on a head without a `pass` is PRD-10's runtime/R104, which also modifies R215
+  (§8).
 - **The verifier deciding inside items or writing the decision log.** *Never*. Only
   `/pr-iterate`'s session decides an inside item (ADR-0038 clause 4), and only from the kit's
   own Agent 7 classification.
@@ -348,11 +380,11 @@ the kit's ADR-0033).
 - **Running the pinned test again.** *Later*. The verifier works offline and judges what the
   test checks. CI already runs the suite. Reopen if `/retro` finds an `upheld` row whose test
   did not pass at its pin.
-- **The verifier as a co-signer before an auto-merge** (D-08's stage 3). *Later*. Here no
-  `verify.verdict` or finding verdict changes a landing (runtime/R215). Reopen when K5 lets a
-  PR land without the operator's merge action, or when slice 4's record shows the verifier's
-  confirmed and disputed verdicts agreeing with post-merge labels well enough to trust as a
-  gate.
+- **The verifier as a co-signer anywhere but the low-risk lane** (D-08's stage 3). *Later*.
+  The lane, PRD-10's one landing without the operator's merge action, requires the verifier's
+  `pass` (operator, 2026-10-31; PRD-10 runtime/R104). No other landing reads a
+  `verify.verdict` or finding verdict (runtime/R215, as PRD-10 modifies it). Reopen when slice 4's record shows the verifier's verdicts agreeing with
+  post-merge labels well enough to trust as a gate elsewhere.
 - **The verifier as a critic of the plan or the tests, on two providers** (D-08's stage 2).
   *Later*. Here it judges a PR head, its pass rows and the review's findings, and never a PRD,
   a ticket or a test before the diff. Reopen when a D-02 or D-08 PRD puts a cross-provider
@@ -365,8 +397,8 @@ the kit's ADR-0033).
 ## 7. Technical constraints
 
 - POSIX `sh`, kit policy as data, and skill text with its suites only.
-- The provider rule lives in the kit's resolver wrapper, as ADR-0020 put the family rule there,
-  so the shared resolver does not move. The trace is the one shared-layer script that moves.
+- The provider rule and the walk's second rung live in the kit's resolver wrapper, as ADR-0020
+  put the family rule there, so the shared resolver does not move. The trace is the one shared-layer script that moves.
 - The worker is offline with no credential (ADR-0009). The broker's allow-list is unchanged,
   because a verifier needs only the two operations it already allows: a COMMENT review and one
   comment.
@@ -417,7 +449,9 @@ and T-75):
 the maintainer confirms them at approval):
 - **Cross-provider means a different declared provider, not a different family.** Family
   differences within one vendor are already ADR-0027's rule. The provider is declared per agent
-  harness in policy, and an undeclared author fails closed: no verifier is chosen.
+  harness in policy, and an undeclared author fails closed: no verifier is chosen. (Amended
+  2026-10-31: a different family of the author's provider is now the walk's second rung; see
+  "Settled after approval".)
 - **A new trace kind, not `review.verdict` with a role key.** The landing script counts any
   Axis-1 `review.verdict` that is not blocked. A role key would count as a review unless every
   reader learned to skip it. A new kind fails closed for every reader that already exists.
@@ -438,8 +472,8 @@ the maintainer confirms them at approval):
   verifier visible to `/retro` instead of silent.
 
 **Decision records:**
-- **Needed at slice 1:** one record for the verifier. It covers the provider rule and its fail
-  closed default, the advisory status, the `verify.verdict` kind with its outcomes and required
+- **Needed at slice 1:** one record for the verifier. It covers the provider rule, the two-rung
+  resolution walk and its fail-closed default, the advisory status outside the low-risk lane, the `verify.verdict` kind with its outcomes and required
   keys, the `V-` id prefix, and the verdict never counting as the review. Adding a kind amends
   ADR-0024 clause 1. ADR-0024 is at its amendment cap (ADR-0021), so this is a new record, as
   ADR-0036 was. It takes the next free number when written.
@@ -449,6 +483,41 @@ the maintainer confirms them at approval):
   (the check table), ADR-0038 (scope words, and its note on the CI prompt), ADR-0033, ADR-0015
   and ADR-0025 (release tickets).
 
+**Settled after approval** (§9's remaining questions, closed 2026-10-31):
+
+- **The verifier's model is resolved by a walk, and the low-risk lane requires its `pass`**
+  (operator, 2026-10-31, overriding the session's recommendation (d) on PRD-13 Q2 and this
+  PRD's MVP default "never"). The walk: first a model from a different provider (for example an
+  OpenAI family); if none is reachable, a model of the author's provider but a different family
+  (Sonnet for an Opus-written diff, Opus for a Sonnet-written one); if neither, `unavailable`
+  (runtime/R203, R224, R205, R208). The trace records which rung verified, `cross-provider` or
+  `same-provider`, as `data.rung` on the `verify.verdict` (runtime/R226, R227), and the record
+  reader prints the verifier row per rung so `/retro` can compare them (runtime/R228). The lane
+  holds a PR for the operator on a disputed row, a `blocked` verdict or `unavailable`: that
+  requirement is PRD-10's runtime/R104 (`lane: held verifier <reason>`, the reason `disputed`,
+  `blocked`, `unavailable` or `none`; T-52, #915), and PRD-10 modifies this PRD's runtime/R215
+  so the lane's hold is the one case where a verifier verdict changes what the landing script
+  does. This PRD leaves R215 as it added it.
+  - **The walk is policy data, not code.** The first rung reads the agents policy's ordered
+    verifier candidates and the provider it declares per agent harness and for the session's own
+    (runtime/R203, R204). The second rung declares nothing new: it is the reviewer tier's
+    ordered walk (the tier, then its ordered fallback, ADR-0013), filtered by the family test the
+    kit wrapper already applies to the kit's own review (ADR-0020, ADR-0027), against the
+    author. Only the rungs' order is fixed by rule (runtime/R225). An operator changes either
+    rung by editing the policy, and the kit names no model outside it.
+  - On the second rung the verifier can be the same model as the kit's own review of that diff,
+    because both follow ADR-0027's walk for the author. That is accepted: `data.rung` lets
+    `/retro` show whether that rung adds anything over the kit's review.
+  - Delivered by T-77 (#940, the resolver: R224 to R226), T-78 (#941, the broker records the
+    rung: R227) and T-82 (#945, the record reader per rung: R228).
+- **Requirement ids do not collide** (the session under the operator's delegation, 2026-10-31).
+  runtime/R200 to R228 and process/R200 to R208 collide with no other PRD's added ids; the
+  2026-10-31 additions start at runtime/R224, after PRD-13's own R223.
+- **No cross-provider model is reachable today: land, and count `unavailable`** (the session
+  under the operator's delegation, 2026-10-31). Logging the other harness's CLI in is an
+  operator action. With the walk, a missing provider no longer leaves every run `unavailable`:
+  the second rung verifies until the first is reachable, and the lane is not hostage to a login.
+
 **Alternatives considered:**
 - **The verifier's Axis-1 verdict counts as the review.** Rejected. One advisory model's word
   would be enough to land, and K3 would read a record mixing two reviewers.
@@ -457,32 +526,15 @@ the maintainer confirms them at approval):
 - **Judging the pins only, without a review.** Rejected. It leaves out the diff-level blind
   spots that motivate cross-provider review (S-10, S-26), and it would need a second contract.
 
-## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
+## 9. Unresolved questions
 
-- ~~**D-08's own definition of C5 is not in this repository.**~~ **Settled** 2026-10-31 (§8,
-  "From D-08"; T-75): keep the MVP and add a finding verdict per finding of the kit's review.
-  The gating uses are *later* (§6).
-- **Whether the low-risk lane requires a verifier `pass`.** A disputed row or a `blocked`
-  verdict could hold a low-risk PR for the operator.
-  - Options: never; only a disputed row holds; any `blocked` holds.
-  - Next step: K5's grill, with slice 4's record in hand. MVP default: never (this PRD).
-- **Requirement ids may collide with D-02's PRDs drafted in parallel.** This PRD numbers from
-  runtime/R200 and process/R200, the next free ids in the living specs. Other K-PRDs written at
-  the same time may take the same ids.
-  - Options: renumber at approval in approval order; give each PRD a reserved block.
-  - Next step: the session that approves the D-02 PRDs renumbers before any of them is
-    published to a ticket. MVP default: renumber at approval.
-- **The kit has no reachable cross-provider model today.** The kit policy's other-vendor ids are
-  commented out until that CLI logs in. Until then every verifier run records `unavailable`.
-  - Options: log the CLI in before slice 1 lands; land slices 1 to 4 and let `unavailable`
-    count; declare a further provider.
-  - Next step: an operator action, to be confirmed at slice 1's ticket. MVP default: land, and
-    count `unavailable`.
+None. T-75 settled the first question, and the rest were settled after approval on 2026-10-31
+(§8).
 
 ## 10. Dogfood plan
 
 Five tickets in slice order: slice 1 alone, then slices 2, 3 and 5 as one frontier, then slice
 4 in its own frontier. Once slice 1 lands, every kit PR opened by `/implement` asks for the
 verifier. The first `/retro` after slice 4 prints the verifier row of each review area, and
-the counts of `unavailable`, `blocked` and `pass` there are what K5's grill reads when it
-decides the lane question in §9.
+the counts of `unavailable`, `blocked` and `pass` there, per rung, show whether the
+`same-provider` rung earns its place beside the `cross-provider` one.
