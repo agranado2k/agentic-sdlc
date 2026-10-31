@@ -21,7 +21,8 @@ approved_at: 2026-10-29T12:08Z
 Have a **verifier**, a reviewer whose model comes from a different provider than the model
 that wrote the diff, review each pull request head beside the kit's own `/review-pr`. It also
 judges whether each passing row of the PR's check table is backed by a test that really checks
-the requirement. Its verdict is recorded in the trace and counted against post-merge outcomes,
+the requirement, and whether each finding the kit's review raised is real, with its evidence. Its
+verdicts are recorded in the trace and counted against post-merge outcomes,
 so the operator can see what a second model family catches that the kit's review misses. In
 this PRD it only reports: it never blocks, never counts as the review a landing requires, and
 never decides anything.
@@ -47,7 +48,8 @@ test, but nothing asks whether that test checks the requirement it is pinned to 
   kit's resolver picks a verifier model whose declared provider differs from the author's. When
   no such model is reachable, the PR records that no verifier ran.
 - The verifier works offline and is given files only. It writes the review worker's report,
-  plus one line per passing check-table row: `upheld` or `disputed`.
+  plus one line per passing check-table row, `upheld` or `disputed`, and one line per finding
+  the kit's review raised at that head, `confirmed` or `disputed`, with its evidence.
 - The broker posts the report as a separately marked review and comment, and records a
   `verify.verdict`. `/pr-iterate` triages the verifier's findings like any bot's, and lists its
   disputed rows and its behavior items for the operator.
@@ -64,6 +66,9 @@ The test of done:
   once it has one.
 - With no candidate from another provider declared, the same run records `verify.verdict
   outcome=unavailable` and posts nothing.
+- On a fixture PR whose kit review raised `H-1` and `M-2`, a report confirming `H-1` and
+  disputing `M-2`, each with a span found at its cited line, records one `finding.verify` per
+  finding. The same report with a span not found at its cited line exits 65 and records nothing.
 - On a fixture trace where a reverted PR's file was named only by a `V-H-1` finding, the record
   reader counts the mistake as missed by the kit's review and caught by the verifier.
 
@@ -96,14 +101,20 @@ PR #971. The author is `sonnet`. Goal: a verifier's report on the PR and its ver
 2. The skill dispatcher stages, as files, the verifier contract, the diff of the head commit
    against its base and the ticket body. For each `pass` row of the PR's check table, it also
    stages the requirement's line from the living spec and the pinned test file at the pinned
-   commit. The worker runs with no network and no forge credential.
-3. The worker prints its report. The broker validates it, then posts one review (event COMMENT,
-   findings inline) and one comment, both under the verifier's markers.
+   commit. It stages the findings the kit's review raised at that head, `H-1` and `M-2`, as
+   data. The worker runs with no network and no forge credential.
+3. The worker prints its report, with one finding verdict line each for `H-1` (`confirmed`) and
+   `M-2` (`disputed`), each citing a place at the head and quoting a span from it. The broker
+   validates it, then posts one review (event COMMENT, findings inline) and one comment, both
+   under the verifier's markers. The comment shows each finding verdict with its evidence.
 4. The broker records `verify.verdict outcome=pass`, with `data.reviewed`, `data.provider` and
    `data.disputed=0`, on `pr:#971`, and raises each finding as `finding.raise` with a `V-` id
-   and `data.agent=verifier`.
+   and `data.agent=verifier`. It records one `finding.verify` per finding verdict line:
+   `outcome=confirmed data.id=H-1` and `outcome=disputed data.id=M-2`.
 
 Extensions:
+- 0a. The kit's review has recorded no Axis-1 verdict at the head yet. The dispatcher records
+  `verify.verdict outcome=unavailable` with that reason, and nothing is posted.
 - 1a. The policy declares no candidate from a provider other than the author's, or declares no
   provider for the author. The resolver prints nothing and warns. The dispatcher records
   `verify.verdict outcome=unavailable` with the reason, and nothing is posted.
@@ -113,6 +124,11 @@ Extensions:
   data.disputed=1`. A CRITICAL or HIGH finding gives `blocked` the same way.
 - 3b. The report has no pin line for one `pass` row, or uses a word other than `upheld` or
   `disputed`. The broker exits 65, posts nothing and records nothing.
+- 3c. The report has no verdict line for `M-2`, names a finding that was not staged, uses a word
+  other than `confirmed` or `disputed`, or quotes a span that is not on its cited line at the
+  head. The broker exits 65, posts nothing and records nothing.
+- 3d. The kit's review raised no finding at the head. An empty findings file is staged and the
+  report carries no finding verdict line.
 
 **UC2 — Iterate with the verifier's findings.** Actor: `/pr-iterate` on PR #971, after UC1 3a,
 with one verifier finding `V-H-1`. Goal: verifier findings triaged and disputed rows shown,
@@ -126,6 +142,11 @@ with the verifier deciding nothing.
    neither decides it nor logs it. It lists the item verbatim at the top of its report.
 5. The kit's review passes at the new head and the verifier still says `blocked`.
    `/pr-iterate` reports the PR converged, with the disputed row and the verifier's item listed.
+
+Extensions:
+- 1a. The verifier disputed the kit's finding `M-2`. `/pr-iterate` lists `M-2` with the
+  verifier's evidence at the top of its report, beside the disputed rows. It does not reject
+  `M-2` on the verifier's word: it triages `M-2` as it would with no verifier on the PR.
 
 **UC3 — Land a PR the verifier blocked.** Actor: the operator, running the landing script on
 PR #971. Goal: a landing that the verifier's verdict neither allows nor stops.
@@ -146,6 +167,9 @@ verifier's record per review area, apart from the lenses'.
 2. In the area's verifier row, the reader prints held up, not held up and unlabelled findings,
    the precision, the catches, and one landing that was `blocked` by the verifier and `pass` by
    the kit's Axis-1.
+3. The same row prints the kit findings the verifier confirmed and the ones it disputed, each
+   split into held up, not held up and unlabelled. The lenses' own counts are what they would
+   be with no `finding.verify` in the trace.
 
 Extensions:
 - 2a. No PR in the area's window carries a verifier finding. The verifier's ratios print `n/a`
@@ -174,6 +198,12 @@ and the pin judgements.
 - **`verify.verdict`**: a new trace kind. Its outcomes are `pass`, `blocked` and `unavailable`.
   It is a separate kind so that no reader of `review.verdict` (the landing script, `/retro`, the
   record reader) counts it as the kit's review by accident.
+- **Finding verdict**: the verifier's judgement of one finding the kit's review raised at the
+  head: `confirmed` when the finding is real, `disputed` when it is not. It always carries its
+  evidence: a `<path>:<line>` at the head commit and a span quoted from that line. It is recorded
+  as the trace kind `finding.verify`, which no reader of `finding.triage` counts as a triage, so
+  it never labels the finding: post-merge outcomes and triage still do. This is how the verifier
+  meets D-08's C5 (§8): its object is the reviewer's findings.
 - **Verifier finding**: a `finding.raise` whose id is `V-` before a lens-style id (`V-H-1`), with
   `data.agent=verifier`. The prefix keeps its id apart from the kit's lens finding ids on the
   same PR, so triage events are matched to the right finding.
@@ -205,6 +235,13 @@ runtime/R213. The landing script SHALL count no `verify.verdict` as the review a
 runtime/R214. WHEN the landing script records `merge.land`, it SHALL carry `data.verified`: the outcome of the latest `verify.verdict` on the PR stamped at or after the head commit's committed date, or `none` when there is none. [UC3 1, 1b]
 runtime/R215. No `verify.verdict` outcome SHALL change whether the landing script refuses, waits or merges. [UC3 1]
 runtime/R216. The record reader SHALL print, per review area, the verifier's findings held up, not held up and unlabelled, its precision, the mistakes it caught, and the count of landings whose `merge.land` carries `data.verified=blocked` while an Axis-1 `review.verdict` at the same head has outcome `pass`. [UC4 1, 2, 2a]
+runtime/R217. WHEN the dispatcher runs the verifier on a pull request's head, it SHALL also stage, as one data file, each finding the kit's own review raised on that PR at that head (any `data.agent` but `verifier`), with its id, severity, place and text, and SHALL stage an empty file when that review raised none. [UC1 2, 3d]
+runtime/R218. IF the kit's own Axis-1 `review.verdict` is not yet recorded at the head when the verifier is requested, THEN the dispatcher SHALL record one `verify.verdict outcome=unavailable` on the PR naming that reason, and nothing SHALL be posted. [UC1 0a]
+runtime/R219. The verifier contract SHALL ask for one finding verdict line per staged finding, carrying the finding's id, `confirmed` or `disputed`, and evidence: a `<path>:<line>` at the head commit and a span quoted from that line. [UC1 3]
+runtime/R220. IF a verifier's report lacks a finding verdict line for a staged finding, names an id that was not staged, carries a word the vocabulary's `finding-verdict` field does not hold, or quotes a span the broker does not find on the cited line of the cited file at the head commit, THEN the broker SHALL exit 65, posting nothing and recording nothing. [UC1 3c]
+runtime/R221. The trace SHALL accept the kind `finding.verify` with the outcomes `confirmed` and `disputed`, carrying a lens finding `data.id` and a `data.where` place, and SHALL refuse, exit 2, writing nothing, any other outcome, a `V-` id, or a missing `data.id` or `data.where`. [UC1 4]
+runtime/R222. WHEN the broker posts a verifier's report, it SHALL record one `finding.verify` on `pr:#<N>` per finding verdict line, with `data.agent=verifier` and the evidence place as `data.where`, SHALL show each verdict with its evidence in the posted comment, and SHALL set the `verify.verdict` outcome by runtime/R211 alone, unmoved by any finding verdict. [UC1 3, 4]
+runtime/R223. The record reader SHALL print, in each area's verifier row, the kit findings the verifier confirmed and those it disputed, each split into held up, not held up and unlabelled, and SHALL count no `finding.verify` toward a lens's counts or a finding's label. [UC4 3]
 
 #### MODIFIED
 
@@ -225,6 +262,7 @@ process/R204. `/pr-iterate` SHALL NOT decide, amend or log a verifier's ⚠️ U
 process/R205. No `verify.verdict` outcome SHALL stop `/pr-iterate` from reporting a PR converged. [UC2 5]
 process/R206. The shipped CI review prompt SHALL ask for `scope: inside` or `scope: outward` as the first words after the tag on each ⚠️ UNSPECIFIED item. [UC5 1]
 process/R207. The shipped CI review prompt SHALL ask for one line per `pass` row of the PR's check table, naming the row's id and `upheld` or `disputed`. [UC5 2]
+process/R208. IF the verifier disputes a finding of the kit's review, THEN `/pr-iterate` SHALL list that finding's id with the verifier's evidence at the top of its report, beside the disputed rows, and SHALL NOT reject the finding on the verifier's verdict alone. [UC2 1a]
 
 ## 5. Slices (vertical, demoable, in order)
 
@@ -234,7 +272,7 @@ release ticket in its own frontier, and slice 4 is `Blocked by:` slice 1 (`/to-t
 the kit's ADR-0033).
 
 **Slice 1 — one verifier review, posted and recorded (shared-layer release).**
-- *Covers:* runtime/R200, R201, R202, R203, R204, R205, R206, R208, R209, R210, R211, R213; process/R200.
+- *Covers:* runtime/R200, R201, R202, R203, R204, R205, R206, R208, R209, R210, R211, R213, R221; process/R200.
 - *Also:* the decision record for the verifier (needed, §8). The glossary gains Verifier and
   Provider. The kit's agents policy declares one provider per agent harness and the verifier
   candidates. The verifier contract is a new kit prompt beside the review worker's, adding only
@@ -242,37 +280,49 @@ the kit's ADR-0033).
   re-captures the transcripts `tests/docs-demo.sh` quotes, and is landed only once its merge
   commit carries the `v<version>` tag (ADR-0015, ADR-0025).
 - *Accept:* the trace suite refuses an unknown `verify.verdict` outcome, a `pass` with no
-  `data.reviewed`, and a `W-H-1` finding id, and accepts `V-H-1`. The tier suite resolves a
+  `data.reviewed`, and a `W-H-1` finding id, and accepts `V-H-1`. It accepts `finding.verify`
+  `confirmed` and `disputed` on `H-1`, and refuses another outcome, a `V-H-1` id and a missing
+  `data.where`. The tier suite resolves a
   Sonnet author to the other provider's candidate, an author on that other provider to the
   session harness's candidate, and prints nothing for an undeclared author. The broker suite
   posts a fixture verifier report under its own markers beside an already posted kit review,
   and records `pass`, then `blocked` for a report with a HIGH finding. A landing-script fixture
   with only a `verify.verdict outcome=pass` is refused with exit 2.
 
-**Slice 2 — the check table's passing rows judged.**
-- *Covers:* runtime/R207, R212.
+**Slice 2 — the check table's passing rows and the review's findings judged.**
+- *Covers:* runtime/R207, R212, R217, R218, R219, R220, R222.
 - *Blocked by:* slice 1.
+- *Also:* the vocabulary policy gains the field `finding-verdict` with `confirmed` and
+  `disputed` (a policy file, no release). The verifier contract asks for the finding verdict
+  lines. Slice 1 adds the trace kind `finding.verify` (runtime/R221) in its release, so this
+  slice moves no shared-layer file.
 - *Accept:* the dispatcher suite stages the spec line and the pinned test file for each `pass`
-  row of a fixture PR body, and stages none for `fail` or `skipped` rows. The broker suite
-  records `blocked data.disputed=1` for a report disputing one row, and exits 65 with nothing
-  posted for a report missing a pin line or using the word `agreed`.
+  row of a fixture PR body, and stages none for `fail` or `skipped` rows. It stages the kit
+  review's findings at the head, an empty file when there are none, and records `unavailable`
+  when no kit Axis-1 verdict is at the head. The broker suite records `blocked data.disputed=1`
+  for a report disputing one row, and exits 65 with nothing posted for a report missing a pin
+  line or using the word `agreed`. It records one `finding.verify` per finding verdict line with
+  the outcome unchanged by them, and exits 65 with nothing recorded for a missing finding line,
+  an unstaged id, the word `agreed`, and a span not on its cited line.
 
 **Slice 3 — `/pr-iterate` with a verifier on the PR.**
-- *Covers:* process/R201, R202, R203, R204, R205.
+- *Covers:* process/R201, R202, R203, R204, R205, R208.
 - *Blocked by:* slice 1.
 - *Accept:* a skill-text suite holds the once-per-head request, the bot-style triage with the
   `V-` id, the disputed-row and verifier-item lists at the top of the report, the unchanged
-  converged rule, and the item that is never decided or logged.
+  converged rule, the item that is never decided or logged, and the disputed kit finding listed
+  with its evidence and never rejected on the verifier's word alone.
 
 **Slice 4 — what the verifier adds, measured (shared-layer release).**
-- *Covers:* runtime/R46 (modified), R48 (modified), R214, R215, R216.
+- *Covers:* runtime/R46 (modified), R48 (modified), R214, R215, R216, R223.
 - *Blocked by:* slice 1.
 - *Also:* the second release: bump, `UPDATING.md`, re-captures, tag. Its `VERSION` history note
   lists the skill and template movements landed since slice 1.
 - *Accept:* on UC4's fixture trace, the record reader counts the reverted PR as missed by the
   kit's review and caught by the verifier. It prints the verifier row's counts and one
   blocked-versus-pass landing, and a lens precision equal to the one it printed before the
-  verifier findings were added. A landing-script fixture records `data.verified=blocked`, and
+  verifier findings were added. With `finding.verify` events added, it prints the confirmed and
+  disputed kit findings split by label, and every lens count is unchanged. A landing-script fixture records `data.verified=blocked`, and
   `data.verified=none` when no verdict is at the head.
 
 **Slice 5 — the CI review prompt writes the same shape.**
@@ -298,6 +348,15 @@ the kit's ADR-0033).
 - **Running the pinned test again.** *Later*. The verifier works offline and judges what the
   test checks. CI already runs the suite. Reopen if `/retro` finds an `upheld` row whose test
   did not pass at its pin.
+- **The verifier as a co-signer before an auto-merge** (D-08's stage 3). *Later*. Here no
+  `verify.verdict` or finding verdict changes a landing (runtime/R215). Reopen when K5 lets a
+  PR land without the operator's merge action, or when slice 4's record shows the verifier's
+  confirmed and disputed verdicts agreeing with post-merge labels well enough to trust as a
+  gate.
+- **The verifier as a critic of the plan or the tests, on two providers** (D-08's stage 2).
+  *Later*. Here it judges a PR head, its pass rows and the review's findings, and never a PRD,
+  a ticket or a test before the diff. Reopen when a D-02 or D-08 PRD puts a cross-provider
+  check before `/implement`, for example on approved acceptance tests (K9).
 - **Running the verifier only on high-risk PRs to save spend.** *Later*, as a K6 efficiency
   ticket, once K3 says which PRs are high risk.
 - **Changing ADR-0027's family walk for the kit's own review.** *Never* here. The verifier is a
@@ -326,6 +385,33 @@ the kit's ADR-0033).
   anything.
 - Q7's order of value: measurement first. So the verifier reports only.
 - PRD-07 §6 deferred re-checking the evidence pins to K8.
+
+**From D-08** (relayed by the D-08 factory session, 2026-10-31; settles §9's first question
+and T-75):
+- **C5's wording** (D-08's operator, 2026-10-23), in substance: a model from a different family
+  or provider checks the reviewer's findings. Its object is the reviewer's findings: are they
+  real, and what did the review miss?
+- This PRD's MVP default judged the check table's `pass` rows. That overlaps C5 but is not the
+  same thing. D-08 also used C5 as a co-signer before any auto-merge (its stage 3) and as plan
+  or test critics on two providers (its stage 2). Those gating uses are *later* (§6).
+- **Ruling** (this session, under the operator's delegation, 2026-10-31, on D-08's
+  recommendation): keep the MVP, a different provider beside `/review-pr` on each PR head,
+  report-only and recorded in the trace, and add one thing so that it meets C5. The verifier
+  also takes `/review-pr`'s raised findings, as data, and returns a finding verdict per finding,
+  `confirmed` or `disputed`, with its evidence (runtime/R217 to R223, process/R208). "What did
+  the review miss" was already covered by the verifier's own `V-` findings on both axes.
+  - A per-finding verdict is the conservative superset. Whether a pass-rows-only MVP would have
+    been enough is left for D-08's operator to comment on later.
+  - Finding verdicts are their own trace kind, `finding.verify`, never a `finding.triage`, so
+    the verifier never labels a kit finding and the lenses' earned record stays the kit's
+    review alone (as for `V-` findings).
+  - A disputed kit finding does not make the verdict `blocked`, and `/pr-iterate` never rejects
+    a finding on the verifier's word alone. The verifier stays advisory.
+  - Evidence is a place at the head and a span quoted from it, which the broker checks against
+    the head commit (the trust boundary's verified span): a dispute with no checkable evidence
+    is refused.
+  - The verifier runs after the kit's review is recorded at the head, because it judges that
+    review's findings; when none is recorded it records `unavailable`.
 
 **Derived while writing** (the session, under the operator's standing delegation of rulings;
 the maintainer confirms them at approval):
@@ -373,14 +459,9 @@ the maintainer confirms them at approval):
 
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
-- **D-08's own definition of C5 is not in this repository.** D-02 names "D-08's
-  cross-provider verifier (C5)", but this repository does not hold D-08's text. So it is not
-  known whether C5 gates a landing, whether it judges only the evidence pins, or whether the
-  factory or the kit runs it.
-  - Options: keep this PRD's advisory, both-axes, kit-run verifier; narrow it to pin judgement
-    only; make it a gate that K5 reads.
-  - Next step: ask the D-08 session, through the operator, before `/to-tickets` runs on this
-    PRD. MVP default: this PRD as written.
+- ~~**D-08's own definition of C5 is not in this repository.**~~ **Settled** 2026-10-31 (§8,
+  "From D-08"; T-75): keep the MVP and add a finding verdict per finding of the kit's review.
+  The gating uses are *later* (§6).
 - **Whether the low-risk lane requires a verifier `pass`.** A disputed row or a `blocked`
   verdict could hold a low-risk PR for the operator.
   - Options: never; only a disputed row holds; any `blocked` holds.
