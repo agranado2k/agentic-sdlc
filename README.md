@@ -95,6 +95,8 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/failure-signature.sh` | The failure signature — a check's or test's name and the first error line of its log, run ids and timestamps written out — and the count of runs running each one came back. `/pr-iterate` and `/implement` stop on the third identical failure. Shared layer. |
 | `scripts/lens-slice.sh` | Cuts the branch's diff into the slice each `/review-pr` standards lens reads, and the whole diff for the behavior axis. |
 | `scripts/lens-slice.config.sh` | **Yours.** Which changed paths each lens reads. Ships filled for a kit-shaped layout; retune it to yours. |
+| `scripts/policy.sh` | The policy reader: a judging file as the base branch has it (`read`), the judging files a diff touches (`touched`), and the risk thresholds (`thresholds`), each at a base ref, failing closed (`fail-closed <reason> <path>`, exit 3) and never falling back to the working tree. Shared layer. |
+| `scripts/risk.config.sh` | **Yours.** The risk policy: the miss-rate ceiling and precision floor a review area must meet, and extra judging paths. Ships filled (5, 80, none); always read at a base. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
 | `.githooks/pre-commit` | Refuses an agent's commit from the main working copy or on the default branch (hard rule 1, "Worktree, always"); a human with no agent-harness marker set commits as before. One loud bypass, documented in the hook. |
@@ -253,7 +255,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.98.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.99.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -706,6 +708,16 @@ skeleton (K0).
   cell by cell, a table below the explain-diff marker or inside a fence is no
   table, and a canary string in every fixture body reaches neither output
   stream.
+- `sh tests/policy.test.sh` holds `scripts/policy.sh`, the policy reader
+  (PRD-08 slice 1, the kit's ADR-0039), and the risk policy it reads: in
+  throwaway repositories with a `main` and a branch, `thresholds`, `read`
+  and `touched` answer as `main` has the file, never as the branch left it,
+  and every fail-closed reason — `no-base`, `missing`, `unreadable`,
+  `invalid` — has a fixture that produces it, its line three fields and
+  nothing read from a file. A path outside the judging set is exit 2 with
+  nothing printed or written, a lookalike in another directory is not in
+  the set, and a policy that changes directory, sets variables or defines a
+  function reaches neither the reader nor its caller.
 - `sh tests/requirement-grammar.test.sh` holds `scripts/requirement.lib.sh`,
   the requirement-line grammar's one home (#545), which the gate's POSIX twin,
   the coverage check and the suites source: the living spec's line, area and
@@ -988,6 +1000,7 @@ sh tests/tdd-pairing-guard.test.sh                     # the pairing rule
 sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/lens-slice.test.sh                            # each review lens reads only its slice
+sh tests/policy.test.sh                                # the policy reader reads a judging file at the base, failing closed
 sh tests/outcome-recorder.test.sh                      # a revert, or a fix inside the fix window, is recorded against the PR
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
