@@ -3535,7 +3535,11 @@
 # process. No judge reads through it yet. One more shared file changes
 # content: UPDATING.md, its entry and both worked examples re-pinned.
 #   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
-# Skills (9a): none. Wiring (9b): none. Templates (9c): none.
+# Skills (9a): none. Wiring (9b): none. Templates (9c):
+# templates/workflows/ai-review-prompt.md (#946, PR #962, landed untagged
+# before this bump) — the CI review prompt writes `scope: inside|outward`
+# after each ⚠️ UNSPECIFIED tag, and one `pin: <id> — <upheld|disputed>`
+# line per `pass` row of the PR body's check table.
 # Config (9d): scripts/risk.config.sh, NEW and shipped FILLED —
 # RISK_MISS_RATE_BELOW=5, RISK_PRECISION_FLOOR=80, RISK_JUDGING_EXTRA='' —
 # listed among the policy files above and copied by bootstrap's adopt arm;
@@ -3543,7 +3547,8 @@
 # Kit-only, never shipped: the kit's ADR-0039, docs/specs/policy.md R1 to
 # R15, the glossary's Base branch's version, Judging file, Policy reader,
 # Fail closed and Risk policy, AGENTS.md's policy-reader row, README.md's
-# rows and suite line, the kit-ci job, and tests/policy.test.sh.
+# rows and suite line, the kit-ci job, and tests/policy.test.sh; from
+# #962, docs/specs/process.md R206 and R207 and tests/ai-review-template.test.sh.
 
 shared-layer: 0.99.0
 

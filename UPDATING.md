@@ -248,7 +248,13 @@ and review behave as before. **One policy file is new (9d):
 take it whole (`kit_take "${TO_REF}" scripts/risk.config.sh
 scripts/risk.config.sh`) and commit it to your base branch: the reader only
 ever reads it at a base, so a copy that exists only on a branch fails
-closed as `missing`. No skill, wiring, template or adapter moves.
+closed as `missing`. **One template moves (9c):
+`templates/workflows/ai-review-prompt.md`** (#946, landed before this bump)
+— the CI review prompt asks for `scope: inside` or `scope: outward` as the
+first words after each ⚠️ UNSPECIFIED tag, and for one `pin: <id> —
+<upheld|disputed>` line per `pass` row of the PR body's check table. If you
+copied it into `.github/workflows/`, take the two paragraphs by hand. No
+skill, wiring or adapter moves.
 
 **Arriving from 0.97.0 or older, the outcome recorder records failed
 factory QA.** No file joins or leaves at 0.98.0. One shared file changes
@@ -1771,10 +1777,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3477 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3483 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3631 insertions(+), 1 deletion(-)
+ 3 files changed, 3637 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
