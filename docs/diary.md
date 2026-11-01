@@ -2891,3 +2891,25 @@ beside the skill, and the suite runs that fence against fixture
 repositories, so the document's own code is what is tested. The ADR was
 built as 0040, renumbered 0041 after 0.101.0, and 0042 at release after
 0.102.0; the release waited behind 0.102.0 (ADR-0033).
+
+## 2026-11-01 — The risk rule judges each PR, and /pr-iterate reports it only
+
+PRD-09 slice 1 of D-02 (#905, factory T-42; ADR-0044, numbered
+provisionally — the release queue may move it). `scripts/risk.sh` reads the
+planner's `Risk:` line through the stamp reader and each touched review
+area's earned record over its 20 most recent settled landings, through a new
+digits-only form of the record reader, `trace.sh record --settled`, against
+the thresholds the policy reader gives at the base. It prints the effective
+risk as closed tokens and records one `risk.judge` per PR, head and verdict.
+Every unknown fails closed to high. `/pr-iterate` runs it at the end of each
+iteration and puts the effective line at the top of its report, marked
+reported only; nothing acts on it. ADR-0044 amends ADR-0024 clauses 1, 7
+and 9 for this one reader. /pr-iterate's step text moved to `RISK.md`, and
+its byte ceiling rose from 38000 to 38500: it sat 3 bytes under.
+
+Baseline, measured 2026-11-01 over the kit's own trace (625 MB): the settled
+record read takes 3.7 s wall (2.0 s user), and the rule's same-verdict read
+(`show pr:#<N> --kind risk.judge`) 1.0 s. On that trace every area already
+holds 20 settled landings and no miss, but precision runs 0.67 to 0.72,
+under the 0.80 floor, so every area reads unlearned and every PR `high
+unlearned` today.
