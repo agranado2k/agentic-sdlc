@@ -2953,3 +2953,17 @@ record read takes 3.7 s wall (2.0 s user), and the rule's same-verdict read
 holds 20 settled landings and no miss, but precision runs 0.67 to 0.72,
 under the 0.80 floor, so every area reads unlearned and every PR `high
 unlearned` today.
+
+## 2026-11-01 — An outward item or an unreviewed head raises the risk rule
+
+PRD-09 slice 2 of D-02 (#906, factory T-43; released as 0.108.0).
+`scripts/risk.sh` now reads the latest Axis-2 `review.verdict` on the PR
+stamped at or after the head commit's committer date, the landing script's
+reading of "at the head" (ADR-0032). `data.outward` of 1 or more makes the
+rule's risk `high outward`; no such verdict, or one with no outward count in
+digits, `high unclear`. The reason order is `outward`, `unlearned`, `unclear`.
+Ruled here: of several Axis-2 verdicts at one head the latest is read, as a
+re-review of the same head supersedes the one before. `/pr-iterate`'s
+`RISK.md` now says to run the rule after the iteration's review recorded its
+verdict. The verdict read (`show pr:#<N> --kind review.verdict`) takes 0.8 s
+wall on the kit's trace.

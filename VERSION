@@ -3764,7 +3764,24 @@
 # ceiling raised to 38500, tests/trace.test.sh's risk.judge rows,
 # tests/land.test.sh section 21 and tests/vocab.test.sh's call-site entry.
 
-shared-layer: 0.107.0
+# 0.108.0 — an outward item or an unreviewed head raises the risk rule's
+# verdict (ticket #906, PRD-09 slice 2 of D-02, factory T-43). No file joins
+# or leaves. Two shared files change content: scripts/risk.sh, which reads
+# the latest Axis-2 `review.verdict` on the PR stamped at or after the head
+# commit — `data.outward` 1 or more makes the rule's risk `high outward`, no
+# such verdict (or one with no outward count) `high unclear`, the reason
+# order `outward`, `unlearned`, `unclear`, the lines and the event unchanged
+# in shape; and UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate — RISK.md names the review at the head among what
+# the rule reads, and says to run it after the iteration's review recorded
+# its verdict.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/runtime.md R59 and R60, AGENTS.md's
+# risk-rule row, and tests/risk.test.sh section 11.
+
+shared-layer: 0.108.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
