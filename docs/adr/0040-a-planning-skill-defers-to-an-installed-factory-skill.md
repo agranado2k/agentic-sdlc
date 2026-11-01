@@ -87,6 +87,6 @@ Chosen: **defer by name, from two files' presence**.
 - Implemented in: #935 (factory item T-72), PRD-12 slice 2; `/to-prd` follows in slice 3.
 - Held by: `tests/spec-skills.test.sh` (the factory-project section, which runs
   `FACTORY.md`'s own fenced check against fixture repositories) and
-  `tests/kit-demo.sh` (process/R136).
+  `tests/self-host.test.sh` (process/R136).
 - Related: PRD-12 §3 and §8; `docs/specs/process.md` process/R121 to R127, R136,
   R223 to R225.
