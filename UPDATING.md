@@ -242,7 +242,11 @@ it, then runs as before; with no manifest nothing changes. It opens neither
 file and runs no `factory` command, and only the operator's own message lifts
 a deferral. A project with no `.factory/project.yaml` sees no difference. If
 you adapted `/to-tickets`, carry your note across and copy `FACTORY.md` in
-beside it. No policy file needs an edit.
+beside it. Two more non-manifest movements ride this release: `/retro`'s
+`QUESTIONS.md` and `SKILL.md` count a factory ticket's `ticket:T-<digits>`
+subject beside `ticket:#N` (step 9a), and the Claude Code adapter's spawn
+guard and hook library accept `ticket=T-<digits>` on a `Trace-Spawn:` line,
+its README saying so (step 9e). No policy file needs an edit.
 
 **Arriving from 0.101.0 or older, in a factory project a value the factory
 defines is read from its manifest.** No file joins or leaves at 0.102.0. One
@@ -1848,10 +1852,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3555 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3559 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3709 insertions(+), 1 deletion(-)
+ 3 files changed, 3713 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

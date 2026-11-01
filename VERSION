@@ -3640,8 +3640,13 @@
 # .claude/skills, opening neither and running no `factory` command; `defer`
 # prints the hand-off naming /factory-tickets and ends, publishing and
 # tracing nothing; `missing` names `factory install-skill` once and runs the
-# forge flow; only the operator's own message lifts a deferral. Wiring (9b):
-# none. Templates (9c): none. Config (9d): none. Adapter (9e): none.
+# forge flow; only the operator's own message lifts a deferral. /retro —
+# QUESTIONS.md and SKILL.md join every ticket query on a factory ticket's
+# `ticket:T-<digits>` subject beside `ticket:#N`, counted once (#967).
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
+# adapters/claude-code — hooks/hook.lib.sh's Trace-Spawn parser and
+# hooks/spawn-guard.sh accept `ticket=T-<digits>`, a canonical factory id,
+# beside `#N` and `none`, and README.md says so (#964).
 # Kit-only, never shipped: ADR-0042 and its index row, bootstrap.sh's
 # KIT_OWN naming it, the glossary's Factory skill and Deferral and its
 # `skill is not installed` exception, docs/specs/process.md R121 to R127,
