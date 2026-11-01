@@ -355,7 +355,11 @@ asks the question on their behalf; a retired answer routes nowhere.
 *Reads: `ticket.write` — the published `tier`, `data.tier_proposed` (the
 tier before the quiz), `data.confidence` (the tier's, as drafted), the
 published `data.label`, `data.label_proposed` (the label before the quiz)
-and `data.label_confidence` (the label's, under its own key);
+and `data.label_confidence` (the label's, under its own key), and the
+risk's three — `data.risk` as published, `data.risk_proposed` and
+`data.risk_confidence`; `risk.judge` (`outcome`, `data.planner`,
+`data.rule`, `data.unlearned`, `data.switch`) — the risk rule against the
+planner, one per pull request and head;
 `finding.raise` (`data.severity`, `data.where`, `data.posted` — whether the
 review posted it); `finding.dismiss` (`data.where`,
 `data.thread`) — a human closing a posted finding with no commit answering
@@ -416,6 +420,15 @@ be nobody's. An event none of the three names goes on a row named
   clause, `— oracle: none — <why>`: it measured nothing. Each label row is held to the
   five-event threshold below, per row — per confidence group, the same as every
   other row — and otherwise its rate is computed as for the tier row.
+- **The risk, per `Risk-confidence`, in a row of its own.** Read exactly
+  as the label's: the latest `ticket.write` per subject, grouped by
+  `data.risk_confidence` — one group per declared word; a risk was
+  overridden at the quiz when its `data.risk` differs from its
+  `data.risk_proposed`; per group, how many were overridden of how many carry
+  both keys; no `data.risk_confidence` is the `unstamped` row, a row with no
+  `data.risk_proposed` prints `not computable from the trace today` and the
+  none form of the clause, and the five-event threshold holds per row. Its
+  oracle clause compares the published risk with the proposed one.
 - **The severity, per band.** Group the `finding.raise` events by
   `data.severity`. One pairing rule says what a dismissal dismissed: a
   `finding.dismiss` pairs with the latest raise on its subject at its
@@ -477,9 +490,10 @@ be nobody's. An event none of the three names goes on a row named
   above is graded by a human — the one at the quiz or the one who closed a
   thread — so a window where no human changed a stamp grades nothing: each
   row reads 0 and a `high` row ties a `low` one by noise. The operator
-  verdicts here are the dismissals and the quiz overrides, read on the
+  verdicts here are the dismissals and the quiz overrides — tier, label
+  and risk — read on the
   latest write per subject as above:
-  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk 'function v(k) { return match($0, "\"" k "\":\"[^\"]*\"") ? substr($0, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "" } /"kind":"finding\.dismiss"/ { n++ } /"kind":"ticket\.write"/ { s = v("subject"); o[s] = (v("tier_proposed") != "" && v("tier_proposed") != v("tier")) || (v("label_proposed") != "" && v("label_proposed") != v("label")) } END { for (s in o) n += o[s]; print n + 0 }'`,
+  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk 'function v(k) { return match($0, "\"" k "\":\"[^\"]*\"") ? substr($0, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "" } /"kind":"finding\.dismiss"/ { n++ } /"kind":"ticket\.write"/ { s = v("subject"); o[s] = (v("tier_proposed") != "" && v("tier_proposed") != v("tier")) || (v("label_proposed") != "" && v("label_proposed") != v("label")) || (v("risk_proposed") != "" && v("risk_proposed") != v("risk")) } END { for (s in o) n += o[s]; print n + 0 }'`,
   skipping the events before the window's start. With question 7's
   binding decision record in place and that count 0, the question answers
   `retired: no operator verdict in the window, and the project accepts train-only verdicts (<the record>)`
@@ -489,6 +503,33 @@ be nobody's. An event none of the three names goes on a row named
   holding one dismissal or one override prints the rows above, the record
   notwithstanding. A project with no such record has the absence raised as
   before.
+- **The risk rule against the planner.** The rule judges each pull request
+  from the review areas' earned records and records one `risk.judge`; this
+  part counts them, and is graded by no human — it prints whether or not
+  the question is retired. Take the latest per pull request: it agreed when
+  the planner's level and the rule's are the same, disagreed otherwise, and
+  a disagreement is split by which side raised the risk — the one that said
+  `high` — then by that side's reason, then, for the rule's `unlearned`, by
+  review area. A verdict with `data.switch=tripped` was the kill switch, not
+  a judgement: it is left out of every count, and the line says how many.
+  The rate's denominator is the verdicts counted; under five, the counts and
+  `too few to rate`. A reason is held to the risk reasons
+  `sh scripts/vocab.sh fields` prints and an area to the review areas
+  `sh scripts/lens-slice.sh --areas` prints; any other value is counted as
+  `undeclared`, never printed:
+  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk -v rs="$(sh scripts/vocab.sh fields | sed -n 's/^risk (qualified):.*reasons for high: \([^;]*\);.*/\1/p')" -v as="$(sh scripts/lens-slice.sh --areas </dev/null | cut -f1 | tr '\n' ' ')" 'function v(k) { return match($0, "\"" k "\":\"[^\"]*\"") ? substr($0, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "" } function ok(w, l) { return index(" " l " ", " " w " ") ? w : "undeclared" } function side(x,   o, i, j, n, a, m, b, s, t) { if (!c[x]) return x " raised 0"; o = x " raised " c[x] " ("; n = split(rs " undeclared", a, " "); for (i = 1; i <= n; i++) if (cr[x, a[i]]) { o = o s a[i] " " cr[x, a[i]]; s = "; "; t = ": "; m = split(as " undeclared", b, " "); for (j = 1; j <= m; j++) if (ca[x, a[i], b[j]]) { o = o t b[j] " " ca[x, a[i], b[j]]; t = ", " } } return o ")" } /"kind":"risk\.judge"/ { p = v("subject"); o[p] = v("outcome"); pl[p] = v("planner"); ru[p] = v("rule"); un[p] = v("unlearned"); sw[p] = v("switch") } END { for (p in o) { if (sw[p] == "tripped") { tr++; continue } if (o[p] == "agreed") { j++; ag++; continue } if (o[p] != "disagreed") continue; j++; d++; x = ru[p] ~ /^high / ? "rule" : "planner"; r = ok(substr(x == "rule" ? ru[p] : pl[p], 6), rs); c[x]++; cr[x, r]++; if (x == "rule") { n = split(un[p], a, " "); for (i = 1; i <= n; i++) ca[x, r, ok(a[i], as)]++ } } print "agreed " ag + 0; print "disagreed " d + 0 (d ? ": " side("rule") ", " side("planner") : ""); print "tripped " tr + 0 ", left out"; print "disagreement rate " d + 0 " of " j + 0 " " (j < 5 ? "too few to rate" : int(100 * d / j + 0.5) " %") }'`
+  prints, for a wave of twelve:
+
+  ```
+  agreed 7
+  disagreed 4: rule raised 3 (unlearned 2: security 2; outward 1), planner raised 1 (security 1)
+  tripped 1, left out
+  disagreement rate 4 of 11 36 %
+  ```
+
+  A side that raises most disagreements in one area is the finding: the rule
+  raising them says the planner misses what that area's record shows, and the
+  planner raising them says the record has not earned the reason yet.
 
 The rows read like this — the field, the skill, the stamp's value, the
 counts, the rate or the words that replace it, the clause:
@@ -497,6 +538,7 @@ counts, the rate or the words that replace it, the clause:
 tier · to-tickets (by kind) · low       5 of 7 overridden   71 %   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
 tier · to-tickets (by kind) · medium    1 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published tier against proposed; no held-out set
 label · to-tickets (by kind) · medium   2 of 3 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published label against proposed; no held-out set
+risk · to-tickets (by kind) · medium    1 of 4 overridden   too few to rate   — oracle: the human at the quiz, <window>, <version>, published risk against proposed; no held-out set
 label · to-tickets (by kind) · high     1 stamped           not computable from the trace today   — oracle: none — no stamp on the row carries the label from before the quiz
 severity · review-pr · low              2 of 11 dismissed   18 %   posted only   — oracle: the human who closed the thread, <window>, <version>, dismissals against raises on the same pull request; no held-out set
 ```
