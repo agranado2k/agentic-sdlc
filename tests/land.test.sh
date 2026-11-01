@@ -1737,4 +1737,136 @@ else
 	skip "no jq on PATH — the script's own job-record program is not run by this suite here"
 fi
 
+# ---------------------------------------------------------------------------
+banner "20. A factory ticket's PR lands by its id (PRD-15 slice 4, runtime/R241 to R245)"
+# ---------------------------------------------------------------------------
+# A factory ticket has no forge issue, so its PR closes none: the landing line
+# names it, `<!-- implement: ticket=T-90 tier=implementer -->`, or --ticket
+# does. Its events take `ticket:T-90` wherever an issue's take `ticket:#<N>`
+# (the trace's TRACE_FACTORY_IDS, ADR-0040). The landing runs no `factory`
+# subcommand and writes nothing under .factory/: a stand-in `factory` that
+# fails if called sits first on PATH, and the landings run from a scratch
+# project whose .factory/ tree is compared before and after.
+cat >"$STUBDIR/factory" <<'FEOF'
+#!/bin/sh
+printf 'factory %s\n' "$*" >>"$FACTORY_LOG"
+exit 1
+FEOF
+chmod +x "$STUBDIR/factory"
+FACTORY_LOG="$SCRATCH/factory.log"
+: >"$FACTORY_LOG"
+export FACTORY_LOG
+FPROJ="$SCRATCH/factory-project"
+mkdir -p "$FPROJ/.factory/items/T-90"
+printf -- '---\nid: T-90\nstage: review\n---\n' >"$FPROJ/.factory/items/T-90/ticket.md"
+# tree_sum <dir> — one checksum line per file under <dir>, sorted: two equal
+# sums are an unchanged tree.
+tree_sum() { (cd "$1" && find . -type f -exec cksum {} + | sort); }
+_fp_before=$(tree_sum "$FPROJ/.factory")
+_fk_before=$(tree_sum "$KIT/.factory")
+cd "$FPROJ" || fail "could not enter the scratch factory project"
+# started_id <id> — a ticket.start on ticket:<id>, as /implement writes it.
+started_id() {
+	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=ticket.start \
+		"subject=ticket:$1" tier=implementer outcome=read reason=seeded </dev/null >/dev/null 2>&1 ||
+		fail "could not seed a ticket.start on ticket:$1"
+}
+# lands_on <PR> <id> <label> — the PR landed, and its events joined ticket:<id>.
+lands_on() {
+	expect_status 0 "$3: lands, exit 0"
+	landing_of "$1" | grep -qF "\"related\":\"ticket:$2\"" && pass "$3: merge.land is related to ticket:$2" ||
+		fail "$3: merge.land is not related to ticket:$2: $(landing_of "$1")"
+	landing_of "$1" | grep -qF '"implement":"yes"' && pass "$3: merge.land records implement=yes" ||
+		fail "$3: merge.land lacks implement=yes: $(landing_of "$1")"
+	show "ticket:$2" --kind feedback | grep -qF "\"subject\":\"ticket:$2\"" && pass "$3: its feedback is on ticket:$2" ||
+		fail "$3: no feedback on ticket:$2: $(show "ticket:$2")"
+	show "pr:#$1" --kind pr.open | grep -qF "ticket:$2" && pass "$3: its pr.open is related to ticket:$2" ||
+		fail "$3: its pr.open is not related to ticket:$2: $(show "pr:#$1" --kind pr.open)"
+}
+iterated 960 961 962 963 964 965 966 967 968
+f=$(body factory90 "<!-- implement: ticket=T-90 tier=implementer -->")
+land STUB_TICKET= "STUB_BODY_FILE=$f" 960
+lands_on 960 T-90 "runtime/R243, runtime/R244: a PR closing no issue, its line naming T-90, no --ticket"
+landing_of 960 | grep -qF '"ticket_start":"no"' && pass "with no ticket.start on ticket:T-90, merge.land records ticket_start=no" ||
+	fail "an unstarted factory ticket's merge.land lacks ticket_start=no: $(landing_of 960)"
+
+started_id T-91
+f=$(body factory91 "<!-- implement: ticket=T-91 tier=implementer -->")
+land STUB_TICKET= "STUB_BODY_FILE=$f" 961 --ticket T-91
+lands_on 961 T-91 "runtime/R241, runtime/R244: --ticket T-91"
+[ -n "$(landing_of 961)" ] && ! landing_of 961 | grep -qF '"ticket_start"' &&
+	pass "--ticket T-91: the ticket.start on ticket:T-91 is read" ||
+	fail "--ticket T-91: a started factory ticket was recorded unstarted: $(landing_of 961)"
+
+# A ticket.start on T-920 is not one on T-92: the subject is matched whole.
+started_id T-920
+f=$(body factory92 "<!-- implement: ticket=T-92 tier=implementer -->")
+land STUB_TICKET= "STUB_BODY_FILE=$f" 962
+lands_on 962 T-92 "a line naming T-92"
+landing_of 962 | grep -qF '"ticket_start":"no"' && pass "a ticket.start on T-920 does not count as T-92's" ||
+	fail "T-920's ticket.start was read as T-92's: $(landing_of 962)"
+
+# Any other spelling is no line: recorded absent, and never the PR's ticket.
+_fx_pr=962
+for _fx_line in "ticket=T-9" "ticket=T-007" "ticket=t-07" "ticket=T-1234567" "ticket=T-9x" "ticket=PRD-15"; do
+	_fx_pr=$((_fx_pr + 1))
+	f=$(body "factorybad.$_fx_pr" "<!-- implement: $_fx_line tier=implementer -->")
+	land STUB_TICKET= "STUB_BODY_FILE=$f" "$_fx_pr"
+	landed_with "$_fx_pr" "runtime/R242: a line spelled $_fx_line" '"implement":"no"'
+	landing_of "$_fx_pr" | grep -qF '"related":"ticket:' && fail "a line spelled $_fx_line named the PR's ticket: $(landing_of "$_fx_pr")" ||
+		pass "a line spelled $_fx_line names no ticket"
+done
+[ "$_fx_pr" -le 968 ] || fail "section 20 ran past the PRs it seeded"
+
+# A PR that closes an issue keeps the issue as its ticket: a factory id on its
+# line is another ticket's, and the line is recorded absent.
+iterated 970
+f=$(body factorycloses "<!-- implement: ticket=T-90 tier=implementer -->")
+land "STUB_BODY_FILE=$f" 970
+landed_with 970 "a PR closing #77 whose line names T-90" '"implement":"no"' '"related":"ticket:#77"'
+
+# --ticket takes an issue number or a canonical factory id, nothing else, and
+# refuses before any forge call.
+for _fx_t in T-9x T-9 T-007 t-07 T-1234567 PRD-15 '#77' T-; do
+	land 971 --ticket "$_fx_t"
+	expect_status 2 "runtime/R241: --ticket $_fx_t is a usage error"
+	[ -s "$STUB_LOG" ] && fail "--ticket $_fx_t reached the forge: $(cat "$STUB_LOG")" ||
+		pass "--ticket $_fx_t: no forge call"
+done
+
+cd "$KIT" || fail "could not return to the kit"
+[ -s "$FACTORY_LOG" ] && fail "the landing ran the factory: $(cat "$FACTORY_LOG")" ||
+	pass "runtime/R245: the landing ran no factory subcommand"
+[ "$(tree_sum "$FPROJ/.factory")" = "$_fp_before" ] && pass "runtime/R245: the project's .factory/ is unchanged" ||
+	fail "the landing changed the project's .factory/"
+[ "$(tree_sum "$KIT/.factory")" = "$_fk_before" ] && pass "the kit's .factory/ is unchanged" ||
+	fail "the landing changed the kit's .factory/"
+
+# /merge-train reads the two-form line and writes the factory id's subjects
+# (process/R240, R241), and /pr-iterate's verdict takes the same handle.
+MT="$KIT/.agents/skills/merge-train/SKILL.md"
+PI="$KIT/.agents/skills/pr-iterate/SKILL.md"
+# The train's filter, run as the skill spells it, prints the handle for each
+# canonical spelling and nothing for any other (process/R241).
+mt_filter=$(grep -o "sed -n -e 's/^<!-- implement: .*/p'" "$MT" | head -n 1)
+[ -n "$mt_filter" ] && pass "process/R241: /merge-train spells its landing-line filter" ||
+	fail "process/R241: /merge-train's landing-line filter is not the three-expression sed"
+for _mf in '#77 #77' 'T-07 T-07' 'T-90 T-90' 'T-123456 T-123456' 'T-9 ' 'T-007 ' 'T-1234567 ' 't-07 ' '#-1 ' 'PRD-15 '; do
+	_mf_in=${_mf%% *} _mf_want=${_mf#* }
+	_mf_got=$(printf '<!-- implement: ticket=%s tier=planner -->\n' "$_mf_in" | eval "$mt_filter" | cut -d' ' -f1)
+	[ "$_mf_got" = "$_mf_want" ] && pass "process/R241: /merge-train's filter reads ticket=$_mf_in as '${_mf_want}'" ||
+		fail "process/R241: /merge-train's filter read ticket=$_mf_in as '$_mf_got', not '$_mf_want'"
+done
+mt_flat=$(tr '\n' ' ' <"$MT" | tr -s ' ')
+t_text_has "$mt_flat" 'related=ticket:<ticket>' "/merge-train's merge.land relates ticket:<ticket>, the handle as the line names it"
+t_text_has "$mt_flat" 'subject=ticket:<ticket>' "process/R240: /merge-train's feedback is on ticket:<ticket>"
+t_text_has "$mt_flat" 'any other spelling is no line' "process/R241: /merge-train treats any other spelling as no line"
+t_text_has "$mt_flat" '`T-07`, never `T-7`' "/merge-train names the canonical factory id"
+printf '%s\n' "$mt_flat" | grep -qF 'ticket:#<ticket>' && fail "/merge-train still writes ticket:#<ticket>" ||
+	pass "/merge-train writes no ticket:#<ticket>"
+pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
+t_text_has "$pi_flat" 'subject=ticket:<ticket>' "process/R240: /pr-iterate's feedback is on ticket:<ticket>"
+printf '%s\n' "$pi_flat" | grep -qF 'ticket:#<ticket>' && fail "/pr-iterate still writes ticket:#<ticket>" ||
+	pass "/pr-iterate writes no ticket:#<ticket>"
+
 t_done "land one PR by hand"

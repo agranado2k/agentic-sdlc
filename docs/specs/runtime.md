@@ -23,7 +23,8 @@ PRD's numbers. R32, R33 and R39 to R42 joined with the outcome recorder
 the PRD writes it. R46 to R51 joined with the misses and lens precision
 (#877). R37 and R38 joined with the failed factory QA
 (#879). R229 to R236 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
-the PRD's numbers past PRD-08 to PRD-13's drafts.
+the PRD's numbers past PRD-08 to PRD-13's drafts. R241 to R245 joined from
+PRD-15 slice 4 (#966), the landing script's factory ticket.
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
@@ -84,3 +85,8 @@ R233. WHEN `verify` reads a line written with a factory-id subject, it SHALL pas
 R234. WHERE `TRACE_FACTORY_IDS` is empty or unset, the trace SHALL judge every subject exactly as it did before this PRD. [UC5]
 R235. The shipped trace policy SHALL carry `TRACE_FACTORY_IDS` empty, with a comment naming its form, and the kit's own trace policy SHALL set it to `ticket=T prd=PRD`.
 R236. WHEN the release that ships runtime/R229 to R234 lands, `UPDATING.md` SHALL tell a consumer that the trace accepts factory-id subjects through `TRACE_FACTORY_IDS`, that a project which sets `TRACE_NUMBERED_TYPES` and plans in the factory sets it to `ticket=T prd=PRD`, and that an empty value changes nothing.
+R241. The landing script's `--ticket` SHALL accept an issue number or a canonical factory ticket id, and SHALL refuse anything else as a usage error, exit 2, before any forge call. [UC2 1a, 1b]
+R242. The landing script SHALL read a landing line whose handle is `#<N>` or a canonical factory ticket id, and SHALL record any other spelling as absent, `data.implement=no`. [UC2 2, 2a]
+R243. IF a PR closes no issue, no `--ticket` is given, and its landing line names a canonical factory ticket id, THEN the landing script SHALL take that id as the PR's ticket. [UC2 2]
+R244. WHEN the landing script's ticket is a factory ticket id, it SHALL read `ticket.start` on `ticket:T-<digits>`, and write `pr.open`, `merge.land` and `feedback` with `ticket:T-<digits>` wherever it writes `ticket:#<N>` for an issue. [UC2 3, 4]
+R245. The landing script SHALL run no `factory` subcommand and SHALL write no file under `.factory/`. [UC2 5]
