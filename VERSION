@@ -3695,7 +3695,25 @@
 # its index row, bootstrap.sh's KIT_OWN naming it, docs/specs/process.md
 # R228 to R239.
 
-shared-layer: 0.104.0
+# 0.105.0 — the trace records a verifier's verdict, its V- findings and its
+# finding verdicts (ticket #939, PRD-13 slice 1 of D-02, factory T-76). NO
+# file joins the shared layer and none leaves. One shared file changes
+# content besides UPDATING.md: scripts/trace.sh declares two kinds,
+# verify.verdict (outcomes pass, blocked, unavailable; the outcome required,
+# and on pass and blocked data.reviewed, 40 hex digits, and data.provider, a
+# token) and finding.verify (outcomes confirmed, disputed; the outcome, a
+# lens data.id never V-, and a <path>:<line> data.where required); a
+# finding.raise id may be V- before a lens id (V-H-1), as may a non-local
+# finding.triage id; the record reader counts no V- raise toward a review
+# area. UPDATING.md gains its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none. Config (9d):
+# none. Adapter (9e): none.
+# Kit-only, never shipped: ADR-0044 and its index row, bootstrap.sh's
+# KIT_OWN naming it, docs/specs/runtime.md R200 to R202 and R221, the
+# glossary's Verifier and Provider, and tests/trace.test.sh section 44.
+
+shared-layer: 0.105.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
