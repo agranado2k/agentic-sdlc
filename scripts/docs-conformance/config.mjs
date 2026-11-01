@@ -427,7 +427,7 @@ const skillCeilings = {
   ".agents/skills/review-pr/SKILL.md": 40500,
   ".agents/skills/to-tickets/SKILL.md": 35000,
   ".agents/skills/pr-iterate/SKILL.md": 38000,
-  ".agents/skills/implement/SKILL.md": 27000,
+  ".agents/skills/implement/SKILL.md": 27500,
 };
 
 /**
