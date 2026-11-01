@@ -197,15 +197,15 @@ Extensions:
 
 Area: runtime
 
-Deltas against `docs/specs/runtime.md`, which ends at R51. PRD-08 is written in parallel and may
-take ids too; whichever is approved second renumbers (§9).
+Deltas against `docs/specs/runtime.md`, which ends at R51. PRD-08 took a new area (policy/R1 to
+R33), so no id here collides with it (§8).
 
 ### ADDED
 
 runtime/R52. The trace SHALL accept the kind `risk.judge` with the outcomes `agreed` and `disagreed`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 7]
 runtime/R53. WHEN the risk rule runs with a base, a head and a PR number, it SHALL print on standard output, in this order and nothing else, `effective: <risk>`, `planner: <risk>`, `rule: <risk>`, one `area: <review area> earned|unlearned` line per review area the diff touches, and `switch: on|tripped`, and exit 0. [UC1 6]
 runtime/R54. The risk rule SHALL read the planner's risk only from a ticket's `Risk:` line, lifted by the stamp reader from a ticket number or a ticket body file, and SHALL read it as `high unclear` when no ticket is given, the ticket carries no `Risk:` line, or the stamp reader refuses it. [UC1 2, 1a, 2a]
-runtime/R55. The risk rule SHALL judge a review area earned only when its earned record shows the policy's full window of landings, a missed-mistake rate below the policy's limit, and a precision at or above the policy's floor, and SHALL judge it unlearned when its precision is `n/a`. [UC1 4]
+runtime/R55. The risk rule SHALL judge a review area earned only when its earned record, read over the area's most recent settled landings (those that landed before the fix window began), shows the full window of 20 settled landings, a missed-mistake rate below the policy's limit, and a precision at or above the policy's floor, and no landing of the area inside the fix window carries a missed mistake; it SHALL judge the area unlearned when its precision is `n/a`. [UC1 4]
 runtime/R56. IF any review area the diff touches is unlearned, or a changed path belongs to no review area, THEN the rule's risk SHALL be `high unlearned` unless `outward` applies, and a path in no area SHALL print as `area: none unlearned`. [UC1 4, 3a]
 runtime/R57. IF the thresholds cannot be read under the base-branch policy contract, THEN the risk rule SHALL judge every review area unlearned. [UC1 4a]
 runtime/R58. IF the trace is unconfigured or holds a `SCHEMA` the reader cannot judge, THEN the risk rule SHALL judge every review area unlearned, name the cause on standard error, print its lines, record nothing, and exit 0. [UC1 4b]
@@ -377,6 +377,36 @@ maintainer confirms them at approval):
   `--ticket-file <path>`, mirroring the skill dispatcher's ticket arguments. Exit 0 for any
   verdict, 2 for a caller error. Expensive to reverse once K5 and the factory call it.
 
+**Settled after approval** (the 2026-10-31 grill of D-02's open questions; these were §9's):
+
+- **Only settled landings count toward an area's 20** (operator, 2026-10-31). A settled landing
+  is one that landed before the fix window began, so a later fix can no longer count it a
+  mistake (glossary: settled landing). An area is earned only when 20 of its landings are
+  settled and pass both thresholds; no new policy key. This modifies runtime/R55 in place, and
+  T-42 (#905) changes with it. Under today's data every area would otherwise read earned on day
+  one, on landings whose labels can still change; with it, no area earns until about 30 days
+  after its 20th landing, which costs nothing while the lane is closed. One consequence the
+  session drew (under the operator's delegation, 2026-10-31): a missed mistake already recorded
+  against a landing still inside the fix window makes the area unlearned at once, as R55 now
+  says, so excluding unsettled landings from the 20 never delays D-02 Q3's one-escape demotion.
+- **What this PRD needs from PRD-08 is answered by PRD-08 as approved** (the session under the
+  operator's delegation, 2026-10-31). The thresholds live in the risk policy as
+  `miss-rate-below` and `precision-floor` (policy/R12, R15); "cannot be read" is PRD-08's
+  `fail-closed <reason> <path>` line with exit 3 (policy/R8, R13); the switch is a risk-policy
+  value read through `read`, which T-44 (#907) names; and the window stays the record reader's
+  20 (PRD-08 §8, operator, 2026-10-31). R55, R57, R66 and R67 read correctly as written.
+- **No requirement id collides with PRD-08** (the session under the operator's delegation,
+  2026-10-31). PRD-08 took policy/R1 to R33; runtime/R52 to R69 and process/R61 to R67 stand.
+- **The rule does not raise `shared-layer` from paths** (the session under the operator's
+  delegation, 2026-10-31). It stays the planner's reason, as agreed with D-08. The never-learnable
+  files are held where the lane acts: PRD-10 holds `VERSION`'s files, base-read policy files and
+  its hold patterns by path (runtime/R85), writing no `Risk:` reason, so the contract the factory
+  reads is unchanged. PRD-08 §8's line that `touched` makes a PR `high shared-layer` is
+  superseded; the report-only verdict may read `low` for a policy-touching PR.
+- **No dedicated reason for a tripped switch** (the session under the operator's delegation,
+  2026-10-31). The rule keeps `high unlearned` with `switch: tripped` beside it (R53, R65), and
+  PRD-10's lane holds on its own `switch` token. The contract's reason list does not move.
+
 **Alternatives considered:**
 
 - **The rule as an operator-run tool only, like the record reader.** It keeps ADR-0024 intact, but
@@ -390,47 +420,7 @@ maintainer confirms them at approval):
 
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
-- **What this PRD needs from K2 (PRD-08), written in parallel.**
-  - Problem: the rule reads the Q3 thresholds and the switch value "through the base-branch policy
-    contract", and K2 defines that contract. Four things are needed from it: which policy file
-    holds the thresholds and the switch; their names; whether the record's window of 20 (fixed in
-    the record reader, runtime/R44) becomes a policy value the reader also reads; and the exact
-    form of "fails closed" a reader sees (an exit code, or a value).
-  - Options seen: K2 names them all; or K3's slice 1 adds the switch and K2 holds only the
-    thresholds.
-  - Next step: read PRD-08 once it is written and align R55, R57, R66 and R67 to its words before
-    either PRD is approved. MVP default: the thresholds and the switch in the same base-branch
-    policy file, the window staying the record reader's 20.
-- **Requirement ids may clash with PRD-08.**
-  - Problem: both PRDs add requirements to the living specs at the same time.
-  - Options seen: PRD-08 takes runtime ids and this PRD renumbers; or the second approved
-    renumbers.
-  - Next step: the maintainer checks both at approval. MVP default: whichever is approved second
-    renumbers.
-- **Do landings still inside the fix window count toward an area's 20?**
-  - Problem: today every review area shows 20 of 20 landings, all inside the 30-day fix window,
-    `missed 0` and precision from 0.89 to 0.95, all from triage labels. Under Q3 as written, all
-    six areas are earned on day one, before any landing has finished the window in which a fix
-    would count it as a mistake.
-  - Options seen: count them, as Q3 is written; require a policy number of settled landings
-    outside the window; require a share of labels from outcomes or humans, not triage (PRD-06 §8
-    left that share to K3).
-  - Next step: question to agranado before K5's grill, with slice 1's first real report in hand.
-    MVP default: count them, since a report changes no landing. It must be settled before K5.
-- **Should the rule also raise `shared-layer` from paths?**
-  - Problem: Q1 lists policy, guard and gate files and the shared layer as never learnable, but the
-    D-08 contract gives that call to the planner alone. A planner who misses it leaves a low
-    stamp that the record may well call earned.
-  - Options seen: planner only, as agreed; the rule also raises from the shared-layer manifest and
-    the K2 policy file list, which needs the factory told, since the rule would write a planner
-    reason.
-  - Next step: raise with the D-08 session and the operator at K5's grill. MVP default: planner
-    only; `/retro`'s disagreement counts show whether planners miss it.
-- **A dedicated reason for a tripped switch.**
-  - Problem: a tripped switch prints `high unlearned`, which reads as a fact about the areas.
-  - Options seen: keep `unlearned` with `switch: tripped` beside it; add a reserved reason such as
-    `halted` to the contract, a shared-layer change the factory must take.
-  - Next step: decide at K5's grill, where the lane reads it. MVP default: `unlearned`.
+None open. The five questions this section held were settled after approval (§8).
 
 ## 10. Dogfood plan
 

@@ -47,8 +47,9 @@ change with no human step, and the operator is involved only when something high
   lane mode; a consumer's ships empty, so its chain stops where it stops today.
 - In lane mode the landing script makes every refusal it makes today, takes none of its override
   flags, then **holds** the PR (exit 4, recorded) unless the lane is open, the risk rule run at
-  the head says `effective: low`, the check table passes, the diff touches nothing on the hold
-  list, the base branch's own workflows are green, and the PR is not an escape's revert. Then it
+  the head says `effective: low`, the check table passes, the verifier (PRD-13) said `pass` at
+  the head, the diff touches nothing on the hold list, the base branch's own workflows are
+  green, and the PR is not an escape's revert. Then it
   merges that head and records the landing as the lane's.
 - Before it judges, each lane run records new post-merge outcomes. A mistake against a lane
   landing (an **escape**) gets one notice to the operator. Where nothing has undone it yet (a
@@ -108,7 +109,8 @@ PR lands with no operator act.
    in this checkout match the base branch's; it records new outcomes, finds no escape to handle,
    and the PR is not an escape's revert; the diff touches no hold-list path; the base branch's
    latest workflow runs are green; the check-table reader, given the PR body and the ticket body,
-   exits 0; the risk rule, run again at the head, prints `effective: low`.
+   exits 0; the latest verifier verdict at the head is `pass` (PRD-13); the risk rule, run again
+   at the head, prints `effective: low`.
 6. It merges that head, waits for the base branch's workflows as today, records `merge.land
    outcome=landed data.via=lane` with the count of decision-log rows, and `feedback
    outcome=unasked data.by=lane`. It prints `lane: landed` and exits 0.
@@ -132,10 +134,14 @@ Extensions:
   it printed `switch: tripped`. Exit 4.
 - 5e. The PR's head moved after the rule judged it. The forge refuses the merge of a head other
   than the judged one; exit 1 as a rejected merge is today.
+- 5f. The verifier's latest verdict at the head is not `pass`: `blocked` with a disputed
+  check-table row, `blocked` otherwise, `unavailable` (no verifier model could be reached), or
+  no verdict at all. `lane: held verifier <reason>`, the reason `disputed`, `blocked`,
+  `unavailable` or `none`. Exit 4.
 - 6a. A base-branch workflow fails after the lane's merge. Exit 1 as today, and the operator gets
   one notice naming the landing and the failed run. Every later lane run holds with `lane: held
   base-red` until the base branch's latest runs are green again.
-- 6b. Every hold (5a–5d, and UC2, UC3 2) records `merge.land outcome=skipped data.via=lane` with
+- 6b. Every hold (5a–5d, 5f, and UC2, UC3 2) records `merge.land outcome=skipped data.via=lane` with
   the hold token, once per PR, head and token.
 
 **UC2 — A PR on the hold list waits for the operator.** Actor: `/pr-iterate`, on PR #934, which
@@ -209,8 +215,11 @@ Goal: see how much the lane carried and why it held the rest.
 - **The low-risk lane**: the landing script run with `--lane`, by `/pr-iterate`, with no operator
   act. It lands a PR or holds it. Nothing else lands without the operator.
 - **Lane policy**: base-branch policy read under K2's contract. It names the lane's operator (a
-  forge login), the landing command `/pr-iterate` runs, and the hold patterns. Shipped empty: a
-  consumer's lane is closed and its `/pr-iterate` runs nothing.
+  forge login), the landing command `/pr-iterate` runs, and the hold patterns. It is a policy
+  file of its own, not the risk policy (which ships filled): shipped empty, so a consumer's lane
+  is closed and its `/pr-iterate` runs nothing, with a kit-only twin that holds the kit's values,
+  as the agents policy has. Both names end `.config.sh` under `scripts/`, so both are in K2's
+  judging set.
 - **Open**: the lane policy names an operator and can be read. Anything else is **closed**.
   Opening and closing are changes to that policy, which only the operator lands, since a lane run
   holds any PR that touches it.
@@ -221,7 +230,7 @@ Goal: see how much the lane carried and why it held the rest.
 - **Hold**: a refusal of the lane's own, after today's refusals have passed. Exit 4, one line
   `lane: held <token>`, one `merge.land outcome=skipped data.via=lane` event. The tokens, in the
   order they are checked: `closed`, `drift`, `escape`, `path`, `base-red`, `check-table`,
-  `switch`, `risk`.
+  `verifier`, `switch`, `risk`. The `verifier` hold names its reason after the token.
 - **Escape**: a `merge.outcome` against a PR whose `merge.land` says `data.via=lane`. An escape is
   handled once: notified, and reverted or ticketed where nothing has undone it. Its area's
   demotion is the risk rule's, read from the earned record (PRD-09), not a state the lane keeps.
@@ -234,8 +243,7 @@ Goal: see how much the lane carried and why it held the rest.
 ## 4. Rules
 
 Ids start at runtime/R80 and process/R80, leaving a gap after PRD-09 (runtime/R52–R69,
-process/R61–R67) for PRD-08, written in parallel. They are re-based at approval if they collide
-(§9).
+process/R61–R67). PRD-08 took a new area (policy/R1 to R33), so none collides (§8).
 
 Area: runtime
 
@@ -245,7 +253,7 @@ Deltas against `docs/specs/runtime.md`.
 
 runtime/R80. WHEN the landing script runs with `--lane`, it SHALL make every refusal it makes without `--lane`, with the same exit code and the same effect. [UC1 4, 4a]
 runtime/R81. IF `--lane` is given with `--no-iteration`, `--no-review`, `--unasked` or `--train`, THEN the landing script SHALL exit 2, merging and recording nothing. [UC1 4]
-runtime/R82. WHEN every refusal has passed in lane mode, the landing script SHALL check, in this order, `closed`, `drift`, `escape`, `path`, `base-red`, `check-table`, `switch` and `risk`, and on the first that applies SHALL print `lane: held <token>`, merge nothing and exit 4. [UC1 5]
+runtime/R82. WHEN every refusal has passed in lane mode, the landing script SHALL check, in this order, `closed`, `drift`, `escape`, `path`, `base-red`, `check-table`, `verifier`, `switch` and `risk`, and on the first that applies SHALL print `lane: held <token>`, merge nothing and exit 4. [UC1 5]
 runtime/R83. The lane SHALL read as closed, holding with `closed`, when the lane policy names no operator or cannot be read under the base-branch policy contract. [UC1 5a, UC4 6]
 runtime/R84. IF the landing script or the risk rule in the running checkout differs from its version on the base branch, THEN a lane run SHALL hold with `drift`. [UC1 5b]
 runtime/R85. IF the PR's diff from its merge base touches a file `VERSION`'s `files:` list names at either end, a policy file read under the base-branch policy contract, or a path the lane policy's hold patterns select, THEN a lane run SHALL hold with `path`. [UC2 1, 2, 1a]
@@ -267,6 +275,7 @@ runtime/R100. WHEN a base-branch workflow fails after a lane landing, the landin
 runtime/R101. WHEN the landing script runs with `--escapes` and no PR, it SHALL record outcomes and handle every unhandled escape as a lane run does, merge nothing, and exit 0. [UC3 7a]
 runtime/R102. The landing script's lane output, its lane events and its notices SHALL carry only closed tokens, review area names, PR and ticket numbers, commit shas, run ids and digits, and no text from a ticket body, a PR body, a commit message or a log.
 runtime/R103. The adapter's root guard SHALL refuse an agent's tool call that deletes, moves or overwrites the kill switch's trip marker. [UC4 5]
+runtime/R104. IF the latest `verify.verdict` on the PR, read as runtime/R214 (PRD-13) reads it for `merge.land`, is not `pass`, THEN a lane run SHALL hold with `verifier`, print `lane: held verifier <reason>` with the reason `disputed` for a `blocked` verdict whose `data.disputed` is 1 or more, `blocked` for any other `blocked`, `unavailable` for `unavailable`, and `none` when there is no such verdict, and SHALL record the reason in the hold event's `data.reason`. [UC1 5f]
 
 Area: process
 
@@ -284,6 +293,10 @@ process/R85. `/merge-train` SHALL NOT be started by the lane, and the lane SHALL
 ### MODIFIED
 
 process/R65 (added by PRD-09). `/pr-iterate` and the landing script SHALL take the same actions on a PR whatever the risk rule prints, except the lane step of process/R80 and the lane mode of runtime/R80–R102. [UC1 2a]
+
+Area: runtime
+
+runtime/R215 (added by PRD-13). No `verify.verdict` outcome SHALL change whether the landing script refuses, waits or merges, except the lane's `verifier` hold of runtime/R104. [UC1 5f]
 
 ## 5. Slices (vertical, demoable, in order)
 
@@ -303,12 +316,13 @@ too. All wait for PRD-09's slice 3 (the kill switch) and PRD-08's base-branch re
   passes over a fresh bootstrap; the record's index row names what it supersedes and amends.
 
 **Slice 2 — the lane lands a low-risk PR, and holds the rest.** The tracer bullet.
-- *Covers:* runtime/R80, R81, R82, R83, R84, R85, R86, R87, R88, R89, R90, R91, R102,
-  process/R80, R81, R82, R85, process/R65 (modified).
-- *Blocked by:* slice 1.
+- *Covers:* runtime/R80, R81, R82, R83, R84, R85, R86, R87, R88, R89, R90, R91, R102, R104,
+  process/R80, R81, R82, R85, process/R65 (modified), runtime/R215 (modified).
+- *Blocked by:* slice 1, and PRD-13's slice 1 for the `verify.verdict` kind.
 - *Accept:* the landing script's suite lands UC1's fixture PR through a stubbed forge and records
   `data.via=lane`; holds a closed lane, a drifted script, a hold-list path, a red base branch, a
-  `skipped` check-table row, a tripped switch and a `high` effective risk, each with its token,
+  `skipped` check-table row, a verifier verdict other than `pass` (each of the four reasons), a
+  tripped switch and a `high` effective risk, each with its token,
   exit 4 and one event; a second held run at the same head writes nothing; every override flag
   with `--lane` exits 2; every refusal the suite already holds still refuses under `--lane`. A
   skill-text suite holds `/pr-iterate`'s lane step, its no-command branch and its report line.
@@ -367,8 +381,8 @@ too. All wait for PRD-09's slice 3 (the kill switch) and PRD-08's base-branch re
   differs from the base branch's, so a PR cannot land under a lane it edited; R85 holds a PR that
   edits them.
 - **Failing closed everywhere**: an unreadable lane policy, a missing ticket, no check table, an
-  unreadable trace (the rule calls the PR high), a red base branch, a failed escape action. Each
-  holds; none lands.
+  unreadable trace (the rule calls the PR high), a red base branch, no verifier `pass` at the
+  head, a failed escape action. Each holds; none lands.
 - **A revert** is made in a throwaway worktree under the git directory, from the base branch,
   with `git revert -m 1` of the escaped merge commit, pushed to a new branch; the worktree is
   removed after. Its PR body opens with the escape's tokens.
@@ -434,6 +448,43 @@ maintainer confirms them at approval):
 - **The trip marker is guarded by the root guard.** PRD-09 left this to K5. A marker an agent can
   delete is no stop once the lane acts.
 
+**Settled after approval** (the 2026-10-31 grill of D-02's open questions; the first five were
+§9's):
+
+- **The lane requires the verifier's `pass`** (operator, 2026-10-31, overriding PRD-13's
+  "never"). A lane run holds a PR with `verifier` unless the latest verifier verdict at its head
+  is `pass`: a disputed check-table row, a `blocked` verdict, or `unavailable` (no verifier model
+  reached) holds it for the operator, and so does no verdict at all. The hold names its reason
+  (`disputed`, `blocked`, `unavailable`, `none`), added as runtime/R104, with runtime/R82's
+  order MODIFIED in place and PRD-13's runtime/R215 MODIFIED here for the one exception. The
+  verifier and the walk that resolves its model (another provider first, else the same provider
+  in a different family from the diff's author) are PRD-13's. The hold sits after
+  `check-table` and before `switch`, so a PR the review and the table already hold reads its own
+  reason first. T-52 (#915) carries it, blocked by PRD-13's first ticket. This matches the D-08
+  operator's "the reviewer and a verifier from another provider both pass a PR" and the D-08
+  session's recommendation, with the operator's same-provider rung added.
+- **The lane policy is a file of its own, shipped empty, with a kit twin** (the session under
+  the operator's delegation, 2026-10-31). The risk policy ships filled with no twin (PRD-08 §3,
+  ADR-0003's 2026-09-28 amendment), and the lane policy ships empty, so one file cannot hold
+  both. Its `scripts/*.config.sh` name puts it in K2's judging set (policy/R9), so R83 and R85
+  hold with no extra list entry, and "cannot be read" is K2's fail-closed line, exit 3. The
+  factory defines no lane key, so no manifest key overrides it. §3 and T-51 (#914) say so.
+- **PRD-09's questions left to K5 are settled** (the session under the operator's delegation,
+  2026-10-31). The token: this PRD's own `switch` hold. The fix window: only settled landings
+  count toward an area's 20 (PRD-09 runtime/R55, operator, 2026-10-31).
+- **The notice is one forge issue assigned to the lane policy's operator login** (the session
+  under the operator's delegation, 2026-10-31). The landing script already holds the forge
+  credentials and calls (runtime/R94, R95), an issue lasts, and R102 bounds its text. The D-08
+  session's recommendation, a trace event plus the factory's post-merge QA queue, is not taken:
+  that queue is not built, exists only in a factory project, and lists landings for batch QA
+  rather than flagging an escape, which D-02 Q5 says the operator is notified of.
+- **The lane stays kit-only** (the session under the operator's delegation, 2026-10-31). The
+  landing script is kit-only; promoting a forge-neutral landing command is K6's grill, with the
+  kit's lane record in hand.
+- **Requirement ids stand** (the session under the operator's delegation, 2026-10-31). PRD-09
+  was approved with process/R65 unchanged, so this PRD's MODIFIED process/R65 names it
+  correctly, and runtime/R80 to R104 and process/R80 to R85 collide with nothing.
+
 **Alternatives considered:**
 
 - **The lane as `/merge-train` started by an agent.** The train's first hard rule is that only the
@@ -446,42 +497,8 @@ maintainer confirms them at approval):
 
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
-- **What this PRD needs from K2 (PRD-08), written in parallel.**
-  - Problem: the lane policy (operator login, landing command, hold patterns), the list of policy
-    files R85 holds, and the form in which a reader sees "cannot be read" all come from K2's
-    contract.
-  - Options seen: the lane values in the same base-branch policy file as the thresholds and the
-    switch; or a lane policy file of its own, then itself on K2's list.
-  - Next step: read PRD-08 when written and align R83, R85 and §3. MVP default: the same file as
-    the thresholds and the switch.
-- **PRD-09's open questions that it left to K5.**
-  - Problem: PRD-09 §9 asks, to settle before K5, whether landings still inside the 30-day fix
-    window count toward an area's 20 (today every area reads earned on day one), and whether a
-    tripped switch needs its own reason token.
-  - Options seen: for the window, count them, require a policy number of settled landings, or
-    require a share of outcome or human labels; for the token, `switch` as a hold token here
-    (this PRD) or a reserved reason in the contract.
-  - Next step: question to agranado before approval, with PRD-09's first real reports. MVP
-    default: the lane stays closed until the operator opens it after reading those reports, which
-    is their answer in practice; the `switch` hold token answers the second.
-- **The notice's channel.**
-  - Problem: Q5 says the operator "gets one notice", not where.
-  - Options seen: a forge issue assigned to the lane's operator; a mention on the escaped PR; a
-    channel named in the lane policy.
-  - Next step: ask agranado at approval. MVP default: one forge issue assigned to the login the
-    lane policy names.
-- **Reaching consumers.**
-  - Problem: the lane runs through the kit-only landing script, so a consumer has the amended §7
-    and an inert step but no lane.
-  - Options seen: kit-only until the kit's own lane has a measured record; promote a forge-neutral
-    landing command to the shared layer, as the skill dispatcher's promotion is planned.
-  - Next step: decide at K6's grill with the kit's lane record in hand. MVP default: kit-only.
-- **Requirement ids and PRD-09's process/R65.**
-  - Problem: the ids here may collide with PRD-08's, and the MODIFIED delta names an id PRD-09
-    has not yet landed in the living spec.
-  - Options seen: re-base at approval; or the second PRD approved renumbers.
-  - Next step: the maintainer checks all three at approval. MVP default: the second approved
-    renumbers, and this PRD's MODIFIED line follows PRD-09's final id.
+None open. The five questions this section held were settled after approval, and the
+operator's 2026-10-31 verifier ruling added one hold (§8).
 
 ## 10. Dogfood plan
 
