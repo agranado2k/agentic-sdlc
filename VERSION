@@ -3627,7 +3627,29 @@
 # docs/specs/policy.md R9's manifest, the kit-ci job, and
 # tests/policy.test.sh's manifest case.
 
-shared-layer: 0.102.0
+# 0.103.0 — /to-tickets defers to the factory's own ticket skill in a
+# factory project (ticket #935, PRD-12 slice 2 of D-02, factory T-72). NO
+# file joins the shared layer and none leaves, and no shared file changes
+# content besides UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — SKILL.md opens with "A factory project defers,
+# before any other step", pointing at a new FACTORY.md beside it, whose
+# fenced factory_deferral answers `defer`, `missing` or `none` from the
+# presence of .factory/project.yaml at the git top level and of
+# factory-tickets/SKILL.md under ~/.claude/skills or the project's
+# .claude/skills, opening neither and running no `factory` command; `defer`
+# prints the hand-off naming /factory-tickets and ends, publishing and
+# tracing nothing; `missing` names `factory install-skill` once and runs the
+# forge flow; only the operator's own message lifts a deferral. Wiring (9b):
+# none. Templates (9c): none. Config (9d): none. Adapter (9e): none.
+# Kit-only, never shipped: ADR-0042 and its index row, bootstrap.sh's
+# KIT_OWN naming it, the glossary's Factory skill and Deferral and its
+# `skill is not installed` exception, docs/specs/process.md R121 to R127,
+# R136 and R223 to R225, config.mjs's skill-path exemption
+# `.claude/skills/factory-tickets/`, tests/spec-skills.test.sh's factory
+# section and tests/self-host.test.sh's process/R136 assertion.
+
+shared-layer: 0.103.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
