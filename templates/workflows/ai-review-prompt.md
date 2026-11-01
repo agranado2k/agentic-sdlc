@@ -163,9 +163,10 @@ beneath it, and reads an item with no scope, or with any other word, as
 `outward`.
 
 **When the pull request body carries a check table** — a
-`<!-- check-table -->` marker over a `| Requirement | Test tier | Result |
-Evidence |` table — judge its passing rows. Write one line per `pass` row,
-in the confirm-list section, in this shape:
+`<!-- check-table -->` marker over a table whose header is
+`| Requirement | Test tier | Result | Evidence |` — judge its passing
+rows. Write one line per `pass` row, in the confirm-list section after
+its tagged items, in this shape:
 
     pin: <id> — <upheld|disputed>
 
