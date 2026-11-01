@@ -1352,6 +1352,11 @@ grep -q "^TRACE_FACTORY_IDS=''" "$KIT/scripts/trace.config.sh" && sed -n '/^# TR
 grep -q "^TRACE_FACTORY_IDS='ticket=T prd=PRD'" "$KIT/scripts/trace.kit.config.sh" && pass "runtime/R235: the kit twin sets it to ticket=T prd=PRD" || fail "runtime/R235: scripts/trace.kit.config.sh does not set TRACE_FACTORY_IDS='ticket=T prd=PRD'"
 t_exec sh -c 'cd "$1" && TRACE_DIR="$2" sh scripts/trace.kit.sh emit kind=note subject=ticket:T-07' _ "$KIT" "$SCRATCH/factory-kit"
 [ "$T_STATUS" = 0 ] && pass "runtime/R235: the kit wrapper's emit subject=ticket:T-07 exits 0 in this repository" || fail "runtime/R235: the kit wrapper refused ticket:T-07 (exit $T_STATUS): $T_ERR"
+# runtime/R236: the release tells a consumer how to take it — the key, the
+# value a factory project with numbered types sets, and that empty changes nothing.
+_fi_upd=$(awk '/^\*\*Arriving from 0\.100\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$KIT/UPDATING.md" | tr '\n' ' ')
+case $_fi_upd in *TRACE_FACTORY_IDS*'ticket=T prd=PRD'*'changes nothing'*) pass "runtime/R236: UPDATING.md's 0.101.0 entry names TRACE_FACTORY_IDS, ticket=T prd=PRD and that an empty value changes nothing" ;; *) fail "runtime/R236: UPDATING.md has no 'Arriving from 0.100.0 or older' entry naming TRACE_FACTORY_IDS, ticket=T prd=PRD and 'changes nothing'" ;; esac
+case $_fi_upd in *TRACE_NUMBERED_TYPES*factory*) pass "runtime/R236: and says it is for a project that sets TRACE_NUMBERED_TYPES and plans in the factory" ;; *) fail "runtime/R236: the entry does not tie the value to TRACE_NUMBERED_TYPES and the factory" ;; esac
 # The vocabulary says it where the vocabulary lives.
 sed -n '/^- \*\*Subject\*\*/,/_Avoid_/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'ticket:T-07' &&
 	pass "the glossary's Subject entry names the factory-id form" || fail "the glossary's Subject entry does not name ticket:T-07"

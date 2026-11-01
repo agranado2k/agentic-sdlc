@@ -22,7 +22,7 @@ PRD's numbers. R32, R33 and R39 to R42 joined with the outcome recorder
 (#876), which restated R43 to name the recorder beside the record reader, as
 the PRD writes it. R46 to R51 joined with the misses and lens precision
 (#877). R37 and R38 joined with the failed factory QA
-(#879). R229 to R235 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
+(#879). R229 to R236 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
 the PRD's numbers past PRD-08 to PRD-13's drafts.
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
@@ -83,3 +83,4 @@ R232. WHEN `show` is given a canonical factory-id subject, the trace SHALL print
 R233. WHEN `verify` reads a line written with a factory-id subject, it SHALL pass a canonical one and SHALL advise on a non-canonical one as it advises on a mis-spelled numbered subject, its verdict unchanged.
 R234. WHERE `TRACE_FACTORY_IDS` is empty or unset, the trace SHALL judge every subject exactly as it did before this PRD. [UC5]
 R235. The shipped trace policy SHALL carry `TRACE_FACTORY_IDS` empty, with a comment naming its form, and the kit's own trace policy SHALL set it to `ticket=T prd=PRD`.
+R236. WHEN the release that ships runtime/R229 to R234 lands, `UPDATING.md` SHALL tell a consumer that the trace accepts factory-id subjects through `TRACE_FACTORY_IDS`, that a project which sets `TRACE_NUMBERED_TYPES` and plans in the factory sets it to `ticket=T prd=PRD`, and that an empty value changes nothing.
