@@ -67,6 +67,11 @@ jobs:
       - name: agents.lib.sh (agent-harness axis)
         run: sh tests/agent-harness.test.sh
 
+      # The kit wrapper's verifier walk (ADR-0044): another provider first, then
+      # the reviewer walk's other family, else nothing. Kit policy, kit-only.
+      - name: agents.kit.sh (verifier walk)
+        run: sh tests/agents-verifier.test.sh
+
       # The kit's first executable spawn path (ADR-0005). Its fixture is a STUB
       # agent harness that prints its argv and its stdin: what this file owns is
       # which command got built and what reached it, and a real vendor would

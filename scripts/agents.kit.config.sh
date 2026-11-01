@@ -130,6 +130,20 @@ AGENT_HARNESS_CODEX_CMD='codex exec {model_flag} < {prompt_file}'
 AGENT_HARNESS_CODEX_MODEL_FLAG='--model {model}'
 
 # ---------------------------------------------------------------------------
+# THE VERIFIER (ADR-0044, PRD-13). Kit policy only: scripts/agents.kit.sh
+# answers `reviewer cross-provider` from these, and no consumer's resolver
+# reads an AGENT_KIT_ name. A model's PROVIDER is its agent harness's,
+# declared here per harness; an unprefixed model runs on this file's own
+# harness. The verifier is the first candidate, in order, whose provider
+# differs from the diff's author's; when none is left, the reviewer tier's
+# ordered walk answers with a model of another family (the walk's second
+# rung, named `same-provider`). tests/agents-verifier.test.sh pins both.
+# ---------------------------------------------------------------------------
+AGENT_KIT_PROVIDER_CLAUDE_CODE='anthropic'
+AGENT_KIT_PROVIDER_CODEX='openai'
+AGENT_KIT_VERIFIER_CANDIDATES='codex:gpt-5.6-sol sonnet'
+
+# ---------------------------------------------------------------------------
 # 1. PLANNER — strongest reasoning available. A wrong decomposition is paid
 #    for by every downstream ticket, so this is the one tier where "most
 #    expensive" is the cost-saving choice.
