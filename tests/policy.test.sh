@@ -226,6 +226,25 @@ t_commit "$Y" "chore: extra on the branch" >/dev/null
 pol "$Y" read docs/notes.md --base main
 expect_status 2 "policy/R9: an extra path the branch adds is not read at the base"
 
+# The software factory's project manifest is a judging file (process/R227):
+# where it holds a value a judge reads, a branch may not change it for itself.
+base_repo
+FM=$REPO
+on_main "$FM" "chore: a factory manifest" sh -c "mkdir -p .factory && printf 'id: f\\nacceptance_tests_since: 2026-11-01\\n' >.factory/project.yaml"
+pol "$FM" read .factory/project.yaml --base main
+expect_status 0 "policy/R9: the factory's project manifest is in the judging set"
+t_write "$FM" .factory/project.yaml 'id: f
+acceptance_tests_since: 2030-01-01
+'
+t_write "$FM" .factory/items/T-01/ticket.md 'x
+'
+t_commit "$FM" "chore: move the date" >/dev/null
+pol "$FM" touched main HEAD
+expect_status 1 "touched exits 1 when the manifest changed"
+expect_out_is ".factory/project.yaml" "policy/R9: touched reports the manifest, and no other .factory/ file"
+pol "$FM" read .factory/items/T-01/ticket.md --base main
+expect_status 2 "policy/R9: a factory item is not in the judging set"
+
 banner "R5, R2. Missing at the base: fail closed, no copy, the branch's copy unread"
 # ---------------------------------------------------------------------------
 base_repo
