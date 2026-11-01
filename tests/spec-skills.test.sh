@@ -1012,13 +1012,12 @@ banner "4d. Test-tier: one line per covered id, checked before the quiz, shown b
 # checker's (scripts/vocab.config.sh); what is held here is that the skill
 # stamps it, hands every line to the checker before the quiz under the same
 # repair-and-recheck rule as the other stamps, shows it beside Covers:, and
-# publishes it — and that this skill stamps no Risk: line (later work).
+# publishes it. The Risk: line is rule 17's, held below (process/R61 to R63).
 w="the Covers rule"
 t_text_has "$covers" '`Test-tier: <id> <tier>`' "process/R52: the keyed line's shape, spelled once" "$w"
 t_text_has "$covers" "one per id" "process/R52: one Test-tier: line per covered id" "$w"
 t_text_has "$covers" '`unit`, `suite`, `e2e` or `manual`' "process/R52: the four tiers, as the checker's vocabulary names them" "$w"
 t_text_has "$covers" "carries no \`Test-tier:\` line" "process/R52: an exempt ticket, or one with no Covers: line, carries none" "$w"
-t_text_has "$covers" "no \`Risk:\` line" "process/R52: this skill stamps no Risk: line" "$w"
 t_text_has "$draft" "its \`Test-tier:\` lines" "process/R52: the draft step stamps the test tiers beside Covers:" "step 2"
 t_text_has "$quiz" "\`'Test-tier: <id> <tier>'\` for each" "process/R52: every Test-tier: line goes to the checker" "the quiz step"
 in_order "$quiz" "process/R52: the test tiers are checked, refused lines repaired and re-checked, before the list is presented" \
@@ -1026,8 +1025,6 @@ in_order "$quiz" "process/R52: the test tiers are checked, refused lines repaire
 t_text_has "$quiz" "test tiers beside its \`Covers:\` line" "process/R52: the quiz shows each ticket's test tiers beside its Covers: line" "the quiz step"
 in_order "$publish" "process/R52: the published body carries the Test-tier: lines after the Covers: line" \
 	"a \`Covers:\` line" "its \`Test-tier:\` lines"
-case $publish in *'`Risk:'*) fail "process/R52: the publish step writes a Risk: line — that stamp is later work" ;;
-*) pass "process/R52: the publish step writes no Risk: line" ;; esac
 ex=$(printf '%s\n' "$covers" | grep -o '`Test-tier: [^`<]*`' | head -1 | tr -d '`')
 if [ -z "$ex" ]; then
 	fail "the Covers rule shows no concrete Test-tier: example line"
@@ -1096,6 +1093,79 @@ else
 		pass "a drafted ticket's Class: line is lifted and passed by scripts/stamp.sh" ||
 		fail "scripts/stamp.sh did not pass the drafted Class: line (exit $rc, printed '$got')"
 fi
+
+# ---------------------------------------------------------------------------
+banner "The risk stamp: /to-tickets stamps, checks and shows Risk and Risk-confidence (process/R61 to R63)"
+# ---------------------------------------------------------------------------
+# PRD-09 (factory item T-48): the planner's half of the risk signal. The
+# grammar is the kit's ADR-0037 and the vocabulary policy's; /retro's
+# question 8 reads the three ticket.write keys this step records. The rubric
+# lives beside SKILL.md, as the domain rubric does, opened from rule 17.
+RISK_ABS="$ROOT/.agents/skills/to-tickets/RISK.md"
+riskrule=$(printf '%s\n' "$rules" | grep '^17\. \*\*Risk' | head -n 1)
+[ -n "$riskrule" ] && pass "process/R61: /to-tickets carries rule 17, the risk stamp" ||
+	fail "process/R61: /to-tickets has no rule 17 opening '**Risk' — nothing says every ticket is risk-stamped"
+t_text_has "$riskrule" "(RISK.md)" "process/R61: rule 17 opens the risk rubric by relative path"
+t_text_has "$riskrule" "one \`Risk:\` line and one \`Risk-confidence:\` line" "process/R61: every ticket carries both lines, once each"
+[ -f "$RISK_ABS" ] && pass "RISK.md sits beside /to-tickets' SKILL.md" ||
+	fail "RISK.md is missing beside /to-tickets' SKILL.md"
+risk=$(section_of "$RISK_ABS" "The risk stamp" 2>/dev/null | tr '\n' ' ' | tr -s ' ')
+t_text_has "$risk" "one \`Risk:\` line and one \`Risk-confidence:\` line" "process/R61: the rubric stamps both lines on every ticket" "the risk rubric"
+# process/R62: each planner reason, with the change it covers, in the PRD's words.
+t_text_has "$risk" "\`irreversible\` — a change that cannot be undone by a revert" "process/R62: irreversible's meaning" "the risk rubric"
+t_text_has "$risk" "\`security\` — a change to auth, secrets or the trust boundary" "process/R62: security's meaning" "the risk rubric"
+t_text_has "$risk" "\`invisible\` — a mistake no post-merge outcome would count" "process/R62: invisible's meaning" "the risk rubric"
+t_text_has "$risk" "\`shared-layer\` — a file the shared-layer manifest lists, a contract file, or a policy, guard or gate file" "process/R62: shared-layer's meaning" "the risk rubric"
+t_text_has "$risk" "\`unclear\` — the planner cannot tell" "process/R62: unclear's meaning" "the risk rubric"
+t_text_has "$risk" "Stamp \`Risk: low\` only when none applies" "process/R62: low is the answer only when no reason applies" "the risk rubric"
+# Every reason the policy lets a planner write is explained, and none it
+# reserves: the rubric moves with the vocabulary, never apart from it.
+fields=$(cd "$ROOT" && unset VOCAB_CONFIG && sh scripts/vocab.sh fields)
+reasons=$(printf '%s\n' "$fields" | sed -n 's/^risk (qualified):.*reasons for high: \([^;]*\);.*/\1/p')
+reserved=$(printf '%s\n' "$fields" | sed -n 's/^risk (qualified):.*reserved: \(.*\)$/\1/p')
+if [ -z "$reasons" ] || [ -z "$reserved" ]; then
+	fail "process/R62: the vocabulary policy printed no risk reasons or no reserved ones"
+else
+	for r in $reasons; do
+		case " $reserved " in *" $r "*) continue ;; esac
+		t_text_has "$risk" "\`$r\` — " "process/R62: the planner reason '$r' the policy declares is explained" "the risk rubric"
+	done
+	for r in $reserved; do
+		t_text_has "$risk" "\`$r\`" "process/R61: the reserved reason '$r' is named as never the planner's" "the risk rubric"
+	done
+fi
+# process/R61: the checker, as the planner, before the quiz; a refused line
+# repaired and checked again, never shown.
+t_text_has "$quiz" "sh scripts/vocab.sh --writer planner 'Risk: <level>' 'Risk-confidence: <token>'" "process/R61: each ticket's risk goes to the checker as the planner"
+in_order "$quiz" "process/R61: the risk is checked, and a refusal fixed, before the list is presented" \
+	"--writer planner 'Risk: <level>'" "fix what it refuses" "present the draft"
+t_text_has "$risk" "repaired and checked again, never shown" "process/R61: a refused risk line is repaired and rechecked" "the risk rubric"
+for kind in good refused; do
+	ex=$(printf '%s\n' "$risk" | grep -o "<!-- $kind --> \`[^\`]*\`" | sed 's/.*`\(.*\)`/\1/')
+	if [ -z "$ex" ]; then
+		fail "the risk rubric shows no '<!-- $kind -->' example line"
+		continue
+	fi
+	(cd "$ROOT" && unset VOCAB_CONFIG && sh scripts/vocab.sh --writer planner "$ex" >/dev/null 2>&1); rc=$?
+	if [ "$kind" = good ]; then
+		[ "$rc" -eq 0 ] && pass "process/R61: the rubric's example ('$ex') passes the checker as the planner" ||
+			fail "process/R61: the rubric's example '$ex' is refused by scripts/vocab.sh (exit $rc)"
+	else
+		[ "$rc" -eq 2 ] && pass "process/R61: the rubric's refused example ('$ex') is refused to the planner" ||
+			fail "process/R61: the rubric's refused example '$ex' exits $rc, not 2"
+	fi
+done
+# process/R63: shown at the quiz beside the tier, published, and recorded.
+t_text_has "$quiz" "each ticket's \`Risk:\` and \`Risk-confidence:\` beside its tier" "process/R63: the quiz shows the risk and its confidence beside the tier"
+in_order "$publish" "process/R63: the body's risk lines follow the tier's confidence" \
+	'`Confidence: <token>` line beneath it' '`Risk:` and `Risk-confidence:` lines'
+in_order "$publish" "process/R63: ticket.write records the published risk, the proposed risk and the risk confidence" \
+	"kind=ticket.write" "data.risk='" "data.risk_proposed='" "data.risk_confidence='"
+# The keys are the ones /retro's question 8 reads (T-49, PR #992).
+retroq=$(cat "$ROOT/.agents/skills/retro/QUESTIONS.md")
+for k in data.risk_proposed data.risk_confidence '`data.risk` as published'; do
+	t_text_has "$retroq" "$k" "process/R63: /retro reads the key /to-tickets records" "/retro's QUESTIONS.md"
+done
 
 # ---------------------------------------------------------------------------
 banner "The release frontier: one shared-layer ticket per frontier (#833)"
