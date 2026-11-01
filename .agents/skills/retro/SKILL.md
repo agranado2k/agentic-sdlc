@@ -99,6 +99,10 @@ The full form — what to read, what counts as a finding, where it goes — is i
    clause; a row with too few events says so instead of a rate; and the
    label's override rate is computable once its stamps carry
    `data.label_proposed` — a row whose stamps predate that key says so.
+   The risk stamp gets a row per `Risk-confidence` the same way, and the
+   risk rule's `risk.judge` verdicts are counted against the planner's —
+   agreed, or disagreed by the side that raised it, its reason and review
+   area — with a tripped switch's verdicts left out and counted.
    Where that record accepts train-only verdicts, a window where no human
    dismissed a finding or overrode a stamp is answered with the same retired
    line, and the rows come back with the first window that holds one.

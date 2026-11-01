@@ -57,6 +57,11 @@
 #      spend/R22, section 16): its spend span RUNS over a fixture trace of
 #      attributed, unattributed and cascade spawns, and prints the rows,
 #      the order-of-magnitude buckets and the unattributed row.
+#  12. Question 8 counts the risk rule against the planner (process/R66,
+#      R67, #912, section 21): its risk span RUNS over a fixture trace of
+#      `risk.judge` events and prints UC5's counts, leaves a tripped switch's
+#      verdicts out and says how many; the risk override per Risk-confidence
+#      is read like the label's and counts as an operator verdict.
 #
 # NOT HELD here, on purpose: question 8's "what counts as a finding"
 # criteria and the rubric version its tier oracle names. Both are on the
@@ -1943,5 +1948,80 @@ case "$(sed -n '/^## Procedure/,/^## Routing/p' "$SKILL_ABS" | flat)" in
 *'`ticket:T-<digits>`'*) pass "process/R242: SKILL.md's export step joins on a factory ticket's subject too" ;;
 *) fail "process/R242: SKILL.md's export step names no \`ticket:T-<digits>\` join" ;;
 esac
+
+
+# ---------------------------------------------------------------------------
+banner "21. Question 8 counts the risk rule's disagreements with the planner (process/R66, R67, #912)"
+# ---------------------------------------------------------------------------
+# The risk rule records one `risk.judge` per PR and head (ADR-0045): the
+# planner's risk, the rule's, the unlearned areas and the switch. Question 8
+# carries a span over the export that counts the latest per PR as agreed or
+# disagreed, splits the disagreements by the side that raised the risk, its
+# reason and the review area, and leaves a tripped switch's verdicts out,
+# saying how many (UC5). It RUNS here over a fixture trace whose counts are
+# UC5's: agreed 7, disagreed 4, tripped 1 — plus a PR judged twice (the
+# latest counts) and one whose earlier verdict was tripped.
+rspan=$(sec_of 8 | grep -o '`sh scripts/trace\.sh export[^`]*risk\\\.judge[^`]*`' | tr -d '`' | head -1)
+[ -n "$rspan" ] && pass "question 8 carries a span over the export that reads risk.judge" ||
+	fail "question 8 carries no \`sh scripts/trace.sh export … risk\\.judge …\` span counting the risk rule's disagreements (process/R66)"
+rj_n=0
+rj() { # <trace dir> <pr> <outcome> <planner> <rule> <unlearned> <switch>
+	rj_n=$((rj_n + 1))
+	_rj_u=
+	[ -n "$6" ] && _rj_u=",\"unlearned\":\"$6\""
+	mkdir -p "$1/events"
+	printf '{"v":1,"ts":"2026-10-20T10:%02d:00Z","id":"20261020T10%02d00Z-%d-0000abcd","kind":"risk.judge","subject":"pr:#%s","outcome":"%s","data":{"head":"%040d","planner":"%s","rule":"%s","effective":"high","switch":"%s"%s}}\n' \
+		"$rj_n" "$rj_n" "$rj_n" "$2" "$3" "$rj_n" "$4" "$5" "$7" "$_rj_u" >>"$1/events/2026-10-20.jsonl"
+}
+rj_run() { ( cd "$ROOT" && TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$(t_trace_runnable "$rspan")" 2>/dev/null ); }
+rk="$SCRATCH/risk.retro"
+# PR 1 disagreed first, then agreed at a later head: the latest counts.
+rj "$rk" 1 disagreed low 'high unlearned' security on
+rj "$rk" 1 agreed low low '' on
+for p in 2 3 4 5 6; do rj "$rk" "$p" agreed low low '' on; done
+rj "$rk" 7 agreed 'high security' 'high unlearned' security on
+rj "$rk" 8 disagreed low 'high unlearned' security on
+rj "$rk" 9 disagreed low 'high unlearned' security on
+rj "$rk" 10 disagreed low 'high outward' '' on
+rj "$rk" 11 disagreed 'high security' low '' on
+# PR 12's verdict was tripped: left out of every count, and counted apart.
+rj "$rk" 12 disagreed low 'high unlearned' pattern tripped
+# PR 13 was tripped once, and judged again with the switch on.
+rj "$rk" 13 agreed low 'high unlearned' pattern tripped
+rj "$rk" 13 disagreed low 'high unlearned' pattern on
+if [ -n "$rspan" ]; then
+	rout=$(rj_run "$rk")
+	for row in 'agreed 7' 'disagreed 5: rule raised 4 (unlearned 3: security 2, pattern 1; outward 1), planner raised 1 (security 1)' \
+		'tripped 1, left out' 'disagreement rate 5 of 12 42 %'; do
+		printf '%s\n' "$rout" | grep -qxF "$row" && pass "process/R66, R67: the risk span prints '$row'" ||
+			fail "process/R66, R67: the risk span did not print '$row' over the fixture; it printed: $(printf '%s' "$rout" | tr '\n' ';')"
+	done
+fi
+# A small window, and trace text that is no declared reason or area: the
+# rate is replaced by the words, and neither value names a row.
+rs="$SCRATCH/risk-small.retro"
+rj "$rs" 1 disagreed low 'high bogus' "x-not-an-area" on
+rj "$rs" 2 disagreed 'high invented' low '' on
+if [ -n "$rspan" ]; then
+	rout=$(rj_run "$rs")
+	for row in 'agreed 0' 'disagreed 2: rule raised 1 (undeclared 1: undeclared 1), planner raised 1 (undeclared 1)' \
+		'tripped 0, left out' 'disagreement rate 2 of 2 too few to rate'; do
+		printf '%s\n' "$rout" | grep -qxF "$row" && pass "process/R66: over a small window the risk span prints '$row'" ||
+			fail "process/R66: over a small window the risk span did not print '$row'; it printed: $(printf '%s' "$rout" | tr '\n' ';')"
+	done
+	printf '%s\n' "$rout" | grep -qE 'bogus|invented|x-not-an-area' && fail "the risk span names a row by trace text" ||
+		pass "…and names no row by trace text: an undeclared reason or area prints \`undeclared\`"
+fi
+# The quiz override per Risk-confidence, read like the label's, and the
+# operator-verdict count that retires the question counts a risk override.
+for needle in '`data.risk_proposed`' '`data.risk_confidence`' 'per `Risk-confidence`' '`data.switch=tripped`' 'which side raised'; do
+	sec_of 8 | flat | grep -qF "$needle" && pass "question 8 names: $needle" || fail "question 8 does not name '$needle' (process/R66, R67)"
+done
+rv="$SCRATCH/risk-override.retro"
+ba_ev "$rv" 2026-10-02T09:00:00Z ticket.write ',"subject":"ticket:#5","tier":"implementer","outcome":"stamped","reason":"fixture","data":{"tier_proposed":"implementer","risk":"high security","risk_proposed":"low","risk_confidence":"low"}'
+if [ -n "$v8" ]; then
+	[ "$(vcount "$rv" "$v8")" = 1 ] && pass "process/R66: question 8's operator-verdict count counts a risk override at the quiz" ||
+		fail "question 8's operator-verdict span printed '$(vcount "$rv" "$v8")' over one risk override, not 1"
+fi
 
 t_done "/retro contract"
