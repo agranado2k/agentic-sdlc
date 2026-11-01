@@ -54,3 +54,23 @@ In order (decisions.md Q7). Each is one /to-tickets run.
 10. **K7b · The chain names a factory ticket by its id.** `/implement`, the PR's landing line, the landing script's `--ticket`, the skill dispatcher and spawn line, the check table, `/merge-train`, `/retro`'s joins and trace subjects (`ticket:T-07`, `prd:PRD-15`) accept a canonical factory ticket id beside an issue number; a factory ticket closes through `links.pr` and `factory move <id> review`, its gates the operator's. The kit mirrors issues until K7b's build slices land, then stops, held by a kit-only suite. Absorbs T-74. Written as PRD-15. Depends on K7 (PRD-12 slice 1).
 
 Raised to D-08 (not edited here): the factory's PRDs A–D depend on K1, K3, K4 and K5; the `Risk:` contract settled with D-08 (decisions.md, 2026-10-23).
+
+## Raised
+
+Proposals from the D-08 factory session (its operator, 2026-11-01, from Will Larson's
+"Speeding up code review with small-change", Imprint, 2026-10-21). Not yet ruled; each changes
+a K3 (PRD-09) or K5 (PRD-10) requirement, so each is ruled by the operator before the ticket it
+would reshape is built (T-42 for K3, T-50 for K5).
+
+- **Per-path lane exclusions (K5).** A list of paths that never enter the lane (payments,
+  security, money movement), as Imprint's per-repository `.small_change` file. In a factory
+  project the list is read from `.factory/project.yaml`, per the widened config rule
+  (2026-10-31).
+- **Shared code and an area cap (K3).** A change that touches a shared library or utility
+  path, or more than N review areas, makes the rule's risk `high` (Imprint: N=1 in its frontend
+  monorepo, N=3 in its backend). The author's track record is already covered as `unlearned`
+  (Imprint: 10+ prior merged PRs in the directory).
+- **A lane failure fixes the system (K1 or K5 norm).** A failed QA on a lane merge leads to a
+  fix of the rule, the lenses, the verifier or the harness, never to more human review
+  ("any error caused by a small-change is a failure in our system"), recorded with the mistake
+  event the record already counts.
