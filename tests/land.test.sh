@@ -1869,4 +1869,27 @@ t_text_has "$pi_flat" 'subject=ticket:<ticket>' "process/R240: /pr-iterate's fee
 printf '%s\n' "$pi_flat" | grep -qF 'ticket:#<ticket>' && fail "/pr-iterate still writes ticket:#<ticket>" ||
 	pass "/pr-iterate writes no ticket:#<ticket>"
 
+
+# ---------------------------------------------------------------------------
+banner "21. The landing takes the same action whatever the risk rule said (process/R65, PRD-09 slice 1)"
+# ---------------------------------------------------------------------------
+# The risk rule is report-only: a PR it called high lands exactly as one it
+# called low, and the landing script reads nothing of it.
+iterated 980 981
+# judged <PR> <outcome> <effective> — a risk.judge at the stub's head.
+judged() {
+	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=risk.judge "subject=pr:#$1" \
+		"outcome=$2" "data.head=$STUB_SHA" data.planner=low "data.rule=$3" "data.effective=$3" data.switch=on reason=seeded </dev/null >/dev/null 2>&1 ||
+		fail "could not seed a risk.judge on pr:#$1"
+}
+judged 980 disagreed 'high unlearned'
+judged 981 agreed low
+land 980
+_rk_high=$(merges)
+landed_with 980 "process/R65: a PR the risk rule called high unlearned" '"outcome":"landed"'
+land 981
+landed_with 981 "process/R65: a PR the risk rule called low" '"outcome":"landed"'
+[ "$_rk_high" = "$(merges)" ] && pass "process/R65: both made the same merge call" || fail "process/R65: the high PR made $_rk_high merge calls, the low one $(merges)"
+grep -qE 'risk\.sh|risk\.judge' "$LAND" && fail "process/R65: the landing script reads the risk rule" || pass "process/R65: the landing script names neither the rule nor its event"
+
 t_done "land one PR by hand"

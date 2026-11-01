@@ -24,9 +24,11 @@ the PRD writes it. R46 to R51 joined with the misses and lens precision
 (#877). R37 and R38 joined with the failed factory QA
 (#879). R229 to R236 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
 the PRD's numbers past PRD-08 to PRD-13's drafts. R241 to R245 joined from
-PRD-15 slice 4 (#966), the landing script's factory ticket. The verifier's
-dispatch and its broker joined as R206, R208 to R211 and R227, from PRD-13
-slice 1 (#941, ADR-0044).
+PRD-15 slice 4 (#966), the landing script's factory ticket. R52 to R58,
+R61 to R64, R68 and R69 joined from PRD-09 slice 1 (#905, ADR-0045), the
+risk rule, keeping the PRD's numbers; R59, R60 and R65 to R67 are its later
+slices'. The verifier's dispatch and its broker joined as R206, R208 to
+R211 and R227, from PRD-13 slice 1 (#941, ADR-0044).
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
@@ -79,6 +81,19 @@ R48. The record reader SHALL count a finding toward every review area its `data.
 R49. The record reader SHALL print, per review area, the findings held up, not held up and unlabelled, the precision (held up over labelled), and the count of labels from triage, from a human dismissal and from a post-merge outcome. [UC4 4]
 R50. IF a ratio's denominator is zero, THEN the record reader SHALL print `n/a` for it. [UC4 4a]
 R51. The record reader SHALL compare no number to a threshold, SHALL print no risk word, and SHALL write nothing to the trace or to any file. [UC4 5]
+R52. The trace SHALL accept the kind `risk.judge` with the outcomes `agreed` and `disagreed`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 7]
+R53. WHEN the risk rule runs with a base, a head and a PR number, it SHALL print on standard output, in this order and nothing else, `effective: <risk>`, `planner: <risk>`, `rule: <risk>`, one `area: <review area> earned|unlearned` line per review area the diff touches, and `switch: on|tripped`, and exit 0. [UC1 6]
+R54. The risk rule SHALL read the planner's risk only from a ticket's `Risk:` line, lifted by the stamp reader from a ticket number or a ticket body file, and SHALL read it as `high unclear` when no ticket is given, the ticket carries no `Risk:` line, or the stamp reader refuses it. [UC1 2, 1a, 2a]
+R55. The risk rule SHALL judge a review area earned only when its earned record, read over the area's most recent settled landings (those that landed before the fix window began), shows the full window of 20 settled landings, a missed-mistake rate below the policy's limit, and a precision at or above the policy's floor, and no landing of the area inside the fix window carries a missed mistake; it SHALL judge the area unlearned when its precision is `n/a`. [UC1 4]
+R56. IF any review area the diff touches is unlearned, or a changed path belongs to no review area, THEN the rule's risk SHALL be `high unlearned` unless `outward` applies, and a path in no area SHALL print as `area: none unlearned`. [UC1 4, 3a]
+R57. IF the thresholds cannot be read under the base-branch policy contract, THEN the risk rule SHALL judge every review area unlearned. [UC1 4a]
+R58. IF the trace is unconfigured or holds a `SCHEMA` the reader cannot judge, THEN the risk rule SHALL judge every review area unlearned, name the cause on standard error, print its lines, record nothing, and exit 0. [UC1 4b]
+R61. The effective risk SHALL be `high` when either the planner's or the rule's risk is `high`, carrying the rule's reason when the rule's risk is high and the planner's otherwise, and `low` only when both are `low`. [UC1 6, 7b]
+R62. The risk rule SHALL check every `Risk` value it prints with the vocabulary checker, declaring itself the risk rule, and SHALL print nothing and exit 2 if the checker refuses one.
+R63. WHEN the risk rule judges a PR, it SHALL record one `risk.judge` event with subject `pr:#<N>`, the ticket in `related` when there is one, outcome `disagreed` when the planner's level differs from the rule's and `agreed` otherwise, and in `data` the head commit, the planner's, rule's and effective risks, the unlearned areas and the switch state. [UC1 7, 7b]
+R64. IF the trace already holds a `risk.judge` for the same PR and head commit with the same risks and switch state, THEN the risk rule SHALL record nothing. [UC1 7a]
+R68. The risk rule SHALL exit 0 whatever risk it prints, and SHALL write nothing but its `risk.judge` event. [UC1 8]
+R69. The risk rule SHALL print and record only risk tokens, review area names from the lens-slice policy, `none`, the switch words, digits and commit shas, and no text from a ticket body, a PR body or a commit message.
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
 R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]

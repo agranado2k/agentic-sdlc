@@ -3713,7 +3713,58 @@
 # KIT_OWN naming it, docs/specs/runtime.md R200 to R202 and R221, the
 # glossary's Verifier and Provider, and tests/trace.test.sh section 44.
 
-shared-layer: 0.105.0
+# 0.106.0 — /to-prd defers to the factory's own PRD skill in a factory
+# project (ticket #936, PRD-12 slice 3 of D-02, factory T-73). NO file joins
+# the shared layer and none leaves, and no shared file changes content
+# besides UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-prd — SKILL.md opens with "A factory project defers,
+# before any other step", ahead of its grilling question, pointing at a new
+# FACTORY.md beside it whose fenced factory_deferral is /to-tickets' own,
+# byte for byte, asked for factory-prd: `defer` prints the hand-off naming
+# /factory-prd and ends, publishing nothing and writing no prd.write;
+# `missing` names `factory install-skill` once and runs the forge flow;
+# `none` changes nothing; only the operator's own message lifts a deferral.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
+# none.
+# Kit-only, never shipped: docs/specs/process.md R120, the glossary's
+# Deferral reference widened to R120, config.mjs's skill-path exemption
+# `.claude/skills/factory-prd/`, and tests/spec-skills.test.sh's /to-prd
+# factory section.
+
+# 0.107.0 — the risk rule judges a pull request's risk from its review
+# areas' earned records, reported only (ticket #905, PRD-09 slice 1 of D-02,
+# factory T-42, the kit's ADR-0045). ONE file joins the shared layer:
+# scripts/risk.sh, the risk rule — `sh scripts/risk.sh <base> <head> --pr
+# <N> [--ticket <N>|T-<n>] [--ticket-file <path>]` prints `effective:`,
+# `planner:`, `rule:`, one `area: <review area> earned|unlearned` line per
+# area the diff touches (`none` for a path in none) and `switch: on`, closed
+# tokens only, and records one `risk.judge` per PR, head and verdict; an
+# area is earned over its 20 most recent settled landings against the risk
+# policy's thresholds read at the base, and every unknown fails closed to
+# high, exit 0; 2 a caller error or a refused value. Two more shared files
+# change content: scripts/trace.sh, which gains the kind `risk.judge`
+# (`agreed`, `disagreed`, its outcome required; `data.head` 40 hex,
+# `data.switch` on or tripped) and `record --settled`, the record reader's
+# digits-only form over settled landings, exit 3 on an unknown SCHEMA; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate — SKILL.md's step 6 runs the risk rule before
+# the scratch files go, pointing at a new RISK.md beside it, and its output
+# format opens with `Risk: <the effective line> (reported only)` under the
+# title; the skill takes the same actions whatever the rule prints.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: the kit's ADR-0045 and its index row, bootstrap's
+# KIT_OWN naming it and KIT_ONLY naming scripts/risk.kit.sh and
+# tests/risk.test.sh, docs/specs/runtime.md R52 to R58, R61 to R64, R68 and
+# R69, docs/specs/process.md R64 and R65, the glossary's Earned, Unlearned,
+# Risk rule and Effective risk, AGENTS.md's hard rule 10 and rows,
+# README.md's rows and suite line, the kit-ci job, config.mjs's /pr-iterate
+# ceiling raised to 38500, tests/trace.test.sh's risk.judge rows,
+# tests/land.test.sh section 21 and tests/vocab.test.sh's call-site entry.
+
+shared-layer: 0.107.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -3749,6 +3800,7 @@ files:
   scripts/behavior-delta.sh
   scripts/lens-slice.sh
   scripts/policy.sh
+  scripts/risk.sh
   scripts/check.sh
   scripts/docs-conformance/index.mjs
   scripts/docs-conformance/context.mjs

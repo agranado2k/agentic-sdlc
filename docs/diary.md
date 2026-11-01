@@ -2918,3 +2918,38 @@ lenses' earned record stays the kit's own before the verifier's row exists,
 and a local triage still takes only a lens id, a verifier finding being
 triaged as a bot's. Built ahead of its slot as 0043 and renumbered 0044
 after 0.104.0, whose wave took 0043 (ADR-0033).
+
+## 2026-11-01 — /to-prd defers to the factory's own PRD skill
+
+PRD-12 slice 3 of D-02 (#936, factory T-73; released as 0.106.0; ADR-0042 already named it).
+`/to-prd` takes `/to-tickets`' deferral in the same shape: a `FACTORY.md`
+beside the skill, opened before the grilling question, running
+`factory_deferral factory-prd`. The fenced function is `/to-tickets`' own,
+byte for byte, and the suite holds the two fences equal before it runs
+`/to-prd`'s against fixtures of its own — a `factory-tickets` skill alone
+does not stand in for `factory-prd`. With both files it hands off naming
+`/factory-prd` and writes no `prd.write`; with the manifest alone it names
+`factory install-skill` once. Spec gains process/R120.
+
+## 2026-11-01 — The risk rule judges each PR, and /pr-iterate reports it only
+
+PRD-09 slice 1 of D-02 (#905, factory T-42; released as 0.107.0,
+ADR-0045). `scripts/risk.sh` reads the
+planner's `Risk:` line through the stamp reader and each touched review
+area's earned record over its 20 most recent settled landings, through a new
+digits-only form of the record reader, `trace.sh record --settled`, against
+the thresholds the policy reader gives at the base. It prints the effective
+risk as closed tokens and records one `risk.judge` per PR, head and verdict.
+Every unknown fails closed to high. `/pr-iterate` runs it at the end of each
+iteration and puts the effective line at the top of its report, marked
+reported only; nothing acts on it. ADR-0045 amends ADR-0024 clauses 1, 7
+and 9 for this one reader; built as 0044 and renumbered at release, after
+0.105.0 took that number (ADR-0033). /pr-iterate's step text moved to `RISK.md`, and
+its byte ceiling rose from 38000 to 38500: it sat 3 bytes under.
+
+Baseline, measured 2026-11-01 over the kit's own trace (625 MB): the settled
+record read takes 3.7 s wall (2.0 s user), and the rule's same-verdict read
+(`show pr:#<N> --kind risk.judge`) 1.0 s. On that trace every area already
+holds 20 settled landings and no miss, but precision runs 0.67 to 0.72,
+under the 0.80 floor, so every area reads unlearned and every PR `high
+unlearned` today.
