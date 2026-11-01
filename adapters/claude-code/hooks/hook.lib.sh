@@ -393,11 +393,12 @@ hook_handed_in() {
 # THE LINE is the prompt's SECOND, under a well-formed Trace-Run first line
 # (hook_run_handed) — or its FIRST, when no run was handed: the spawn of a
 # session with no run open (#627) — exactly
-#   Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>
+#   Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|T-<digits>|none>
 # four fields in that order, one space apart, nothing else on the line. The
 # tier is one of the four the kit sizes work to; a domain and a skill are
 # `[a-z][a-z0-9-]*`, 32 characters at most; a ticket is `#` and a number with
-# no leading zero, six digits at most. `none` leaves the domain empty and
+# no leading zero, six digits at most, or a canonical factory ticket id,
+# `T-<digits>` (#964). `none` leaves the domain empty and
 # relates no ticket. A line further down, out of order, with an extra field, a
 # tab or a value of another shape is no line: the stop is `unattributed`, which
 # the summary shows as a row of its own rather than dropping. Each value is
@@ -454,6 +455,11 @@ hook_spawn_in() {
 	none) ;;
 	'#'[1-9] | '#'[1-9][0-9] | '#'[1-9][0-9][0-9] | '#'[1-9][0-9][0-9][0-9] | \
 		'#'[1-9][0-9][0-9][0-9][0-9] | '#'[1-9][0-9][0-9][0-9][0-9][0-9]) ;;
+	# A canonical factory ticket id (#964, runtime/R240): T- and 2 to 6
+	# digits, a leading zero only in the two-digit form — the trace's own
+	# shape (the kit's ADR-0040), so the stop relates ticket:T-<digits> as it does #N.
+	T-[0-9][0-9] | T-[1-9][0-9][0-9] | T-[1-9][0-9][0-9][0-9] | \
+		T-[1-9][0-9][0-9][0-9][0-9] | T-[1-9][0-9][0-9][0-9][0-9][0-9]) ;;
 	*) return 1 ;;
 	esac
 	hook_spawn_tier=${_hs_t#tier=}
