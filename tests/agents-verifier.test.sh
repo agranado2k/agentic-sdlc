@@ -98,6 +98,15 @@ verify AGENT_SESSION_MODEL=vendor-big-1 'AGENT_UNREACHABLE_MODELS=rival-one-2 ri
 expect_resolved '' "a spawn word named unreachable covers the ids that fold to it, and a spent walk prints nothing"
 expect_status 0 "a spent walk exits 0"
 
+EMPTYC="$SCRATCH/empty-candidates"
+mkdir -p "$EMPTYC/scripts"
+cp "$TREE/scripts/agents.kit.sh" "$TREE/scripts/agents.lib.sh" "$EMPTYC/scripts/"
+sed "s/^AGENT_KIT_VERIFIER_CANDIDATES=.*/# AGENT_KIT_VERIFIER_CANDIDATES='other:rival-one-2'   # out until its CLI logs in/" "$TREE/scripts/agents.kit.config.sh" >"$EMPTYC/scripts/agents.kit.config.sh"
+t_exec env -C "$EMPTYC" -u AGENT_HARNESS_SELF -u AGENT_UNREACHABLE_MODELS AGENT_SESSION_MODEL=vendor-big-1 sh scripts/agents.kit.sh --rung reviewer cross-provider
+expect_resolved same-provider "candidates commented out: the walk takes the same-provider rung"
+t_exec env -C "$EMPTYC" -u AGENT_HARNESS_SELF -u AGENT_UNREACHABLE_MODELS AGENT_SESSION_MODEL=vendor-big-1 sh scripts/agents.kit.sh --model reviewer cross-provider
+expect_resolved vendor-small-1 "candidates commented out: the reviewer walk's other family answers"
+
 banner "neither rung, or no author's provider (R205)"
 verify AGENT_SESSION_MODEL=vendor-small-1 'AGENT_UNREACHABLE_MODELS=rival-one-2 rival-two-3 vendor-big-1' -- --model
 expect_resolved '' "both rungs spent: nothing on stdout, exit 0"
@@ -136,11 +145,15 @@ for _pol in agents.kit.config.sh agents.kit.codex.config.sh; do
 	[ -z "$_missing" ]
 	_t_expect $? "$_pol: every verifier candidate is an id --ids lists, so its spawn can be traced" "unlisted:$_missing"
 done
+# The other harness's CLI is not logged in (PRD-13 §2): the kit's Claude
+# Code policy declares no candidate of another provider, so its implementer's
+# diff is verified on the second rung, a model of another family.
 _impl=$(env -C "$KIT" -u AGENT_HARNESS_SELF sh scripts/agents.kit.sh --model implementer 2>/dev/null)
+_impl_fam=$(env -C "$KIT" -u AGENT_HARNESS_SELF sh scripts/agents.kit.sh --alias implementer 2>/dev/null)
 t_exec env -C "$KIT" -u AGENT_HARNESS_SELF -u AGENT_UNREACHABLE_MODELS AGENT_SESSION_MODEL="$_impl" sh scripts/agents.kit.sh --rung reviewer cross-provider
-expect_resolved cross-provider "the kit's policy: its implementer's diff gets a verifier of another provider"
-t_exec env -C "$KIT" -u AGENT_HARNESS_SELF -u AGENT_UNREACHABLE_MODELS AGENT_SESSION_MODEL="$_impl" sh scripts/agents.kit.sh --harness reviewer cross-provider
-[ -n "$T_OUT" ]
-_t_expect $? "the kit's policy: that verifier crosses to another agent harness" "--harness printed nothing"
+expect_resolved same-provider "the kit's policy, no other-provider candidate: its implementer's diff takes the same-provider rung"
+t_exec env -C "$KIT" -u AGENT_HARNESS_SELF -u AGENT_UNREACHABLE_MODELS AGENT_SESSION_MODEL="$_impl" sh scripts/agents.kit.sh --alias reviewer cross-provider
+[ -n "$T_OUT" ] && [ -n "$_impl_fam" ] && [ "$T_OUT" != "$_impl_fam" ]
+_t_expect $? "the kit's policy: that verifier is of another family than the implementer's ('$_impl_fam')" "--alias printed '${T_OUT:-nothing}'"
 
 t_done "agents verifier walk"

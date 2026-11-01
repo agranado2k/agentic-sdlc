@@ -141,7 +141,14 @@ AGENT_HARNESS_CODEX_MODEL_FLAG='--model {model}'
 # ---------------------------------------------------------------------------
 AGENT_KIT_PROVIDER_CLAUDE_CODE='anthropic'
 AGENT_KIT_PROVIDER_CODEX='openai'
-AGENT_KIT_VERIFIER_CANDIDATES='codex:gpt-5.6-sol sonnet'
+# The codex candidate is OUT while that CLI is not logged in on this host
+# (PRD-13 §2: the kit policy's cross-vendor ids stay commented out until it
+# logs in). Re-enable it — put `codex:gpt-5.6-sol` back first in the list —
+# once `codex login status` reports a login. Until then a Claude-authored diff
+# is verified on the second rung, `same-provider`, and the list's one live
+# candidate serves a codex-authored diff only.
+# AGENT_KIT_VERIFIER_CANDIDATES='codex:gpt-5.6-sol sonnet'
+AGENT_KIT_VERIFIER_CANDIDATES='sonnet'
 
 # ---------------------------------------------------------------------------
 # 1. PLANNER — strongest reasoning available. A wrong decomposition is paid
