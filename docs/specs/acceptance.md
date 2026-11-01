@@ -19,3 +19,4 @@ R3. The vocabulary checker SHALL accept several `Accept-test:` lines for one id,
 R4. The shipped vocabulary policy SHALL declare the field `accept-test` as a keyed field whose value is held to the test-pin grammar the checker owns, with a published line bound of 32, and the checker's built-in defaults SHALL equal it.
 R5. WHEN a ticket carries `Accept-test:` lines, the stamp reader SHALL lift and check them with the ticket's other stamp lines and print them as spelled. [UC1 2]
 R6. IF a ticket's `Accept-test:` line names an id that is not on its `Covers:` line, THEN the stamp reader SHALL exit 2 naming the field `accept-test`. [UC1 2b]
+R7. WHEN the release that ships acceptance/R1 to R6 lands, `UPDATING.md` SHALL tell a consumer whose own vocabulary policy file predates it to add the `accept-test` field and its bound.

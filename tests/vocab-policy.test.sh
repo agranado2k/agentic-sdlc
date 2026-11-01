@@ -326,4 +326,16 @@ for word in '`risk`' '`risk-confidence`' '`test-tier`' '`result`' '`scope`' 'scr
 	esac
 done
 
+# acceptance/R7: the release that ships the Accept-test: line tells a consumer
+# whose own policy predates it to add the field and its bound.
+note=$(awk '/^\*\*Arriving from 0\.103\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$UPDATING" | tr '\n' ' ')
+[ -n "$note" ] && pass "acceptance/R7: UPDATING.md carries the arriving-from-0.103.0 paragraph" ||
+	fail "acceptance/R7: UPDATING.md has no 'Arriving from 0.103.0 or older' paragraph"
+for word in '`accept-test`' '`VOCAB_PIN=' '`accept-test=32`' '`VOCAB_BOUNDS`' 'scripts/vocab.config.sh' 'whole policy'; do
+	case $note in
+	*"$word"*) pass "acceptance/R7: the paragraph names $word" ;;
+	*) fail "acceptance/R7: the paragraph does not name $word" ;;
+	esac
+done
+
 t_done "vocab-policy"

@@ -3658,7 +3658,35 @@
 # `.claude/skills/factory-tickets/`, tests/spec-skills.test.sh's factory
 # section and tests/self-host.test.sh's process/R136 assertion.
 
-shared-layer: 0.103.0
+# 0.104.0 — a ticket's stamp carries `Accept-test:` lines (ticket #969,
+# PRD-14 slice 1 of D-02, factory T-95). NO file joins the shared layer and
+# none leaves. Two shared files change content besides UPDATING.md:
+# scripts/vocab.sh learns a pin field, VOCAB_PIN — a keyed field whose value
+# after the requirement id is a test pin `<path>::<test-name>` held to the
+# checker's grammar (at most 200 bytes, printable ASCII, no `|`, a relative
+# path with no space and no `..` segment, a non-empty test name), several
+# lines per id, two identical lines one answer; its defaults declare
+# `accept-test` so, bounded at 32 lines, and it refuses a field named `pin`
+# and a pin field that is not keyed or declares tokens. scripts/stamp.sh
+# lifts `Accept-test:` lines with the stamp, prints them as spelled, exits 2
+# naming accept-test on an id off the ticket's Covers: line, and 5 past 32
+# lines. UPDATING.md gains its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — SKILL.md's rule 8 (no file paths in ticket
+# bodies) gains its second exception, the `Accept-test:` line, and its quiz
+# step checks each such line with `sh scripts/vocab.sh 'Accept-test: <id>
+# <path>::<test-name>'` before the human sees the draft and shows them beside
+# the Test-tier: lines. Wiring (9b): none. Templates (9c): none. Config (9d):
+# scripts/vocab.config.sh declares `accept-test` in VOCAB_FIELDS and
+# VOCAB_KEYED, a new VOCAB_PIN='accept-test', and `accept-test=32` in
+# VOCAB_BOUNDS — a consumer's own policy file that predates this takes them by
+# hand. Adapter (9e): none.
+# Kit-only, never shipped: ADR-0037's amendment and its index row, the new
+# docs/specs/acceptance.md (R1 to R7) and bootstrap.sh's KIT_OWN naming it,
+# docs/specs/process.md R43 modified and R220 and R221, the glossary's
+# Acceptance test, `Accept-test:` line and Test pin.
+
+shared-layer: 0.104.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
