@@ -56,6 +56,12 @@ finding() {
 	ev "$1" "$2" finding.triage "pr:#$3" "$6" "\"id\":\"$4\",\"source\":\"local\""
 }
 
+# verdict <trace> <ts> <pr> <axis> [<outward>] — a review.verdict on the PR;
+# <outward> left out writes no data.outward.
+verdict() {
+	ev "$1" "$2" review.verdict "pr:#$3" confirm "\"axis\":\"$4\",\"unspecified\":\"${5:-0}\"${5:+,\"outward\":\"$5\"}"
+}
+
 # --- the repository: landings on main, the risk policy at the base ----------
 t_repo
 R=$REPO
@@ -94,6 +100,11 @@ pr_branch uc1 scripts/foo.sh tests/foo.test.sh
 pr_branch docs docs/x.md
 pr_branch tests-only tests/foo.test.sh
 UC1_HEAD=$(git -C "$R" rev-parse uc1)
+# A time at or after every pull request's head commit: a verdict stamped at it
+# is at the head (the landing script's test, ADR-0032); one stamped in 2025,
+# before the head was committed, reviewed an older commit.
+AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+OLD=2025-06-01T00:00:00Z
 # A base whose risk policy is gone, and one whose policy fails `sh -n`.
 git -C "$R" checkout -q -b nopolicy main
 git -C "$R" rm -q scripts/risk.config.sh
@@ -124,6 +135,8 @@ settled() {
 # The traces, one per scenario.
 T_EARNED="$SCRATCH/trace-earned"
 settled "$T_EARNED" 1 21
+# The PRs judged low below carry an Axis-2 verdict at the head, no outward item.
+for _pr in 920 921 951; do verdict "$T_EARNED" "$AT" "$_pr" 2 0; done
 # security: a settled landing in it alone, reverted and missed — missed 1 of 20.
 T_SEC="$SCRATCH/trace-sec"
 settled "$T_SEC" 1 21
@@ -397,5 +410,97 @@ _adr=$(grep -l 'risk rule' "$KIT"/docs/adr/[0-9]*.md 2>/dev/null | xargs grep -l
 for term in 'Risk rule' 'Effective risk' 'Earned' 'Unlearned'; do
 	grep -qF -- "- **$term**" "$KIT/docs/domain-glossary.md" && pass "the glossary defines $term" || fail "the glossary has no entry for $term"
 done
+
+# ---------------------------------------------------------------------------
+banner "11. An outward item or an unreviewed head raises the rule's risk (runtime/R59, R60)"
+# ---------------------------------------------------------------------------
+# UC2: the Axis-2 verdict at the head counted one outward item; every area
+# earned and the ticket says low.
+verdict "$T_EARNED" "$AT" 1100 1
+verdict "$T_EARNED" "$AT" 1100 2 1
+rule "$P_EARNED" main uc1 --pr 1100 --ticket-file "$f"
+expect_status 0 "runtime/R59: an outward verdict exits 0"
+[ "$T_OUT" = "effective: high outward
+planner: low
+rule: high outward
+$(areas_all earned)
+switch: on" ] && pass "runtime/R59: an Axis-2 verdict at the head with data.outward=1 over all-earned areas prints rule: high outward and effective: high outward" ||
+	fail "runtime/R59: UC2 printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+J=$(judges "$T_EARNED" | grep -F '"pr:#1100"')
+for tok in '"outcome":"disagreed"' '"rule":"high outward"' '"effective":"high outward"' '"planner":"low"' "\"head\":\"$UC1_HEAD\"" '"switch":"on"'; do
+	case $J in *"$tok"*) pass "runtime/R59, runtime/R63: the outward judgment carries $tok" ;; *) fail "runtime/R59: the outward judgment lacks $tok: $J" ;; esac
+done
+case $J in *'"unlearned"'*) fail "runtime/R63: an all-earned outward judgment names unlearned areas" ;; *) pass "runtime/R63: an all-earned outward judgment names no unlearned area" ;; esac
+# Two or more outward items are outward too.
+verdict "$T_EARNED" "$AT" 1101 2 3
+rule "$P_EARNED" main uc1 --pr 1101 --ticket-file "$f"
+[ "$(printf '%s\n' "$T_OUT" | sed -n 3p)" = 'rule: high outward' ] && pass "runtime/R59: data.outward of 3 is outward" || fail "runtime/R59: outward=3 printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+
+# UC2 1a: no Axis-2 verdict at the head.
+rule_line() { printf '%s\n' "$T_OUT" | sed -n 3p; }
+nolow() {
+	[ "$T_OUT" = "effective: high unclear
+planner: low
+rule: high unclear
+$(areas_all earned)
+switch: on" ]
+}
+rule "$P_EARNED" main uc1 --pr 1102 --ticket-file "$f"
+nolow && pass "runtime/R60: no Axis-2 verdict for the PR over all-earned areas prints rule: high unclear" ||
+	fail "runtime/R60: no verdict printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+judges "$T_EARNED" | grep -F '"pr:#1102"' | grep -F '"outcome":"disagreed"' | grep -qF '"rule":"high unclear"' &&
+	pass "runtime/R60, runtime/R63: and records the rule's high unclear against the planner's low, disagreed" || fail "runtime/R60: #1102 recorded $(judges "$T_EARNED" | grep -F '"pr:#1102"')"
+verdict "$T_EARNED" "$OLD" 1103 2 0
+rule "$P_EARNED" main uc1 --pr 1103 --ticket-file "$f"
+nolow && pass "runtime/R60: an Axis-2 verdict only at an older commit is no verdict at the head — high unclear" ||
+	fail "runtime/R60: an older verdict printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+verdict "$T_EARNED" "$OLD" 1104 2 1
+rule "$P_EARNED" main uc1 --pr 1104 --ticket-file "$f"
+nolow && pass "runtime/R59, runtime/R60: an outward item counted at an older commit is not the head's — high unclear" ||
+	fail "runtime/R60: an older outward verdict printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+verdict "$T_EARNED" "$AT" 1105 1
+rule "$P_EARNED" main uc1 --pr 1105 --ticket-file "$f"
+nolow && pass "runtime/R60: an Axis-1 verdict alone at the head is no Axis-2 verdict — high unclear" ||
+	fail "runtime/R60: an Axis-1 verdict printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+verdict "$T_EARNED" "$AT" 1106 2
+rule "$P_EARNED" main uc1 --pr 1106 --ticket-file "$f"
+nolow && pass "runtime/R60: an Axis-2 verdict that counts no outward items cannot rule one out — high unclear" ||
+	fail "runtime/R60: a verdict with no data.outward printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+verdict "$T_EARNED" "$AT" 1107 2 0
+rule "$P_EARNED" main uc1 --pr 1199 --ticket-file "$f"
+nolow && pass "runtime/R60: another PR's verdict is not this PR's — high unclear" ||
+	fail "runtime/R60: another PR's verdict printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+# The latest Axis-2 verdict at the head is the one read.
+verdict "$T_EARNED" "$AT" 1108 2 1
+verdict "$T_EARNED" "$AT" 1108 2 0
+rule "$P_EARNED" main uc1 --pr 1108 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: low' ] && pass "runtime/R59: the latest Axis-2 verdict at the head is the one read" || fail "runtime/R59: the latest verdict read $(rule_line)"
+
+# UC2 2a: the order is outward, then unlearned, then unclear.
+P_SEC=$(tpol "$T_SEC")
+verdict "$T_SEC" "$AT" 1110 2 1
+rule "$P_SEC" main uc1 --pr 1110 --ticket-file "$f"
+[ "$T_OUT" = 'effective: high outward
+planner: low
+rule: high outward
+area: security unlearned
+area: api-crud earned
+area: pattern earned
+area: simplicity earned
+area: reuse-dry earned
+area: test-hygiene earned
+switch: on' ] && pass "runtime/R59: outward over an unlearned area prints high outward and still the unlearned area: line" ||
+	fail "runtime/R59: outward with unlearned printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+judges "$T_SEC" | grep -F '"pr:#1110"' | grep -F '"rule":"high outward"' | grep -qF '"unlearned":"security"' &&
+	pass "runtime/R63: and the event still names the unlearned area" || fail "runtime/R63: #1110 recorded $(judges "$T_SEC" | grep -F '"pr:#1110"')"
+rule "$P_SEC" main uc1 --pr 1111 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high unlearned' ] && [ "$(printf '%s\n' "$T_OUT" | head -1)" = 'effective: high unlearned' ] &&
+	pass "runtime/R60: no verdict with unlearned areas prints high unlearned" || fail "runtime/R60: no verdict with unlearned printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+# The same PR and head re-judged after its review raised it records again.
+rule "$P_EARNED" main uc1 --pr 1112 --ticket-file "$f"
+verdict "$T_EARNED" "$AT" 1112 2 1
+rule "$P_EARNED" main uc1 --pr 1112 --ticket-file "$f"
+[ "$(judges "$T_EARNED" | grep -cF '"pr:#1112"')" = 2 ] && pass "runtime/R64: a review that changes the rule's risk at the same head is a judgment of its own" ||
+	fail "runtime/R64: #1112 recorded $(judges "$T_EARNED" | grep -cF '"pr:#1112"') judgments"
 
 t_done "the risk rule"

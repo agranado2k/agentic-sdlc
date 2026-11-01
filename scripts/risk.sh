@@ -36,8 +36,20 @@
 # `precision-floor`, and no missed mistake on a landing still inside the fix
 # window (runtime/R55); any other area is UNLEARNED, and so is a path in no
 # area (`none`). The thresholds are read through the policy reader at <base>
-# (`policy.sh thresholds --base`), never the pull request's tree. Any
-# unlearned area makes the rule's risk `high unlearned`; else `low`.
+# (`policy.sh thresholds --base`), never the pull request's tree.
+#
+# THE REVIEW AT THE HEAD. The rule reads the latest Axis-2 `review.verdict`
+# on the PR stamped at or after the head commit's committer date (UTC), as
+# the landing script reads "at the head". Its `data.outward` of 1 or more —
+# something outside the PR relies on an unspecified change
+# (the kit's ADR-0038) — makes the rule's risk `high outward` (runtime/R59). No such
+# verdict, one only at an older commit, or one that carries no outward count
+# in digits makes it `high unclear`: the rule cannot rule out an outward item
+# it has not seen (runtime/R60).
+#
+# The reason, in order: `outward`, then `unlearned` (any unlearned area),
+# then `unclear`; else `low`. Unlearned areas keep their `area:` lines and
+# `data.unlearned` whichever reason prints.
 #
 # FAILING CLOSED. A policy reader exit other than 0 (thresholds it cannot
 # give), an unconfigured trace, a trace whose SCHEMA the reader cannot judge,
@@ -200,10 +212,35 @@ fi
 [ -z "$_none" ] || printf 'none\tunlearned\n' >>"$_tmp/verdicts"
 unlearned=$(awk -F '\t' '$2 == "unlearned" { printf "%s%s", s, $1; s = " " }' "$_tmp/verdicts")
 
+# --- the review at the head -----------------------------------------------------
+# The latest Axis-2 review.verdict on pr:#<N> stamped at or after the head
+# commit's committer date, both UTC ISO seconds compared as strings — the
+# landing script's reading of "at the head" (the kit's ADR-0032). The
+# envelope (subject, stamp) is read up to the data map; axis and outward from
+# the map. Prints its data.outward, `-` when it carries no count in digits;
+# nothing when there is no such verdict, or the trace cannot be read.
+outward=
+if [ -n "$record" ]; then
+	head_at=$(TZ=UTC git show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd "$head" 2>/dev/null)
+	outward=$(sh "$_here/trace.sh" show "pr:#$pr" --kind review.verdict 2>/dev/null |
+		awk -v s="\"subject\":\"pr:#$pr\"" -v h="$head_at" '
+			{ e = $0; m = ""; d = index(e, ",\"data\":{"); if (d) { m = substr(e, d); e = substr(e, 1, d - 1) } }
+			h != "" && index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h &&
+			match(m, /"axis":"2"/) {
+				o = match(m, /"outward":"[0-9]+"/) ? substr(m, RSTART + 11, RLENGTH - 12) : "-"
+			}
+			END { if (o != "") print o }')
+fi
+
 # --- the verdict ------------------------------------------------------------------
+# The rule's reason, in order: outward, then unlearned, then unclear.
 switch=on
 rule=low
+case $outward in
+'' | -) rule='high unclear' ;;
+esac
 [ -z "$unlearned" ] || rule='high unlearned'
+case $outward in '' | - | 0) ;; *) rule='high outward' ;; esac
 plevel=${planner%% *}
 rlevel=${rule%% *}
 if [ "$rlevel" = high ]; then
