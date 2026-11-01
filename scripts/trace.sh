@@ -207,8 +207,8 @@
 # lens findings raised on them held up. It reads `merge.land`,
 # `merge.outcome`, the findings' raises, triages and dismissals, and git, and
 # writes nothing. The operator and /retro run it; no chain skill does. Its
-# settled form, `record --settled`, is the risk rule's (scripts/risk.sh, the
-# kit's ADR-0044): digits only, over each area's settled landings.
+# settled form, `record --settled`, is the risk rule's (scripts/risk.sh,
+# the kit's ADR-0044): digits only, over each area's settled landings.
 #
 # THE OUTCOME RECORDER, `outcomes`, writes the `merge.outcome` lines git and
 # the trace prove (the kit's ADR-0036): a `reverted` against each landed PR

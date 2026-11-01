@@ -268,6 +268,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # adds `label` to the keys (process/R130) and is bounded the same way.
 # check-table.sh lifts the bare `Test-tier:` lines of a ticket body and
 # refuses more than the policy's bound before the checker reads them (#870).
+# risk.sh checks one risk value per call, its own token of the risk grammar's
+# shape — the planner's lifted by stamp.sh and held to that shape — never a
+# body (PRD-09 runtime/R62).
 LIFTED=$(
 	cat <<'EOLIFT'
 scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier)[[:space:]]*:"
@@ -276,6 +279,7 @@ scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE "^[[:space:]]
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 scripts/check-table.sh@@-@@printf '%s\n' "$stamps" | sh "$vocab" check@@[ "$n" -le "$bound" ] || {
+scripts/risk.sh@@risk_checked@@sh "$_here/vocab.sh" check --writer risk-rule "Risk: $1"@@case $1 in low | "high "*) ;; *) return 1 ;; esac
 EOLIFT
 )
 

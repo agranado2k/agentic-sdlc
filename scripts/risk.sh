@@ -8,7 +8,7 @@
 # REPORT-ONLY. What it prints changes no exit code and no action of any skill
 # or script; /pr-iterate puts the effective line at the top of its report,
 # marked reported only (the kit's PRD-09; the decision record that lets a chain
-# skill run it amends ADR-0024 clauses 7 and 9).
+# skill run it amends the kit's ADR-0024 clauses 7 and 9).
 #
 # WHAT IT PRINTS, on stdout, in this order and nothing else (runtime/R53):
 #   effective: <risk>
@@ -26,8 +26,8 @@
 # the stamp reader (scripts/stamp.sh) from `--ticket` — an issue number, or a
 # factory ticket id — or from `--ticket-file`, a body the stamp reader reads
 # through a stand-in tracker, as the skill dispatcher reads one. No ticket, no
-# `Risk:` line, or any stamp-reader exit but 0 reads `high unclear` (the kit's
-# ADR-0037 clause 3); nothing is written into the ticket.
+# `Risk:` line, or any stamp-reader exit but 0 reads `high unclear`
+# (the kit's ADR-0037 clause 3); nothing is written into the ticket.
 #
 # THE RULE'S RISK. Each review area the diff (merge-base(<base>, <head>) to
 # <head>) touches is EARNED when the trace's record reader, in its settled form
@@ -216,11 +216,16 @@ fi
 outcome=agreed
 [ "$plevel" = "$rlevel" ] || outcome=disagreed
 
-# Every Risk value checked as the risk rule before a line is printed, one call
-# each: the checker refuses one field written twice with two values.
+# risk_checked <risk> — the one value, of the risk grammar's shape, checked as
+# the risk rule. One call per value: the checker refuses one field written
+# twice with two values.
+risk_checked() {
+	case $1 in low | "high "*) ;; *) return 1 ;; esac
+	sh "$_here/vocab.sh" check --writer risk-rule "Risk: $1" >/dev/null 2>&1
+}
+# Every Risk value checked before a line is printed.
 for _v in "$effective" "$planner" "$rule"; do
-	sh "$_here/vocab.sh" check --writer risk-rule "Risk: $_v" >/dev/null 2>&1 ||
-		die "the vocabulary checker refused a risk value — nothing printed"
+	risk_checked "$_v" || die "the vocabulary checker refused a risk value — nothing printed"
 done
 
 {
