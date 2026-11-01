@@ -282,7 +282,7 @@ const skillPaths = {
     // project, absent in the kit tree the skill also ships from.
     ".github/workflows/ai-review.example.yml",
     // Written by the software factory's `factory install-skill`, never by the
-    // kit: /to-tickets' factory deferral tests for its presence (the kit's ADR-0040).
+    // kit: /to-tickets' factory deferral tests for its presence (the kit's ADR-0041).
     ".claude/skills/factory-tickets/",
   ],
 };

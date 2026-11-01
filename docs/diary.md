@@ -2852,3 +2852,15 @@ naming `sh scripts/stamp.sh <issue-number>`. The id is 1 to 6 digits as
 /implement's SKILL.md sat 6 bytes under its 27000-byte ceiling, so the
 factory text went to STAMP.md behind a one-sentence pointer and the
 ceiling rose to 27500.
+
+## 2026-11-01 — the trace accepts factory-id subjects
+
+PRD-15 slice 1 of D-02 (#963, factory T-97, absorbing #937; released as
+0.101.0, ADR-0040). `TRACE_FACTORY_IDS` pairs a numbered type with a factory
+prefix, `ticket=T prd=PRD` in the kit's twin and empty as shipped, so
+`sh scripts/trace.kit.sh emit kind=note subject=ticket:T-07` now exits 0
+here while `ticket:T-7` and `ticket:T-007` exit 2 naming both forms. The
+canonical id is checked by shape alone, 2 to 6 digits with a leading zero
+only in the two-digit form; a `ticket:T-070` can never be written, so
+section 21b writes that `show` decoy by hand. The release waited behind
+0.100.0 (ADR-0033) and was built test-first in the meantime.

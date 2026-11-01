@@ -3580,7 +3580,33 @@
 # 27500, and the suites that hold them — tests/stamp.test.sh's factory
 # section and tests/implement-deliver.test.sh section 4h.
 
-shared-layer: 0.100.0
+# 0.101.0 — the trace accepts factory-id subjects (ticket #963, PRD-15
+# slice 1 of D-02, factory T-97; absorbs #937, T-74). NO file joins the
+# shared layer and none leaves. Two shared files change content besides
+# UPDATING.md: scripts/trace.sh reads a second policy key,
+# TRACE_FACTORY_IDS, words `<type>=<PREFIX>` pairing a type
+# TRACE_NUMBERED_TYPES names with 1 to 8 uppercase letters (any other word
+# exit 2, naming it and the policy file); a paired type takes, beside
+# `<type>:#<digits>`, the canonical factory id `<type>:<PREFIX>-<digits>` —
+# 2 to 6 digits, a leading zero only in the two-digit form — at emit, as a
+# subject or a related token, and every other spelling of it is exit 2,
+# writing nothing and naming both forms; show matches it whole; verify and
+# summary advise on a non-canonical one, the verdict unchanged; empty or
+# unset, every subject is judged as before; and scripts/trace.config.sh,
+# which carries TRACE_FACTORY_IDS='' under a comment naming its form; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none. Config (9d):
+# scripts/trace.config.sh gains TRACE_FACTORY_IDS (a shared file, taken by
+# Part 1; a project that sets TRACE_NUMBERED_TYPES and plans in the factory
+# sets it to `ticket=T prd=PRD`). Adapter (9e): none.
+# Kit-only, never shipped: ADR-0040 and its index row, bootstrap.sh's
+# KIT_OWN list naming it, docs/specs/runtime.md R229 to R236, the glossary's
+# Subject entry, Ticket handle and Canonical factory id,
+# scripts/trace.kit.config.sh's TRACE_FACTORY_IDS='ticket=T prd=PRD', and
+# tests/trace.test.sh section 21b that holds them.
+
+shared-layer: 0.101.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
