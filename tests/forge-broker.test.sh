@@ -1720,4 +1720,115 @@ esac
 STUB_PR=12
 export STUB_PR
 
+
+# ---------------------------------------------------------------------------
+banner "V1. A verifier's report posts under its own markers, beside a kit review (runtime/R209, R210)"
+# ---------------------------------------------------------------------------
+# The same report bytes, already posted as the KIT's review: a verifier post
+# of them must not read the kit's marker as its own, and the reverse.
+STUB_PR=50
+export STUB_PR
+broker 50 "$GOOD" --dry-run
+KIT_MARKER=$(printf '%s\n' "$T_OUT" | grep -o '<!-- forge-broker: [0-9a-f]* -->' | head -n 1)
+[ -n "$KIT_MARKER" ] && pass "the kit review's marker is read off its dry run" || fail "no kit marker in the dry run"
+printf '%s\n' "https://forge.invalid/pull/50#pullrequestreview-7	$KIT_MARKER already here" >"$SCRATCH/v-reviews.tsv"
+printf '%s\n' "https://forge.invalid/pull/50#issuecomment-8	$KIT_MARKER already here" >"$SCRATCH/v-comments.tsv"
+STUB_REVIEWS="$SCRATCH/v-reviews.tsv" STUB_COMMENTS="$SCRATCH/v-comments.tsv"
+export STUB_REVIEWS STUB_COMMENTS
+broker 50 "$GOOD" --verifier --rung same-provider --provider anthropic --model opus
+expect_status 0 "runtime/R210: a verifier report beside an already posted kit review of the same bytes exits 0"
+assert_mutating 2 "runtime/R210: …and posts its own review and comment — the kit's marker is not the verifier's"
+REVIEW=$(payload pulls/50/reviews)
+COMMENT=$(payload issues/50/comments)
+case "$REVIEW" in
+*'<!-- forge-broker-verifier: '*) pass "runtime/R209: the verifier's review carries the verifier's marker" ;;
+*) fail "runtime/R209: the verifier's review has no verifier marker"; printf '%s\n' "$REVIEW" | sed 's/^/        | /' ;;
+esac
+case "$REVIEW$COMMENT" in
+*'<!-- forge-broker: '*) fail "runtime/R209: a verifier body carries the kit review's marker" ;;
+*) pass "runtime/R209: neither verifier body carries the kit review's marker" ;;
+esac
+case "$COMMENT" in
+*'<!-- forge-broker-verifier: '*) pass "runtime/R209: the verifier's comment carries the verifier's marker" ;;
+*) fail "runtime/R209: the verifier's comment has no verifier marker" ;;
+esac
+case "$REVIEW" in
+*'"event":"COMMENT"'*'"path":"scripts/a.sh"'*'"line":3'*) pass "runtime/R209: one review, event COMMENT, findings inline" ;;
+*) fail "runtime/R209: the verifier review is not event COMMENT with its findings inline" ;;
+esac
+# The reverse: a verifier post already there does not stop the kit's.
+VMARK=$(printf '%s\n' "$REVIEW" | grep -o '<!-- forge-broker-verifier: [0-9a-f]* -->' | head -n 1)
+printf '%s\n' "https://forge.invalid/pull/50#pullrequestreview-9	$VMARK already here" >"$SCRATCH/v-reviews.tsv"
+printf '%s\n' "https://forge.invalid/pull/50#issuecomment-9	$VMARK already here" >"$SCRATCH/v-comments.tsv"
+broker 50 "$GOOD"
+expect_status 0 "runtime/R210: a kit review beside an already posted verifier report exits 0"
+assert_mutating 2 "runtime/R210: …and posts — the verifier's marker never stops the kit's post"
+# And a verifier re-run finds its own marker and posts nothing.
+broker 50 "$GOOD" --verifier --rung same-provider --provider anthropic
+expect_status 0 "a retried verifier run exits 0"
+assert_mutating 0 "…and finds its own marker: nothing posted twice"
+unset STUB_REVIEWS STUB_COMMENTS
+
+# ---------------------------------------------------------------------------
+banner "V2. The verifier's verdict is its own kind, with its rung (runtime/R211, R227)"
+# ---------------------------------------------------------------------------
+STUB_PR=51
+export STUB_PR
+broker 51 "$GOOD" --verifier --rung same-provider --provider anthropic --model opus
+expect_status 0 "a verifier report with a HIGH finding lands"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#51' --kind verify.verdict
+V=$(printf '%s\n' "$T_OUT" | grep -F '"kind":"verify.verdict"')
+[ "$(printf '%s\n' "$V" | grep -c .)" = 1 ] && pass "runtime/R211: one verify.verdict on pr:#51" || fail "runtime/R211: expected one verify.verdict, got: $V"
+for want in '"outcome":"blocked"' "\"reviewed\":\"$HEAD_SHA\"" '"provider":"anthropic"' '"disputed":"0"' '"rung":"same-provider"'; do
+	case "$V" in
+	*"$want"*) pass "runtime/R211, R227: the verdict carries $want" ;;
+	*) fail "runtime/R211, R227: the verdict lacks $want: $V" ;;
+	esac
+done
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#51' --kind finding.raise
+for id in V-H-1 V-M-1; do
+	case $(printf '%s\n' "$T_OUT" | grep -F "\"id\":\"$id\"") in
+	*'"agent":"verifier"'*) pass "runtime/R211: $id is raised with data.agent=verifier" ;;
+	*) fail "runtime/R211: no raise of $id with data.agent=verifier: $T_OUT" ;;
+	esac
+done
+printf '%s\n' "$T_OUT" | grep -q '"id":"[CHML]-' &&
+	fail "runtime/R211: a verifier finding was raised under a lens id" ||
+	pass "runtime/R211: no verifier finding carries a bare lens id"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#51' --kind review.verdict
+expect_out_lacks '"kind":"review.verdict"' "the verifier records no review.verdict — no reader counts it as the kit's review"
+# A report with no CRITICAL or HIGH finding is a pass, on the other rung.
+STUB_PR=52
+export STUB_PR
+awk '/^\*\*H-1\*\*/ { skip = 2 } skip { skip--; next } { print } /^#### HIGH$/ { print "— none found." }' "$GOOD" >"$SCRATCH/v-pass.md"
+broker 52 "$SCRATCH/v-pass.md" --verifier --rung cross-provider --provider openai --harness codex
+expect_status 0 "a verifier report with a MEDIUM finding only lands"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#52' --kind verify.verdict
+for want in '"outcome":"pass"' '"provider":"openai"' '"rung":"cross-provider"'; do
+	case "$T_OUT" in
+	*"$want"*) pass "runtime/R211, R227: a report with no CRITICAL or HIGH finding records $want" ;;
+	*) fail "runtime/R211, R227: the pass verdict lacks $want: $T_OUT" ;;
+	esac
+done
+
+# ---------------------------------------------------------------------------
+banner "V3. No rung, an unknown rung, or no provider: exit 65, nothing posted or recorded (runtime/R227)"
+# ---------------------------------------------------------------------------
+STUB_PR=53
+export STUB_PR
+for args in '--verifier --provider anthropic' '--verifier --rung sideways --provider anthropic' '--verifier --rung same-provider'; do
+	# shellcheck disable=SC2086 # each case is its words
+	broker 53 "$GOOD" $args
+	expect_status 65 "runtime/R227: '$args' exits 65"
+	assert_mutating 0 "runtime/R227: '$args' posts nothing"
+done
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#53'
+expect_out_lacks '"subject":"pr:#53"' "runtime/R227: nothing recorded on pr:#53"
+# A rung or a provider without --verifier is a usage error: the kit review has neither.
+broker 53 "$GOOD" --rung same-provider
+expect_status 2 "--rung without --verifier is a usage error"
+assert_mutating 0 "…and posts nothing"
+STUB_PR=12
+export STUB_PR
+
 t_done "tests/forge-broker.test.sh"
