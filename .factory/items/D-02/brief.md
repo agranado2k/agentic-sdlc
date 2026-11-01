@@ -58,9 +58,8 @@ Raised to D-08 (not edited here): the factory's PRDs A–D depend on K1, K3, K4 
 ## Raised
 
 Proposals from the D-08 factory session (its operator, 2026-11-01, from Will Larson's
-"Speeding up code review with small-change", Imprint, 2026-10-21). Not yet ruled; each changes
-a K3 (PRD-09) or K5 (PRD-10) requirement, so each is ruled by the operator before the ticket it
-would reshape is built (T-42 for K3, T-50 for K5).
+"Speeding up code review with small-change", Imprint, 2026-10-21). Not yet ruled. Each adds to a K3 (PRD-09) or K5 (PRD-10) requirement; they do not hold T-42 or T-50
+(decisions.md, 2026-11-01): an accepted one arrives later as a delta against the shipped rule.
 
 - **Per-path lane exclusions (K5).** A list of paths that never enter the lane (payments,
   security, money movement), as Imprint's per-repository `.small_change` file. In a factory

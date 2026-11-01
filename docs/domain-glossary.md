@@ -295,6 +295,25 @@ Grouped by the seam each term belongs to. Entry shape:
   policy publishes. Ref: ADR-0037.
   - _Avoid_: "capability tier" or "tier" alone — the tier is the model's;
     the test tier is the test's.
+- **Acceptance test** — a test named on a ticket, before the build, as part
+  of the definition of done of one requirement the ticket covers. A
+  requirement may have several. A human approves them before the build
+  starts, and the build starts from them red and never edits them (PRD-14).
+  Ref: ADR-0037.
+  - _Avoid_: "the ticket's tests" — the build's own tests are tests too;
+    an acceptance test is one named before the build.
+- **`Accept-test:` line** — the stamp line that names one acceptance test:
+  `Accept-test: <requirement id> <test pin>`. A **keyed field** of the
+  vocabulary, like `Test-tier:`, but its value after the id is a test pin
+  held to the checker's grammar, never to tokens; the id must be on the
+  ticket's `Covers:` line, an id may repeat once per test, and a ticket
+  carries at most 32 such lines. `/to-tickets` rule 8 lets it name a path.
+  Ref: ADR-0037.
+- **Test pin** — `<path>::<test-name>`, the name of one test in one file,
+  split at its first `::`: at most 200 bytes of printable ASCII and no `|`,
+  the path relative, non-empty, with no space and no `..` segment, the test
+  name non-empty and free to hold spaces. The check table's evidence pin is
+  a test pin with `@<commit>` after it. Ref: ADR-0037.
 - **Check table** — the block in a PR body that shows, per requirement the
   ticket covers, the test tier that checked it, the **result** (`pass`,
   `fail`, `skipped`) and the evidence: a `<path>::<test>@<sha>` pin, an
@@ -374,6 +393,14 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: the bare "harness" — see "Words this project does not use";
     "provider" (that is the vendor behind the model, not the program running
     it); and "runner".
+- **Provider** — the vendor behind a model, as the agent-harness entry above
+  already uses the word. The kit's agents policy declares one provider per
+  agent harness and one for the session's own, and a model's provider is its
+  agent harness's. Comparing **families** (ADR-0027) is a different and finer
+  test: two models of one provider can differ in family and share a provider.
+  The verifier's walk tries another provider first. Ref: ADR-0044, PRD-13.
+  - _Avoid_: "vendor" for the policy's word (it is the plain meaning, not the
+    token), and "agent harness" — the program a model runs in.
 - **Budget** — the two ceilings a dispatched worker's whole process tree runs
   inside: a task ceiling and a memory ceiling, decided at dispatch time as a
   percentage of the host — the task ceiling the operator's own session runs
@@ -606,6 +633,18 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "proxy" (a proxy forwards what it is given; the broker refuses
     most of it), "relay" (the operator pasting a review by hand — the thing
     the broker replaces), "poster".
+- **Verifier** — a reviewer-tier spawn in the `cross-provider` domain that
+  reviews one PR head beside the kit's own `/review-pr`, with the review
+  worker's contract. Its model is resolved by a walk: a model of another
+  **provider** than the diff's author first, else one of the author's provider
+  and another family, else none (`unavailable`). It also judges each `pass`
+  row of the PR's check table and each finding the kit's review raised. It is
+  advisory: its verdict, the trace kind `verify.verdict`, is never the review
+  a landing requires, and its verdict on a finding, `finding.verify`, is never
+  a triage, so it labels nothing. Its own findings carry a `V-` id (`V-H-1`).
+  Its one gating use is PRD-10's low-risk lane. Ref: ADR-0044, PRD-13.
+  - _Avoid_: "second reviewer" or "co-signer" (it signs nothing), and
+    "cross-check".
 - **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
   trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
   window — by default since its own last run end — it answers eight fixed
