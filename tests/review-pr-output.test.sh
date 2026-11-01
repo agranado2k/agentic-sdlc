@@ -2048,6 +2048,53 @@ bait_copy "$ICT_ABS" "$SCRATCH/ct-bait-i.md" 's/FILENAME == ARGV\[1\]/NR == FNR/
 rm -f "$SCRATCH/ct-bait-i.md"
 rm -rf "$SCRATCH/uc3" "$SCRATCH/ct-pr" "$SCRATCH/ct-ticket"
 
+# process/R239 (#965, PRD-15 slice 3): for a factory ticket id the ticket side
+# of the check table is what the stamp reader printed — it carries the checked
+# `Covers:` and `Test-tier:` lines the reader needs — and no issue is fetched.
+# The review's coordinator and the loop both say so beside their fetch.
+FT_REVIEW='sh scripts/stamp.sh T-<digits> >"$d/ticket-body"'
+FT_ITER='sh scripts/stamp.sh T-<digits> >"$scratch/ticket-body"'
+for pair in "$RCT_ABS|$FT_REVIEW|/review-pr" "$ICT_ABS|$FT_ITER|/pr-iterate"; do
+	f=${pair%%|*}; rest=${pair#*|}; line=${rest%|*}; who=${rest##*|}
+	t=$(unwrap "$f")
+	t_text_has "$t" "$line" "process/R239: $who takes a factory ticket's side from the stamp reader" "$who's CHECK-TABLE.md"
+	t_text_has "$t" "\`<!-- implement: ticket=T-<digits> tier=<tier> -->\`" "process/R239: $who reads the factory id off the landing line" "$who's CHECK-TABLE.md"
+	t_text_has "$t" "fetches no issue" "process/R239: $who fetches no issue for a factory ticket" "$who's CHECK-TABLE.md"
+done
+# …and that ticket side is one the real reader takes: a stand-in `factory`
+# first on PATH answers `factory stamp T-07`, a stand-in tracker fails if
+# called, and the check-table reader judges the stamp reader's output.
+FPROJ="$SCRATCH/ct-fproj"
+mkdir -p "$FPROJ/scripts" "$FPROJ/.factory" "$SCRATCH/ct-fbin"
+for f in stamp.sh vocab.sh vocab.config.sh requirement.lib.sh; do cp "$ROOT/scripts/$f" "$FPROJ/scripts/$f"; done
+: >"$FPROJ/.factory/project.yaml"
+git -C "$FPROJ" init -q -b main
+cat >"$SCRATCH/ct-fbin/factory" <<'STUB'
+#!/bin/sh
+printf 'Tier: implementer\nCovers: process/R1, process/R2\nTest-tier: process/R1 suite\nTest-tier: process/R2 suite\n'
+STUB
+cat >"$SCRATCH/ct-fbin/gh" <<'STUB'
+#!/bin/sh
+echo called >>"$CT_GH_CALLS"
+exit 1
+STUB
+chmod +x "$SCRATCH/ct-fbin/factory" "$SCRATCH/ct-fbin/gh"
+: >"$SCRATCH/ct-gh-calls"
+(cd "$SCRATCH" && CT_GH_CALLS="$SCRATCH/ct-gh-calls" PATH="$SCRATCH/ct-fbin:$PATH" sh "$FPROJ/scripts/stamp.sh" T-07 >"$SCRATCH/ct-ticket" 2>/dev/null)
+[ ! -s "$SCRATCH/ct-gh-calls" ] && pass "process/R239: the factory ticket's side is read with no tracker call" ||
+	fail "process/R239: the stamp read for T-07 called the tracker"
+ct_body '| process/R1 | suite | pass | tests/a.test.sh::process/R1@3f9c2e1 |' '| process/R2 | suite | pass | tests/a.test.sh::process/R2@3f9c2e1 |'
+t_exec sh scripts/check-table.sh "$SCRATCH/ct-pr" "$SCRATCH/ct-ticket"
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] &&
+	pass "process/R239: a complete table passes against the stamp reader's output for T-07" ||
+	fail "process/R239: the reader exited $T_STATUS printing '$T_OUT' on a complete table against T-07's stamp"
+ct_body '| process/R1 | suite | pass | tests/a.test.sh::process/R1@3f9c2e1 |'
+t_exec sh scripts/check-table.sh "$SCRATCH/ct-pr" "$SCRATCH/ct-ticket"
+[ "$T_STATUS" = 1 ] && [ "$T_OUT" = 'missing-row: process/R2' ] &&
+	pass "process/R239: a row missing for T-07's covered id is named from the stamp reader's output" ||
+	fail "process/R239: the reader exited $T_STATUS printing '$T_OUT' on a table missing process/R2"
+rm -rf "$FPROJ" "$SCRATCH/ct-fbin" "$SCRATCH/ct-gh-calls" "$SCRATCH/ct-pr" "$SCRATCH/ct-ticket"
+
 # ---------------------------------------------------------------------------
 banner "26. The loop decides inside items into a decision log, and holds outward ones (#874)"
 # ---------------------------------------------------------------------------

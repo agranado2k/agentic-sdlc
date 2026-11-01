@@ -3676,7 +3676,14 @@
 # bodies) gains its second exception, the `Accept-test:` line, and its quiz
 # step checks each such line with `sh scripts/vocab.sh 'Accept-test: <id>
 # <path>::<test-name>'` before the human sees the draft and shows them beside
-# the Test-tier: lines. Wiring (9b): none. Templates (9c): none. Config (9d):
+# the Test-tier: lines. /implement — STAMP.md gains a section for a
+# canonical factory ticket id: read through `factory show`, built on the
+# claim branch, moved to build as the branch's first commit and to review
+# once the PR exists, `ticket:T-<digits>` subjects and a T- landing line with
+# no closing keyword, every factory gate left to the operator; SKILL.md,
+# CHECK-TABLE.md and DISPATCHED-REVIEW.md point there; /review-pr's and
+# /pr-iterate's CHECK-TABLE.md take a factory ticket's side from the stamp
+# reader (#965, factory T-96). Wiring (9b): none. Templates (9c): none. Config (9d):
 # scripts/vocab.config.sh declares `accept-test` in VOCAB_FIELDS and
 # VOCAB_KEYED, a new VOCAB_PIN='accept-test', and `accept-test=32` in
 # VOCAB_BOUNDS — a consumer's own policy file that predates this takes them by
@@ -3684,7 +3691,9 @@
 # Kit-only, never shipped: ADR-0037's amendment and its index row, the new
 # docs/specs/acceptance.md (R1 to R7) and bootstrap.sh's KIT_OWN naming it,
 # docs/specs/process.md R43 modified and R220 and R221, the glossary's
-# Acceptance test, `Accept-test:` line and Test pin.
+# Acceptance test, `Accept-test:` line and Test pin; with #965, ADR-0043 and
+# its index row, bootstrap.sh's KIT_OWN naming it, docs/specs/process.md
+# R228 to R239.
 
 shared-layer: 0.104.0
 

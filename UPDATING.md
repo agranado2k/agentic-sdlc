@@ -249,8 +249,15 @@ found is the whole policy, so one that predates this release declares no
 — copy them from the kit's file at this tag. **One skill moves (9a).**
 `/to-tickets`' rule 8 lets an `Accept-test:` line name a test file's path,
 and its quiz step checks each such line with the checker before the human
-sees the draft and shows them beside the `Test-tier:` lines. No wiring,
-template or adapter moves.
+sees the draft and shows them beside the `Test-tier:` lines. Riding this
+release (9a): `/implement` builds a factory ticket by its canonical id — its
+`STAMP.md` gains the section (read through `factory show`, the claim
+branch, the move to build as the first commit and to review once the PR
+exists, a `T-` landing line with no closing keyword, every factory gate the
+operator's) and `SKILL.md`, `CHECK-TABLE.md` and `DISPATCHED-REVIEW.md` point
+there — and `/review-pr`'s and `/pr-iterate`'s `CHECK-TABLE.md` read a factory
+ticket's side through the stamp reader. No wiring, template or adapter
+moves.
 
 **Arriving from 0.102.0 or older, `/to-tickets` defers to the factory's own
 ticket skill in a factory project.** No file joins or leaves at 0.103.0, and
