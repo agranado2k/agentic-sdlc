@@ -19,7 +19,7 @@
 #   sh scripts/trace.sh current
 #   sh scripts/trace.sh id [--check <id>]
 #   sh scripts/trace.sh runs [<id>]
-#   sh scripts/trace.sh record
+#   sh scripts/trace.sh record [--settled]
 #
 # WHAT IT IS. Every decision the chain makes — a tier stamped, a model resolved,
 # a finding raised or rejected, a PR iterated, a merge landed — is one JSON line
@@ -206,7 +206,9 @@
 # carry a `merge.outcome`, how many carry one the review missed, and how the
 # lens findings raised on them held up. It reads `merge.land`,
 # `merge.outcome`, the findings' raises, triages and dismissals, and git, and
-# writes nothing. The operator and /retro run it; no chain skill does.
+# writes nothing. The operator and /retro run it; no chain skill does. Its
+# settled form, `record --settled`, is the risk rule's (scripts/risk.sh,
+# the kit's ADR-0045): digits only, over each area's settled landings.
 #
 # THE OUTCOME RECORDER, `outcomes`, writes the `merge.outcome` lines git and
 # the trace prove (the kit's ADR-0036): a `reverted` against each landed PR
@@ -245,8 +247,8 @@ TRACE_EVENT_CAP=4000
 # on every kind but those TRACE_REQUIRED names (below, #832). The kind
 # list after it stays a literal line, because the skill suites read it as
 # one; the trace suite holds the two to the same kinds, row for row.
-TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed verify.verdict=pass|blocked|unavailable finding.verify=confirmed|disputed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome verify.verdict finding.verify hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
+TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed risk.judge=agreed|disagreed verify.verdict=pass|blocked|unavailable finding.verify=confirmed|disputed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome risk.judge verify.verdict finding.verify hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567,
 # 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins
@@ -275,10 +277,12 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # model's provider, a token; and its verdict on one kit finding names that
 # lens finding's id, never a V- one, and a <path>:<line> place
 # (the kit's ADR-0044, #939).
+# A risk rule's verdict names the head it judged, a commit sha, and the
+# kill switch's state, on or tripped (PRD-09 slice 1).
 # `verify` advises on a raise and on a lens count
 # written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
 # from here).
-TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2 merge.outcome=by_sha:[0-9a-f]{40} merge.outcome=days:[0-9]+ merge.outcome/outcome~reverted|fixed=by_sha!:[0-9a-f]{40} merge.outcome/outcome~qa-failed=ticket!:[A-Za-z0-9._-]+ verify.verdict=reviewed:[0-9a-f]{40} verify.verdict=provider:[a-z][a-z0-9._-]* verify.verdict/outcome~pass|blocked=reviewed!:[0-9a-f]{40} verify.verdict/outcome~pass|blocked=provider!:[a-z][a-z0-9._-]* finding.verify=id:[CHML]-[0-9]+ finding.verify=where:.+:[0-9]+'
+TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2 merge.outcome=by_sha:[0-9a-f]{40} merge.outcome=days:[0-9]+ merge.outcome/outcome~reverted|fixed=by_sha!:[0-9a-f]{40} merge.outcome/outcome~qa-failed=ticket!:[A-Za-z0-9._-]+ verify.verdict=reviewed:[0-9a-f]{40} verify.verdict=provider:[a-z][a-z0-9._-]* verify.verdict/outcome~pass|blocked=reviewed!:[0-9a-f]{40} verify.verdict/outcome~pass|blocked=provider!:[a-z][a-z0-9._-]* finding.verify=id:[CHML]-[0-9]+ finding.verify=where:.+:[0-9]+ risk.judge=head:[0-9a-f]{40} risk.judge=switch:on|tripped'
 # THE REQUIRED KEYS (the kit's ADR-0034, amending the kit's ADR-0024 clause 1, #832):
 # a field or data key every line of a kind must carry, whatever its outcome.
 # Each entry is `<kind>=outcome` or `<kind>=data.<key>`. A raise names its
@@ -288,11 +292,12 @@ TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[
 # or it is nothing a reader can count (the kit's ADR-0036, #875); a
 # verifier's verdict names its outcome, and its verdict on one finding its
 # outcome, the finding's id and the evidence's place (the kit's ADR-0044,
-# #939). An empty
+# #939); and a risk rule's verdict names whether it agreed with the
+# planner (PRD-09 slice 1). An empty
 # value is no value. The VALUE stays the shape row's, the outcome table's, and for a raise's severity the
 # vocabulary checker's (trace_check_severity). `verify` advises on a line
 # already written without one (TRACE_AWK_REQUIRED reads this table).
-TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome verify.verdict=outcome finding.verify=outcome finding.verify=data.id finding.verify=data.where'
+TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome verify.verdict=outcome finding.verify=outcome finding.verify=data.id finding.verify=data.where risk.judge=outcome'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -314,7 +319,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh current
        sh scripts/trace.sh id [--check <id>]
        sh scripts/trace.sh runs [<id>]
-       sh scripts/trace.sh record
+       sh scripts/trace.sh record [--settled]
        sh scripts/trace.sh outcomes
          (a <dir> beginning with - or session= is refused: name it ./<dir>)
 USAGE
@@ -2965,12 +2970,36 @@ trace_fix_window() {
 # dismissal with the latest raise at its `data.where` before it and every
 # raise at that where from the same run. A ratio over zero prints `n/a`.
 # Nothing is compared to a threshold and nothing is written. Unconfigured: nothing on stdout, exit 0, like every reader.
+#
+# `record --settled` is the RISK RULE's form (scripts/risk.sh, PRD-09
+# runtime/R55): digits and area names only, one line per area,
+#
+#   <area> landings <n> missed <k> held <h> judged <j> window-missed <w>
+#
+# counted over the area's most recent 20 SETTLED landings — those whose day
+# is the fix window's days or more before today, so no later fix can still
+# count them a mistake — with <w> the landings of the area INSIDE the fix
+# window that carry a missed mistake, all of them. <j> is held up plus not
+# held up, so the precision is <h>/<j>. A trace whose SCHEMA this reader
+# cannot judge is exit 3 here, said on stderr, nothing on stdout.
 trace_record() {
-	[ $# -eq 0 ] || usage
+	_rc_settled=0
+	case $# in
+	0) ;;
+	1) [ "$1" = --settled ] || usage; _rc_settled=1 ;;
+	*) usage ;;
+	esac
 	trace_dir || {
 		trace_unconfigured_note
 		return 0
 	}
+	if [ "$_rc_settled" = 1 ]; then
+		_rc_schema=$(trace_first_line "$TRACE_ROOT_DIR/SCHEMA")
+		if [ -n "$_rc_schema" ] && [ "$_rc_schema" != "$TRACE_SCHEMA" ]; then
+			echo "x  trace: $TRACE_ROOT_DIR/SCHEMA says schema $_rc_schema and this script reads $TRACE_SCHEMA — a trace it does not know is not its to judge" >&2
+			return "$TRACE_EX_SCHEMA"
+		fi
+	fi
 	[ -f "$_trace_here/lens-slice.sh" ] || {
 		echo "trace: record: no lens-slice.sh beside this script — no review areas to count" >&2
 		return 0
@@ -3032,7 +3061,7 @@ trace_record() {
 		printf '%s\n' "$_rc_areas" | awk 'NF { print "A\t" $0 }'
 		printf '%s\n' "$_rc_files"
 		printf '%s\n' "$_rc_ev"
-	} | LC_ALL=C awk -F '\t' -v today="$(date -u +%Y-%m-%d)" -v window="$TRACE_FIX_WINDOW" -v cap="$TRACE_RECORD_LANDINGS" '
+	} | LC_ALL=C awk -F '\t' -v today="$(date -u +%Y-%m-%d)" -v window="$TRACE_FIX_WINDOW" -v cap="$TRACE_RECORD_LANDINGS" -v settled="$_rc_settled" '
 		function day(s,   y, m, d, a) {
 			y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0
 			a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3
@@ -3109,12 +3138,17 @@ trace_record() {
 					for (y = x - 1; y >= 1 && (lts[cand[y]] < lts[v] || (lts[cand[y]] == lts[v] && lpr[cand[y]] > lpr[v])); y--) cand[y + 1] = cand[y]
 					cand[y + 1] = v
 				}
-				c = n < cap ? n : cap; w = 0; mk = 0; km = 0
+				# Settled: a landing inside the fix window is not counted toward
+				# the 20, but a missed mistake on one is said (window-missed).
+				c = 0; w = 0; mk = 0; km = 0; um = 0
 				split("", counted)
-				for (x = 1; x <= c; x++) {
+				for (x = 1; x <= n && c < cap; x++) {
 					j = cand[x]
+					inw = now - day(lts[j]) < window
+					if (settled && inw) { if (lpr[j] in missed) um++; continue }
+					c++
 					counted[lpr[j]] = 1
-					if (now - day(lts[j]) < window) w++
+					if (inw) w++
 					if (lpr[j] in mistake) mk++
 					if (lpr[j] in missed) km++
 				}
@@ -3129,6 +3163,7 @@ trace_record() {
 					else if (tri[r] == "rejected" || (r in dism)) nh++
 					else ul++
 				}
+				if (settled) { printf "%s landings %d missed %d held %d judged %d window-missed %d\n", a, c, km, hu, hu + nh, um; continue }
 				printf "%s: landings %d of %d, in the fix window %d, mistakes %d, missed %d of %d, miss rate %s, held up %d of %d, not held up %d, unlabelled %d, precision %s, labels from triage %d, human %d, outcome %d\n", a, c, cap, w, mk, km, c, ratio(km, c), hu, hu + nh, nh, ul, ratio(hu, hu + nh), st, sh, so
 			}
 		}'

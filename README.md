@@ -255,7 +255,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.106.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.107.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -714,6 +714,16 @@ skeleton (K0).
   where the base or the head holds it, from the working tree with no base and
   at the base with one, and prints nothing elsewhere, the guards policy never
   read for it; at the base an absent manifest or a malformed date fails closed.
+- `sh tests/risk.test.sh` holds `scripts/risk.sh`, the risk rule (PRD-09
+  slice 1, the kit's ADR-0045): in a throwaway repository with landings, a
+  fixture trace and pull request branches, a low ticket's PR whose security
+  area missed a mistake prints `effective: high unlearned` and records one
+  `risk.judge outcome=disagreed`, and a second run writes nothing; an area is
+  earned only over 20 settled landings, a miss inside the fix window, precision
+  `n/a` or under the floor demote it, a path in no area prints `area: none
+  unlearned`, and unreadable thresholds, an unconfigured trace and an unknown
+  `SCHEMA` fail closed at exit 0; no ticket text leaves the rule, and
+  `/pr-iterate` reports the verdict without acting on it.
 - `sh tests/policy.test.sh` holds `scripts/policy.sh`, the policy reader
   (PRD-08 slice 1, the kit's ADR-0039), and the risk policy it reads: in
   throwaway repositories with a `main` and a branch, `thresholds`, `read`
@@ -1007,6 +1017,7 @@ sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/lens-slice.test.sh                            # each review lens reads only its slice
 sh tests/policy.test.sh                                # the policy reader reads a judging file at the base, failing closed
+sh tests/risk.test.sh                                  # the risk rule judges a PR from its review areas' earned records
 sh tests/factory-config.test.sh                        # a value the factory defines is read from its manifest, at the base too
 sh tests/outcome-recorder.test.sh                      # a revert, or a fix inside the fix window, is recorded against the PR
 sh tests/worktree-cleanup.test.sh                      # the pruning rule

@@ -527,9 +527,36 @@ Grouped by the seam each term belongs to. Entry shape:
   the labels' sources. `sh scripts/trace.sh record`
   prints it, one row per review area, for the operator and `/retro`'s
   question 2, and no chain skill reads it. It compares nothing to a
-  threshold (ADR-0036).
+  threshold (ADR-0036); `record --settled`, the **risk rule**'s form, prints
+  the same counts over **settled landings**, digits only (ADR-0045).
   - _Avoid_: "score", "trust level" (the record holds counts, never a
     verdict).
+- **Earned** — a **review area** whose **earned record**, over its most
+  recent 20 **settled landings**, shows all 20, a miss rate below the risk
+  policy's `miss-rate-below` and a precision at or above its
+  `precision-floor`, with no missed **mistake** on a landing of the area still
+  inside the fix window (PRD-09 runtime/R55, ADR-0045). One escape demotes it
+  at once.
+  - _Avoid_: "trusted", "safe" (earned is a count against two numbers).
+- **Unlearned** — any **review area** that is not **earned**, precision `n/a`
+  included, and every changed path in no review area, named `none`. Also the
+  reserved `Risk:` reason only the **risk rule** writes (ADR-0037).
+  - _Avoid_: "risky area" (unlearned says the record cannot vouch, not that
+    the area is dangerous).
+- **Risk rule** — `scripts/risk.sh`: given a PR's base, head, number and
+  ticket, prints the **effective risk**, the planner's, its own, one line per
+  review area the diff touches and the kill switch's state, as closed tokens
+  only, and records one `risk.judge` event, `agreed` or `disagreed`. Its own
+  risk is `high unlearned` when any touched area is **unlearned**, else `low`.
+  Every unknown fails closed, toward high. The one route by which a chain
+  skill sees anything derived from the trace: `/pr-iterate` reports it, and
+  nothing acts on it yet (ADR-0045, PRD-09).
+  - _Avoid_: "risk score", "risk model" (it is a rule over counts).
+- **Effective risk** — the higher of the planner's `Risk:` stamp (`high
+  unclear` when there is none) and the **risk rule**'s, `high` above `low`;
+  on high it carries the rule's reason when the rule says high, the
+  planner's otherwise. The one risk a later lane reads, never recomputes.
+  - _Avoid_: "final risk", "overall risk".
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a

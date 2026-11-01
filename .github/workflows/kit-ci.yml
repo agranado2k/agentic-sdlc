@@ -520,6 +520,15 @@ jobs:
       - name: Policy reader suite
         run: sh tests/policy.test.sh
 
+  risk:
+    name: The risk rule judges a PR from its review areas' earned records
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Risk rule suite
+        run: sh tests/risk.test.sh
+
   factory-config:
     name: A value the factory defines is read from its manifest, at the base too
     runs-on: ubuntu-latest

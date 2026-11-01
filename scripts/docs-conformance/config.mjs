@@ -424,6 +424,9 @@ const livingSpec = {
  * The first ceilings are the four largest skills' sizes when the rule landed
  * plus a stated margin: 10%, rounded up to the next 1000 bytes. Splitting a
  * skill lowers its ceiling; raising one is this visible policy diff.
+ * /pr-iterate's rose 500 bytes for the risk rule's step and report line
+ * (PRD-09 slice 1, #905): it sat 3 bytes under 38000, and the step's whole
+ * text already lives in its RISK.md.
  *
  * KEEP IT LITERAL — one `"<repo-relative path>": <bytes>,` per line. The
  * gate's POSIX twin in scripts/check.sh reads this block by text.
@@ -431,7 +434,7 @@ const livingSpec = {
 const skillCeilings = {
   ".agents/skills/review-pr/SKILL.md": 40500,
   ".agents/skills/to-tickets/SKILL.md": 35000,
-  ".agents/skills/pr-iterate/SKILL.md": 38000,
+  ".agents/skills/pr-iterate/SKILL.md": 38500,
   ".agents/skills/implement/SKILL.md": 27500,
 };
 

@@ -1393,6 +1393,7 @@ pr.open opened
 pr.iterate green red stopped
 merge.land landed skipped stopped
 merge.outcome reverted fixed qa-failed
+risk.judge agreed disagreed
 verify.verdict pass blocked unavailable
 finding.verify confirmed disputed
 hypothesis proposed confirmed refuted inconclusive
@@ -1501,6 +1502,19 @@ IFS=$_ov_ifs
 [ -z "$_ov_bad" ] && pass "every row writes its own words and no outcome, and refuses another kind's word" || fail "the script disagrees with the table:$_ov_bad"
 expect_exit 2 "a kind that carries no outcome refuses one — session.end outcome=ok" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=session.end outcome=ok
 expect_said "session.end"
+# runtime/R52 (PRD-09 slice 1): the risk rule's verdict is a kind of its own,
+# agreed or disagreed, and any other word on it is refused, writing nothing.
+_ov_n=$(cat "$OV"/events/*.jsonl 2>/dev/null | wc -l | tr -d ' ')
+for _ov_w in agreed disagreed; do
+	expect_exit 0 "runtime/R52: risk.judge outcome=$_ov_w is accepted" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind=risk.judge subject='pr:#1' outcome="$_ov_w" data.head=0123456789abcdef0123456789abcdef01234567 data.switch=on
+done
+for _ov_w in low high 'high unlearned' agree; do
+	expect_exit 2 "runtime/R52: risk.judge outcome='$_ov_w' is refused" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=risk.judge subject='pr:#1' outcome="$_ov_w"
+done
+expect_exit 2 "runtime/R52: a risk.judge with no outcome is refused — it is no verdict a reader can count" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=risk.judge subject='pr:#1'
+expect_exit 2 "a risk.judge's head is a 40-hex commit sha" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=risk.judge subject='pr:#1' outcome=agreed data.head=HEAD
+expect_exit 2 "a risk.judge's switch is on or tripped" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=risk.judge subject='pr:#1' outcome=agreed data.switch=off
+[ "$(cat "$OV"/events/*.jsonl 2>/dev/null | wc -l | tr -d ' ')" = "$_ov_n" ] && pass "runtime/R52: and a refused risk.judge writes nothing" || fail "runtime/R52: a refused risk.judge was written"
 expect_exit 2 "begin refuses an outcome on run.start — it writes through emit" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement outcome=ok
 OVR=$(env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement)
 expect_exit 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" end "$OVR" outcome=delivered
