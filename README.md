@@ -255,7 +255,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.99.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.101.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -709,7 +709,7 @@ skeleton (K0).
   table, and a canary string in every fixture body reaches neither output
   stream.
 - `sh tests/factory-config.test.sh` holds the kit's configuration reads in a
-  factory project (PRD-12 slice 4, the kit's ADR-0040): `scripts/policy.sh
+  factory project (PRD-12 slice 4, the kit's ADR-0041): `scripts/policy.sh
   value` reads a value the factory defines from `.factory/project.yaml`
   where the base or the head holds it, from the working tree with no base and
   at the base with one, and prints nothing elsewhere, the guards policy never

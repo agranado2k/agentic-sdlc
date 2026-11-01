@@ -512,8 +512,23 @@ Grouped by the seam each term belongs to. Entry shape:
   shipped; the kit's own is `ticket pr prd`): a numbered type is spelled one
   way, `<type>:#<digits>` with no leading zero, as in `ticket:#<digits>` — any
   other spelling is refused at emit, and an old one already in the trace is
-  only an advisory. An event may name secondary subjects under `related`.
+  only an advisory. A numbered type the policy pairs with a factory prefix
+  (`TRACE_FACTORY_IDS`, empty as shipped; the kit's own is `ticket=T prd=PRD`)
+  takes a second spelling, the **factory-id subject** `<type>:<PREFIX>-<digits>`
+  with a canonical factory id: `ticket:T-07`, `prd:PRD-15` (ADR-0040). An event
+  may name secondary subjects under `related`.
   - _Avoid_: "target", "ref" alone.
+- **Ticket handle** — what the chain names a ticket by: an issue number,
+  written `#<N>`, or a canonical factory id, `T-07`. One ticket has one
+  handle: a ticket mirrored as an issue is named by its number, any other
+  factory ticket by its id (PRD-15).
+  - _Avoid_: "ticket ref", "ticket key".
+- **Canonical factory id** — a factory item's id as the factory writes it in
+  the item's `id:` field: its prefix, a hyphen, then 2 to 6 digits with a
+  leading zero only in the two-digit form — `T-07`, `T-101`, `PRD-15`; never
+  `T-7`, `T-007` or `t-07`. Checked by shape alone, and the one spelling the
+  chain writes, so a one-digit id is padded before it is written.
+  - _Avoid_: "factory number", "short id".
 - **Run** — one invocation of a skill, with an id the trace hands out at
   `begin` and closes at `end`; every event emitted in between carries it, a
   nested skill carries the outer as `parent`, and a dispatched worker gets
@@ -715,6 +730,20 @@ Grouped by the seam each term belongs to. Entry shape:
   differentiating) and generic (buy or copy). It decides where the design
   investment goes, and the brief's decision record carries it. Ref: PRD #107.
   - _Avoid_: "strategic design" — same reason.
+- **Factory project** — a repository that plans in the software factory: its
+  git top level holds the factory's project manifest, `.factory/project.yaml`.
+  The manifest's presence is the whole test — read and nothing more, so a
+  stray `.factory/` folder without it is no factory project, and nothing above
+  the git top level counts. Ref: PRD-12 (factory item), process/R128.
+  - _Avoid_: "factory repo", "factory-enabled" — one name, one test.
+- **Factory ticket** — a ticket the software factory holds as an item in a
+  factory project, named by its id, `T-` and digits (a temporary `T-~<hex>`
+  id, before `factory renumber`, is not yet one the kit reads). The kit never
+  opens its file: the stamp reader reads its stamp through the factory's own
+  reader, `factory stamp`, and checks what that prints as it checks an issue
+  body. Ref: PRD-12 (factory item), process/R128 to R134.
+  - _Avoid_: "factory item" for a ticket alone — an item is any of the
+    factory's records, a discovery or a PRD among them.
 
 ---
 

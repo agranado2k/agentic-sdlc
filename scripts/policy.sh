@@ -25,7 +25,7 @@
 #             value the kit reads that the software factory defines; exit 0.
 #             Its one home in a FACTORY PROJECT — the base's commit or HEAD's
 #             holds .factory/project.yaml — is the factory's key in that
-#             manifest (the kit's ADR-0040). Outside one it prints NOTHING and
+#             manifest (the kit's ADR-0041). Outside one it prints NOTHING and
 #             exits 0: the value has no home there, and no kit file stands in.
 #             With --base the manifest is read at the base, through `fetch`
 #             like any judging file: absent there, or a value out of shape,

@@ -227,6 +227,44 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
+**Arriving from 0.100.0 or older, the trace accepts factory-id subjects.**
+No file joins or leaves at 0.101.0. Two shared files change content besides
+this recipe. `scripts/trace.sh` reads a second policy key,
+`TRACE_FACTORY_IDS`: words `<type>=<PREFIX>`, each pairing a type
+`TRACE_NUMBERED_TYPES` names with a prefix of 1 to 8 uppercase letters. A
+paired type takes a second spelling beside `<type>:#<digits>`, the canonical
+factory id `<type>:<PREFIX>-<digits>` — 2 to 6 digits, a leading zero only in
+the two-digit form (`ticket:T-07`, `prd:PRD-15`; never `ticket:T-7`) — as a
+subject or a `related` token; any other spelling of it is refused at emit,
+exit 2, and a malformed word is exit 2 naming it and the policy file.
+`scripts/trace.config.sh` carries the key empty, with a comment naming its
+form; Part 1 brings it. A project that sets `TRACE_NUMBERED_TYPES` and plans
+in the factory sets `TRACE_FACTORY_IDS='ticket=T prd=PRD'` in its trace
+policy; an empty value changes nothing — every subject is judged as before.
+No skill, wiring, template or adapter moves.
+
+**Arriving from 0.99.0 or older, the stamp reader reads a factory ticket
+id.** No file joins or leaves at 0.100.0. One shared file changes content
+besides this recipe: `scripts/stamp.sh` now accepts a factory ticket id,
+`T-` and 1 to 6 digits, as well as an issue number; a temporary `T-~<hex>`
+id, or anything else, is a usage error, exit 2. In a factory project — one
+whose git top level holds `.factory/project.yaml` — it runs `factory stamp`
+with the id from that top level, opens no file under `.factory/`, calls no
+tracker, and checks what `factory stamp` prints through its own lift, bound
+and vocabulary checker, a `Label:` line included for a factory ticket only.
+Its exits for an id are 0, 2 (no factory project, no such ticket, or a
+refused value), 3 (no stamp, no checker, or no `factory` binary on `PATH`,
+the last with one stderr line naming the binary and `sh scripts/stamp.sh
+<issue-number>`) and 5, never 4. Its behaviour for an issue number is
+unchanged. **One skill moves (9a).** `/implement`: `STAMP.md` reads a
+factory ticket's stamp with `sh scripts/stamp.sh T-<n>`, treats each exit
+as for an issue, falls back once to the forge issue when the binary is
+absent and the hand-off named one, and refuses a temporary id, naming
+`factory renumber`; `SKILL.md` points there. **One template moves (9c):**
+`constitution/AGENTS.md.template`'s vocabulary row names the `T-<n>` form —
+take the clause into your manual's row by hand. No wiring, policy file or
+adapter moves.
+
 **Arriving from 0.98.0 or older, one script joins: the policy reader, and
 one policy file is new: the risk policy.** `scripts/policy.sh` joins the
 shared layer at 0.99.0 — see "When a file joins the shared layer" below. It
@@ -1717,7 +1755,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.99.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.101.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -1729,10 +1767,10 @@ order by the locale's collation, and only the paths move, never the verdicts.
 
 ```console
 $ kit tag --list --sort=-v:refname
-v0.99.0
+v0.101.0
 v0.1.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.99.0
+v0.1.0 -> v0.101.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1777,10 +1815,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3483 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3521 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3637 insertions(+), 1 deletion(-)
+ 3 files changed, 3675 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1854,7 +1892,7 @@ $ # step 5 — apply
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.99.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.101.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1926,10 +1964,10 @@ WARN  docs conformance: advisories (gate stays green)
   [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
       -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
-OK  docs gate: all checks passed (shared-layer 0.99.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.101.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.99.0
-Part 1 complete — shared layer at v0.99.0. The update is not done: go to step 8.
+0.101.0
+Part 1 complete — shared layer at v0.101.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -2803,7 +2841,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.99.0 case for this file, and `ADD` is the 0.3.0 → 0.99.0
+`MERGE` is the 0.4.0 → 0.101.0 case for this file, and `ADD` is the 0.3.0 → 0.101.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -3173,14 +3211,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.99.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.101.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.99.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.101.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -3395,7 +3433,7 @@ NEW       docs/specs/README.md
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.99.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.101.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -3425,7 +3463,7 @@ WARN  docs conformance: advisories (gate stays green)
   [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
       -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
-OK  docs gate: all checks passed (shared-layer 0.99.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.101.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
@@ -3439,7 +3477,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.99.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.101.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a

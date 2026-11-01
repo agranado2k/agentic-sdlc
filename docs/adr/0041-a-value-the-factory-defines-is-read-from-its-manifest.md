@@ -1,4 +1,4 @@
-# ADR-0040: In a factory project, a configuration value the factory defines is read from its manifest, at the base too
+# ADR-0041: In a factory project, a configuration value the factory defines is read from its manifest, at the base too
 
 - **Status**: Accepted
 - **Date**: 2026-11-01

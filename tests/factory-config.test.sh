@@ -4,7 +4,7 @@
 # its project manifest, and the kit's own policy file is read for it only in a
 # repository that is not a factory project, for a value the kit defines
 # there (PRD-12 slice 4, process/R226 and
-# process/R227, the kit's ADR-0040).
+# process/R227, the kit's ADR-0041).
 #
 # The shared read is `sh scripts/policy.sh value <name> [--base <ref>]`. Today
 # one value has a factory key, the acceptance-test adoption date, so every case
