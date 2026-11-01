@@ -471,6 +471,14 @@ expect_exit 0 "the stamped project's gate is green" -- \
 # said bootstrap deleted it, because no assertion named it.
 t_assert_no_kit_residue "$KIT" "$PROJ" "a fresh bootstrap"
 
+# process/R136: a project with no .factory/ folder of its own gets none from
+# bootstrap — the kit's own factory items leave with the kit — so its
+# planning skills find no manifest and run their forge flow, unchanged. The
+# copy above carried the kit's .factory/, so this fails if the strip goes.
+[ -d "$KIT/.factory" ] && [ ! -e "$PROJ/.factory" ] &&
+	pass "process/R136: the stamped project holds no .factory/ folder" ||
+	fail "process/R136: bootstrap left a .factory/ folder in the stamped project (or the kit has none to strip)"
+
 # And nothing that did survive cites a kit record as the project's (#564): the
 # records are gone, so a shipped file names one only as `the kit's ADR-<n>`.
 # The optional /dogfood skill is not in this tree (--no-dogfood above), so it

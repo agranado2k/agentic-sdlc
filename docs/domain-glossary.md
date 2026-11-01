@@ -531,8 +531,23 @@ Grouped by the seam each term belongs to. Entry shape:
   shipped; the kit's own is `ticket pr prd`): a numbered type is spelled one
   way, `<type>:#<digits>` with no leading zero, as in `ticket:#<digits>` — any
   other spelling is refused at emit, and an old one already in the trace is
-  only an advisory. An event may name secondary subjects under `related`.
+  only an advisory. A numbered type the policy pairs with a factory prefix
+  (`TRACE_FACTORY_IDS`, empty as shipped; the kit's own is `ticket=T prd=PRD`)
+  takes a second spelling, the **factory-id subject** `<type>:<PREFIX>-<digits>`
+  with a canonical factory id: `ticket:T-07`, `prd:PRD-15` (ADR-0040). An event
+  may name secondary subjects under `related`.
   - _Avoid_: "target", "ref" alone.
+- **Ticket handle** — what the chain names a ticket by: an issue number,
+  written `#<N>`, or a canonical factory id, `T-07`. One ticket has one
+  handle: a ticket mirrored as an issue is named by its number, any other
+  factory ticket by its id (PRD-15).
+  - _Avoid_: "ticket ref", "ticket key".
+- **Canonical factory id** — a factory item's id as the factory writes it in
+  the item's `id:` field: its prefix, a hyphen, then 2 to 6 digits with a
+  leading zero only in the two-digit form — `T-07`, `T-101`, `PRD-15`; never
+  `T-7`, `T-007` or `t-07`. Checked by shape alone, and the one spelling the
+  chain writes, so a one-digit id is padded before it is written.
+  - _Avoid_: "factory number", "short id".
 - **Run** — one invocation of a skill, with an id the trace hands out at
   `begin` and closes at `end`; every event emitted in between carries it, a
   nested skill carries the outer as `parent`, and a dispatched worker gets
@@ -748,6 +763,20 @@ Grouped by the seam each term belongs to. Entry shape:
   body. Ref: PRD-12 (factory item), process/R128 to R134.
   - _Avoid_: "factory item" for a ticket alone — an item is any of the
     factory's records, a discovery or a PRD among them.
+- **Factory skill** — the software factory's own planning skill for an item:
+  `factory-prd` for a PRD, `factory-tickets` for tickets. It is present when
+  its `SKILL.md` exists under the user's `~/.claude/skills/<name>/`, where
+  `factory install-skill` writes it, or the project's own
+  `.claude/skills/<name>/` — no other path counts. Ref: PRD-12 (factory item),
+  process/R225, ADR-0042.
+  - _Avoid_: "factory plugin" — it is a skill a harness discovers by directory.
+- **Deferral** — a planning skill's first step in a factory project whose
+  factory skill is present: one hand-off naming that factory skill, nothing
+  published to the forge, no trace event, and the run ends. Decided from the
+  manifest's and the skill's presence alone, never by running `factory`; only
+  the operator's own message in the session lifts it. Ref: PRD-12 (factory
+  item), process/R121 to R126, ADR-0042.
+  - _Avoid_: "redirect" — the kit writes nothing to the factory; it stops.
 
 ---
 
@@ -795,7 +824,7 @@ banned word and the word to use instead.
   stamped). Use **bootstrap** for the one-shot run, or **stamp** / **copy** for
   what it does to an individual file. Except: **the dependency sense** —
   `dependency install`, `npm install`, `unpinned installs`, `install error`,
-  `installed extension`.
+  `installed extension`, `skill is not installed` (the factory's hand-off words, ADR-0042).
 - **config** — ambiguous on its own between a **policy file** (the consumer's
   to edit) and shared-layer mechanism. Use **policy file** or **shared-layer
   mechanism**, or qualify it. The unabbreviated **configuration**, in its

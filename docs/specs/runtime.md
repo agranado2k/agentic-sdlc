@@ -22,7 +22,9 @@ PRD's numbers. R32, R33 and R39 to R42 joined with the outcome recorder
 (#876), which restated R43 to name the recorder beside the record reader, as
 the PRD writes it. R46 to R51 joined with the misses and lens precision
 (#877). R37 and R38 joined with the failed factory QA
-(#879).
+(#879). R229 to R236 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
+the PRD's numbers past PRD-08 to PRD-13's drafts. R241 to R245 joined from
+PRD-15 slice 4 (#966), the landing script's factory ticket.
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
@@ -75,3 +77,16 @@ R48. The record reader SHALL count a finding toward every review area its `data.
 R49. The record reader SHALL print, per review area, the findings held up, not held up and unlabelled, the precision (held up over labelled), and the count of labels from triage, from a human dismissal and from a post-merge outcome. [UC4 4]
 R50. IF a ratio's denominator is zero, THEN the record reader SHALL print `n/a` for it. [UC4 4a]
 R51. The record reader SHALL compare no number to a threshold, SHALL print no risk word, and SHALL write nothing to the trace or to any file. [UC4 5]
+R229. WHERE the trace policy's `TRACE_FACTORY_IDS` names a word `<type>=<PREFIX>`, the trace SHALL accept at emit a subject or `related` token `<type>:<PREFIX>-<digits>` whose id is canonical, beside the `<type>:#<digits>` spelling the type already takes. [UC1 3, UC2 3]
+R230. IF a subject or `related` token of a type `TRACE_FACTORY_IDS` names is neither `<type>:#<digits>` nor a canonical factory id of that type's prefix, THEN the trace SHALL exit 2 at emit, write nothing, and name the two forms the value should take.
+R231. IF a `TRACE_FACTORY_IDS` word is not `<type>=<PREFIX>` with a type `TRACE_NUMBERED_TYPES` names and a prefix of 1 to 8 uppercase letters, THEN the trace SHALL exit 2 naming the word and the policy file.
+R232. WHEN `show` is given a canonical factory-id subject, the trace SHALL print exactly the events whose subject is that string or whose `related` holds it as a whole token, so that `ticket:T-07` never matches `ticket:T-070`. [UC2 3]
+R233. WHEN `verify` reads a line written with a factory-id subject, it SHALL pass a canonical one and SHALL advise on a non-canonical one as it advises on a mis-spelled numbered subject, its verdict unchanged.
+R234. WHERE `TRACE_FACTORY_IDS` is empty or unset, the trace SHALL judge every subject exactly as it did before this PRD. [UC5]
+R235. The shipped trace policy SHALL carry `TRACE_FACTORY_IDS` empty, with a comment naming its form, and the kit's own trace policy SHALL set it to `ticket=T prd=PRD`.
+R236. WHEN the release that ships runtime/R229 to R234 lands, `UPDATING.md` SHALL tell a consumer that the trace accepts factory-id subjects through `TRACE_FACTORY_IDS`, that a project which sets `TRACE_NUMBERED_TYPES` and plans in the factory sets it to `ticket=T prd=PRD`, and that an empty value changes nothing.
+R241. The landing script's `--ticket` SHALL accept an issue number or a canonical factory ticket id, and SHALL refuse anything else as a usage error, exit 2, before any forge call. [UC2 1a, 1b]
+R242. The landing script SHALL read a landing line whose handle is `#<N>` or a canonical factory ticket id, and SHALL record any other spelling as absent, `data.implement=no`. [UC2 2, 2a]
+R243. IF a PR closes no issue, no `--ticket` is given, and its landing line names a canonical factory ticket id, THEN the landing script SHALL take that id as the PR's ticket. [UC2 2]
+R244. WHEN the landing script's ticket is a factory ticket id, it SHALL read `ticket.start` on `ticket:T-<digits>`, and write `pr.open`, `merge.land` and `feedback` with `ticket:T-<digits>` wherever it writes `ticket:#<N>` for an issue. [UC2 3, 4]
+R245. The landing script SHALL run no `factory` subcommand and SHALL write no file under `.factory/`. [UC2 5]

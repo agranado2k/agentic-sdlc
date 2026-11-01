@@ -255,7 +255,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.100.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.103.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -708,6 +708,12 @@ skeleton (K0).
   cell by cell, a table below the explain-diff marker or inside a fence is no
   table, and a canary string in every fixture body reaches neither output
   stream.
+- `sh tests/factory-config.test.sh` holds the kit's configuration reads in a
+  factory project (PRD-12 slice 4, the kit's ADR-0041): `scripts/policy.sh
+  value` reads a value the factory defines from `.factory/project.yaml`
+  where the base or the head holds it, from the working tree with no base and
+  at the base with one, and prints nothing elsewhere, the guards policy never
+  read for it; at the base an absent manifest or a malformed date fails closed.
 - `sh tests/policy.test.sh` holds `scripts/policy.sh`, the policy reader
   (PRD-08 slice 1, the kit's ADR-0039), and the risk policy it reads: in
   throwaway repositories with a `main` and a branch, `thresholds`, `read`
@@ -1001,6 +1007,7 @@ sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/lens-slice.test.sh                            # each review lens reads only its slice
 sh tests/policy.test.sh                                # the policy reader reads a judging file at the base, failing closed
+sh tests/factory-config.test.sh                        # a value the factory defines is read from its manifest, at the base too
 sh tests/outcome-recorder.test.sh                      # a revert, or a fix inside the fix window, is recorded against the PR
 sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale

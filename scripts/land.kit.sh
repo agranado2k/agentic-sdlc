@@ -3,7 +3,7 @@
 # Kit-authoring only, never shipped (bootstrap.sh's KIT_ONLY list deletes it,
 # with tests/land.test.sh).
 #
-#   sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
+#   sh scripts/land.kit.sh <PR#> [--ticket <N|T-NN>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
 #
 # WHY THIS EXISTS. /merge-train records every landing it makes — a merge.land
 # with the merge sha, then the operator's verdict as a feedback event — and
@@ -97,8 +97,13 @@
 #   so does a release whose tag is not on origin: merged, not landed. A
 #   release's merge.land carries data.release, data.tagged and data.reruns.
 #
-# THE TICKET is the PR's first closing reference, or --ticket. With neither,
-# the feedback sits on the PR itself.
+# THE TICKET is the PR's first closing reference, or --ticket — an issue
+# number, or a canonical factory ticket id (T-07) — or, with neither, the
+# factory ticket id its /implement landing line names (PRD-15, runtime/R243).
+# An issue's events take ticket:#<N>, a factory ticket's ticket:T-<digits>.
+# With no ticket at all, the feedback sits on the PR itself. A factory
+# ticket's own close is the factory's: this script runs no `factory`
+# subcommand and writes nothing under .factory/ (runtime/R245).
 #
 # THE TRACE's emits are never load-bearing (ADR-0008 clause 4): unconfigured,
 # the merge and stdout are exactly what a traced run does. Its one read is
@@ -124,9 +129,9 @@ POLL_SECONDS=${LAND_POLL_SECONDS:-10}
 
 usage() {
 	cat >&2 <<'EOF'
-usage: sh scripts/land.kit.sh <PR#> [--ticket <N>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
+usage: sh scripts/land.kit.sh <PR#> [--ticket <N|T-NN>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
   <PR#>       the pull request to land — green, mergeable, clean against its base
-  --ticket    the ticket the PR implemented, when the PR closes none
+  --ticket    the ticket the PR implemented, when the PR closes none: an issue number or a factory ticket id (T-07)
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
   --no-iteration  land with no /pr-iterate iteration at the head commit, for this reason (recorded)
   --no-review     land with no /review-pr verdict at the head commit, for this reason (recorded)
@@ -136,6 +141,17 @@ EOF
 	exit 2
 }
 note() { echo "land: $1" >&2; }
+# factory_id <handle> — 0 when <handle> is a canonical factory ticket id: T-,
+# then 2 to 6 digits, a leading zero only in the two-digit form — the one
+# spelling the trace takes as ticket:T-<digits> (the kit's ADR-0040).
+factory_id() {
+	case $1 in
+	T-[0-9][0-9]) return 0 ;;
+	T-0* | T-*[!0-9]* | T-???????*) return 1 ;;
+	T-??*) return 0 ;;
+	esac
+	return 1
+}
 refuse() {
 	note "refusing PR #$PR: $1 — nothing merged, nothing recorded"
 	exit 2
@@ -176,7 +192,7 @@ while [ $# -gt 0 ]; do
 done
 case $PR in '' | *[!0-9]*) [ -z "$PR" ] || note "'$PR' is not a pull request number"; usage ;; esac
 [ "$VIA" = land ] || [ -z "$UNASKED" ] || { note "--train leaves the verdict to the train; drop --unasked"; usage; }
-case $TICKET in *[!0-9]*) note "--ticket '$TICKET' is not a ticket number"; usage ;; esac
+case $TICKET in *[!0-9]*) factory_id "$TICKET" || { note "--ticket '$TICKET' is neither a ticket number nor a factory ticket id (T-07)"; usage; } ;; esac
 command -v gh >/dev/null 2>&1 || { note "no forge CLI (gh) on PATH"; exit 69; }
 
 # trace loud|quiet <field>=<value> … — `quiet` silences the unconfigured
@@ -335,11 +351,56 @@ if [ -n "$_sl_hit" ] && ! bumped "$_sl_before" "$_sl_after" >/dev/null; then
 	refuse "it moves the shared layer — $(printf '%s\n' "$_sl_hit" | tr '\n' ' ')— with no new version on VERSION's shared-layer line (${_sl_was:-no version} at its merge base, ${_sl_now:-no version} at its head); a shared-layer change is a release (AGENTS.md hard rule 3): bump the minor in VERSION, record it in UPDATING.md, re-capture the pinned transcripts"
 fi
 
+# --- 1c. the landing line ---------------------------------------------------------
+# Whether /implement opened the PR, read from the line it writes in the body
+# (#480). The body is untrusted text: it is matched against one fixed shape,
+# never evaluated and never spliced into an event — what reaches the trace is
+# a handle the shape allows, `#` and 1 to 9 digits or a canonical factory
+# ticket id, and a tier the vocabulary checker passes. Anything else, the body
+# unreadable included, is recorded as absent; the record never blocks a
+# landing. Read before the merge, since a line naming a factory ticket names
+# the ticket of a PR that closes none (runtime/R243).
+IMPLEMENT=no
+IMPL_TIER=
+implement_line() {
+	gh pr view "$PR" --json body --jq '.body // ""' 2>/dev/null | tr -d '\r' |
+		awk 'index($0, "<!-- implement:") == 1 { n++; line = $0 } END { if (n == 1) print line }' |
+		sed -n 's/^<!-- implement: ticket=\([#T][-0-9]\{1,10\}\) tier=\([a-z][a-z0-9-]\{0,31\}\) -->$/\1 \2/p'
+}
+# legal_tier <token> — the vocabulary checker's verdict on one token the
+# shape above already bounded: one argument, one line, never the body.
+legal_tier() { sh "$ROOT/scripts/vocab.sh" "Tier: $1" >/dev/null 2>&1; }
+# legal_handle <handle> — `#` and 1 to 9 digits, or a canonical factory id.
+legal_handle() {
+	case $1 in
+	'#'*) case ${1#\#} in '' | *[!0-9]* | ??????????*) return 1 ;; esac ;;
+	*) factory_id "$1" ;;
+	esac
+}
+# Exactly one line opening with the marker, and it of the one shape: a second
+# one, or a malformed one, leaves nothing to read.
+IMPL=$(implement_line)
+_il_ticket=
+if [ -n "$IMPL" ]; then
+	_il_ticket=${IMPL%% *}
+	_il_tier=${IMPL#* }
+	legal_handle "$_il_ticket" && legal_tier "$_il_tier" || _il_ticket=
+fi
+
 [ -n "$TICKET" ] || TICKET=$(field ticket)
+# A PR that closes no issue and was given no --ticket takes the factory
+# ticket its line names; an issue number on the line names none (#480).
+[ -n "$TICKET" ] || ! factory_id "$_il_ticket" || TICKET=$_il_ticket
+# TREF is the ticket as a subject spells it after `ticket:`.
+case $TICKET in '' | T-*) TREF=$TICKET ;; *) TREF="#$TICKET" ;; esac
+if [ -n "$_il_ticket" ] && { [ -z "$TICKET" ] || [ "$_il_ticket" = "$TREF" ]; }; then
+	IMPLEMENT=yes
+	IMPL_TIER=$_il_tier
+fi
 TITLE=$(field title)
 if [ -n "$TICKET" ]; then
-	FB_SUBJECT="ticket:#$TICKET"
-	set -- "related=ticket:#$TICKET"
+	FB_SUBJECT="ticket:$TREF"
+	set -- "related=ticket:$TREF"
 else
 	FB_SUBJECT="pr:#$PR"
 	set --
@@ -358,7 +419,7 @@ fi
 if [ -n "$(trace_read dir)" ] &&
 	! trace_read show "pr:#$PR" --kind pr.open | grep -qF "\"subject\":\"pr:#$PR\""; then
 	_po_rel=
-	[ -z "$TICKET" ] || _po_rel="ticket:#$TICKET"
+	[ -z "$TICKET" ] || _po_rel="ticket:$TREF"
 	_po_branch=$(field headRefName | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
 	[ -z "$_po_branch" ] || _po_rel="${_po_rel:+$_po_rel }branch:$_po_branch"
 	# The landing's own arguments sit in "$@" for step 2: the optional field
@@ -372,7 +433,7 @@ fi
 # ticket.start on ticket:#<N>, merge.land says data.ticket_start=no; with one, or
 # with no ticket known, it says nothing. Unconfigured, nothing is read.
 if [ -n "$TICKET" ] && [ -n "$(trace_read dir)" ] &&
-	! trace_read show "ticket:#$TICKET" --kind ticket.start | grep -qF "\"subject\":\"ticket:#$TICKET\""; then
+	! trace_read show "ticket:$TREF" --kind ticket.start | grep -qF "\"subject\":\"ticket:$TREF\""; then
 	set -- "$@" data.ticket_start=no
 fi
 
@@ -674,34 +735,7 @@ fi
 WAITED=$(($(date +%s) - START))
 
 # --- 4. the landing ---------------------------------------------------------------
-# Whether /implement opened the PR, read from the line it writes in the body
-# (#480). The body is untrusted text: it is matched against one fixed shape,
-# never evaluated and never spliced into an event — what reaches the trace is
-# a digit string the shape allows and a tier the vocabulary checker passes.
-# Anything else, the body unreadable included, is recorded as absent; the
-# record never blocks a landing.
-IMPLEMENT=no
-IMPL_TIER=
-implement_line() {
-	gh pr view "$PR" --json body --jq '.body // ""' 2>/dev/null | tr -d '\r' |
-		awk 'index($0, "<!-- implement:") == 1 { n++; line = $0 } END { if (n == 1) print line }' |
-		sed -n 's/^<!-- implement: ticket=#\([0-9]\{1,9\}\) tier=\([a-z][a-z0-9-]\{0,31\}\) -->$/\1 \2/p'
-}
-# legal_tier <token> — the vocabulary checker's verdict on one token the
-# shape above already bounded: one argument, one line, never the body.
-legal_tier() { sh "$ROOT/scripts/vocab.sh" "Tier: $1" >/dev/null 2>&1; }
-# Exactly one line opening with the marker, and it of the one shape: a second
-# one, or a malformed one, leaves nothing to read.
-IMPL=$(implement_line)
-if [ -n "$IMPL" ]; then
-	_il_ticket=${IMPL%% *}
-	_il_tier=${IMPL#* }
-	if { [ -z "$TICKET" ] || [ "$_il_ticket" = "$TICKET" ]; } &&
-		legal_tier "$_il_tier"; then
-		IMPLEMENT=yes
-		IMPL_TIER=$_il_tier
-	fi
-fi
+# Whether /implement opened the PR is read in step 1c's landing line, above.
 set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAITED" "data.workflows=$WORKFLOWS" "data.via=$VIA" "reason=$TITLE" \
 	"data.implement=$IMPLEMENT"
 [ -z "$IMPL_TIER" ] || set -- "$@" "data.implement_tier=$IMPL_TIER"

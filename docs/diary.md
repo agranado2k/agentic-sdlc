@@ -2852,3 +2852,42 @@ naming `sh scripts/stamp.sh <issue-number>`. The id is 1 to 6 digits as
 /implement's SKILL.md sat 6 bytes under its 27000-byte ceiling, so the
 factory text went to STAMP.md behind a one-sentence pointer and the
 ceiling rose to 27500.
+
+## 2026-11-01 — the trace accepts factory-id subjects
+
+PRD-15 slice 1 of D-02 (#963, factory T-97, absorbing #937; released as
+0.101.0, ADR-0040). `TRACE_FACTORY_IDS` pairs a numbered type with a factory
+prefix, `ticket=T prd=PRD` in the kit's twin and empty as shipped, so
+`sh scripts/trace.kit.sh emit kind=note subject=ticket:T-07` now exits 0
+here while `ticket:T-7` and `ticket:T-007` exit 2 naming both forms. The
+canonical id is checked by shape alone, 2 to 6 digits with a leading zero
+only in the two-digit form; a `ticket:T-070` can never be written, so
+section 21b writes that `show` decoy by hand. The release waited behind
+0.100.0 (ADR-0033) and was built test-first in the meantime.
+
+## 2026-11-01 — a value the factory defines is read from its manifest
+
+PRD-12 slice 4 of D-02 (#959, factory T-88; released as 0.102.0,
+ADR-0041). `.factory/project.yaml` joins the policy reader's judging set,
+and `sh scripts/policy.sh value acceptance-tests-since --base main` reads
+the adoption date from the manifest at the base, failing closed on a
+manifest absent there or a malformed date. A branch can neither delete the
+manifest nor add it to change its own answer: the base's or the head's copy
+makes the project a factory project. The first build read a guards-policy
+date outside a factory project; the coordinator's ruling on PRD-14 §8
+dropped it, so a repository with no manifest prints nothing. The ADR was
+built as 0040 and renumbered at release, after 0.101.0 took that number.
+
+## 2026-11-01 — /to-tickets defers to the factory's own ticket skill
+
+PRD-12 slice 2 of D-02 (#935, factory T-72; released as 0.103.0,
+ADR-0042). `/to-tickets` decides a deferral before any other step, from two
+files' presence: `.factory/project.yaml` at the git top level and
+`factory-tickets/SKILL.md` under the user's or the project's
+`.claude/skills`. With both it hands off naming `/factory-tickets` and
+publishes nothing; with the manifest alone it names `factory install-skill`
+once and runs as before. The check is a fenced function in `FACTORY.md`
+beside the skill, and the suite runs that fence against fixture
+repositories, so the document's own code is what is tested. The ADR was
+built as 0040, renumbered 0041 after 0.101.0, and 0042 at release after
+0.102.0; the release waited behind 0.102.0 (ADR-0033).

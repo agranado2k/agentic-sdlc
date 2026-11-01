@@ -19,6 +19,10 @@ TRACE_DIR='.trace'
 # leaves this empty: which types a tracker numbers is each project's call.
 TRACE_NUMBERED_TYPES='ticket pr prd'
 
+# The kit plans in the factory too, so a factory ticket or PRD with no issue
+# is named by its canonical id, `ticket:T-07`, `prd:PRD-15` (PRD-15, ADR-0040).
+TRACE_FACTORY_IDS='ticket=T prd=PRD'
+
 # TOOL CAPTURE IS ON HERE, and this is the one file in the repository that says
 # so. The kit's product IS the chain, so what its own sessions actually did —
 # which command, against which file, with what result — is the raw material a

@@ -3580,7 +3580,85 @@
 # 27500, and the suites that hold them — tests/stamp.test.sh's factory
 # section and tests/implement-deliver.test.sh section 4h.
 
-shared-layer: 0.100.0
+# 0.101.0 — the trace accepts factory-id subjects (ticket #963, PRD-15
+# slice 1 of D-02, factory T-97; absorbs #937, T-74). NO file joins the
+# shared layer and none leaves. Two shared files change content besides
+# UPDATING.md: scripts/trace.sh reads a second policy key,
+# TRACE_FACTORY_IDS, words `<type>=<PREFIX>` pairing a type
+# TRACE_NUMBERED_TYPES names with 1 to 8 uppercase letters (any other word
+# exit 2, naming it and the policy file); a paired type takes, beside
+# `<type>:#<digits>`, the canonical factory id `<type>:<PREFIX>-<digits>` —
+# 2 to 6 digits, a leading zero only in the two-digit form — at emit, as a
+# subject or a related token, and every other spelling of it is exit 2,
+# writing nothing and naming both forms; show matches it whole; verify and
+# summary advise on a non-canonical one, the verdict unchanged; empty or
+# unset, every subject is judged as before; and scripts/trace.config.sh,
+# which carries TRACE_FACTORY_IDS='' under a comment naming its form; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none. Config (9d):
+# scripts/trace.config.sh gains TRACE_FACTORY_IDS (a shared file, taken by
+# Part 1; a project that sets TRACE_NUMBERED_TYPES and plans in the factory
+# sets it to `ticket=T prd=PRD`). Adapter (9e): none.
+# Kit-only, never shipped: ADR-0040 and its index row, bootstrap.sh's
+# KIT_OWN list naming it, docs/specs/runtime.md R229 to R236, the glossary's
+# Subject entry, Ticket handle and Canonical factory id,
+# scripts/trace.kit.config.sh's TRACE_FACTORY_IDS='ticket=T prd=PRD', and
+# tests/trace.test.sh section 21b that holds them.
+
+# 0.102.0 — in a factory project, a value the factory defines is read from
+# its manifest (ticket #959, PRD-12 slice 4 of D-02, factory T-88). NO file
+# joins the shared layer and none leaves. One shared file changes content
+# besides UPDATING.md: scripts/policy.sh counts .factory/project.yaml in its
+# judging set, and answers a fourth question, `value <name> [--base <ref>]`:
+# where the base commit or HEAD holds the manifest, `<name> <value>` or
+# `<name> unset` from the manifest's key, read at the base through the
+# reader's fetch (absent there or out of shape, `fail-closed missing|invalid
+# .factory/project.yaml`, exit 3) or from the working tree with no base;
+# elsewhere nothing printed, exit 0, no kit file read. One value today,
+# acceptance-tests-since (the manifest's acceptance_tests_since). UPDATING.md
+# gains its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none. Config (9d):
+# none. Adapter (9e): none.
+# Kit-only, never shipped: ADR-0041 and its index row (and ADR-0039's row
+# naming it), bootstrap.sh's KIT_OWN and KIT_ONLY lists naming it and
+# tests/factory-config.test.sh, docs/specs/process.md R226 and R227,
+# docs/specs/policy.md R9's manifest, the kit-ci job, and
+# tests/policy.test.sh's manifest case.
+
+# 0.103.0 — /to-tickets defers to the factory's own ticket skill in a
+# factory project (ticket #935, PRD-12 slice 2 of D-02, factory T-72). NO
+# file joins the shared layer and none leaves, and no shared file changes
+# content besides UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — SKILL.md opens with "A factory project defers,
+# before any other step", pointing at a new FACTORY.md beside it, whose
+# fenced factory_deferral answers `defer`, `missing` or `none` from the
+# presence of .factory/project.yaml at the git top level and of
+# factory-tickets/SKILL.md under ~/.claude/skills or the project's
+# .claude/skills, opening neither and running no `factory` command; `defer`
+# prints the hand-off naming /factory-tickets and ends, publishing and
+# tracing nothing; `missing` names `factory install-skill` once and runs the
+# forge flow; only the operator's own message lifts a deferral. /retro —
+# QUESTIONS.md and SKILL.md join every ticket query on a factory ticket's
+# `ticket:T-<digits>` subject beside `ticket:#N`, counted once (#967).
+# /merge-train — SKILL.md reads the landing line's handle as `#<N>` or a
+# canonical factory ticket id through an exact filter, and its merge.land
+# and feedback lines take `ticket:<handle>`; /pr-iterate — SKILL.md's
+# feedback line takes the same handle (#965).
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
+# adapters/claude-code — hooks/hook.lib.sh's Trace-Spawn parser and
+# hooks/spawn-guard.sh accept `ticket=T-<digits>`, a canonical factory id,
+# beside `#N` and `none`, and README.md says so (#964).
+# Kit-only, never shipped: ADR-0042 and its index row, bootstrap.sh's
+# KIT_OWN naming it, the glossary's Factory skill and Deferral and its
+# `skill is not installed` exception, docs/specs/process.md R121 to R127,
+# R136 and R223 to R225, config.mjs's skill-path exemption
+# `.claude/skills/factory-tickets/`, tests/spec-skills.test.sh's factory
+# section and tests/self-host.test.sh's process/R136 assertion.
+
+shared-layer: 0.103.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

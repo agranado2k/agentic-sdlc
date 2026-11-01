@@ -5,7 +5,7 @@
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt <text>      [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --prompt-file <path> [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh <skill> --tier <tier> [--domain <token>] ...
-#   sh scripts/skill-dispatch.kit.sh <skill> --ticket <N> ...   (the Trace-Spawn line's ticket)
+#   sh scripts/skill-dispatch.kit.sh <skill> --ticket <N|T-nn> ... (the Trace-Spawn line's ticket)
 #   sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> \
 #                                     (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]
 #   sh scripts/skill-dispatch.kit.sh --tier-of <skill>
@@ -108,7 +108,7 @@ TRACE_CONFIG="$ROOT/scripts/trace.kit.config.sh"
 export TRACE_CONFIG
 
 usage() {
-	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] [--ticket <N>] --prompt <text> [--dry-run]" >&2
+	echo "usage: sh scripts/skill-dispatch.kit.sh <skill> [--tier <tier> [--domain <token>]] [--ticket <N|T-nn>] --prompt <text> [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh review-pr --set BRANCH=<b> --set BASE=<b> (--prompt <spec> | --set-file SPEC=<path>) [--dry-run]" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --tier-of <skill>" >&2
 	echo "       sh scripts/skill-dispatch.kit.sh --phase-tier <phase>" >&2
@@ -210,13 +210,24 @@ while [ "$_count" -gt 0 ]; do
 		_count=$((_count - 1))
 		;;
 	--ticket)
-		[ "$_count" -gt 0 ] || die "--ticket needs the number of the ticket the dispatch serves"
-		TICKET=${1#\#}
+		[ "$_count" -gt 0 ] || die "--ticket needs the issue number or the factory ticket id the dispatch serves"
+		# TICKET is the handle every writer below spells the ticket by:
+		# `#<N>` for an issue, the canonical factory id as given (#964,
+		# runtime/R237) — `T-`, 2 to 6 digits, a leading zero only in the
+		# two-digit form, the trace's own shape (ADR-0040). Checked by shape
+		# alone, before anything is staged; no factory command is run here.
+		TICKET=$1
 		shift
 		_count=$((_count - 1))
 		case "$TICKET" in
-		[1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-9][0-9][0-9][0-9][0-9] | [1-9][0-9][0-9][0-9][0-9][0-9]) ;;
-		*) die "--ticket takes a ticket number, '#' optional, no leading zero, six digits at most" ;;
+		T-[0-9][0-9] | T-[1-9][0-9][0-9] | T-[1-9][0-9][0-9][0-9] | T-[1-9][0-9][0-9][0-9][0-9] | T-[1-9][0-9][0-9][0-9][0-9][0-9]) ;;
+		*)
+			TICKET=#${TICKET#\#}
+			case "$TICKET" in
+			'#'[1-9] | '#'[1-9][0-9] | '#'[1-9][0-9][0-9] | '#'[1-9][0-9][0-9][0-9] | '#'[1-9][0-9][0-9][0-9][0-9] | '#'[1-9][0-9][0-9][0-9][0-9][0-9]) ;;
+			*) die "--ticket takes an issue number, '#' optional, no leading zero, six digits at most — or a factory ticket id, T- and 2 to 6 digits, a leading zero only in the two-digit form (T-07, never T-7)" ;;
+			esac
+			;;
 		esac
 		;;
 	--rung-done) RUNG_DONE=1 ;;
@@ -259,6 +270,10 @@ done
 # stamp, and the skill's phase answers, said; anything else is a stop, exit
 # 2, the refused text never printed. Sets _fs_tier and _fs_domain, or _fs_none
 # on exit 3 or on a stamp naming no tier.
+#   A FACTORY TICKET (#964, runtime/R239) has no tracker to stand in for: its
+# stamp is the factory's, read by `sh scripts/stamp.sh T-<digits>`, and the
+# file is the ticket's text only — the oracle line, the review's spec. No
+# stand-in `gh` is built for it.
 _fs_read_stamp() {
 	_fs_tier='' _fs_domain='' _fs_none=''
 	[ -f "$CASCADE_TICKET" ] || die "--ticket-file '$CASCADE_TICKET' is not a file"
@@ -267,11 +282,19 @@ _fs_read_stamp() {
 		return 0
 	fi
 	_fs_tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-dispatch-stamp.XXXXXX") || die "no scratch to read the ticket file's stamp"
-	printf '#!/bin/sh\nexec cat "$SKILL_DISPATCH_TICKET_FILE"\n' >"$_fs_tmp/gh"
-	chmod +x "$_fs_tmp/gh"
 	_fs_rc=0
-	_fs_lines=$(PATH="$_fs_tmp:$PATH" SKILL_DISPATCH_TICKET_FILE=$CASCADE_TICKET \
-		sh "$ROOT/scripts/stamp.sh" "${TICKET:-0}" 2>"$_fs_tmp/err") || _fs_rc=$?
+	case "$TICKET" in
+	T-*)
+		_fs_lines=$(sh "$ROOT/scripts/stamp.sh" "$TICKET" 2>"$_fs_tmp/err") || _fs_rc=$?
+		;;
+	*)
+		_fs_issue=${TICKET#\#}
+		printf '#!/bin/sh\nexec cat "$SKILL_DISPATCH_TICKET_FILE"\n' >"$_fs_tmp/gh"
+		chmod +x "$_fs_tmp/gh"
+		_fs_lines=$(PATH="$_fs_tmp:$PATH" SKILL_DISPATCH_TICKET_FILE=$CASCADE_TICKET \
+			sh "$ROOT/scripts/stamp.sh" "${_fs_issue:-0}" 2>"$_fs_tmp/err") || _fs_rc=$?
+		;;
+	esac
 	_fs_err=$(cat "$_fs_tmp/err")
 	rm -rf "$_fs_tmp"
 	case "$_fs_rc" in
@@ -347,6 +370,7 @@ else
 	[ -z "$_fs_tier" ] || TIER_ARGS="$_fs_tier${_fs_domain:+ $_fs_domain}"
 	if [ -n "$TIER_ARGS" ]; then
 		TIER_SOURCE="the ticket file's stamp"
+		case "$TICKET" in T-*) TIER_SOURCE="factory ticket $TICKET's stamp" ;; esac
 	else
 		TIER_ARGS=$(phase_tier "$(skill_phase "$SKILL")")
 		TIER_SOURCE="$SKILL's own phase${_fs_none:+ (the ticket file carries no stamp)}"
@@ -384,7 +408,7 @@ if [ "${SKILL#/}" = review-pr ]; then
 		# A record answers the dispatch's own ticket, or a ticketless
 		# dispatch only when the cascade itself ran with no ticket: another
 		# ticket's record left in this worktree is no author for this review.
-		[ "$_ra_ticket" = "${TICKET:+#}${TICKET:-none}" ] && _ra_author=$_ra_model
+		[ "$_ra_ticket" = "${TICKET:-none}" ] && _ra_author=$_ra_model
 	fi
 	_ra_built=0
 	if [ "$_ra_ran" = 1 ] && [ -n "$CASCADE_TICKET" ]; then
@@ -400,7 +424,7 @@ if [ "${SKILL#/}" = review-pr ]; then
 		export AGENT_SESSION_MODEL
 		echo "skill-dispatch: the diff's author is '$_ra_author', the model its cascade's passed verdict recorded; the reviewer is resolved against that author, not the session" >&2
 	elif [ "$_ra_built" = 1 ]; then
-		die "review refused — ticket ${TICKET:+#$TICKET }is cascade-built and '$_ra_wt' holds no rung author recorded for it; the reviewer is resolved from the author, never the session's own model. Judge the rung first — the cascade's own call with --rung-done records its verdict and its author — then dispatch the review again"
+		die "review refused — ticket ${TICKET:+$TICKET }is cascade-built and '$_ra_wt' holds no rung author recorded for it; the reviewer is resolved from the author, never the session's own model. Judge the rung first — the cascade's own call with --rung-done records its verdict and its author — then dispatch the review again"
 	elif [ "$_ra_ran" = 0 ] && [ -n "$CASCADE_TICKET" ]; then
 		# Said, so a review dispatched from the wrong checkout is visible: the
 		# record is read from --worktree, or from the checkout this runs in.
@@ -430,7 +454,7 @@ done
 
 # What the spawn served, on the prompt's first two lines (#587, spend/R1):
 # `Trace-Run: <run> [<parent>]`, then `Trace-Spawn: tier=<tier>
-# domain=<domain|none> skill=<skill> ticket=<#N|none>` — exactly the channel
+# domain=<domain|none> skill=<skill> ticket=<#N|T-<digits>|none>` — exactly the channel
 # the adapter's subagent-stop hook reads (ADR-0008 clause 5, #583 amendment).
 # The run is the one this dispatch runs under, asked of the trace with
 # `current` — the run and parent an emit from here would stamp (#746). An
@@ -452,8 +476,7 @@ if [ -n "$_sl_run" ] && _sl_id_ok "$_sl_run"; then
 	_sl_id_ok "$_sl_parent" || _sl_parent=''
 	_sl_tier=${TIER_ARGS%% *} _sl_domain=none
 	case "$TIER_ARGS" in *' '*) _sl_domain=${TIER_ARGS#* } ;; esac
-	_sl_ticket=none
-	[ -z "$TICKET" ] || _sl_ticket="#$TICKET"
+	_sl_ticket=${TICKET:-none}
 	SPAWN_LINES="Trace-Run: $_sl_run${_sl_parent:+ $_sl_parent}
 Trace-Spawn: tier=$_sl_tier domain=$_sl_domain skill=${SKILL#/} ticket=$_sl_ticket
 "
@@ -636,7 +659,7 @@ _cascade_verdict() {
 	# empty author is no author, so its review is refused, never resolved
 	# from the session.
 	[ "$3" = passed ] || return 0
-	printf 'model=%s\nticket=%s\n' "$2" "${TICKET:+#}${TICKET:-none}" >"$CASCADE_AUTHOR"
+	printf 'model=%s\nticket=%s\n' "$2" "${TICKET:-none}" >"$CASCADE_AUTHOR"
 }
 
 # _cascade_close <status> — end the cascade's run, once: ok on 0, stopped on
@@ -718,8 +741,7 @@ _cascade_handback() {
 	_sl_id_ok "$CASCADE_PARENT" && _hb_parent=" $CASCADE_PARENT"
 	_hb_lines=0
 	_sl_id_ok "$CASCADE_RUN" && _hb_lines=1
-	_hb_ticket=none
-	[ -z "$TICKET" ] || _hb_ticket="#$TICKET"
+	_hb_ticket=${TICKET:-none}
 	{
 		if [ "$_hb_lines" = 1 ]; then
 			printf 'Trace-Run: %s%s\n' "$CASCADE_RUN" "$_hb_parent"
@@ -792,7 +814,7 @@ _cascade() {
 	# registry records this dispatcher as the run's process.
 	CASCADE_PARENT=$_sl_run
 	if [ -f "$TRACE_SH" ] && CASCADE_RUN=$(TRACE_QUIET=1 sh "$TRACE_SH" begin --detached "${SKILL#/}" \
-		${TICKET:+"subject=ticket:#$TICKET"}) && [ -n "$CASCADE_RUN" ]; then
+		${TICKET:+"subject=ticket:$TICKET"}) && [ -n "$CASCADE_RUN" ]; then
 		CASCADE_OPEN=1
 	else
 		CASCADE_RUN=''
