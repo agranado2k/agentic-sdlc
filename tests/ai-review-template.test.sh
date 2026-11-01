@@ -283,6 +283,39 @@ for tag in "🔀 MIXED COMMIT" "⚠️ UNSPECIFIED" "✅ SPECIFIED" "❌ MISSING
 	assert_file_has "$PROMPT" "$tag"
 done
 
+# ---------------------------------------------------------------------------
+banner "6c. The prompt writes the same scope words and pin judgements as the verifier"
+# ---------------------------------------------------------------------------
+# PRD-13 slice 5 (#946): a consumer's CI review lands beside the kit's own
+# review and its verifier, so its confirm-list carries the same scope mark on
+# every ⚠️ UNSPECIFIED item, and its review judges each passing check-table
+# row. Both words are pinned with WHERE they are written — a scope buried on a
+# line beneath the tag is a line a reader of tagged lines drops.
+assert_file_has "$PROMPT" "scope: inside"
+assert_file_has "$PROMPT" "scope: outward"
+assert_file_has "$PROMPT" "⚠️ UNSPECIFIED  scope: <inside|outward> —"
+assert_file_has "$PROMPT" "as the first words after its tag, on the item's own line"
+if grep -qF "scope: inside" "$PROMPT_ABS" && grep -qF "scope: outward" "$PROMPT_ABS" &&
+	grep -qF "⚠️ UNSPECIFIED  scope: <inside|outward> —" "$PROMPT_ABS"; then
+	pass "process/R206: the prompt asks for scope: inside or scope: outward as the first words after the ⚠️ UNSPECIFIED tag"
+else
+	fail "process/R206: the prompt does not ask for the scope words right after the ⚠️ UNSPECIFIED tag"
+fi
+# The pin judgement: one line per `pass` row, the row's id and one of two
+# words. The shape is pinned whole, so a third word or a line per row of any
+# result would show here.
+assert_file_has "$PROMPT" "one line per \`pass\` row"
+assert_file_has "$PROMPT" "pin: <id> — <upheld|disputed>"
+assert_file_has "$PROMPT" "\`upheld\`"
+assert_file_has "$PROMPT" "\`disputed\`"
+assert_file_has "$PROMPT" "<!-- check-table -->"
+if grep -qF 'one line per `pass` row' "$PROMPT_ABS" &&
+	grep -qF "pin: <id> — <upheld|disputed>" "$PROMPT_ABS"; then
+	pass "process/R207: the prompt asks for one pin line per pass row, naming the id and upheld or disputed"
+else
+	fail "process/R207: the prompt does not ask for one upheld/disputed line per pass row of the check table"
+fi
+
 # The two-axis split is the one rule the prompt states rather than references,
 # because it describes the shape of the review's own output and no reviewer
 # infers it (shared invariant §5).
