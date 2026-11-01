@@ -2836,3 +2836,19 @@ wall, about 60 ms typical; one `read` of the docs gate's `config.mjs`, 52
 ms. Until this lands, `thresholds --base origin/main` on the kit prints
 `fail-closed missing scripts/risk.config.sh`, the reader holding its own
 rule.
+
+## 2026-11-01 — the stamp reader reads a factory ticket's stamp
+
+PRD-12 slice 1 of D-02 (#934, released as 0.100.0), the factory's IN-01.
+`scripts/stamp.sh T-<n>` in a factory project runs `factory stamp` from the
+git top level the script lives in and checks what it prints through the
+kit's own lift, bound and checker, `Label:` lifted for a factory ticket
+only; an issue number reads as before. Run on the kit itself, which is a
+factory project, `sh scripts/stamp.sh T-02` printed its four checked lines
+in 1.8 s wall, `T-71` (no stamp lines in its file) exited 3, `T-~a1b2`
+exited 2 as a usage error, and with `factory` off `PATH` `T-71` exited 3
+naming `sh scripts/stamp.sh <issue-number>`. The id is 1 to 6 digits as
+#934 says; PRD-15's canonical 2-to-6-digit form pads before it calls.
+/implement's SKILL.md sat 6 bytes under its 27000-byte ceiling, so the
+factory text went to STAMP.md behind a one-sentence pointer and the
+ceiling rose to 27500.
