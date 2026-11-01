@@ -1,4 +1,4 @@
-# ADR-0044: A chain skill runs the risk rule, the one route by which it sees anything derived from the trace
+# ADR-0045: A chain skill runs the risk rule, the one route by which it sees anything derived from the trace
 
 - **Status**: Accepted
 - **Date**: 2026-11-01

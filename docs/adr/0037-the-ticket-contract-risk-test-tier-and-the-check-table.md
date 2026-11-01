@@ -4,7 +4,7 @@
 - **Date**: 2026-10-25
 - **Deciders**: the planner session for #869, under the operator's delegation of rulings (ADR-0016); the contract itself was settled with the software factory's D-08 session on 2026-10-23 (PRD-07 §8); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: —
-- **Superseded by**: —
+- **Superseded by**: — (amended 2026-11-01 for #969: the `Accept-test:` line, a keyed field whose value is a test pin held to the checker's grammar, bounded at 32 lines and held to the ticket's `Covers:` ids; `/to-tickets` rule 8's second exception; see the amendment below)
 
 ## Context and problem statement
 
@@ -144,3 +144,43 @@ Chosen: **new kinds of field in the checker, held as policy data**.
 - Related: ADR-0012 (ids and `Covers:`), ADR-0015 and ADR-0025 (a release is
   bumped and tagged), ADR-0033 (one shared-layer ticket per frontier),
   ADR-0016 (the session's delegated rulings).
+
+## Amendment 2026-11-01 — the `Accept-test:` line (#969)
+
+PRD-14 (factory item, D-02, slice 1) lets a ticket name, before its build,
+the tests that define its done, and the software factory (its PRD-17) stamps
+them. The line joins this contract, so its grammar is fixed here, where the
+factory reads the other stamp lines' words.
+
+1. **`Accept-test:` is a keyed field whose value is a test pin.**
+   `Accept-test: <requirement id> <path>::<test-name>` — the id in the
+   coverage check's bounded grammar, one space, then the pin. The policy
+   declares it in `VOCAB_KEYED` and in a new list, `VOCAB_PIN`: a keyed
+   field whose value after the id is held to a grammar the checker owns
+   (`vocab_pin_ok`), never to tokens, so it declares no `VOCAB_<FIELD>`.
+   `fields` prints it as `accept-test (keyed pin):`. Unlike `Test-tier:`, an
+   id may repeat, once per test, and two identical lines are one answer.
+2. **The test pin's grammar** is mechanism, a literal like the query's: at
+   most 200 bytes, printable ASCII, no `|`; split at its first `::`, the
+   path non-empty, relative (no leading `/`), holding no space and no `..`
+   segment; the test name non-empty, spaces allowed. A refusal names the
+   field `accept-test`.
+3. **Its bound is published**: `VOCAB_BOUNDS='test-tier=32 accept-test=32'`.
+   The stamp reader stops at the 33rd line, exit 5, nothing printed.
+4. **The id must be on the ticket's own `Covers:` line.** The stamp reader
+   holds each `Accept-test:` id to the one `Covers:` value it accepted; an
+   id off it, or any `Accept-test:` line on a ticket with no id list, is
+   exit 2 naming `accept-test`.
+5. **`/to-tickets` rule 8 gains its second exception**: an `Accept-test:`
+   line names a test file by path, because the approval commit pins each
+   path and the acceptance guard (PRD-14 slice 2) catches one that drifts.
+   The quiz step checks each such line with the checker before the human
+   sees the draft and shows them beside the ticket's `Test-tier:` lines.
+
+A consumer whose own `scripts/vocab.config.sh` predates this declares no
+`accept-test` field, and its stamp reader drops the lines as undeclared,
+exactly as clause 7's release did for the first five. Held by
+`tests/vocab.test.sh` (the Accept-test: section), `tests/vocab-policy.test.sh`
+(acceptance/R4), `tests/stamp.test.sh` (the acceptance/R5 and R6 sections and
+process/R43) and `tests/spec-skills.test.sh` (process/R220, R221); the
+requirements are `docs/specs/acceptance.md` R1 to R6.

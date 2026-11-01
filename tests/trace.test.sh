@@ -1394,6 +1394,8 @@ pr.iterate green red stopped
 merge.land landed skipped stopped
 merge.outcome reverted fixed qa-failed
 risk.judge agreed disagreed
+verify.verdict pass blocked unavailable
+finding.verify confirmed disputed
 hypothesis proposed confirmed refuted inconclusive
 spike.verdict true false inconclusive
 brief.decide presented recorded
@@ -1438,8 +1440,9 @@ ov_held() {
 	# (merge.outcome's evidence, #875), or a factory ticket's id.
 	sed -n "s/^TRACE_SHAPES='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | sed -n "s|^$1/[^=]*=\([a-z_]*\)!:.*|\1|p" | sort -u | while read -r _oh_s; do
 		case $_oh_s in
-		by_sha) echo data.by_sha=0123456789abcdef0123456789abcdef01234567 ;;
+		by_sha | reviewed) echo "data.$_oh_s=0123456789abcdef0123456789abcdef01234567" ;;
 		ticket) echo data.ticket=T-1 ;;
+		provider) echo data.provider=openai ;;
 		*) echo "data.$_oh_s=0" ;;
 		esac
 	done
@@ -1448,6 +1451,7 @@ ov_held() {
 		id) echo data.id=H-1 ;;
 		severity) echo data.severity=low ;;
 		axis) echo data.axis=1 ;;
+		where) echo data.where=scripts/a.sh:12 ;;
 		*) echo "data.$_oh_k=no-fixture-value-for-a-required-key" ;;
 		esac
 	done
@@ -2373,8 +2377,10 @@ grep -F '"kind":"finding.raise"' "$RI/events/$TODAY.jsonl" 2>/dev/null | grep -q
 # the two ends of the join cannot drift apart.
 _ri_raise=$(sed -n "s/^TRACE_SHAPES='.*finding\.raise=id:\([^ ']*\).*/\1/p" "$TRACE")
 _ri_local=$(sed -n "s/^TRACE_SHAPES='.*finding\.triage\/data\.source~local=id:\([^ ']*\).*/\1/p" "$TRACE")
+# The raise shape's first alternative, a lens id, is one of the local
+# triage's; its V- alternative is the verifier's, triaged as a bot's (#939).
 _ri_join=no
-[ -n "$_ri_raise" ] && case "|$_ri_local|" in *"|$_ri_raise|"*) _ri_join=yes ;; esac
+[ -n "$_ri_raise" ] && case "|$_ri_local|" in *"|${_ri_raise%%|*}|"*) _ri_join=yes ;; esac
 [ "$_ri_join" = yes ] && pass "the raise's shape ($_ri_raise) is one the local triage's ($_ri_local) accepts" ||
 	fail "TRACE_SHAPES' raise id shape '$_ri_raise' is not an alternative of the local triage's '$_ri_local'"
 
@@ -2408,7 +2414,7 @@ done
 # A table that lost the raise row is a table error, refused, never a silent
 # advisory that matches nothing (review of PR #605, M-3).
 RIX="$SCRATCH/raise-norow"; mkdir -p "$RIX"
-sed "s/^TRACE_SHAPES='finding\.raise=id:\[CHML\]-\[0-9\]+ /TRACE_SHAPES='/" "$TRACE" >"$RIX/trace.sh"
+sed "s/^TRACE_SHAPES='finding\.raise=id:[^ ]* /TRACE_SHAPES='/" "$TRACE" >"$RIX/trace.sh"
 grep -q "^TRACE_SHAPES='.*finding\.raise=id:" "$RIX/trace.sh" && fail "the fixture still carries the raise row — the bait proves nothing" || pass "bait: a copy of the script without the raise row"
 t_exec env TRACE_CONFIG="$RIVON" sh "$RIX/trace.sh" verify
 case $T_STATUS:$T_ERR in 2:*"finding.raise=id"*) pass "verify on a table with no raise row is exit 2, naming the row" ;; *) fail "verify without the raise row exited $T_STATUS, not 2 naming the row: $T_ERR" ;; esac
@@ -2433,8 +2439,10 @@ adr8_holds_raise_rule "$ADR8_BAIT/no-raise-rule.md" &&
 _ri_lines=$(grep -F 'kind=finding.raise' "$KIT/.agents/skills/review-pr/SKILL.md")
 [ "$(printf '%s\n' "$_ri_lines" | grep -c .)" -ge 2 ] && ! printf '%s\n' "$_ri_lines" | grep -q 'data\.id=[^ ]*INITIAL' &&
 	pass "/review-pr's raise lines never offer INITIAL-N as data.id's value" || fail "a /review-pr raise line still offers the INITIAL-N placeholder as data.id"
-[ -n "$_ri_raise" ] && printf '%s\n' "$_ri_lines" | tr '\n' ' ' | grep -qF "$_ri_raise" &&
-	pass "and its raise paragraphs state the shape TRACE_SHAPES declares, $_ri_raise" || fail "/review-pr's raise paragraphs do not state $_ri_raise"
+# The review's lenses raise lens ids, the shape's first alternative; the V-
+# alternative is the verifier's, raised by the broker (#939).
+[ -n "$_ri_raise" ] && printf '%s\n' "$_ri_lines" | tr '\n' ' ' | grep -qF "${_ri_raise%%|*}" &&
+	pass "and its raise paragraphs state the lens shape TRACE_SHAPES declares, ${_ri_raise%%|*}" || fail "/review-pr's raise paragraphs do not state ${_ri_raise%%|*}"
 
 # ---------------------------------------------------------------------------
 banner "31. A spawn's model is one form: an id the agents policy maps, held at emit (ticket #569)"
@@ -4018,5 +4026,98 @@ printf '%s\n' "$T_OUT" | grep -Eiqw 'low|high|risk|threshold' &&
 	pass "runtime/R51: no row carries low, high, risk or a threshold"
 [ "$(pr_snap)" = "$_pr_before" ] && pass "runtime/R51: the run leaves the trace and the working tree byte-identical" ||
 	fail "runtime/R51: record changed the trace or the repository"
+
+banner "44. a verifier's verdict, its V- findings and its finding verdicts are trace kinds (runtime/R200-R202, R221, #939)"
+# PRD-13 slice 1: the verifier — a reviewer from another provider beside the
+# kit's own review — records its verdict as a kind of its own, never a
+# review.verdict, so no reader that counts the kit's review counts it; its
+# findings carry a V- id; and its judgement of one kit finding is
+# finding.verify, never a finding.triage, so it labels nothing.
+VV_T="$SCRATCH/verifier-trace"; VVON=$(policy "$VV_T")
+VV_SHA=0123456789abcdef0123456789abcdef01234567
+vv_lines() { cat "$VV_T"/events/*.jsonl 2>/dev/null | wc -l | tr -d ' '; }
+# vv_refused <label> -- <emit args…> — exit 2, and the trace holds no new line.
+vv_refused() {
+	_vv_l=$1; shift 2
+	_vv_n=$(vv_lines)
+	t_exec env TRACE_CONFIG="$VVON" sh "$TRACE" emit "$@"
+	[ "$T_STATUS" = 2 ] && [ "$(vv_lines)" = "$_vv_n" ] && pass "$_vv_l: exit 2, nothing written" ||
+		fail "$_vv_l: exited $T_STATUS, lines $_vv_n -> $(vv_lines): $T_ERR"
+}
+vv_written() {
+	_vv_l=$1; shift 2
+	_vv_n=$(vv_lines)
+	t_exec env TRACE_CONFIG="$VVON" sh "$TRACE" emit "$@"
+	[ "$T_STATUS" = 0 ] && [ "$(vv_lines)" = $((_vv_n + 1)) ] && pass "$_vv_l: written" ||
+		fail "$_vv_l: exited $T_STATUS, lines $_vv_n -> $(vv_lines): $T_ERR"
+}
+
+# runtime/R200: the kind and its three outcomes, and nothing else.
+for _vv_o in pass blocked; do
+	vv_written "runtime/R200: verify.verdict outcome=$_vv_o" -- kind=verify.verdict subject='pr:#971' outcome="$_vv_o" data.reviewed="$VV_SHA" data.provider=openai
+done
+vv_written "runtime/R200: verify.verdict outcome=unavailable" -- kind=verify.verdict subject='pr:#971' outcome=unavailable reason='no verifier resolved'
+for _vv_o in confirm green landed; do
+	vv_refused "runtime/R200: verify.verdict outcome=$_vv_o" -- kind=verify.verdict subject='pr:#971' outcome="$_vv_o" data.reviewed="$VV_SHA" data.provider=openai
+done
+vv_refused "runtime/R200: a verify.verdict with no outcome" -- kind=verify.verdict subject='pr:#971' data.reviewed="$VV_SHA" data.provider=openai
+
+# runtime/R201: a pass or a blocked names the head it reviewed and its provider.
+for _vv_o in pass blocked; do
+	vv_refused "runtime/R201: $_vv_o with no data.reviewed" -- kind=verify.verdict subject='pr:#971' outcome="$_vv_o" data.provider=openai
+	vv_refused "runtime/R201: $_vv_o with a data.reviewed that is not 40 hex digits" -- kind=verify.verdict subject='pr:#971' outcome="$_vv_o" data.reviewed=HEAD data.provider=openai
+	vv_refused "runtime/R201: $_vv_o with a 39-digit data.reviewed" -- kind=verify.verdict subject='pr:#971' outcome="$_vv_o" data.reviewed="${VV_SHA%?}" data.provider=openai
+	vv_refused "runtime/R201: $_vv_o with no data.provider" -- kind=verify.verdict subject='pr:#971' outcome="$_vv_o" data.reviewed="$VV_SHA"
+	vv_refused "runtime/R201: $_vv_o with a data.provider that is no token" -- kind=verify.verdict subject='pr:#971' outcome="$_vv_o" data.reviewed="$VV_SHA" data.provider='Open AI'
+done
+
+# runtime/R202: a V- before a lens id is a raise's and a triage's id; W- is not.
+vv_written "runtime/R202: finding.raise data.id=V-H-1" -- kind=finding.raise subject='pr:#971' outcome=raised data.id=V-H-1 data.severity=high data.agent=verifier
+vv_written "runtime/R202: finding.triage data.id=V-H-1, triaged as a bot's" -- kind=finding.triage subject='pr:#971' outcome=accepted data.id=V-H-1 data.source=bot
+vv_refused "runtime/R202: a local triage of V-H-1 — refused before, still refused: a verifier finding is triaged as a bot's" -- kind=finding.triage subject='pr:#971' outcome=rejected data.id=V-H-1 data.source=local
+vv_written "runtime/R202: and a lens id still raises" -- kind=finding.raise subject='pr:#971' outcome=raised data.id=H-1 data.severity=high
+for _vv_i in W-H-1 V-X-1 V-H- V-V-H-1 v-H-1 V-A2-1 INITIAL-1; do
+	vv_refused "runtime/R202: finding.raise data.id=$_vv_i" -- kind=finding.raise subject='pr:#971' outcome=raised data.id="$_vv_i" data.severity=high
+done
+vv_refused "runtime/R202: a local triage of W-H-1" -- kind=finding.triage subject='pr:#971' outcome=accepted data.id=W-H-1 data.source=local
+vv_refused "runtime/R202: a triage of an id with a space" -- kind=finding.triage subject='pr:#971' outcome=accepted data.id='V H 1' data.source=bot
+
+# runtime/R221: the verifier's verdict on one kit finding, with its evidence.
+for _vv_o in confirmed disputed; do
+	vv_written "runtime/R221: finding.verify outcome=$_vv_o on H-1" -- kind=finding.verify subject='pr:#971' outcome="$_vv_o" data.id=H-1 data.where=scripts/trace.sh:12 data.agent=verifier
+done
+vv_refused "runtime/R221: finding.verify outcome=accepted — a verdict, never a triage" -- kind=finding.verify subject='pr:#971' outcome=accepted data.id=H-1 data.where=scripts/trace.sh:12
+vv_refused "runtime/R221: finding.verify with no outcome" -- kind=finding.verify subject='pr:#971' data.id=H-1 data.where=scripts/trace.sh:12
+vv_refused "runtime/R221: finding.verify on V-H-1 — the verifier never judges its own findings" -- kind=finding.verify subject='pr:#971' outcome=confirmed data.id=V-H-1 data.where=scripts/trace.sh:12
+vv_refused "runtime/R221: finding.verify with no data.id" -- kind=finding.verify subject='pr:#971' outcome=disputed data.where=scripts/trace.sh:12
+vv_refused "runtime/R221: finding.verify with no data.where" -- kind=finding.verify subject='pr:#971' outcome=disputed data.id=H-1
+vv_refused "runtime/R221: finding.verify whose data.where is no <path>:<line> place" -- kind=finding.verify subject='pr:#971' outcome=disputed data.id=H-1 data.where=scripts/trace.sh
+( cd "$KIT" && env TRACE_CONFIG="$VVON" sh "$TRACE" verify >/dev/null 2>&1 ) && pass "runtime/R200-R202, R221: what was written is a trace verify accepts" ||
+	fail "runtime/R200-R202, R221: verify refuses the verifier fixture"
+
+# A V- finding is the verifier's, never a lens's: the record reader counts it
+# toward no review area (PRD-13 §8; its own row is a later slice's).
+VR_T="$SCRATCH/verifier-record-trace"
+t_repo
+VR=$REPO
+_vr_s=$(er_land "$VR" src/a.sh 'pr one')
+er_ev "$VR_T" "$NOW" merge.land 'pr:#1' landed "$_vr_s"
+pr_ev "$VR_T" "$NOW" finding.raise 'pr:#1' raised run-v '"id":"V-H-1","severity":"high","agent":"verifier","where":"src/a.sh:1"'
+pr_ev "$VR_T" "$NOW" finding.triage 'pr:#1' accepted run-v '"id":"V-H-1","source":"bot"'
+VR_ON=$(policy "$VR_T")
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$VR" "$VR_ON" "$ER_POL" "$TRACE"
+[ "$(printf '%s\n' "$T_OUT" | grep '^security: ')" = 'security: landings 1 of 20, in the fix window 1, mistakes 0, missed 0 of 1, miss rate 0.00, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0' ] &&
+	pass "a V- finding counts toward no review area's precision" || fail "the record reader counted a V- finding: $(printf '%s\n' "$T_OUT" | grep '^security: ') $T_ERR"
+
+# The decision is recorded where decisions live: a new record amending
+# ADR-0024 clause 1 (its amendment cap), naming both kinds and the V- prefix.
+_vv_adr=$(grep -l '^- \*\*Supersedes / amends\*\*: amends ADR-0024 clause' "$KIT"/docs/adr/[0-9]*.md 2>/dev/null | xargs grep -l 'verify\.verdict' 2>/dev/null | head -1)
+[ -n "$_vv_adr" ] && grep -qF 'finding.verify' "$_vv_adr" && grep -qF '`V-`' "$_vv_adr" && grep -qF 'ADR-0032' "$_vv_adr" &&
+	grep -qF "$(basename "$_vv_adr")" "$KIT/docs/adr/INDEX.md" &&
+	pass "the verifier's record amends ADR-0024 clause 1, names verify.verdict, finding.verify, the V- prefix and ADR-0032, and is in the index" ||
+	fail "no indexed record amending ADR-0024 clause 1 for verify.verdict, finding.verify, V- and ADR-0032"
+for _vv_g in Verifier Provider; do
+	grep -q "^- \*\*$_vv_g\*\*" "$KIT/docs/domain-glossary.md" && pass "the glossary defines $_vv_g" || fail "the glossary has no $_vv_g entry"
+done
 
 t_done "trace script"

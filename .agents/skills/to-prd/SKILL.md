@@ -8,6 +8,10 @@ metadata:
 
 This skill takes the current conversation context and codebase understanding and produces a PRD. Do NOT interview the user — just synthesize what you already know. The one exception is the one question below, asked before anything else when the conversation was never grilled. (If the requirements are not settled yet, that is `/grill-me` or `/grill-with-docs`, not this.)
 
+## A factory project defers, before any other step
+
+First of all — before the grilling question below, and before you explore the repo — open [FACTORY.md](FACTORY.md) and run its check, `factory_deferral factory-prd`. `defer` ends the run at its hand-off; `missing` is said once; `none` changes nothing.
+
 ## Before you start
 
 - **An ungrilled conversation.** Before any step of the process, read this conversation for a grilling session — a `/grill-me` or `/grill-with-docs` run that settled the plan one question at a time. Only such a run counts as grilled; an interview of the same shape held by hand does not, and asking costs one line. When it holds no grilling session, open by asking the user one question, and only one: run `/grill-me` first? Where the project has a glossary (`docs/domain-glossary.md`) and decision records (`docs/adr/`), name `/grill-with-docs` instead — it challenges the plan against both. **Yes** runs that skill; when it ends, hand back to this skill and synthesize from step 1. A run with nobody to answer — spawned by another session, or unattended — takes the No path without asking. **No** writes the PRD as this skill always has, and lists under Open Issues each point you would otherwise have guessed, in that section's three-line shape, so a later session sees the guess instead of inheriting it as a decision. The check reads the conversation only, never the trace: the trace records grill decisions, but no skill reads it to decide anything (the kit's ADR-0008). Beyond this one question the skill still never interviews (the kit's ADR-0012).

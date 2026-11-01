@@ -25,7 +25,7 @@ the PRD writes it. R46 to R51 joined with the misses and lens precision
 (#879). R229 to R236 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
 the PRD's numbers past PRD-08 to PRD-13's drafts. R241 to R245 joined from
 PRD-15 slice 4 (#966), the landing script's factory ticket. R52 to R58,
-R61 to R64, R68 and R69 joined from PRD-09 slice 1 (#905, ADR-0044), the
+R61 to R64, R68 and R69 joined from PRD-09 slice 1 (#905, ADR-0045), the
 risk rule, keeping the PRD's numbers; R59, R60 and R65 to R67 are its later
 slices'.
 
@@ -93,6 +93,10 @@ R63. WHEN the risk rule judges a PR, it SHALL record one `risk.judge` event with
 R64. IF the trace already holds a `risk.judge` for the same PR and head commit with the same risks and switch state, THEN the risk rule SHALL record nothing. [UC1 7a]
 R68. The risk rule SHALL exit 0 whatever risk it prints, and SHALL write nothing but its `risk.judge` event. [UC1 8]
 R69. The risk rule SHALL print and record only risk tokens, review area names from the lens-slice policy, `none`, the switch words, digits and commit shas, and no text from a ticket body, a PR body or a commit message.
+R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
+R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
+R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]
+R221. The trace SHALL accept the kind `finding.verify` with the outcomes `confirmed` and `disputed`, carrying a lens finding `data.id` and a `data.where` place, and SHALL refuse, exit 2, writing nothing, any other outcome, a `V-` id, or a missing `data.id` or `data.where`. [UC1 4]
 R229. WHERE the trace policy's `TRACE_FACTORY_IDS` names a word `<type>=<PREFIX>`, the trace SHALL accept at emit a subject or `related` token `<type>:<PREFIX>-<digits>` whose id is canonical, beside the `<type>:#<digits>` spelling the type already takes. [UC1 3, UC2 3]
 R230. IF a subject or `related` token of a type `TRACE_FACTORY_IDS` names is neither `<type>:#<digits>` nor a canonical factory id of that type's prefix, THEN the trace SHALL exit 2 at emit, write nothing, and name the two forms the value should take.
 R231. IF a `TRACE_FACTORY_IDS` word is not `<type>=<PREFIX>` with a type `TRACE_NUMBERED_TYPES` names and a prefix of 1 to 8 uppercase letters, THEN the trace SHALL exit 2 naming the word and the policy file.

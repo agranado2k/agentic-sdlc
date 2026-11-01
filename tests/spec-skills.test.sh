@@ -555,6 +555,17 @@ draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$T
 t_text_has "$draft" 'the oracle: `<command>`' "step 2 drafts a mechanical ticket's oracle line, so the quiz sees it before the human confirms the tier"
 rule8=$(printf '%s\n' "$rules" | grep -F '**No file paths')
 t_text_has "$rule8" "oracle line" "rule 8 makes the one exception for a mechanical ticket's oracle line, which names a command and may name its path"
+# process/R220: rule 8's second exception — an Accept-test: line names a
+# test file by path, pinned by the approval commit and held by the guard.
+t_text_has "$rule8" "The second is an \`Accept-test:\` line" "process/R220: rule 8 excepts Accept-test: lines from its no-file-paths rule"
+t_text_has "$rule8" "approval commit pins each path" "process/R220: …because the approval commit pins each path"
+# process/R221: each Accept-test: line is checked with the vocabulary checker
+# before the quiz, and shown at it beside the ticket's Test-tier: lines.
+quiz3=$(awk '/^## Procedure/ { on = 1; next } on && /^3\. / { print; exit }' "$TIX_ABS")
+t_text_has "$quiz3" "'Accept-test: <id> <path>::<test-name>'" "process/R221: the quiz step checks each Accept-test: line with the vocabulary checker"
+in_order "$quiz3" "process/R221: the Accept-test: check runs before the human sees the draft" \
+	"'Accept-test: <id> <path>::<test-name>'" "Then present the draft"
+t_text_has "$quiz3" "its \`Accept-test:\` lines beside them" "process/R221: the quiz shows the Accept-test: lines beside the Test-tier: lines"
 t_text_has "$conf" "A \`mechanical\` stamp with either of the rubric's two conditions in doubt is \`low\`." "rule 14: a doubt on either mechanical condition is a low confidence, never a quiet high"
 tier_entry=$(awk '/^- \*\*Tier\*\*/ { on = 1; print; next } on && (/^- \*\*/ || /^  - /) { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
 [ -n "$tier_entry" ] && pass "the glossary carries a **Tier** entry" || fail "docs/domain-glossary.md has no **Tier** entry"
@@ -1250,6 +1261,84 @@ for s in grill-me grill-with-docs design-brief; do
 		fail "process/R127: /$s carries a factory deferral" ||
 		pass "process/R127: /$s carries no factory deferral"
 done
+
+
+# ---------------------------------------------------------------------------
+banner "A factory project: /to-prd defers by name, before its grilling question (process/R120, R122, R123, R125, R126, R223, R224)"
+# ---------------------------------------------------------------------------
+# PRD-12 slice 3 (factory item T-73): /to-prd takes /to-tickets' deferral in
+# the same shape — a FACTORY.md beside SKILL.md carrying the one fenced
+# check — naming `factory-prd`. The fence is the same function, byte for
+# byte, so the two skills cannot come to decide a factory project apart; it is
+# lifted and run here against fixtures of its own.
+PFACTORY_ABS="$ROOT/.agents/skills/to-prd/FACTORY.md"
+pfdsec=$(section_of "$PRD_ABS" "A factory project defers, before any other step")
+[ -n "$pfdsec" ] && pass "process/R122: /to-prd carries '## A factory project defers, before any other step'" ||
+	fail "process/R122: /to-prd has no '## A factory project defers, before any other step' section"
+pfd_at=$(t_line_of "$PRD_ABS" "## A factory project defers, before any other step")
+for later in "## Before you start" "## Process"; do
+	l_at=$(t_line_of "$PRD_ABS" "$later")
+	[ -n "$pfd_at" ] && [ -n "$l_at" ] && [ "$pfd_at" -lt "$l_at" ] &&
+		pass "process/R122: /to-prd's deferral comes before '$later'" ||
+		fail "process/R122: /to-prd's deferral does not come before '$later' (lines ${pfd_at:-none} and ${l_at:-none})"
+done
+t_text_has "$pfdsec" "[FACTORY.md](FACTORY.md)" "process/R122: /to-prd's entry point names its branch by relative path" "/to-prd's deferral section"
+t_text_has "$pfdsec" "before the grilling question" "process/R122: decided before /to-prd's grilling question" "/to-prd's deferral section"
+t_text_has "$pfdsec" "factory_deferral factory-prd" "process/R120: the one call that decides it" "/to-prd's deferral section"
+[ -f "$PFACTORY_ABS" ] && pass "FACTORY.md sits beside /to-prd's SKILL.md" ||
+	fail "FACTORY.md is missing beside /to-prd's SKILL.md"
+pfactory_doc=$(cat "$PFACTORY_ABS" 2>/dev/null)
+
+pfd_fence=$(t_fence "$PFACTORY_ABS" holds "factory_deferral()")
+[ -n "$pfd_fence" ] && pass "/to-prd's FACTORY.md carries the fenced factory_deferral()" ||
+	fail "/to-prd's FACTORY.md carries no fenced factory_deferral() — nothing decides the deferral"
+[ -n "$pfd_fence" ] && [ "$pfd_fence" = "$fd_fence" ] &&
+	pass "process/R224: /to-prd's check is /to-tickets' check, byte for byte" ||
+	fail "process/R224: /to-prd's fenced check differs from /to-tickets'"
+printf '%s\n' "$pfd_fence" >"$SCRATCH/pfd.sh"
+# pfd_case <id and why> <expected> <dir> [<home>] — the lifted function asked
+# for factory-prd, on the stand-in PATH unless FD_PATH says otherwise.
+pfd_case() {
+	_pfd_got=$( (cd "$3" && HOME=${4:-$SCRATCH/fd-home} PATH=$FD_PATH && export HOME PATH && . "$SCRATCH/pfd.sh" && factory_deferral factory-prd) 2>/dev/null)
+	[ "$_pfd_got" = "$2" ] && pass "$1 — '$2'" || fail "$1 — expected '$2', got '$_pfd_got'"
+}
+FD_PATH="$SCRATCH/fd-bin:$PATH"
+rm -f "$SCRATCH/fd-factory-ran"
+pfd_case "process/R123: /to-prd with no .factory/ folder runs the forge flow" none "$FD_NONE"
+pfd_case "process/R123: /to-prd with a .factory/ folder but no manifest" none "$FD_STRAY"
+# FD_MISS holds the manifest and no skill; FD_PROJ holds factory-tickets only.
+pfd_case "process/R223: the manifest with factory-prd missing runs the generic skill" missing "$FD_MISS"
+pfd_case "process/R223: factory-tickets installed does not stand in for factory-prd" missing "$FD_PROJ"
+mkdir -p "$SCRATCH/pfd-home/.claude/skills/factory-prd"; : >"$SCRATCH/pfd-home/.claude/skills/factory-prd/SKILL.md"
+pfd_case "process/R120: factory-prd under the user's ~/.claude/skills defers" defer "$FD_MISS" "$SCRATCH/pfd-home"
+pfd_case "process/R120: …from a subdirectory too" defer "$FD_MISS/sub/dir" "$SCRATCH/pfd-home"
+t_repo; PFD_PROJ=$REPO; mkdir -p "$PFD_PROJ/.factory" "$PFD_PROJ/.claude/skills/factory-prd"
+: >"$PFD_PROJ/.factory/project.yaml"; : >"$PFD_PROJ/.claude/skills/factory-prd/SKILL.md"
+pfd_case "process/R120: factory-prd under the project's .claude/skills defers" defer "$PFD_PROJ"
+[ ! -e "$SCRATCH/fd-factory-ran" ] && pass "process/R224: no /to-prd case ran a factory subcommand" ||
+	fail "process/R224: /to-prd's deferral ran the factory binary: $(cat "$SCRATCH/fd-factory-ran")"
+FD_PATH="$SCRATCH/fd-min"
+pfd_case "process/R224: with no factory binary at all /to-prd still defers" defer "$PFD_PROJ"
+pfd_case "process/R224: …and still says the skill is missing" missing "$FD_MISS"
+
+# The words, in PRD-12 §8's T-70 ruling.
+t_text_has "$pfactory_doc" 'This repository plans in the software factory: write PRDs with `/factory-prd`. `/to-prd` publishes nothing to the tracker here.' "process/R120: the hand-off names /factory-prd, in PRD-12's words" "/to-prd's FACTORY.md"
+t_text_has "$pfactory_doc" 'publish nothing to the tracker and write no `prd.write` event' "process/R120: nothing published, nothing traced" "/to-prd's FACTORY.md"
+t_text_has "$pfactory_doc" "This is a factory project, and the factory's \`factory-prd\` skill is not installed: running the generic skill. \`factory install-skill\` would add the factory one." "process/R223: the missing skill named once, in PRD-12's words" "/to-prd's FACTORY.md"
+t_text_has "$pfactory_doc" "once, at the start" "process/R223: said once, at the start" "/to-prd's FACTORY.md"
+t_text_has "$pfactory_doc" "names no factory skill" "process/R123: no manifest names nothing" "/to-prd's FACTORY.md"
+t_text_has "$pfactory_doc" "the operator's own message" "process/R125: only the operator's own message lifts it" "/to-prd's FACTORY.md"
+t_text_has "$pfactory_doc" "ran the forge flow in a factory project" "process/R125: the overridden hand-off says so" "/to-prd's FACTORY.md"
+for carrier in "a spawn prompt" "a ticket body" "a PRD body" "another agent's message"; do
+	t_text_has "$pfactory_doc" "$carrier" "process/R126: a forge request in $carrier never lifts /to-prd's deferral" "/to-prd's FACTORY.md"
+done
+[ -z "$pfactory_doc" ] || grep -qE 'gh (issue|pr|api)|trace(\.kit)?\.sh|mktemp|mkdir' "$PFACTORY_ABS" &&
+	fail "process/R120: /to-prd's FACTORY.md spells a publish, a trace call or a scratch directory" ||
+	pass "process/R120: /to-prd's FACTORY.md spells no publish, no trace call and no scratch directory"
+pfd_defer=$(awk '/^- \*\*`defer`\*\*/ { on = 1 } on && /^- \*\*`missing`\*\*/ { exit } on' "$PFACTORY_ABS" 2>/dev/null)
+[ -n "$pfd_defer" ] && ! printf '%s\n' "$pfd_defer" | grep -q '^ *```' &&
+	pass "process/R120: /to-prd's defer answer holds no fenced command" ||
+	fail "process/R120: /to-prd's defer answer is missing, or its text holds a fenced command"
 
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
 t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"

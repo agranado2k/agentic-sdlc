@@ -284,6 +284,8 @@ const skillPaths = {
     // Written by the software factory's `factory install-skill`, never by the
     // kit: /to-tickets' factory deferral tests for its presence (the kit's ADR-0042).
     ".claude/skills/factory-tickets/",
+    // …and /to-prd's, for `factory-prd` (PRD-12 slice 3).
+    ".claude/skills/factory-prd/",
   ],
 };
 

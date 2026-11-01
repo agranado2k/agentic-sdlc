@@ -255,7 +255,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.103.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.106.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -715,7 +715,7 @@ skeleton (K0).
   at the base with one, and prints nothing elsewhere, the guards policy never
   read for it; at the base an absent manifest or a malformed date fails closed.
 - `sh tests/risk.test.sh` holds `scripts/risk.sh`, the risk rule (PRD-09
-  slice 1, the kit's ADR-0044): in a throwaway repository with landings, a
+  slice 1, the kit's ADR-0045): in a throwaway repository with landings, a
   fixture trace and pull request branches, a low ticket's PR whose security
   area missed a mistake prints `effective: high unlearned` and records one
   `risk.judge outcome=disagreed`, and a second run writes nothing; an area is
@@ -1024,6 +1024,7 @@ sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
 sh tests/agents-tiers.test.sh                          # the capability-tier resolver
 sh tests/agent-harness.test.sh                         # the agent-harness axis of that resolver
+sh tests/agents-verifier.test.sh                       # the kit wrapper's verifier walk, two rungs
 sh tests/agent-dispatch.test.sh                        # running a tier on another agent harness
 sh tests/agent-roster.test.sh                          # bootstrap's agent-roster prompt
 sh tests/implement-deliver.test.sh                     # /implement's Deliver phase

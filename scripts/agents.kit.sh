@@ -223,6 +223,113 @@ case ${1:-} in
 --*) _kit_tier=${2:-} _kit_domain=${3:-} ;;
 *) _kit_tier=${1:-} _kit_domain=${2:-} ;;
 esac
+
+# THE VERIFIER WALK (ADR-0044 clause 2; PRD-13 runtime/R203-R205, R224-R226).
+# `reviewer cross-provider`, the diff's author in $AGENT_SESSION_MODEL, is
+# the verifier: kit policy no consumer's resolver reads, so it is answered
+# here and never delegated. Two rungs, in an order fixed by rule, each read
+# from the policy as data:
+#
+#   cross-provider  the first of AGENT_KIT_VERIFIER_CANDIDATES whose provider
+#                   differs from the author's;
+#   same-provider   else the first of the reviewer tier's ordered walk
+#                   (AGENT_TIER_REVIEWER, then AGENT_TIER_REVIEWER_FALLBACK)
+#                   whose family — _kit_fold — differs from the author's;
+#
+# each skipping a name in $AGENT_UNREACHABLE_MODELS (the value, its model
+# half, or a spawn word it folds to). A model's provider is its agent
+# harness's, AGENT_KIT_PROVIDER_<HARNESS>; an unprefixed model runs on the
+# session's own harness, $AGENT_HARNESS_SELF or claude-code. An author with
+# no declared provider, or a walk spent on both rungs, prints nothing, warns,
+# and exits 0 — the caller records `unavailable`, never inherits.
+#
+# Forms: bare and --model print the model half, --harness its harness (or
+# nothing: the session's own), --alias the in-session spawn word (nothing for
+# a crossing), --rung the rung alone. Every form names the rung on stderr too,
+# so a caller reading the model reads it unchanged.
+if [ "$_kit_tier" = reviewer ] && [ "$_kit_domain" = cross-provider ]; then
+	case ${1:-} in
+	--model | --harness | --alias | --rung | reviewer) ;;
+	*) exec sh scripts/agents.lib.sh "$@" ;; # the resolver's usage error
+	esac
+	_kit_form=${1:-}
+	[ -f "$AGENTS_CONFIG" ] || exec sh scripts/agents.lib.sh "$@"
+	_kit_answer=$(
+		. scripts/agents.lib.sh
+		agents_load_config >/dev/null 2>&1
+		_vw_self=${AGENT_HARNESS_SELF:-claude-code}
+		# _vw_provider <value> — sets _vw_p (empty: undeclared), _vw_h, _vw_m.
+		_vw_provider() {
+			agents_split_harness "$1"
+			_vw_h=$_ah_harness _vw_m=$_ah_model _vw_p=
+			_vw_on=${_ah_harness:-$_vw_self}
+			case $1 in
+			*:*) [ -n "$_ah_harness" ] || return 0 ;; # an undeclared prefix
+			esac
+			case $_vw_on in '' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 0 ;; esac
+			eval "_vw_p=\${AGENT_KIT_PROVIDER_$(printf '%s' "$_vw_on" | tr 'a-z-' 'A-Z_'):-}"
+		}
+		_vw_unreachable() {
+			for _vw_n in ${AGENT_UNREACHABLE_MODELS:-}; do
+				case $_vw_n in "$1" | "$_vw_m" | "$(_kit_fold "$_vw_m")") return 0 ;; esac
+			done
+			return 1
+		}
+		_vw_author=${AGENT_SESSION_MODEL:-}
+		if [ -z "$_vw_author" ]; then
+			echo "why no author is named: set AGENT_SESSION_MODEL to the diff's author"
+			exit 0
+		fi
+		_vw_provider "$_vw_author" 2>/dev/null
+		_vw_ap=$_vw_p
+		_vw_af=$(_kit_fold "$_vw_m")
+		if [ -z "$_vw_ap" ]; then
+			echo "why the author '$_vw_author' has no declared provider (AGENT_KIT_PROVIDER_<HARNESS> in $AGENTS_CONFIG)"
+			exit 0
+		fi
+		_vw_skips=
+		for _vw_v in ${AGENT_KIT_VERIFIER_CANDIDATES:-}; do
+			_vw_provider "$_vw_v" 2>/dev/null
+			if [ -z "$_vw_p" ] || [ "$_vw_p" = "$_vw_ap" ]; then continue; fi
+			if _vw_unreachable "$_vw_v"; then
+				_vw_skips="$_vw_skips $_vw_v"
+				continue
+			fi
+			echo "cross-provider $_vw_v"
+			exit 0
+		done
+		for _vw_v in ${AGENT_TIER_REVIEWER:-} ${AGENT_TIER_REVIEWER_FALLBACK:-}; do
+			_vw_provider "$_vw_v" 2>/dev/null
+			[ "$(_kit_fold "$_vw_m")" != "$_vw_af" ] || continue
+			if _vw_unreachable "$_vw_v"; then
+				_vw_skips="$_vw_skips $_vw_v"
+				continue
+			fi
+			echo "same-provider $_vw_v"
+			exit 0
+		done
+		echo "why neither rung leaves a candidate for author '$_vw_author' (provider $_vw_ap), skipped as unreachable:${_vw_skips:- none}"
+	)
+	_kit_rung=${_kit_answer%% *}
+	_kit_value=${_kit_answer#* }
+	if [ "$_kit_rung" = why ]; then
+		[ "${AGENTS_TIER_QUIET:-}" = 1 ] || {
+			echo "!  agents: no verifier — $_kit_value." >&2
+			echo "   Nothing is printed: record verify.verdict outcome=unavailable, never inherit (ADR-0044)." >&2
+		}
+		exit 0
+	fi
+	[ "${AGENTS_TIER_QUIET:-}" = 1 ] || echo "   agents: verifier rung: $_kit_rung ($_kit_value)" >&2
+	_kit_vh= _kit_vm=$_kit_value
+	case $_kit_value in *:*) _kit_vh=${_kit_value%%:*} _kit_vm=${_kit_value#*:} ;; esac
+	case $_kit_form in
+	--harness) printf '%s\n' "$_kit_vh" ;;
+	--rung) printf '%s\n' "$_kit_rung" ;;
+	--alias) [ -n "$_kit_vh" ] || _kit_fold "$_kit_vm" ;;
+	*) printf '%s\n' "$_kit_vm" ;;
+	esac
+	exit 0
+fi
 if [ "$_kit_tier" = reviewer ] && [ -f "$AGENTS_CONFIG" ] &&
 	{ [ -n "${AGENT_UNREACHABLE_MODELS:-}" ] || [ -n "${AGENT_SESSION_MODEL:-}" ]; }; then
 	_kit_ids=' '
