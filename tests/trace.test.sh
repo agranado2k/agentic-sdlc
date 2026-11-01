@@ -1264,6 +1264,106 @@ sed -n '/^- \*\*Subject\*\*/,/_Avoid_/p' "$KIT/docs/domain-glossary.md" | tr '\n
 	pass "the glossary's Subject entry states the numbered spelling" || fail "the glossary's Subject entry does not name ticket:#<digits>"
 
 
+banner "21b. A factory-id subject is the second spelling of a paired type: ticket:T-07, prd:PRD-15 (PRD-15 slice 1, #963)"
+# A factory project names a ticket T-07 and never opens an issue for it, so the
+# chain must be able to write ticket:T-07 — and the trace is the receiving end:
+# nothing may write it until emit takes it. Which prefix a type takes is POLICY,
+# TRACE_FACTORY_IDS, never code: the kit names no tracker. One spelling per
+# ticket still holds — the id is canonical, 2 to 6 digits with a leading zero
+# only in the two-digit form, the spelling the factory writes in an item's id:
+# field — so ticket:T-7 and ticket:T-007 are refused as ticket:#012 is.
+FI="$SCRATCH/factory-ids"
+FION="$SCRATCH/policy.factory-ids.sh"
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket pr prd'\nTRACE_FACTORY_IDS='ticket=T prd=PRD'\n" "$FI" >"$FION"
+# runtime/R229: a canonical factory id of the paired prefix is accepted, as a
+# subject and as a related token, beside the #<digits> spelling.
+t_exec env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='ticket:T-07' reason=seven
+[ "$T_STATUS" = 0 ] && [ -z "$T_ERR" ] && pass "runtime/R229: emit writes subject=ticket:T-07, silently" || fail "runtime/R229: ticket:T-07 was refused (exit $T_STATUS): $T_ERR"
+expect_exit 0 "runtime/R229: and subject=ticket:T-101 — three digits, no padding" -- env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='ticket:T-101' reason=hundred-one
+expect_exit 0 "runtime/R229: and related='prd:PRD-15 pr:#9' — each token by its own type's prefix" -- env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='ticket:#12' related='prd:PRD-15 pr:#9' reason=related
+expect_exit 0 "runtime/R229: and ticket:#12 still — the issue spelling stays beside the factory one" -- env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='ticket:#12'
+expect_exit 0 "runtime/R229: and ticket:T-123456 — six digits is the ceiling, not past it" -- env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='ticket:T-123456'
+[ "$(grep -c '"subject":"ticket:T-07"' "$FI/events/$TODAY.jsonl")" = 1 ] && [ "$(grep -c '"subject":"ticket:T-101"' "$FI/events/$TODAY.jsonl")" = 1 ] && [ "$(grep -c '"related":"prd:PRD-15 pr:#9"' "$FI/events/$TODAY.jsonl")" = 1 ] &&
+	pass "runtime/R229: and each line is written as given" || fail "runtime/R229: the accepted factory-id lines are not in the trace: $(cat "$FI/events/$TODAY.jsonl")"
+# runtime/R230: every other spelling of a paired type is refused at emit, exit 2,
+# writing nothing, naming both forms. Each value is one a plausible wrong
+# implementation lets through: no padding check, no upper bound, a
+# case-insensitive prefix, any prefix the policy names rather than the type's own.
+_fi_before=$(wc -l <"$FI/events/$TODAY.jsonl")
+for _fi_bad in 'ticket:T-7' 'ticket:T-007' 'ticket:T-1234567' 'ticket:t-07' 'ticket:PRD-07' 'prd:T-07' 'ticket:T-' 'ticket:T07' 'ticket:T-07a' 'ticket:T--07'; do
+	expect_exit 2 "runtime/R230: emit subject='$_fi_bad' is refused" -- env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject="$_fi_bad"
+done
+expect_exit 2 "runtime/R230: and a related token ticket:T-7 is held to the rule too" -- env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='pr:#9' related='prd:PRD-15 ticket:T-7'
+[ "$(wc -l <"$FI/events/$TODAY.jsonl")" = "$_fi_before" ] && pass "runtime/R230: and none of the refusals wrote a line" || fail "runtime/R230: a refused factory id was written"
+t_exec env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='ticket:T-7'
+case $T_ERR in *'ticket:#<digits>'*'ticket:T-<digits>'*) pass "runtime/R230: the refusal names both forms, ticket:#<digits> and ticket:T-<digits>" ;; *) fail "runtime/R230: the refusal did not name both forms: $T_ERR" ;; esac
+t_exec env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='prd:T-07'
+case $T_ERR in *'prd:#<digits>'*'prd:PRD-<digits>'*) pass "runtime/R230: and names them per type — prd:PRD-<digits> for a prd" ;; *) fail "runtime/R230: the prd refusal did not name prd:PRD-<digits>: $T_ERR" ;; esac
+# A paired type's prefix belongs to it alone: pr is numbered but unpaired here.
+expect_exit 2 "runtime/R230: a numbered type with no pairing keeps its one spelling — pr:T-07 is refused" -- env TRACE_CONFIG="$FION" sh "$TRACE" emit kind=note subject='pr:T-07'
+# runtime/R231: a malformed policy word is the policy error it is.
+for _fi_word in 'ticket=t' 'issue=T' 'ticket' 'ticket=TOOLONGXY' 'ticket=' '=T' 'ticket=T-1'; do
+	_fi_pol="$SCRATCH/policy.factory-bad.sh"
+	printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket pr prd'\nTRACE_FACTORY_IDS='%s'\n" "$SCRATCH/factory-bad" "$_fi_word" >"$_fi_pol"
+	expect_exit 2 "runtime/R231: a TRACE_FACTORY_IDS word '$_fi_word' is exit 2" -- env TRACE_CONFIG="$_fi_pol" sh "$TRACE" emit kind=note subject='ticket:#1'
+	case $T_ERR in *"TRACE_FACTORY_IDS word '$_fi_word'"*"$_fi_pol"*) pass "runtime/R231: and the error names the word and the policy file" ;; *) fail "runtime/R231: the error did not name '$_fi_word' and $_fi_pol: $T_ERR" ;; esac
+done
+[ ! -e "$SCRATCH/factory-bad/events/$TODAY.jsonl" ] && pass "runtime/R231: and no malformed policy let a line through" || fail "runtime/R231: an emit under a malformed policy wrote a line"
+# runtime/R232: show matches a factory-id subject whole — never a prefix of a longer id.
+# ticket:T-070 is no canonical id, so emit refuses it: the lines a prefix
+# match would wrongly catch are written by hand, as an older writer might have.
+TRACE_CONFIG=$FION sh "$TRACE" emit kind=note subject='pr:#40' related='ticket:T-07' reason=related-seven
+printf '{"v":1,"ts":"2026-11-01T00:00:00Z","id":"t070","kind":"note","subject":"ticket:T-070","reason":"seventy"}\n' >>"$FI/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-11-01T00:00:00Z","id":"t070r","kind":"note","subject":"pr:#41","related":"ticket:T-070","reason":"related-seventy"}\n' >>"$FI/events/$TODAY.jsonl"
+t_exec env TRACE_CONFIG="$FION" sh "$TRACE" show 'ticket:T-07'
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 2 ] && case $T_OUT in *'"reason":"seven"'*'"reason":"related-seven"'*) true ;; *) false ;; esac &&
+	pass "runtime/R232: show ticket:T-07 prints its subject event and its related event, and nothing else" || fail "runtime/R232: show ticket:T-07 printed the wrong events (exit $T_STATUS): $T_OUT"
+case $T_OUT in *seventy*) fail "runtime/R232: show ticket:T-07 matched a ticket:T-070 line: $T_OUT" ;; *) pass "runtime/R232: and none of a ticket:T-070 line, as subject or related" ;; esac
+expect_exit 2 "runtime/R232: show refuses ticket:T-7 — a reader cannot ask for a spelling emit never writes" -- env TRACE_CONFIG="$FION" sh "$TRACE" show 'ticket:T-7'
+# runtime/R233: verify passes a canonical factory-id line and advises on a
+# hand-written non-canonical one, its verdict unchanged.
+FV="$SCRATCH/factory-verify"
+FVON="$SCRATCH/policy.factory-verify.sh"
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket pr prd'\nTRACE_FACTORY_IDS='ticket=T prd=PRD'\n" "$FV" >"$FVON"
+TRACE_CONFIG=$FVON sh "$TRACE" emit kind=note subject='ticket:T-07' related='prd:PRD-15' reason=clean
+printf '{"v":1,"ts":"2026-11-01T00:00:00Z","id":"hand","kind":"note","subject":"ticket:T-7","reason":"by hand"}\n' >>"$FV/events/$TODAY.jsonl"
+printf '{"v":1,"ts":"2026-11-01T00:00:00Z","id":"hand2","kind":"note","subject":"pr:#9","related":"prd:PRD-015","reason":"by hand"}\n' >>"$FV/events/$TODAY.jsonl"
+t_exec env TRACE_CONFIG="$FVON" sh "$TRACE" verify
+[ "$T_STATUS" = 0 ] && [ -z "$T_OUT" ] && pass "runtime/R233: verify over a non-canonical factory id exits 0 with nothing on stdout — an advisory is not a verdict" || fail "runtime/R233: verify exited $T_STATUS or printed a verdict: $T_OUT"
+case $T_ERR in *"$TODAY.jsonl:1"*) fail "runtime/R233: verify advised on the canonical line 1: $T_ERR" ;; *) pass "runtime/R233: and passes the canonical ticket:T-07 and prd:PRD-15 line" ;; esac
+case $T_ERR in *"$TODAY.jsonl:2"*"ticket:T-7"*'ticket:T-<digits>'*) pass "runtime/R233: and advises on ticket:T-7 by file:line, naming the factory form" ;; *) fail "runtime/R233: stderr did not name $TODAY.jsonl:2, ticket:T-7 and ticket:T-<digits>: $T_ERR" ;; esac
+case $T_ERR in *"$TODAY.jsonl:3"*"prd:PRD-015"*) pass "runtime/R233: and on a related prd:PRD-015" ;; *) fail "runtime/R233: stderr did not name $TODAY.jsonl:3 and prd:PRD-015: $T_ERR" ;; esac
+t_exec env TRACE_CONFIG="$FVON" sh "$TRACE" summary
+case $T_ERR in *"2 numbered"*) pass "runtime/R233: and summary counts the two in its one advisory line" ;; *) fail "runtime/R233: summary did not count 2 numbered subjects: $T_ERR" ;; esac
+# runtime/R234: with the key empty or unset, nothing changes.
+FE="$SCRATCH/factory-empty"
+FEON="$SCRATCH/policy.factory-empty.sh"
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket pr prd'\nTRACE_FACTORY_IDS=''\n" "$FE" >"$FEON"
+expect_exit 2 "runtime/R234: with TRACE_FACTORY_IDS empty, ticket:T-07 is refused as before" -- env TRACE_CONFIG="$FEON" sh "$TRACE" emit kind=note subject='ticket:T-07'
+expect_said 'ticket:#<digits> (no leading zero)'
+expect_unsaid 'ticket:T-<digits>'
+expect_exit 2 "runtime/R234: and with it unset — the numbered-only policy of #305" -- env TRACE_CONFIG="$SPON" sh "$TRACE" emit kind=note subject='ticket:T-07'
+expect_exit 0 "runtime/R234: with both keys empty, ticket:T-07 is accepted as before — the grammar is open" -- env TRACE_CONFIG="$OPENON" sh "$TRACE" emit kind=note subject='ticket:T-07'
+TRACE_FACTORY_IDS='ticket=T' TRACE_CONFIG=$SPON sh "$TRACE" emit kind=note subject='ticket:T-07' 2>/dev/null &&
+	fail "runtime/R234: an environment TRACE_FACTORY_IDS was honoured" || pass "runtime/R234: the environment cannot pair a prefix — it is the policy file's to say"
+# runtime/R235: the shipped policy carries it empty with its form named; the kit's twin pairs ticket and prd.
+grep -q "^TRACE_FACTORY_IDS=''" "$KIT/scripts/trace.config.sh" && sed -n '/^# TRACE_FACTORY_IDS/,/^TRACE_FACTORY_IDS=/p' "$KIT/scripts/trace.config.sh" | grep -q '<type>=<PREFIX>' &&
+	pass "runtime/R235: the shipped policy carries TRACE_FACTORY_IDS empty, its comment naming <type>=<PREFIX>" || fail "runtime/R235: scripts/trace.config.sh does not carry TRACE_FACTORY_IDS='' under a comment naming <type>=<PREFIX>"
+grep -q "^TRACE_FACTORY_IDS='ticket=T prd=PRD'" "$KIT/scripts/trace.kit.config.sh" && pass "runtime/R235: the kit twin sets it to ticket=T prd=PRD" || fail "runtime/R235: scripts/trace.kit.config.sh does not set TRACE_FACTORY_IDS='ticket=T prd=PRD'"
+t_exec sh -c 'cd "$1" && TRACE_DIR="$2" sh scripts/trace.kit.sh emit kind=note subject=ticket:T-07' _ "$KIT" "$SCRATCH/factory-kit"
+[ "$T_STATUS" = 0 ] && pass "runtime/R235: the kit wrapper's emit subject=ticket:T-07 exits 0 in this repository" || fail "runtime/R235: the kit wrapper refused ticket:T-07 (exit $T_STATUS): $T_ERR"
+# runtime/R236: the release tells a consumer how to take it — the key, the
+# value a factory project with numbered types sets, and that empty changes nothing.
+_fi_upd=$(awk '/^\*\*Arriving from 0\.100\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$KIT/UPDATING.md" | tr '\n' ' ')
+case $_fi_upd in *TRACE_FACTORY_IDS*'ticket=T prd=PRD'*'changes nothing'*) pass "runtime/R236: UPDATING.md's 0.101.0 entry names TRACE_FACTORY_IDS, ticket=T prd=PRD and that an empty value changes nothing" ;; *) fail "runtime/R236: UPDATING.md has no 'Arriving from 0.100.0 or older' entry naming TRACE_FACTORY_IDS, ticket=T prd=PRD and 'changes nothing'" ;; esac
+case $_fi_upd in *TRACE_NUMBERED_TYPES*factory*) pass "runtime/R236: and says it is for a project that sets TRACE_NUMBERED_TYPES and plans in the factory" ;; *) fail "runtime/R236: the entry does not tie the value to TRACE_NUMBERED_TYPES and the factory" ;; esac
+# The vocabulary says it where the vocabulary lives.
+sed -n '/^- \*\*Subject\*\*/,/_Avoid_/p' "$KIT/docs/domain-glossary.md" | tr '\n' ' ' | grep -q 'ticket:T-07' &&
+	pass "the glossary's Subject entry names the factory-id form" || fail "the glossary's Subject entry does not name ticket:T-07"
+grep -q '^- \*\*Ticket handle\*\*' "$KIT/docs/domain-glossary.md" && grep -q '^- \*\*Canonical factory id\*\*' "$KIT/docs/domain-glossary.md" &&
+	pass "and the glossary gains Ticket handle and Canonical factory id" || fail "the glossary lacks a Ticket handle or a Canonical factory id entry"
+grep -l 'TRACE_FACTORY_IDS' "$KIT"/docs/adr/0*.md >/dev/null 2>&1 && pass "and a decision record names TRACE_FACTORY_IDS" || fail "no decision record names TRACE_FACTORY_IDS"
+
 banner "22. Every kind holds outcome to its own vocabulary (ticket #348)"
 # The retrospective of 2026-10-01 (F8) found three review.verdict events whose
 # outcome was a whole sentence: the kind set was closed and the outcome open
