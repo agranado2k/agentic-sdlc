@@ -28,6 +28,8 @@ PRD-15 slice 4 (#966), the landing script's factory ticket. R52 to R58,
 R61 to R64, R68 and R69 joined from PRD-09 slice 1 (#905, ADR-0045), the
 risk rule, keeping the PRD's numbers; R59 and R60 joined with its second
 slice (#906), the review at the head; R65 to R67 are its later slices'.
+The verifier's dispatch and its broker joined as R206, R208 to R211 and
+R227, from PRD-13 slice 1 (#941, ADR-0044).
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
@@ -98,7 +100,13 @@ R69. The risk rule SHALL print and record only risk tokens, review area names fr
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
 R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]
+R206. WHEN the skill dispatcher runs the verifier on a pull request's head, it SHALL stage the verifier contract, the head commit's diff against its base, and the ticket body as files, and SHALL give the worker no network and no forge credential. [UC1 2]
+R208. IF the resolver prints no verifier, or the verifier's spawn still fails after one re-resolve with the failed model named unreachable, THEN the dispatcher SHALL record one `verify.verdict outcome=unavailable` on the PR with the reason, and nothing SHALL be posted. [UC1 1a, 2a]
+R209. The broker SHALL validate a verifier's report against the review worker's contract, and SHALL post it as one review (event COMMENT, findings inline) and one comment, each under a marker distinct from the kit review's markers. [UC1 3]
+R210. The broker's check for an earlier post SHALL read a verifier's markers and the kit review's markers apart, so a post of one never stops a post of the other. [UC1 3]
+R211. WHEN the broker posts a verifier's report, it SHALL record one `verify.verdict` on `pr:#<N>` carrying `data.reviewed`, `data.provider` and `data.disputed`, with outcome `blocked` when the report holds a CRITICAL or HIGH finding or a disputed row and `pass` otherwise, and SHALL raise each finding as `finding.raise` with its `V-` id and `data.agent=verifier`. [UC1 4, 3a]
 R221. The trace SHALL accept the kind `finding.verify` with the outcomes `confirmed` and `disputed`, carrying a lens finding `data.id` and a `data.where` place, and SHALL refuse, exit 2, writing nothing, any other outcome, a `V-` id, or a missing `data.id` or `data.where`. [UC1 4]
+R227. WHEN the broker records a `verify.verdict` of outcome `pass` or `blocked`, it SHALL carry `data.rung` as the rung the resolver named for that run, and SHALL exit 65, posting nothing and recording nothing, when the dispatcher passed no rung or a word other than `cross-provider` or `same-provider`. [UC1 4, 1b]
 R229. WHERE the trace policy's `TRACE_FACTORY_IDS` names a word `<type>=<PREFIX>`, the trace SHALL accept at emit a subject or `related` token `<type>:<PREFIX>-<digits>` whose id is canonical, beside the `<type>:#<digits>` spelling the type already takes. [UC1 3, UC2 3]
 R230. IF a subject or `related` token of a type `TRACE_FACTORY_IDS` names is neither `<type>:#<digits>` nor a canonical factory id of that type's prefix, THEN the trace SHALL exit 2 at emit, write nothing, and name the two forms the value should take.
 R231. IF a `TRACE_FACTORY_IDS` word is not `<type>=<PREFIX>` with a type `TRACE_NUMBERED_TYPES` names and a prefix of 1 to 8 uppercase letters, THEN the trace SHALL exit 2 naming the word and the policy file.

@@ -187,6 +187,8 @@ CASCADE_TICKET=''
 CASCADE_WT=''
 CASCADE_BASE=''
 RUNG_DONE=0
+VERIFY_PR=''
+SPAWN_FAILED=''
 DELIVER=0
 RESTART=0
 PROMPT_RAW=''
@@ -231,6 +233,20 @@ while [ "$_count" -gt 0 ]; do
 		esac
 		;;
 	--rung-done) RUNG_DONE=1 ;;
+	--pr | --spawn-failed)
+		# The verifier's own two (runtime/R206, R208): the PR its verdict is
+		# recorded on, and a model whose in-session spawn failed.
+		[ "$_count" -gt 0 ] || die "$a needs a value"
+		case "$a" in
+		--pr)
+			VERIFY_PR=${1#\#}
+			case "$VERIFY_PR" in '' | 0* | *[!0-9]*) die "--pr takes a pull request number, got '$1'" ;; esac
+			;;
+		*) SPAWN_FAILED=$1 ;;
+		esac
+		shift
+		_count=$((_count - 1))
+		;;
 	--deliver) DELIVER=1 ;;
 	--restart) RESTART=1 ;;
 	--ticket-file | --worktree | --base)
@@ -434,7 +450,15 @@ if [ "${SKILL#/}" = review-pr ]; then
 	fi
 fi
 
+# The verifier is `review-pr` on the reviewer tier in the cross-provider
+# domain (ADR-0044): its model is the kit wrapper's walk, never the plain
+# resolver's, so the dry-run line below would name the wrong one.
+VERIFY=''
+[ "${SKILL#/}" != review-pr ] || [ "$TIER_ARGS" != 'reviewer cross-provider' ] || VERIFY=1
+[ -n "$VERIFY" ] || [ -z "$VERIFY_PR$SPAWN_FAILED" ] ||
+	die "--pr and --spawn-failed belong to a verifier dispatch: review-pr --tier reviewer --domain cross-provider"
 for a in "$@"; do
+	[ -z "$VERIFY" ] || break
 	[ "$a" = --dry-run ] || continue
 	echo "skill-dispatch: tier '$TIER_ARGS' — from $TIER_SOURCE" >&2
 	# The spawn's agent type and model (#588, spend/R6–R7): under the Claude
@@ -1003,10 +1027,14 @@ dispatch_rewritten() {
 # A dry run stages nothing. A --prompt-file is the caller's own document and
 # is never rendered here: it keeps agent-dispatch's plain exit 3.
 
-# _review_handback <contract> <dispatch args…> — stage the review, exit 3.
-_review_handback() {
-	_rh_contract=$1
-	shift
+# _review_stage <state name> <contract> <dispatch args…> — parse the markers,
+# pin the commit, and stage the diff and the rendered prompt under
+# <git dir>/<state name>/. Sets _rh_state and _rh_sha. With _RH_SPEC=1 it also
+# stages the SPEC marker's text as <state>/spec and names it in the preamble —
+# the verifier's ticket body, as a file (runtime/R206).
+_review_stage() {
+	_rh_name=$1 _rh_contract=$2
+	shift 2
 	_rh_n=0 _rh_branch='' _rh_base=''
 	_count=$#
 	while [ "$_count" -gt 0 ]; do
@@ -1061,16 +1089,33 @@ _review_handback() {
 		die "BRANCH '$_rh_branch' names no commit in '$_rh_wt' — the in-session review pins the commit it hands back"
 	(cd "$_rh_wt" && git rev-parse --verify -q "$_rh_base^{commit}" >/dev/null) ||
 		die "BASE '$_rh_base' names no commit in '$_rh_wt'"
-	_rh_state="$(cd "$_rh_wt" && git rev-parse --absolute-git-dir)/skill-review"
+	_rh_state="$(cd "$_rh_wt" && git rev-parse --absolute-git-dir)/$_rh_name"
 	rm -rf "$_rh_state"
 	mkdir -p "$_rh_state" || die "cannot stage the in-session review under '$_rh_state'"
 	(cd "$_rh_wt" && git diff "$_rh_base...$_rh_sha") >"$_rh_state/diff" ||
 		{ rm -rf "$_rh_state"; die "cannot stage the diff of '$_rh_base...$_rh_sha'"; }
 	printf '%s\n' "$_rh_sha" >"$_rh_state/commit"
+	_rh_spec_note=''
+	if [ "${_RH_SPEC:-}" = 1 ]; then
+		: >"$_rh_state/spec"
+		_rh_i=1
+		while [ "$_rh_i" -le "$_rh_n" ]; do
+			if [ "$(eval "printf '%s' \"\$RH_K_$_rh_i\"")" = SPEC ]; then
+				_rh_f=$(eval "printf '%s' \"\$RH_F_$_rh_i\"")
+				if [ -n "$_rh_f" ]; then
+					cp "$_rh_f" "$_rh_state/spec"
+				else
+					eval "printf '%s\n' \"\$RH_V_$_rh_i\"" >"$_rh_state/spec"
+				fi
+			fi
+			_rh_i=$((_rh_i + 1))
+		done
+		_rh_spec_note=" The ticket body is staged at $_rh_state/spec."
+	fi
 	{
 		printf '%s' "$SPAWN_LINES"
-		printf 'You run in this session, on an agent type that reads files and runs no command, so the dispatcher ran git for you. The commit to review is %s — `git rev-parse %s` when this review was handed back — and `git diff %s...%s` is staged at %s. Wherever the text below tells you to run either command, read those instead, and report that sha as REVIEWED.\n\n' \
-			"$_rh_sha" "$_rh_branch" "$_rh_base" "$_rh_sha" "$_rh_state/diff"
+		printf '%s The commit to review is %s — `git rev-parse %s` when this review was handed back — and `git diff %s...%s` is staged at %s.%s Wherever the text below tells you to run either command, read those instead, and report that sha as REVIEWED.\n\n' \
+			"${_RH_LEAD:-You run in this session, on an agent type that reads files and runs no command, so the dispatcher ran git for you.}" "$_rh_sha" "$_rh_branch" "$_rh_base" "$_rh_sha" "$_rh_state/diff" "$_rh_spec_note"
 		RH_N=$_rh_n awk '
 			BEGIN {
 				n = ENVIRON["RH_N"] + 0
@@ -1102,6 +1147,35 @@ _review_handback() {
 			END { exit(hdr ? 1 : 0) }
 		' "$_rh_contract"
 	} >"$_rh_state/prompt" || { rm -rf "$_rh_state"; die "cannot render the worker contract into '$_rh_state/prompt'"; }
+}
+
+# _without_markers <function> <dispatch args…> — call <function> with the
+# arguments agent-dispatch still takes once the markers are rendered into the
+# staged prompt: every --prompt, --set and --set-file, with its value, gone.
+# A function, not a printed list: POSIX sh cannot hand a rewritten "$@" back.
+_without_markers() {
+	_wm_fn=$1
+	shift
+	_count=$#
+	while [ "$_count" -gt 0 ]; do
+		a=$1
+		shift
+		_count=$((_count - 1))
+		case "$a" in
+		--prompt | --set | --set-file) shift; _count=$((_count - 1)) ;;
+		*) set -- "$@" "$a" ;;
+		esac
+	done
+	"$_wm_fn" "$@"
+}
+
+# _review_handback <contract> <dispatch args…> — stage the review, exit 3.
+_review_handback() {
+	_review_stage skill-review "$@"
+	shift
+	_without_markers _review_handback_dispatch "$@"
+}
+_review_handback_dispatch() {
 	_rh_rc=0
 	# shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
 	_rh_model=$(sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@" --prompt-file "$_rh_state/prompt") || _rh_rc=$?
@@ -1115,8 +1189,175 @@ _review_handback() {
 	exit 3
 }
 
+# --- the verifier (#941; PRD-13 runtime/R206, R208; ADR-0044) ----------------
+# WHY. The verifier is an advisory reviewer from another provider than the
+# diff's author (or, on the walk's second rung, another family), run on the
+# same head as the kit's own review. Its model is the kit wrapper's two-rung
+# walk — `sh scripts/agents.kit.sh reviewer cross-provider`, the author in
+# AGENT_SESSION_MODEL — never the plain resolver, which knows no walk.
+#
+# WHAT IT STAGES, as files under <git dir>/skill-verify/: the verifier
+# contract (the role below, then .agents/prompts/review-worker.md,
+# unchanged), the head's diff against its base, the ticket body (`spec`), and
+# the walk's answer — rung, provider, model, harness — that the broker is
+# passed. The worker gets no network (the agent harness's default sandbox, or
+# the reviewer agent type, which runs no command) and no forge credential:
+# the forge's token variables are unset before agent-dispatch runs.
+#
+# WHEN NO VERIFIER RUNS, that is a fact, never a skip: the walk prints
+# nothing, or a spawn fails and the one re-resolve past it (that model named
+# unreachable) fails too or finds nothing. Then one `verify.verdict
+# outcome=unavailable` is recorded on `pr:#<N>`, the staged files are
+# removed, and the exit is 6 — nothing for the broker. A dispatched spawn's
+# failure is seen here; an in-session one is the session's to report, by
+# running the same call again with `--spawn-failed <model>`.
+#
+# Exits: 0 the report on stdout, for the broker; 3 handed back, the model on
+# stdout, the prompt staged; 6 unavailable, recorded; 2 a caller error.
+VERIFY_UNAVAILABLE=6
+# _verifier_role — the verifier's role, read before the review worker's
+# contract. It adds ONLY the role: one contract per task kind, never one per
+# provider, so comparing two vendors measures the models and not the prompts.
+# It lives here, not under .agents/prompts/, because that directory ships to
+# every consumer and the verifier is kit-only, as this dispatcher is.
+_verifier_role() {
+	cat <<'VERIFIER_ROLE'
+# You are the verifier
+
+You review this pull request head as the **verifier**: an advisory reviewer
+whose model comes from another provider than the model that wrote the diff
+(or, when none is reachable, another family of the same provider). The kit's
+own review of the same head runs apart from you; you do not see it, and you do
+not repeat or defer to it.
+
+- **Your review is advisory.** It is never the review a landing requires, and
+  it decides nothing. Judge the diff on its own merits, as hard as the
+  contract below asks.
+- **You work offline, from files.** The dispatcher staged the head's diff
+  against its base and the ticket body for you; the lines above this text say
+  where. You hold no network and no forge credential, and you need neither.
+- **Answer in the review worker's contract, below, exactly.** Number your
+  findings as it says (`H-1`, `M-1`, …): the broker that posts your report adds
+  the verifier's `V-` prefix itself, and posts it under the verifier's own
+  markers.
+
+The review worker's contract follows.
+
+VERIFIER_ROLE
+}
+_verify_unavailable() {
+	rm -rf "$_v_state"
+	# The record is the run's whole outcome (runtime/R208), so a refused emit
+	# is said, never reported as recorded.
+	if _vu_err=$(sh "$TRACE_SH" emit kind=verify.verdict "subject=pr:#$VERIFY_PR" outcome=unavailable data.via=dispatcher "reason=$1" </dev/null 2>&1 >/dev/null); then
+		_vu_said="Recorded verify.verdict outcome=unavailable"
+	else
+		_vu_said="verify.verdict outcome=unavailable was NOT recorded: ${_vu_err:-the trace refused it}"
+	fi
+	echo "skill-dispatch: no verifier ran on PR #$VERIFY_PR — $1. $_vu_said; nothing to post (ADR-0044)." >&2
+	exit "$VERIFY_UNAVAILABLE"
+}
+# _verify_resolve — the walk past $_v_unreach. Sets _v_rung, _v_model,
+# _v_harness, _v_value (what a policy line maps) and _v_provider; on no
+# answer returns 1 with the walk's own reason in _v_why.
+_verify_resolve() {
+	_v_why=''
+	_v_rung=$(cd "$ROOT" && AGENT_UNREACHABLE_MODELS="$_v_unreach" sh scripts/agents.kit.sh --rung reviewer cross-provider 2>"$_v_tmp/err") || _v_rung=''
+	if [ -z "$_v_rung" ]; then
+		_v_why=$(sed -n 's/^!  agents: no verifier — //p' "$_v_tmp/err" | sed 's/\.$//' | head -n 1)
+		return 1
+	fi
+	_v_model=$(cd "$ROOT" && AGENTS_TIER_QUIET=1 AGENT_UNREACHABLE_MODELS="$_v_unreach" sh scripts/agents.kit.sh --model reviewer cross-provider 2>/dev/null)
+	_v_harness=$(cd "$ROOT" && AGENTS_TIER_QUIET=1 AGENT_UNREACHABLE_MODELS="$_v_unreach" sh scripts/agents.kit.sh --harness reviewer cross-provider 2>/dev/null)
+	_v_value=${_v_harness:+$_v_harness:}$_v_model
+	_v_hkey=$(printf '%s' "${_v_harness:-${AGENT_HARNESS_SELF:-claude-code}}" | tr 'a-z-' 'A-Z_')
+	case $_v_hkey in '' | *[!A-Z0-9_]*) _v_provider='' ;; *)
+		_v_provider=$(sh -c '. "$1" >/dev/null 2>&1; eval "printf %s \"\${AGENT_KIT_PROVIDER_$2:-}\""' _ "$AGENTS_CONFIG" "$_v_hkey") ;;
+	esac
+	case $_v_provider in [a-z]*) case $_v_provider in *[!a-z0-9._-]*) _v_provider='' ;; esac ;; *) _v_provider='' ;; esac
+	[ -n "$_v_model" ] && [ -n "$_v_provider" ] || {
+		_v_why="the walk named '$_v_value' on the $_v_rung rung, but no model or no provider token could be read for it"
+		return 1
+	}
+}
+_verify_record_answer() {
+	for _v_f in rung provider model harness; do
+		eval "printf '%s\n' \"\$_v_$_v_f\"" >"$_v_state/$_v_f"
+	done
+}
+_verify() {
+	[ -n "$VERIFY_PR" ] || die "a verifier dispatch needs --pr <N>: its verdict, unavailable included, is recorded on that pull request"
+	_v_wt=${CASCADE_WT:-.}
+	_v_state="$(cd "$_v_wt" && git rev-parse --absolute-git-dir)/skill-verify" || die "'$_v_wt' is no git checkout"
+	_v_tmp=$(mktemp -d "${TMPDIR:-/tmp}/skill-verify.XXXXXX") || die "no scratch for the verifier"
+	trap 'rm -rf "$_v_tmp"' EXIT
+	_v_unreach=${AGENT_UNREACHABLE_MODELS:-} _v_retried=''
+	if [ -n "$SPAWN_FAILED" ]; then
+		[ ! -f "$_v_state/retried" ] ||
+			_verify_unavailable "the verifier's spawn failed on '$SPAWN_FAILED' after one re-resolve past '$(cat "$_v_state/retried")'"
+		_v_unreach="$_v_unreach $SPAWN_FAILED" _v_retried=$SPAWN_FAILED
+	fi
+	_verify_resolve || _verify_unavailable "${_v_why:-the walk named no verifier}"
+	for a in "$@"; do
+		[ "$a" = --dry-run ] || continue
+		echo "skill-dispatch: the verifier — rung '$_v_rung', model '$_v_model'${_v_harness:+ on '$_v_harness'}, provider '$_v_provider'; dry run, nothing staged" >&2
+		exit 0
+	done
+	_v_worker="$ROOT/.agents/prompts/review-worker.md"
+	[ -f "$_v_worker" ] || die "the verifier contract needs .agents/prompts/review-worker.md"
+	# The role, then the worker's contract with its editor header stripped
+	# here: one prompt, rendered in one pass.
+	{
+		_verifier_role
+		awk 'NR == 1 && $0 == "<!--" { h = 1; next } h { if ($0 == "-->") h = 0; next } { print }' "$_v_worker"
+	} >"$_v_tmp/contract"
+	_RH_SPEC=1 _RH_LEAD='The dispatcher ran git for you, and you hold no network.' _review_stage skill-verify "$_v_tmp/contract" "$@"
+	_v_state=$_rh_state
+	_verify_record_answer
+	[ -z "$_v_retried" ] || printf '%s\n' "$_v_retried" >"$_v_state/retried"
+	_without_markers _verify_dispatch "$@"
+}
+# _verify_dispatch <dispatch args…> — run the staged verifier, re-resolving
+# once past a failed spawn; exits 0, 3, 6 or 2 as _verify's header says.
+_verify_dispatch() {
+	while :; do
+		# The walk's answer is mapped for this one call, on a copy of the
+		# policy: agent-dispatch resolves a tier and a domain, and knows no walk.
+		{ cat "$AGENTS_CONFIG"; printf "\nAGENT_TIER_REVIEWER_CROSS_PROVIDER='%s'\n" "$_v_value"; } >"$_v_tmp/policy.sh"
+		_v_rc=0
+		_v_out=$(
+			unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN
+			AGENTS_CONFIG="$_v_tmp/policy.sh" sh "$ROOT/scripts/agent-dispatch.sh" reviewer cross-provider "$@" --prompt-file "$_v_state/prompt"
+		) || _v_rc=$?
+		case $_v_rc in
+		0)
+			printf '%s\n' "$_v_out"
+			echo "skill-dispatch: the verifier ran on the $_v_rung rung ('$_v_value', provider $_v_provider). Post its report with: sh scripts/forge-broker.kit.sh $VERIFY_PR <report file> --commit $_rh_sha --verifier --rung $_v_rung --provider $_v_provider" >&2
+			exit 0
+			;;
+		3)
+			[ -z "$_v_out" ] || printf '%s\n' "$_v_out"
+			echo "skill-dispatch: the verifier is yours to spawn in-session — agent type 'reviewer', model '${_v_out:-none}', rung $_v_rung, its prompt verbatim from $_v_state/prompt (commit $_rh_sha; the diff and the ticket body beside it). Save its report to a file outside the working tree, then: sh scripts/forge-broker.kit.sh $VERIFY_PR <report file> --commit $_rh_sha --verifier --rung $_v_rung --provider $_v_provider. If the spawn fails, run this same call again with --spawn-failed '$_v_out'." >&2
+			exit 3
+			;;
+		2)
+			rm -rf "$_v_state"
+			exit 2
+			;;
+		esac
+		[ -z "$_v_retried" ] ||
+			_verify_unavailable "the verifier's spawn failed on '$_v_value' (agent-dispatch exit $_v_rc) after one re-resolve past '$_v_retried'"
+		echo "skill-dispatch: the verifier's spawn on '$_v_value' failed (agent-dispatch exit $_v_rc); re-resolving once past it" >&2
+		_v_retried=$_v_value _v_unreach="$_v_unreach $_v_value"
+		_verify_resolve || _verify_unavailable "the verifier's spawn failed on '$_v_retried' (agent-dispatch exit $_v_rc), and the re-resolve past it named none: ${_v_why:-the walk is spent}"
+		_verify_record_answer
+		printf '%s\n' "$_v_retried" >"$_v_state/retried"
+	done
+}
+
 case "${SKILL#/}" in
 review-pr)
+	[ -z "$VERIFY" ] || _verify "$@"
 	# The header above says why: the worker is offline, so it gets the
 	# contract, never an instruction to run a skill that needs the network.
 	# With no --prompt the contract alone is the prompt — the spec arrives as

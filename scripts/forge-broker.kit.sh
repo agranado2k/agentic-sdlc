@@ -5,6 +5,7 @@
 #
 #   sh scripts/forge-broker.kit.sh <PR> <report|-> [--dry-run] [--commit <sha>]
 #                                  [--model <id>] [--harness <name>]
+#                                  [--verifier --rung <rung> --provider <token>]
 #
 # WHY THIS EXISTS. When /implement reaches its review step with no review
 # workflow wired, this repo dispatches the reviewer tier to another vendor's
@@ -94,6 +95,22 @@
 #      instead: the first run traced them, and a second set would
 #      double-count.
 #
+# A VERIFIER'S REPORT (--verifier; ADR-0044, PRD-13 runtime/R209-R211, R227).
+# The verifier is an advisory reviewer from another provider (or, on the
+# walk's second rung, another family) whose report is in the same worker
+# contract and is validated by the same pass. Three things differ, and only
+# three. Its bodies carry the marker `forge-broker-verifier`, never this
+# script's own, so step 5 reads the two apart: a kit review already posted
+# never stops a verifier's post, nor the reverse. Its raises carry a `V-` id
+# and `data.agent=verifier`. And it records ONE `verify.verdict` in place of
+# the two `review.verdict` lines — no reader of the kit's review counts it —
+# with `data.reviewed`, `data.provider`, `data.disputed` and `data.rung`:
+# `blocked` when the report holds a CRITICAL or HIGH finding (or is the
+# no-lens verdict, which is no review), `pass` otherwise. The rung is the one
+# the resolver named for that run, passed by the dispatcher; with no rung, a
+# word other than `cross-provider` or `same-provider`, or no provider token,
+# the run is exit 65 before anything is read from the forge.
+#
 # --dry-run performs the READS (head, commits, base, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
 #
@@ -128,12 +145,15 @@ EX_CONFIG=78
 usage() {
 	cat >&2 <<'EOF'
 usage: sh scripts/forge-broker.kit.sh <PR> <report|-> [--dry-run] [--commit <sha>] [--model <id>] [--harness <name>]
+                                     [--verifier --rung cross-provider|same-provider --provider <token>]
   <PR>       the pull request number the review lands on — the operator's, never the report's
   <report>   the dispatched reviewer's stdout, captured to a file; - reads standard input
   --dry-run  read the PR, print both payloads as they would be sent, post nothing
   --commit   the sha the session recorded before dispatching; must equal the report's REVIEWED line.
              Optional when REVIEWED is the PR head; REQUIRED when it is behind the head
   --model, --harness   recorded on the trace event, nothing else
+  --verifier the report is a verifier's: its own markers, V- ids, one verify.verdict;
+             --rung and --provider are the resolver's answer for the run, required with it
 exit: 0 posted (or already posted) · 2 usage · 65 report fails the contract, or drifted without --commit · 69 no forge CLI · 75 reviewed commit no longer in the PR · 78 policy
 EOF
 	exit "$EX_USAGE"
@@ -154,6 +174,10 @@ DRY=0
 COMMIT=
 MODEL=
 HARNESS=
+VERIFIER=
+RUNG=
+PROVIDER=
+RUNG_SET= PROVIDER_SET=
 while [ $# -gt 0 ]; do
 	case $1 in
 	--dry-run) DRY=1 ;;
@@ -170,6 +194,17 @@ while [ $# -gt 0 ]; do
 	--harness)
 		[ $# -ge 2 ] || usage
 		HARNESS=$2
+		shift
+		;;
+	--verifier) VERIFIER=1 ;;
+	--rung)
+		[ $# -ge 2 ] || usage
+		RUNG=$2 RUNG_SET=1
+		shift
+		;;
+	--provider)
+		[ $# -ge 2 ] || usage
+		PROVIDER=$2 PROVIDER_SET=1
 		shift
 		;;
 	-h | --help) usage ;;
@@ -192,6 +227,21 @@ case $PR in '' | *[!0-9]*) note "'$PR' is not a pull request number"; usage ;; e
 if [ "$REPORT" != - ]; then
 	[ -f "$REPORT" ] || { note "report '$REPORT' does not exist or is not a file"; usage; }
 	[ -r "$REPORT" ] || { note "report '$REPORT' is not readable"; usage; }
+fi
+if [ -z "$VERIFIER" ]; then
+	[ -z "$RUNG_SET$PROVIDER_SET" ] || { note "--rung and --provider describe a verifier's run; they need --verifier"; usage; }
+else
+	# runtime/R227: the rung the resolver named, passed on; nothing else.
+	case $RUNG in
+	cross-provider | same-provider) ;;
+	'') die "$EX_DATAERR" "a verifier's report needs --rung, the rung the resolver named for its run (cross-provider or same-provider) — nothing posted, nothing recorded" ;;
+	*) die "$EX_DATAERR" "--rung '$RUNG' is no rung: the resolver names cross-provider or same-provider — nothing posted, nothing recorded" ;;
+	esac
+	case $PROVIDER in
+	[a-z]*) case $PROVIDER in *[!a-z0-9._-]*) PROVIDER= ;; esac ;;
+	*) PROVIDER= ;;
+	esac
+	[ -n "$PROVIDER" ] || die "$EX_DATAERR" "a verifier's report needs --provider, its model's provider as a token (a lowercase letter, then lowercase letters, digits, . _ or -) — nothing posted, nothing recorded"
 fi
 if [ -n "$COMMIT" ]; then
 	case $COMMIT in *[!0-9a-fA-F]* | '' | ? | ?? | ??? | ???? | ????? | ??????) die "$EX_USAGE" "--commit '$COMMIT' is not a hex sha of at least seven characters" ;; esac
@@ -534,7 +584,15 @@ json_str() {
 }
 
 HASH=$( (unset GIT_DIR GIT_WORK_TREE && git hash-object "$TMP/report.md") 2>/dev/null) || die 1 "git hash-object failed — git is required"
-MARKER="<!-- forge-broker: $HASH -->"
+# A verifier's report carries a marker of its own (runtime/R209-R210): the
+# lookup below greps for the whole marker, so the two never read as each other.
+if [ -n "$VERIFIER" ]; then
+	MARKER="<!-- forge-broker-verifier: $HASH -->"
+	WHO="a verifier, an advisory reviewer from the run's $RUNG rung (provider \`$PROVIDER\`), that ran offline and read-only"
+else
+	MARKER="<!-- forge-broker: $HASH -->"
+	WHO="a dispatched reviewer that ran offline and read-only"
+fi
 
 # The review body: the marker, the verdict, and the four headings, each
 # stating absence or listing the findings that are inline below it. The
@@ -601,7 +659,7 @@ done
 	printf '%s\n\n' "$VERDICT_LINE"
 	printf '## Axis 1 — Standards\n'
 	cat "$TMP/body.md"
-	printf '\n---\n_Standards axis of a review by a dispatched reviewer that ran offline and read-only; landed by the forge broker (`scripts/forge-broker.kit.sh`) at %s' "$REVIEWED"
+	printf '\n---\n_Standards axis of a review by %s; landed by the forge broker (`scripts/forge-broker.kit.sh`) at %s' "$WHO" "$REVIEWED"
 	[ -n "$MODEL" ] && printf ', model `%s`' "$MODEL"
 	[ -n "$HARNESS" ] && printf ' on `%s`' "$HARNESS"
 	printf '. Event: COMMENT, by policy — this review never approves or blocks._\n'
@@ -613,6 +671,7 @@ printf '{"commit_id":"%s","event":"%s","body":"%s","comments":[%s]}\n' \
 	printf '%s\n' "$MARKER"
 	printf '## Axis 2 — Behavior (for a human)\n\n'
 	cat "$TMP/behavior"
+	[ -z "$VERIFIER" ] || printf '\n---\n_The verifier is advisory: this is not the review a landing requires, and it decides nothing (ADR-0044)._\n'
 	printf '\n---\n_Behavior axis of the same dispatched review; a confirm-list for a human, never resolved by an agent (shared invariant §5)._\n'
 } >"$TMP/comment.md"
 printf '{"body":"%s"}\n' "$(json_str <"$TMP/comment.md")" >"$TMP/comment.json"
@@ -753,10 +812,36 @@ while read -r i f_posted; do
 	f_note="posted inline by the forge broker"
 	[ "$f_posted" = no ] && f_note="a LOW, counted in the review body and never posted (/review-pr §5)"
 	[ "$f_where" = unsafe-path ] && f_note="$f_note; its path is outside the plain set, so data.where says unsafe-path"
+	if [ -n "$VERIFIER" ]; then
+		f_id=V-$f_id f_agent=verifier
+	else
+		f_agent=$(agent_token "$TMP/findings/$i.body")
+	fi
 	trace quiet kind=finding.raise "subject=pr:#$PR" outcome=raised "data.id=$f_id" \
-		"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$(agent_token "$TMP/findings/$i.body")" \
+		"data.severity=$(printf '%s' "$f_sev" | tr 'A-Z' 'a-z')" "data.agent=$f_agent" \
 		"data.where=$f_where" data.via=broker "data.posted=$f_posted" "reason=$f_note"
 done <"$TMP/raises"
+# A verifier's verdict is its own kind and nothing else (runtime/R211,
+# R227, ADR-0044): no review.verdict, so no reader of the kit's review counts
+# it. Blocked on a CRITICAL or HIGH finding the report holds — posted or
+# withheld, it is the report's — or on the no-lens verdict; pass otherwise.
+# No pin line is read yet, so nothing is disputed.
+if [ -n "$VERIFIER" ]; then
+	V_OUT=pass
+	[ -z "$NO_LENS" ] || V_OUT=blocked
+	i=1
+	while [ "$i" -le "$COUNT" ]; do
+		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
+		case $f_sev in CRITICAL | HIGH) V_OUT=blocked ;; esac
+		i=$((i + 1))
+	done
+	V_REASON=$VERDICT
+	[ -z "$NO_LENS" ] || V_REASON='no lens ran'
+	trace loud kind=verify.verdict "subject=pr:#$PR" "outcome=$V_OUT" "reason=$V_REASON" data.via=broker \
+		"data.reviewed=$REVIEWED" "data.provider=$PROVIDER" "data.rung=$RUNG" data.disputed=0 \
+		"data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.dropped=$NDROPPED"
+	exit 0
+fi
 # VERDICT_WORD was read at validation, above, and is never empty here.
 # The no-lens verdict is traced as /review-pr's NO-LENS.md records it in
 # session — blocked, no lens counted, the roster the worker contract's six
