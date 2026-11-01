@@ -449,6 +449,11 @@ Grouped by the seam each term belongs to. Entry shape:
   lines, or its factory ticket's QA reads `fail`. A revert has no window
   (ADR-0036, PRD-06 decision Q2).
   - _Avoid_: "bug" (a mistake is a fact about a PR, not a defect report).
+- **Settled landing** — a landed PR older than the **fix window**, so that
+  whether it is a **mistake** can no longer change except by a revert. Only
+  settled landings count toward the 20 an **earned record** needs before its
+  review area can earn low risk (operator, 2026-10-31; PRD-09).
+  - _Avoid_: "old landing" (the line is the fix window, not an age).
 - **Review area** — one record of the lens-slice policy
   (`scripts/lens-slice.config.sh`), named by its lens token. A path belongs
   to every review area whose include pattern matches it and whose exclude

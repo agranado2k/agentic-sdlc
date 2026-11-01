@@ -6,7 +6,7 @@ parent: PRD-10
 stage: ready
 created: 2026-10-29
 updated: 2026-10-29
-deps: [T-51, T-41]
+deps: [T-51, T-41, T-76]
 priority: 3
 stages:
   - {stage: ready, at: 2026-10-29T12:20Z}

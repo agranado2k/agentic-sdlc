@@ -3,12 +3,15 @@ id: PRD-14
 type: prd
 title: Acceptance tests approved with the ticket, held by a guard and built from first
 parent: D-02
-stage: review
+stage: approved
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-31
 stages:
   - {stage: draft, at: 2026-10-29T16:33Z}
   - {stage: review, at: 2026-10-29T16:42Z}
+  - {stage: approved, at: 2026-10-31T12:52Z}
+approved_by: "agranado"
+approved_at: 2026-10-31T12:52Z
 ---
 
 # PRD-14 · Acceptance tests approved with the ticket, held by a guard and built from first
@@ -266,7 +269,7 @@ acceptance/R20. IF a ticket is owed (not exempt, no approval record, at least on
 acceptance/R21. IF the factory project manifest at the base names no adoption date, the key absent or written with no value, THEN `tests` SHALL print `no-tests <ticket> no-adoption-date` and exit 0 for a ticket without an approval record, and `check` SHALL still hold every ticket that has one.
 acceptance/R22. IF the factory project manifest's `acceptance_tests_since` at the base is not a valid `YYYY-MM-DD` date, THEN the acceptance guard SHALL print `fail-closed invalid .factory/project.yaml` and exit 3.
 acceptance/R23. The shipped TDD pairing workflow, and the kit's own guards workflow, SHALL run the acceptance guard's `check` on every pull request from its base commit to its head, with `POLICY_BASE` set to the base commit, and fail on a non-zero exit. [UC3 1]
-acceptance/R24. WHERE the repository is a factory project, `/implement` SHALL ask the acceptance guard for the ticket's tests at the base before its first edit. [UC2 1, 1d]
+acceptance/R24. WHERE the repository is a factory project, `/implement` SHALL take the factory ticket id (`T-<n>`) it is handed, as PRD-12 process/R135 reads its stamp, and SHALL ask the acceptance guard for that ticket's tests at the base before its first edit; only in a project that mirrors its factory tickets as forge issues, while it does, MAY `/implement` handed an issue number take the id from the one factory ticket whose `GitHub issue:` line names it. [UC2 1, 1d]
 acceptance/R25. IF the acceptance guard prints `owed`, THEN `/implement` SHALL stop before its first commit and report that the ticket's acceptance tests are owed. [UC2 1a]
 acceptance/R26. IF the acceptance guard exits 3 for `tests`, THEN `/implement` SHALL stop before its first commit and report the fail-closed line. [UC2 1c]
 acceptance/R27. WHEN the acceptance guard prints approved tests, `/implement` SHALL bring each approved file into its worktree at its content at the approval commit and commit those files alone, unchanged, as the build's first commit. [UC2 2]
@@ -303,7 +306,8 @@ process/R221. WHERE a ticket draft carries `Accept-test:` lines, `/to-tickets` S
 
 #### MODIFIED
 
-policy/R9. The judging set SHALL hold exactly the files directly under `scripts/` whose names end `.config.sh`, the docs gate's config and local-vocabulary modules, the files directly under `.githooks/` and `.github/workflows/`, every file named `ticket.md` directly under a directory directly under `.factory/items/`, the factory project manifest `.factory/project.yaml`, the risk policy, and each path the risk policy's extra list names at the base ref, each matched by its whole repository-relative path. [UC3 2, 2c]
+policy/R9. The judging set SHALL hold exactly the files directly under `scripts/` whose names end `.config.sh`, the docs gate's config and local-vocabulary modules, the files directly under `.githooks/` and `.github/workflows/`, every file named `ticket.md` directly under a directory directly under `.factory/items/`, the factory project manifest `.factory/project.yaml`, the risk policy, and each path the risk policy's extra list names at the base ref, each matched by its whole repository-relative path; `touched` reports a factory ticket file only as policy/R10 says. [UC3 2, 2c]
+policy/R10. WHEN asked for `touched <base> <head>`, the policy reader SHALL print, one per line and sorted, each judging-set path that the diff from the two refs' merge base to the head adds, modifies, deletes, or renames from or to, except a factory ticket file, which it SHALL print only when the front matter `tests:` approval record differs between the merge base and the head (added, removed or changed), and SHALL exit 1 when it printed one and 0 when it printed none. [UC3 2]
 
 ## 5. Slices (vertical, demoable, in order)
 
@@ -329,7 +333,7 @@ release factory PRD-17 starts on.
 
 **Slice 2 — the acceptance guard (shared-layer release).** The tracer bullet of the hold: one
 approved file, judged at the base, failing closed.
-- *Covers:* acceptance/R8, acceptance/R9, acceptance/R10, acceptance/R11, acceptance/R12, acceptance/R13, acceptance/R14, acceptance/R15, acceptance/R16, acceptance/R17, acceptance/R18, acceptance/R19, acceptance/R20, acceptance/R21, acceptance/R22, acceptance/R23, acceptance/R35, acceptance/R36, acceptance/R37, policy/R9.
+- *Covers:* acceptance/R8, acceptance/R9, acceptance/R10, acceptance/R11, acceptance/R12, acceptance/R13, acceptance/R14, acceptance/R15, acceptance/R16, acceptance/R17, acceptance/R18, acceptance/R19, acceptance/R20, acceptance/R21, acceptance/R22, acceptance/R23, acceptance/R35, acceptance/R36, acceptance/R37, policy/R9, policy/R10.
 - *Blocked by:* slice 1, and PRD-08 slices 1 and 2.
 - *Also:* the new decision record (§8). The glossary gains approval record, approval commit,
   held ticket, acceptance guard, factory project, adoption date and owed. The kit, a factory
@@ -353,7 +357,10 @@ approved file, judged at the base, failing closed.
 **Slice 3 — tests-first mode in `/implement`.**
 - *Covers:* acceptance/R24, acceptance/R25, acceptance/R26, acceptance/R27, acceptance/R28, acceptance/R29, acceptance/R30, acceptance/R31.
 - *Blocked by:* slice 2.
-- *Also:* the glossary gains tests-first mode.
+- *Also:* the glossary gains tests-first mode. `/implement` takes the factory ticket id it is
+  handed (`T-<n>`) and asks the guard for that ticket's tests; it does not look the ticket up
+  from an issue number, except through the kit's `GitHub issue:` line while the kit mirrors its
+  tickets as issues (acceptance/R24, §8).
 - *Accept:* `/implement`'s skill-text suite holds each step: the reader asked before the first
   edit in a factory project, the stop on `owed` and on exit 3, the first commit of the
   approved files alone, the red check and its stop, the never-edit rule and its stop, and the
@@ -458,7 +465,8 @@ maintainer confirms them at approval):
   made on `main` after the approval as well as one in the PR.
 - **The guard reads the tickets at the base, through K2's reader.** A PR that rewrites its own
   approval record is judged by the base's. To read them there, factory ticket files join K2's
-  judging set (MODIFIED policy/R9), so K2's `touched` also reports a PR that edits one.
+  judging set (MODIFIED policy/R9), so K2's `touched` also reports a PR that changes one's
+  approval record (MODIFIED policy/R10, operator, 2026-10-31).
 - **The guard scans every held ticket, not the PR's ticket.** It needs no PR → ticket mapping,
   and it also stops a PR for one ticket from changing another ticket's approved tests.
 - **The hold ends at `done`.** After that the file is ordinary code. A change before then needs
@@ -501,6 +509,37 @@ maintainer confirms them at approval):
   brief's "printable ASCII, no spaces in the path, at most 200 bytes": the guard opens the path,
   and the check table holds the pin in a cell.
 
+**Settled after approval** (the 2026-10-31 grill of D-02's open questions; these were §9's):
+
+- **`touched` reports a factory ticket file only when its `tests:` approval record changes**
+  (operator, 2026-10-31). The factory manifest it reports on any change. The factory's workflow
+  moves a ticket's stage on the ticket's own branch, so under the first wording every
+  implementation PR in such a project would be reported, held by PRD-10's `path` hold, and the
+  lane could never land there. The approval record is the operator-only act, so it alone is
+  flagged; `read` still serves every ticket file at the base. MODIFIED policy/R9 gains the
+  pointer and policy/R10 is MODIFIED here, both in slice 2; T-41 (#904) is unaffected.
+- **`/implement` takes the factory ticket id, not an issue number** (the session under the
+  operator's delegation, 2026-10-31, matching the D-08 session's recommendation). PRD-12
+  process/R135 already reads a factory ticket's stamp from `T-<n>`, and in a consumer factory
+  project no ticket carries a `GitHub issue:` line (the factory's rule: a ticket is never a
+  GitHub issue), so an issue-number lookup would read `no-tests` on every ticket. The lookup
+  survives only as the kit's fallback while it mirrors tickets as issues, until K7b lands
+  (operator, 2026-10-31, PRD-12). acceptance/R24 and slice 3's text are MODIFIED in place; this
+  changes slice 3's shape, which the old §9 said none of these would.
+- **One approved test is run by the guards policy's command where set, otherwise as its file**
+  (the session under the operator's delegation, 2026-10-31). The factory defines no runner key,
+  so no manifest key applies. The D-08 session's runner per extension is not taken: one command
+  taking a path and a name is less machinery, and a multi-language project can dispatch inside
+  it.
+- **One check-table row per id, citing one approved test, with `pass` asserting all of them**
+  (the session under the operator's delegation, 2026-10-31). A second row for an id is already
+  `extra-row:` in the check-table reader, and the Evidence cell takes one pin. The D-08
+  session's "cite them all" would change the evidence grammar, a shared-layer release for
+  little gain.
+- **Requirement ids stand** (the session under the operator's delegation, 2026-10-31). No two
+  D-02 PRDs add the same id: acceptance/R1 to R39 is a new area, process/R220 and R221 collide
+  with nothing, and no other PRD modifies process/R43, R46, R47, policy/R9 or policy/R10.
+
 **Decision records:**
 - **Needed at slice 1:** an in-place amendment of ADR-0037, which fixes the ticket contract and
   has no amendment yet (ADR-0021's cap is five): the `Accept-test:` key, the test-pin grammar,
@@ -529,32 +568,7 @@ maintainer confirms them at approval):
 
 ## 9. Unresolved questions (MVP defaults; raise with `factory inbox add` if hit)
 
-None changes a ticket's shape. These keep the shapes above:
-
-- **How `/implement` finds the factory ticket for the issue it builds.**
-  - Options: the reader takes `#<N>` and picks the one factory ticket whose body holds the line
-    `GitHub issue: #<N>`; the dispatcher passes the factory id; or K7's factory-ticket read.
-  - Next step: settle in slice 3's grill with K7's state in hand. MVP default: the `#<N>`
-    lookup; no match reads as `no-tests #<N> no-factory-ticket`, since only factory tickets have
-    an approval to read.
-- **How one approved test is run.**
-  - Options: a run command in the guards policy taking a path and a test name; or the project's
-    own test command on the whole file.
-  - Next step: slice 3's implementer. MVP default: the policy's command where set, else the
-    file, so red and green are judged per file.
-- **Several approved tests for one id against one check-table row.**
-  - Options: the row cites one, and `pass` asserts all passed (this PRD); or one row per test.
-  - Next step: K8's grill, where the evidence is re-checked. MVP default: one row per id.
-- **Whether K2's `touched` should report factory ticket files.** It now does (policy/R9), so
-  under K3 every PR that edits a factory ticket is high risk.
-  - Options: keep it; or let `read` serve factory tickets while `touched` skips them.
-  - Next step: question to agranado at K3's grill. MVP default: keep it, since approval is the
-    operator's act anyway.
-- **Requirement ids may collide with D-02's PRDs drafted in parallel.** This PRD takes
-  process/R220 and R221, past PRD-13's R207, and modifies process/R43, R46, R47 and policy/R9,
-  which no other open PRD modifies today.
-  - Next step: the session that approves the D-02 PRDs renumbers before any is published to a
-    ticket. MVP default: as written.
+None open. The five questions this section held were settled after approval (§8).
 
 ## 10. Dogfood plan
 
