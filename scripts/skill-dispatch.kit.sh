@@ -1149,9 +1149,12 @@ _review_stage() {
 	} >"$_rh_state/prompt" || { rm -rf "$_rh_state"; die "cannot render the worker contract into '$_rh_state/prompt'"; }
 }
 
-# _review_handback <contract> <dispatch args…> — stage the review, exit 3.
-_review_handback() {
-	_review_stage skill-review "$@"
+# _without_markers <function> <dispatch args…> — call <function> with the
+# arguments agent-dispatch still takes once the markers are rendered into the
+# staged prompt: every --prompt, --set and --set-file, with its value, gone.
+# A function, not a printed list: POSIX sh cannot hand a rewritten "$@" back.
+_without_markers() {
+	_wm_fn=$1
 	shift
 	_count=$#
 	while [ "$_count" -gt 0 ]; do
@@ -1163,6 +1166,16 @@ _review_handback() {
 		*) set -- "$@" "$a" ;;
 		esac
 	done
+	"$_wm_fn" "$@"
+}
+
+# _review_handback <contract> <dispatch args…> — stage the review, exit 3.
+_review_handback() {
+	_review_stage skill-review "$@"
+	shift
+	_without_markers _review_handback_dispatch "$@"
+}
+_review_handback_dispatch() {
 	_rh_rc=0
 	# shellcheck disable=SC2086  # TIER_ARGS is one or two words, by construction
 	_rh_model=$(sh "$ROOT/scripts/agent-dispatch.sh" $TIER_ARGS "$@" --prompt-file "$_rh_state/prompt") || _rh_rc=$?
@@ -1296,16 +1309,11 @@ _verify() {
 	_v_state=$_rh_state
 	_verify_record_answer
 	[ -z "$_v_retried" ] || printf '%s\n' "$_v_retried" >"$_v_state/retried"
-	_count=$#
-	while [ "$_count" -gt 0 ]; do
-		a=$1
-		shift
-		_count=$((_count - 1))
-		case "$a" in
-		--prompt | --set | --set-file) shift; _count=$((_count - 1)) ;;
-		*) set -- "$@" "$a" ;;
-		esac
-	done
+	_without_markers _verify_dispatch "$@"
+}
+# _verify_dispatch <dispatch args…> — run the staged verifier, re-resolving
+# once past a failed spawn; exits 0, 3, 6 or 2 as _verify's header says.
+_verify_dispatch() {
 	while :; do
 		# The walk's answer is mapped for this one call, on a copy of the
 		# policy: agent-dispatch resolves a tier and a domain, and knows no walk.
