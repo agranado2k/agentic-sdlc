@@ -685,7 +685,7 @@ trace_check_token() {
 # TRACE_FACTORY_IDS (`ticket=T prd=PRD`), takes a second spelling beside its
 # number: the canonical factory id, `<type>:<PREFIX>-<digits>` — 2 to 6
 # digits, a leading zero only in the two-digit form, the one spelling the
-# factory writes in an item's id: field (PRD-15, decision record ADR-0040).
+# factory writes in an item's id: field (the kit's ADR-0040).
 # The shape is checked alone; the trace runs no factory command. Same
 # policy-only rule: the assignment below precedes the source.
 TRACE_NUMBERED_TYPES=''
