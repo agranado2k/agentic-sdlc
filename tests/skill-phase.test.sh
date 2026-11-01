@@ -854,6 +854,15 @@ esac
 grep -rlq 'You are the verifier' "$ROOT/.agents/prompts" &&
 	fail "runtime/R206: a file under .agents/prompts/ carries the verifier's role — it would ship" ||
 	pass "runtime/R206: the verifier's role ships nowhere: no file under .agents/prompts/ carries it"
+# runtime/R208: the record is the whole outcome, so a trace that refuses it
+# is said — never "Recorded".
+printf "TRACE_DIR='%s'\n" "$SCRATCH/v-trace-is-a-file" >"$VTREE/scripts/trace.kit.config.sh"
+: >"$SCRATCH/v-trace-is-a-file"
+V_AUTHOR='nobody:model' v_dispatch vstub --pr 78
+[ "$T_STATUS" = 6 ] && _t_has "$T_ERR" 'was NOT recorded' && ! _t_has "$T_ERR" 'Recorded verify.verdict' &&
+	pass "runtime/R208: an unavailable verdict the trace refused is said not recorded, still exit 6" ||
+	fail "runtime/R208: a refused unavailable record exited $T_STATUS and said: $T_ERR"
+git -C "$VTREE" checkout -q -- scripts/trace.kit.config.sh
 # The PR is the dispatcher's to record on: a verifier dispatch names it.
 v_dispatch vstub
 [ "$T_STATUS" = 2 ] && _t_has "$T_ERR" '--pr' && pass "a verifier dispatch with no --pr is a usage error naming it" ||

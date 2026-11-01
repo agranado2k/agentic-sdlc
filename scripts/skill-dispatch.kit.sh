@@ -1247,8 +1247,14 @@ VERIFIER_ROLE
 }
 _verify_unavailable() {
 	rm -rf "$_v_state"
-	sh "$TRACE_SH" emit kind=verify.verdict "subject=pr:#$VERIFY_PR" outcome=unavailable data.via=dispatcher "reason=$1" </dev/null >/dev/null 2>&1 || :
-	echo "skill-dispatch: no verifier ran on PR #$VERIFY_PR — $1. Recorded verify.verdict outcome=unavailable; nothing to post (ADR-0044)." >&2
+	# The record is the run's whole outcome (runtime/R208), so a refused emit
+	# is said, never reported as recorded.
+	if _vu_err=$(sh "$TRACE_SH" emit kind=verify.verdict "subject=pr:#$VERIFY_PR" outcome=unavailable data.via=dispatcher "reason=$1" </dev/null 2>&1 >/dev/null); then
+		_vu_said="Recorded verify.verdict outcome=unavailable"
+	else
+		_vu_said="verify.verdict outcome=unavailable was NOT recorded: ${_vu_err:-the trace refused it}"
+	fi
+	echo "skill-dispatch: no verifier ran on PR #$VERIFY_PR — $1. $_vu_said; nothing to post (ADR-0044)." >&2
 	exit "$VERIFY_UNAVAILABLE"
 }
 # _verify_resolve — the walk past $_v_unreach. Sets _v_rung, _v_model,
