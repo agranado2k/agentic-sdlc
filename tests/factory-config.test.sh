@@ -2,13 +2,14 @@
 # tests/factory-config.test.sh — the kit's configuration reads in a factory
 # project: a value the factory also defines is read from the factory's key in
 # its project manifest, and the kit's own policy file is read for it only in a
-# repository that is not a factory project (PRD-12 slice 4, process/R226 and
+# repository that is not a factory project, for a value the kit defines
+# there (PRD-12 slice 4, process/R226 and
 # process/R227, the kit's ADR-0040).
 #
 # The shared read is `sh scripts/policy.sh value <name> [--base <ref>]`. Today
 # one value has a factory key, the acceptance-test adoption date, so every case
 # here holds the read on that date: the manifest's `acceptance_tests_since`,
-# the guards policy's GUARD_ACCEPTANCE_TESTS_SINCE outside a factory project.
+# and nothing outside a factory project: the date has no kit-side home.
 # Every case builds a REAL throwaway repository: a factory project is the
 # manifest's presence at the git top level, and the base read is git's objects.
 #
@@ -40,7 +41,8 @@ manifest() {
 }
 
 # factory_repo — main holds a manifest dated 2026-11-01 and a guards policy
-# that disagrees (2025-01-01); HEAD is a branch `work` off it.
+# that sets a date of its own (2025-01-01), which is never read; HEAD is a
+# branch `work` off it.
 factory_repo() {
 	t_repo
 	t_write "$REPO" "$MF" "$(manifest 'acceptance_tests_since: 2026-11-01')
@@ -107,38 +109,32 @@ t_commit "$DEL" "chore: drop the manifest" >/dev/null
 pol "$DEL" value "$NAME" --base main
 expect_resolved "$NAME 2026-11-01" "process/R227: a branch deleting the manifest is still read from the base's manifest"
 
-banner "R226. Without the manifest, the kit's own policy file, unchanged"
+banner "R226. Without the manifest, no adoption date: nothing printed, never a kit file"
 # ---------------------------------------------------------------------------
+# Only a factory project has an adoption date (PRD-14 §8, the operator's
+# ruling of 2026-10-31): a repository with no manifest owes nothing, and the
+# guards policy's GUARD_ACCEPTANCE_TESTS_SINCE, set in this fixture, is never
+# read — the value has no kit-side home.
 plain_repo
 P=$REPO
 pol "$P" value "$NAME"
-expect_resolved "$NAME 2025-01-01" "process/R226: no manifest, the guards policy's date"
+expect_resolved "" "process/R226: no manifest, nothing printed (exit 0), the guards policy unread"
 pol "$P" value "$NAME" --base main
-expect_resolved "$NAME 2025-01-01" "process/R226: no manifest at either end, the guards policy's date at the base"
-t_write "$P" "$GP" "GUARD_SOURCE_RE='^src/'
-GUARD_ACCEPTANCE_TESTS_SINCE=2024-02-29
-"
-t_commit "$P" "chore: move the kit date on the branch" >/dev/null
-pol "$P" value "$NAME" --base main
-expect_resolved "$NAME 2025-01-01" "the kit's policy file is read at the base too"
-pol "$P" value "$NAME"
-expect_resolved "$NAME 2024-02-29" "and from the working tree with no base"
+expect_resolved "" "process/R226: no manifest at the base or the head, nothing printed (exit 0)"
 
 # A stray .factory/ folder with no manifest is not a factory project.
 mkdir -p "$P/.factory/items"
 t_write "$P" .factory/items/note.md 'x
 '
 pol "$P" value "$NAME"
-expect_resolved "$NAME 2024-02-29" "process/R226: a .factory/ folder without the manifest reads the kit's policy file"
+expect_resolved "" "process/R226: a .factory/ folder without the manifest is no factory project"
 
-# Unset at both homes is an answer, not a failure.
-plain_repo
-U=$REPO
-t_write "$U" "$GP" "GUARD_SOURCE_RE='^src/'
-"
-t_commit "$U" "chore: no date" >/dev/null
-pol "$U" value "$NAME"
-expect_resolved "$NAME unset" "the guards policy without the date: unset"
+# The caller's environment never stands in for a missing home.
+t_exec env GUARD_ACCEPTANCE_TESTS_SINCE=2020-01-01 sh -c 'cd "$1" && sh "$2" value "$3" --base work' _ "$P" "$READER" "$NAME"
+expect_resolved "" "a caller's exported GUARD_ACCEPTANCE_TESTS_SINCE is not read at the base"
+t_exec env GUARD_ACCEPTANCE_TESTS_SINCE=2020-01-01 sh -c 'cd "$1" && sh "$2" value "$3"' _ "$P" "$READER" "$NAME"
+expect_resolved "" "nor in the working tree"
+
 factory_repo
 UM=$REPO
 set_manifest "$UM" 'acceptance_tests_since:'
@@ -147,12 +143,6 @@ expect_resolved "$NAME unset" "a manifest key written with no value: unset"
 set_manifest "$UM" 'other: 1'
 pol "$UM" value "$NAME"
 expect_resolved "$NAME unset" "a manifest without the key: unset, never the guards policy's date"
-
-# The caller's environment never stands in for the kit's policy.
-t_exec env GUARD_ACCEPTANCE_TESTS_SINCE=2020-01-01 sh -c 'cd "$1" && sh "$2" value "$3" --base work' _ "$U" "$READER" "$NAME"
-expect_resolved "$NAME unset" "a caller's exported GUARD_ACCEPTANCE_TESTS_SINCE is not read at the base"
-t_exec env GUARD_ACCEPTANCE_TESTS_SINCE=2020-01-01 sh -c 'cd "$1" && sh "$2" value "$3"' _ "$U" "$READER" "$NAME"
-expect_resolved "$NAME unset" "nor in the working tree"
 
 banner "R227. At the base, an absent manifest or a malformed value fails closed"
 # ---------------------------------------------------------------------------
@@ -187,17 +177,6 @@ acceptance_tests_since: 2026-11-02"; do
 		pass "'$bad' in the working tree fails closed too" ||
 		fail "'$bad' in the working tree — expected exit 3, got $T_STATUS [$T_OUT]"
 done
-
-# A malformed kit-side date fails closed the same way, at its own path.
-plain_repo
-K=$REPO
-t_write "$K" "$GP" "GUARD_ACCEPTANCE_TESTS_SINCE=soon
-"
-t_commit "$K" "chore: a malformed kit date" >/dev/null
-pol "$K" value "$NAME" --base work
-[ "$T_STATUS" = 3 ] && [ "$T_OUT" = "fail-closed invalid $GP" ] &&
-	pass "a malformed guards-policy date fails closed invalid at its own path" ||
-	fail "malformed kit date — expected exit 3 'fail-closed invalid $GP', got $T_STATUS [$T_OUT]"
 
 pol "$F" value "$NAME" --base nosuchref
 [ "$T_STATUS" = 3 ] && [ "$T_OUT" = "fail-closed no-base $MF" ] &&

@@ -22,18 +22,17 @@
 # thresholds  prints `miss-rate-below <n>` then `precision-floor <n>`, read from
 #             the risk policy (scripts/risk.config.sh) at the base; exit 0.
 # value       prints `<name> <value>`, or `<name> unset`, for one configuration
-#             value the kit reads that the software factory also defines; exit
-#             0. Its one home in a FACTORY PROJECT — the base's commit or HEAD's
+#             value the kit reads that the software factory defines; exit 0.
+#             Its one home in a FACTORY PROJECT — the base's commit or HEAD's
 #             holds .factory/project.yaml — is the factory's key in that
-#             manifest; only elsewhere is the kit's own policy file read for it
-#             (the kit's ADR-0040). With --base the home is read at the base,
-#             through `fetch` like any judging file: a manifest absent there, or
-#             a value out of shape, fails closed, never falling back to the
-#             kit's policy file. With no --base it reads the git top level's
-#             working tree — the one working-tree read, for a local session; a
-#             judge always passes --base. The values, each a YYYY-MM-DD date:
-#               acceptance-tests-since  manifest `acceptance_tests_since`, else
-#                 scripts/guards.config.sh GUARD_ACCEPTANCE_TESTS_SINCE
+#             manifest (the kit's ADR-0040). Outside one it prints NOTHING and
+#             exits 0: the value has no home there, and no kit file stands in.
+#             With --base the manifest is read at the base, through `fetch`
+#             like any judging file: absent there, or a value out of shape,
+#             fails closed. With no --base it reads the git top level's working
+#             tree — the one working-tree read, for a local session; a judge
+#             always passes --base. The values, each a YYYY-MM-DD date:
+#               acceptance-tests-since  manifest `acceptance_tests_since`
 #             The next value the factory comes to define joins `factory_value`
 #             below, and its kit judges read it through here.
 #
@@ -247,12 +246,11 @@ risk_eval() {
 in_extra() { [ -n "$EXTRA" ] && printf '%s\n' "$EXTRA" | grep -qxF -- "$1"; }
 
 # factory_value <name> — the registry of configuration values the kit reads
-# that the factory also defines (process/R226): FV_KEY, the manifest's
-# top-level key; FV_KIT and FV_VAR, the kit's policy file and its variable,
-# read only outside a factory project. Status 1 for a name not listed.
+# that the factory defines (process/R226): FV_KEY, the manifest's top-level
+# key. Status 1 for a name not listed.
 factory_value() {
 	case $1 in
-	acceptance-tests-since) FV_KEY=acceptance_tests_since FV_KIT=scripts/guards.config.sh FV_VAR=GUARD_ACCEPTANCE_TESTS_SINCE ;;
+	acceptance-tests-since) FV_KEY=acceptance_tests_since ;;
 	*) return 1 ;;
 	esac
 }
@@ -270,28 +268,18 @@ date_ok() {
 		END { exit bad }'
 }
 
-# value_in <file> <home> — set VALUE from <file>, the copy of <home>: the
-# manifest's FV_KEY, or the kit policy's FV_VAR evaluated in a child that
-# starts with it unset. Empty is unset. Status 1 when the value is out of shape.
+# value_in <file> — set VALUE from the manifest copy <file>'s FV_KEY: the
+# value bare or quoted, a trailing comment allowed. Empty is unset. Status 1
+# when the value is out of shape or the key is written twice.
 value_in() {
-	if [ "$2" = "$MANIFEST" ]; then
-		_vi_out=$(awk -v k="$FV_KEY" '
-			index($0, k ":") == 1 {
-				n++
-				v = substr($0, length(k) + 2)
-				sub(/^[ \t]+/, "", v); sub(/^#.*/, "", v); sub(/[ \t]+#.*$/, "", v); sub(/[ \t\r]+$/, "", v)
-				if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
-			}
-			END { if (n > 1) exit 1; printf "%s.", v }' "$1" 2>/dev/null) || return 1
-	else
-		sh -n "$1" >/dev/null 2>&1 || return 1
-		_vi_out=$(sh -c '
-			unset "$2"
-			. "$1" >/dev/null 2>&1 </dev/null
-			eval "command printf \"%s.\" \"\${$2-}\""
-		' _ "$1" "$FV_VAR" 2>/dev/null) || return 1
-	fi
-	case $_vi_out in *.) ;; *) return 1 ;; esac
+	_vi_out=$(awk -v k="$FV_KEY" '
+		index($0, k ":") == 1 {
+			n++
+			v = substr($0, length(k) + 2)
+			sub(/^[ \t]+/, "", v); sub(/^#.*/, "", v); sub(/[ \t]+#.*$/, "", v); sub(/[ \t\r]+$/, "", v)
+			if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
+		}
+		END { if (n > 1) exit 1; printf "%s.", v }' "$1" 2>/dev/null) || return 1
 	VALUE=${_vi_out%.}
 	[ -z "$VALUE" ] || date_ok "$VALUE"
 }
@@ -386,20 +374,17 @@ value)
 	factory_value "$2" || die "no configuration value named: $2"
 	if [ -z "$ref" ]; then
 		top=$(git rev-parse --show-toplevel 2>/dev/null) || die "no working tree to read"
-		home=$FV_KIT
-		{ [ -e "$top/$MANIFEST" ] || [ -L "$top/$MANIFEST" ]; } && home=$MANIFEST
-		{ [ -e "$top/$home" ] || [ -L "$top/$home" ]; } || closed missing "$home"
-		[ -f "$top/$home" ] && [ -r "$top/$home" ] || closed unreadable "$home"
-		value_in "$top/$home" "$home" || closed invalid "$home"
+		{ [ -e "$top/$MANIFEST" ] || [ -L "$top/$MANIFEST" ]; } || exit 0
+		[ -f "$top/$MANIFEST" ] && [ -r "$top/$MANIFEST" ] || closed unreadable "$MANIFEST"
+		value_in "$top/$MANIFEST" || closed invalid "$MANIFEST"
 	else
 		# A factory project when the base or the head holds the manifest:
-		# a branch can neither delete it nor add it to change its own home.
-		home=$FV_KIT
-		git cat-file -e "HEAD:$MANIFEST" 2>/dev/null && home=$MANIFEST
-		commit=$(base_commit "$ref") || closed no-base "$home"
-		git cat-file -e "$commit:$MANIFEST" 2>/dev/null && home=$MANIFEST
-		fetch "$commit" "$home" || closed "$REASON" "$home"
-		value_in "$COPY" "$home" || closed invalid "$home"
+		# a branch can neither delete it nor add it to change its own answer.
+		commit=$(base_commit "$ref") || closed no-base "$MANIFEST"
+		git cat-file -e "HEAD:$MANIFEST" 2>/dev/null ||
+			git cat-file -e "$commit:$MANIFEST" 2>/dev/null || exit 0
+		fetch "$commit" "$MANIFEST" || closed "$REASON" "$MANIFEST"
+		value_in "$COPY" || closed invalid "$MANIFEST"
 	fi
 	printf '%s %s\n' "$2" "${VALUE:-unset}"
 	exit 0

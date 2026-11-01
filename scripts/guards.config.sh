@@ -114,10 +114,3 @@ Architecture decisions|^docs/adr/'
 # structure-only commit: an edited scenario is an unambiguous behavior change,
 # while a newly added one is just added coverage.
 BEHAVIOR_DELTA_FEATURE_RE='\.feature$'
-
-# The acceptance-test adoption date, YYYY-MM-DD, read ONLY in a repository
-# that is not a software-factory project: where the git top level holds
-# .factory/project.yaml, its `acceptance_tests_since` is the one home and this
-# line is never read (`sh scripts/policy.sh value acceptance-tests-since`,
-# the kit's ADR-0040). Unset by default.
-# GUARD_ACCEPTANCE_TESTS_SINCE=

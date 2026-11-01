@@ -710,10 +710,10 @@ skeleton (K0).
   stream.
 - `sh tests/factory-config.test.sh` holds the kit's configuration reads in a
   factory project (PRD-12 slice 4, the kit's ADR-0040): `scripts/policy.sh
-  value` reads a value the factory also defines from `.factory/project.yaml`
+  value` reads a value the factory defines from `.factory/project.yaml`
   where the base or the head holds it, from the working tree with no base and
-  at the base with one, and the kit's policy file only elsewhere; at the base
-  an absent manifest or a malformed date fails closed, never falling back.
+  at the base with one, and prints nothing elsewhere, the guards policy never
+  read for it; at the base an absent manifest or a malformed date fails closed.
 - `sh tests/policy.test.sh` holds `scripts/policy.sh`, the policy reader
   (PRD-08 slice 1, the kit's ADR-0039), and the risk policy it reads: in
   throwaway repositories with a `main` and a branch, `thresholds`, `read`
