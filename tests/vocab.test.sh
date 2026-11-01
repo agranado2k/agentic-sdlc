@@ -262,7 +262,7 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # an entry no call matches: the inventory holds no more than the tree.
 #
 # stamp.sh lifts by KEY and bounds the count: at most the policy's bound of
-# one key (8, 32 for Test-tier:; 8 when it publishes none) reach the checker,
+# one key (8, 32 for Test-tier: and Accept-test:; 8 when it publishes none) reach the checker,
 # and a body with more is its exit 5, nothing checked (#400, #869) — so
 # its lift is bounded like every other site here; a factory ticket's lift
 # adds `label` to the keys (process/R130) and is bounded the same way.
@@ -270,8 +270,8 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # refuses more than the policy's bound before the checker reads them (#870).
 LIFTED=$(
 	cat <<'EOLIFT'
-scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier)[[:space:]]*:"
-scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier)[[:space:]]*:"
+scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier|accept(-|[[:space:]_]+)test)[[:space:]]*:"
+scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier|accept(-|[[:space:]_]+)test)[[:space:]]*:"
 .agents/skills/pr-iterate/SKILL.md@@typed_return_ok@@printf 'Author-kind: %s\n%s\n' "$1" "$3" | sh "$checker"@@[ "$(printf '%s\n' "$3" | grep -c '')" -eq 3 ] || return 1
 .agents/skills/to-tickets/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
@@ -1252,6 +1252,69 @@ expect_status 2 "process/R40: with no requirement library beside the checker, a 
 expect_err_has "requirement.lib.sh"
 t_exec sh "$SCRATCH/nolib/vocab.sh" fields
 expect_status 0 "…while fields still answers — the library is read only to check an id"
+
+# ---------------------------------------------------------------------------
+banner "Accept-test: — a KEYED field whose value is a test pin (acceptance/R1, R2, R3)"
+# ---------------------------------------------------------------------------
+vocab fields
+expect_out_has "accept-test (keyed pin):" "acceptance/R4: fields prints accept-test as a keyed field held to the test-pin grammar"
+# UC1 2: the two lines a ticket carries for one id.
+vocab 'Accept-test: report/R3 tests/report.test.sh::totals by area' \
+	'Accept-test: report/R3 tests/report.test.sh::empty window prints zero'
+expect_resolved "" "acceptance/R1: UC1's two Accept-test: lines are accepted"
+vocab 'Accept-test: R3 a::b'
+expect_resolved "" "acceptance/R1: a PRD's plain id and the shortest pin"
+vocab 'Accept-test: report/R3 tests/a.sh::name::with a second ::'
+expect_resolved "" "acceptance/R1: the pin splits at its first ::, the name may hold another"
+vocab 'Accept-test: report/R3 tests/report.test.sh::totals by area' \
+	'Accept-test: report/R3 tests/report.test.sh::totals by area'
+expect_resolved "" "acceptance/R3: two identical lines read as one answer"
+vocab 'Accept-test: report/R3 tests/a.sh::x' 'Accept-test: report/R3 tests/b.sh::y' 'Accept-test: report/R4 tests/a.sh::x'
+expect_resolved "" "acceptance/R3: several lines for one id, and one test for two ids, are accepted"
+pin200="tests/$(printf '%0190d' 0 | tr 0 a)::xy"
+[ "${#pin200}" = 200 ] || fail "the 200-byte fixture is ${#pin200} bytes"
+vocab "Accept-test: report/R3 $pin200"
+expect_resolved "" "acceptance/R2: a 200-byte pin is within the bound"
+# acceptance_refused <label> <pin> — the checker refuses it, naming accept-test.
+acceptance_refused() {
+	vocab "Accept-test: report/R3 $2"
+	expect_status 2 "acceptance/R2: $1 is refused"
+	expect_err_has "x vocab: accept-test:" "acceptance/R2: …naming the field accept-test"
+}
+acceptance_refused "a space in the path (UC1 2a)" 'tests/report test.sh::totals'
+acceptance_refused "a .. segment (UC1 2d)" '../secrets/key::x'
+acceptance_refused "a .. segment inside the path" 'tests/../secrets::x'
+acceptance_refused "a .. segment at the path's end" 'tests/..::x'
+acceptance_refused "a leading / (UC1 2d)" '/etc/passwd::x'
+acceptance_refused "a |" 'tests/a.sh::x | y'
+acceptance_refused "a 201-byte pin (UC1 2e)" "${pin200}z"
+acceptance_refused "a 260-byte line (UC1 2e)" "tests/$(printf '%0250d' 0 | tr 0 a)::x"
+acceptance_refused "an empty test name" 'tests/a.sh::'
+acceptance_refused "an empty path" '::x'
+acceptance_refused "a pin with no ::" 'tests/a.sh'
+acceptance_refused "a byte outside printable ASCII" "tests/a.sh::caf$(printf '\303\251')"
+acceptance_refused "a tab" "tests/a.sh::a$(printf '\t')b"
+vocab 'Accept-test: report/R3'
+expect_status 2 "acceptance/R1: an id with no pin is refused"
+expect_err_has "x vocab: accept-test:"
+vocab 'Accept-test: Report/R3 tests/a.sh::x'
+expect_status 2 "acceptance/R1: an id outside the requirement grammar is refused"
+expect_err_has "accept-test: the id is not a requirement id"
+vocab "Accept-test: x;touch\$(id) tests/a.sh::x"
+expect_status 2 "acceptance/R1: an id shaped like a command is refused"
+t_exec sh "$SCRATCH/nolib/vocab.sh" 'Accept-test: report/R3 tests/a.sh::x'
+expect_status 2 "acceptance/R1: with no requirement library beside the checker, an Accept-test: line is refused"
+# The pin kind is held at load: it names a keyed field, and declares no tokens.
+pin_policy_refused() {
+	t_write "$SCRATCH" pin.config.sh "$2"
+	t_exec env VOCAB_CONFIG="$SCRATCH/pin.config.sh" sh "$VOCAB" fields
+	expect_status 2 "acceptance/R4: $1: a policy error, exit 2"
+	expect_err_has "$3"
+}
+pin_policy_refused "a pin field that is not keyed" "$(printf '%s\n' "VOCAB_FIELDS='accept-test'" "VOCAB_PIN='accept-test'")" \
+	"policy: VOCAB_PIN names 'accept-test', which is not a keyed field"
+pin_policy_refused "a pin field that declares tokens" "$(printf '%s\n' "VOCAB_FIELDS='accept-test'" "VOCAB_KEYED='accept-test'" "VOCAB_PIN='accept-test'" "VOCAB_ACCEPT_TEST='unit'")" \
+	"a pin is held to its grammar, never to tokens"
 
 # ---------------------------------------------------------------------------
 banner "The contract's new closed fields and the per-key line bounds (process/R41)"

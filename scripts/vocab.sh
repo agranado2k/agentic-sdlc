@@ -46,12 +46,17 @@
 #              it); the checker holds the token and never the id's meaning.
 #              The field repeats once per key: the same key with two tokens
 #              is refused, the same key with the same token is one answer.
+#   PIN        (VOCAB_PIN) — a KEYED field whose value after the id is a
+#              TEST PIN, `<path>::<test-name>`, held to vocab_pin_ok rather
+#              than to tokens: `Accept-test: report/R3 tests/r.test.sh::totals`.
+#              It is in VOCAB_KEYED too and declares no tokens; the same key
+#              may name several pins, and the same line twice is one answer.
 # A rule reads one token, so no rule may name a query, qualified or keyed
 # field. The kit's ADR-0037 fixes the ticket contract these serve.
 #
 # LINE BOUNDS are policy too, PUBLISHED here for every reader of a stamp:
 # VOCAB_BOUND is how many lines of one stamp key a reader lifts, VOCAB_BOUNDS
-# its per-field exceptions (`test-tier=32`). The checker validates them and
+# its per-field exceptions (`test-tier=32 accept-test=32`). The checker validates them and
 # prints them under `fields`; scripts/stamp.sh enforces them. A policy that
 # declares none prints none, and that reader keeps its own bound of 8.
 #
@@ -67,7 +72,8 @@
 # `(open)`, a query one marked `(query)` with no tokens (its value is a trace
 # filter held to a grammar, VOCAB_QUERY), a qualified one marked
 # `(qualified)` with its levels, the reasons and the reserved reasons, a
-# keyed one marked `(keyed)` with its tokens, then a `bound:` line and a
+# keyed one marked `(keyed)` with its tokens, a pin one `(keyed pin)` with
+# none, then a `bound:` line and a
 # `bound <field>:` line per exception, then one line per rule. Every reason is on
 # stderr, prefixed `x vocab:`, one line per violation naming the field, the
 # value and the vocabulary. Exit 0 is legal; exit 2 is a refused value, a
@@ -125,11 +131,12 @@ VOCAB_TOKEN_MAX=64
 # file: a file is the whole policy, never a layer over these — a rule it
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
-	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier result scope'
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope'
 	VOCAB_OPEN='domain class'
 	VOCAB_QUERY='targets'
 	VOCAB_QUALIFIED='risk'
-	VOCAB_KEYED='test-tier'
+	VOCAB_KEYED='test-tier accept-test'
+	VOCAB_PIN='accept-test'
 	VOCAB_TIER='planner implementer mechanical reviewer'
 	VOCAB_LABEL='ready-for-agent none'
 	VOCAB_DOMAIN='content code tests html-report self-implemented'
@@ -149,7 +156,7 @@ vocab_shipped_defaults() {
 	VOCAB_RESULT='pass fail skipped'
 	VOCAB_SCOPE='inside outward'
 	VOCAB_BOUND='8'
-	VOCAB_BOUNDS='test-tier=32'
+	VOCAB_BOUNDS='test-tier=32 accept-test=32'
 	VOCAB_RULES='command-shaped=yes => action!=apply'
 }
 
@@ -185,6 +192,7 @@ vocab_load_config() {
 	VOCAB_QUERY=
 	VOCAB_QUALIFIED=
 	VOCAB_KEYED=
+	VOCAB_PIN=
 	VOCAB_BOUND=
 	VOCAB_BOUNDS=
 	VOCAB_RULES=
@@ -244,6 +252,8 @@ vocab_is_query() { vocab_in_list "${VOCAB_QUERY:-}" "$1"; }
 vocab_is_qualified() { vocab_in_list "${VOCAB_QUALIFIED:-}" "$1"; }
 
 vocab_is_keyed() { vocab_in_list "${VOCAB_KEYED:-}" "$1"; }
+
+vocab_is_pin() { vocab_in_list "${VOCAB_PIN:-}" "$1"; }
 
 # vocab_sub <field> <part> — a qualified field's own list: QUALIFIED,
 # REASONS or RESERVED, in VOCAB_<FIELD>_<PART>.
@@ -325,6 +335,62 @@ vocab_query_ok() {
 	done
 	if [ "$_qo_kind" = 0 ]; then
 		vocab_refuse "$_qo_field: the filter names no kind= term — a filter is over one kind"
+		return 1
+	fi
+	return 0
+}
+
+# vocab_pin_ok <field> <pin> — a TEST PIN, `<path>::<test-name>`, held to a
+# grammar because no token set can hold it: at most VOCAB_PIN_MAX bytes,
+# printable ASCII, no `|`; split at its first `::`, the path non-empty,
+# relative (no leading `/`), holding no space and no `..` segment, and the
+# test name non-empty — it may hold spaces. The pin is ticket text and later
+# a path a guard reads, so the alphabet keeps a shell, a table row and a
+# path walk out of it. Mechanism, not policy — a literal, like the query's.
+VOCAB_PIN_MAX=200
+vocab_pin_ok() {
+	_po_field=$1
+	if [ -n "$(printf '%s' "$2" | LC_ALL=C tr -d ' -~')" ]; then
+		vocab_refuse "$_po_field: the test pin holds a byte outside printable ASCII"
+		return 1
+	fi
+	if [ "$(printf '%s' "$2" | wc -c | tr -d ' ')" -gt "$VOCAB_PIN_MAX" ]; then
+		vocab_refuse "$_po_field: the test pin is longer than $VOCAB_PIN_MAX bytes"
+		return 1
+	fi
+	case $2 in
+	*'|'*)
+		vocab_refuse "$_po_field: the test pin holds a |"
+		return 1
+		;;
+	*::*) ;;
+	*)
+		vocab_refuse "$_po_field: the test pin is not <path>::<test-name>"
+		return 1
+		;;
+	esac
+	_po_path=${2%%::*}
+	_po_name=${2#*::}
+	case $_po_path in
+	'')
+		vocab_refuse "$_po_field: the test pin's path is empty"
+		return 1
+		;;
+	*' '*)
+		vocab_refuse "$_po_field: the test pin's path holds a space"
+		return 1
+		;;
+	/*)
+		vocab_refuse "$_po_field: the test pin's path starts with / — a path is relative to the repository"
+		return 1
+		;;
+	.. | ../* | */.. | */../*)
+		vocab_refuse "$_po_field: the test pin's path holds a .. segment"
+		return 1
+		;;
+	esac
+	if [ -z "$_po_name" ]; then
+		vocab_refuse "$_po_field: the test pin's test name is empty"
 		return 1
 	fi
 	return 0
@@ -564,7 +630,7 @@ vocab_validate_policy() {
 		# own variables share: a field named `fields` would make the field
 		# list its own vocabulary, silently.
 		case $_vp_f in
-		fields | open | rules | token-shape | config | qualified | keyed | bound | bounds)
+		fields | open | rules | token-shape | config | qualified | keyed | pin | bound | bounds)
 			vocab_refuse "policy: field name '$_vp_f' is reserved — $(vocab_var "$_vp_f") is the checker's own variable"
 			continue
 			;;
@@ -588,6 +654,11 @@ vocab_validate_policy() {
 			[ -z "$_vp_tokens" ] || vocab_refuse "policy: field '$_vp_f' is a query and declares tokens ($(vocab_var "$_vp_f")) — a query is held to its grammar, never to tokens"
 			continue
 		fi
+		if vocab_is_pin "$_vp_f"; then
+			vocab_is_keyed "$_vp_f" || vocab_refuse "policy: VOCAB_PIN names '$_vp_f', which is not a keyed field — a pin is a keyed field's value"
+			[ -z "$_vp_tokens" ] || vocab_refuse "policy: field '$_vp_f' is a pin and declares tokens ($(vocab_var "$_vp_f")) — a pin is held to its grammar, never to tokens"
+			continue
+		fi
 		if [ -z "$_vp_tokens" ] && ! vocab_is_open "$_vp_f"; then
 			vocab_refuse "policy: field '$_vp_f' declares no tokens ($(vocab_var "$_vp_f") is empty)"
 			continue
@@ -602,7 +673,7 @@ vocab_validate_policy() {
 		done
 		vocab_is_qualified "$_vp_f" && vocab_validate_qualified "$_vp_f"
 	done
-	for _vp_list in QUERY QUALIFIED KEYED; do
+	for _vp_list in QUERY QUALIFIED KEYED PIN; do
 		for _vp_q in $(eval "printf '%s' \"\${VOCAB_$_vp_list:-}\""); do
 			vocab_is_field "$_vp_q" || vocab_refuse "policy: VOCAB_$_vp_list names '$_vp_q', which is not a declared field"
 		done
@@ -768,6 +839,10 @@ vocab_check_qualified() {
 _vocab_keyed=
 vocab_check_keyed() {
 	_ck_f=$1
+	vocab_is_pin "$_ck_f" && {
+		vocab_check_pinned "$_ck_f" "$2"
+		return
+	}
 	_ck_tokens=$(vocab_tokens "$_ck_f")
 	set -f
 	# shellcheck disable=SC2086  # the split into id and token is the point
@@ -801,6 +876,32 @@ vocab_check_keyed() {
 	fi
 	_vocab_keyed="$_vocab_keyed${_vocab_keyed:+$_vocab_nl}$_ck_f $1 $2"
 	return 0
+}
+
+# vocab_check_pinned <field> <value> — a requirement id, one space, a test
+# pin. Several pins per id: a pin field repeats once per test, and the same
+# line twice is the same answer, so nothing is remembered across lines.
+vocab_check_pinned() {
+	case $2 in
+	*' '*) ;;
+	*)
+		vocab_refuse "$1: expected '<requirement id> <path>::<test-name>'"
+		return 1
+		;;
+	esac
+	vocab_req_id_ok "${2%% *}"
+	case $? in
+	0) ;;
+	2)
+		vocab_refuse "$1: the requirement grammar $_vocab_here/requirement.lib.sh is missing beside the checker — no id can be read"
+		return 1
+		;;
+	*)
+		vocab_refuse "$1: the id is not a requirement id — R<n> or <area>/R<n>, the area at most 32 characters, n at most 6 digits"
+		return 1
+		;;
+	esac
+	vocab_pin_ok "$1" "${2#* }"
 }
 
 # The values seen so far, per field, for the rules: _vocab_val_<VAR>=<value>.
@@ -906,6 +1007,8 @@ vocab_fields() {
 				"$(vocab_sub "$_vf_field" QUALIFIED)" "$(vocab_sub "$_vf_field" REASONS)"
 			[ -z "$(vocab_sub "$_vf_field" RESERVED)" ] || printf '; reserved: %s' "$(vocab_sub "$_vf_field" RESERVED)"
 			printf '\n'
+		elif vocab_is_pin "$_vf_field"; then
+			printf '%s (keyed pin):\n' "$_vf_field"
 		elif vocab_is_keyed "$_vf_field"; then
 			printf '%s (keyed): %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
 		else
