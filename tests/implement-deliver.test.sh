@@ -996,6 +996,7 @@ fs_has "\`links.pr\` to \`\"#<PR>\"\`" "process/R235: links.pr names the PR"
 fs_has "\`factory move T-<digits> review\`" "process/R235: the move to review"
 fs_has "push both as one commit" "process/R235: …pushed as one commit on the branch"
 fs_has "keep the \`links.pr\` commit and report the refusal" "process/R235: a refused review move keeps links.pr"
+fs_has "Push it before you record the branch tip for step 9's review" "process/R235: the close is pushed before the review pins its commit (review M-1)"
 for g in "\`factory review\`" "\`factory qa\`" "\`factory approve\`" "\`factory close\`" "a forced \`factory move\`"; do
 	fs_has "$g" "process/R236: $g is named"
 done
