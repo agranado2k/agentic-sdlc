@@ -929,6 +929,34 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+banner "4h. A factory ticket id: one call, the same exits, a fall-back said once (process/R135 R139 R222)"
+# ---------------------------------------------------------------------------
+# PRD-12 slice 1 (#934). A session handed a factory ticket id reads its stamp
+# through the same reader, the id in place of the number — the reader runs
+# `factory stamp` itself — and treats every exit as for an issue. With no
+# `factory` binary the reader exits 3: a session holding the ticket's forge
+# issue number says once that it fell back and reads that issue's stamp,
+# one holding none takes exit 3's path. A temporary id is refused before any
+# read: `factory renumber` is what makes it stampable.
+fac=$(grep -F -- "**Handed a factory ticket id" "$STAMP_ABS")
+[ -n "$fac" ] && pass "process/R135: STAMP.md carries the factory ticket id bullet" ||
+	fail "process/R135: STAMP.md has no bullet opening '**Handed a factory ticket id'"
+fac_has() { t_text_has "$fac" "$1" "$2" "the factory ticket bullet"; }
+fac_has "\`sh scripts/stamp.sh T-<n>\`" "process/R135: the one call, the id and nothing else"
+fac_has "treat each exit as for an issue" "process/R135: the exits mean what they mean for an issue"
+fac_has "a temporary id, \`T-~\` and hex" "process/R222: the temporary id is named"
+fac_has "read no stamp" "process/R222: …and refused before any read"
+fac_has "\`factory renumber\`" "process/R222: …naming what makes it stampable"
+fallback=$(grep -F -- "**An absent \`factory\` binary" "$STAMP_ABS")
+[ -n "$fallback" ] && pass "process/R139: STAMP.md carries the absent-binary fall-back" ||
+	fail "process/R139: STAMP.md has no line opening '**An absent \`factory\` binary'"
+fb_has() { t_text_has "$fallback" "$1" "$2" "the fall-back"; }
+fb_has "say once that you fell back to the forge issue" "process/R139: the fall-back is said, once"
+fb_has "\`sh scripts/stamp.sh <N>\`" "process/R139: …and the issue's stamp read by its number"
+fb_has "holding none, take exit 3's path as for an issue" "process/R139: no issue number: exit 3's path"
+_ptr "**Handed a factory ticket id" STAMP.md "the factory ticket bullet"
+
+# ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "/pr-iterate"

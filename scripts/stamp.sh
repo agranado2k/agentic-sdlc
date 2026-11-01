@@ -2,6 +2,22 @@
 # stamp.sh — read a ticket's stamp lines, checked, out of an untrusted body.
 #
 #   sh scripts/stamp.sh <issue-number>
+#   sh scripts/stamp.sh T-<n>          (a factory ticket, in a factory project)
+#
+# A FACTORY TICKET (process/R128 to R134, R138; PRD-12). The one argument is
+# digits — an issue number, read from the tracker as below — or a factory
+# ticket id, `T-` and 1 to 6 digits; anything else, a temporary `T-~<hex>` id
+# included, is a usage error, exit 2. For an id, the checkout is a factory
+# project only when the git top level this file lives in holds
+# .factory/project.yaml (exit 2 otherwise, nothing run); the reader then runs
+# `factory stamp <id>` from that top level, opens no file under .factory/ and
+# calls no tracker. What that prints is an untrusted body like an issue's —
+# the same lift, bound and checker below, `Label:` lines lifted here and only
+# here (an issue's label is the tracker's, never a body line) — and its stderr
+# is discarded: every case is named from its exit. Its 2 is 2, 3 is 3, 5 is
+# 5, and any other status is 3; a factory ticket never exits 4, since nothing
+# is fetched. No `factory` on PATH: exit 3, one stderr line naming the binary
+# and the forge-issue form, `sh scripts/stamp.sh <issue-number>`.
 #
 # WHAT IT ANSWERS. Which `Tier:`, `Confidence:`, `Domain:`, `Targets:`,
 # `Class:`, `Covers:`, `Risk:`, `Risk-confidence:` and `Test-tier:` lines a
@@ -86,23 +102,43 @@ _stamp_here=$(cd "$(dirname "$0")" && pwd -P)
 stamp_say() { printf 'x stamp: %s\n' "$*" >&2; }
 
 usage() {
-	stamp_say "usage: sh scripts/stamp.sh <issue-number> — the number alone, digits only"
+	stamp_say "usage: sh scripts/stamp.sh <issue-number> | T-<n> — the issue's number, digits only, or a factory ticket id, T- and 1 to 6 digits (a temporary T-~<hex> id is not stampable)"
 	exit 2
 }
 
 [ $# = 1 ] || usage
 case $1 in
+T-[0123456789]*)
+	case ${1#T-} in *[!0123456789]*) usage ;; esac
+	[ ${#1} -le 8 ] || usage
+	ticket=$1 _subj="ticket $1" _label_word='Label:, ' _lift_label='label|'
+	;;
 '' | *[!0123456789]*) usage ;;
+*) issue=$1 ticket= _subj="issue #$1" _label_word= _lift_label= ;;
 esac
-issue=$1
 
 _stamp_root=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_stamp_here" rev-parse --show-toplevel) 2>/dev/null) ||
 	_stamp_root=$(dirname "$_stamp_here")
 vocab="$_stamp_root/scripts/vocab.sh"
 
+# --- a factory ticket: a factory project, and the factory's own reader -------
+# Decided before anything is made or run: the manifest's presence, read and
+# nothing more, then the binary. Nothing is fetched, so no case here is 4.
+if [ -n "$ticket" ]; then
+	if [ ! -f "$_stamp_root/.factory/project.yaml" ]; then
+		stamp_say "$ticket: this checkout is no factory project — no .factory/project.yaml at its git top level, $_stamp_root; nothing read"
+		exit 2
+	fi
+	if ! command -v factory >/dev/null 2>&1; then
+		stamp_say "$ticket: no \`factory\` binary on PATH, so no factory stamp read — read the ticket's forge issue instead: sh scripts/stamp.sh <issue-number>"
+		exit 3
+	fi
+fi
+
 # --- fetch, once more on failure -------------------------------------------
 _stamp_tmp=$(mktemp -d "${TMPDIR:-/tmp}/stamp.XXXXXX") || {
 	stamp_say "no scratch directory — nothing read"
+	[ -n "$ticket" ] && exit 3
 	exit 4
 }
 # The EXIT trap cleans up; a signal EXITS, so the script never reads on with
@@ -113,7 +149,31 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 stamp_fetch() { gh issue view "$issue" --json body --jq .body >"$_stamp_tmp/body"; }
-if ! stamp_fetch && ! stamp_fetch; then
+if [ -n "$ticket" ]; then
+	# Run from the git top level, its stdout the untrusted body below; its
+	# stderr discarded — every case is named here, from the status alone.
+	_frc=0
+	(cd "$_stamp_root" && unset GIT_DIR GIT_WORK_TREE && exec factory stamp "$ticket") >"$_stamp_tmp/body" 2>/dev/null || _frc=$?
+	case $_frc in
+	0) ;;
+	2)
+		stamp_say "$ticket: factory stamp refused it — no such ticket, or a refused value; nothing printed"
+		exit 2
+		;;
+	3)
+		stamp_say "$ticket: factory stamp read no stamp — no stamp line, or no checker; not a refusal, nothing printed"
+		exit 3
+		;;
+	5)
+		stamp_say "$ticket: factory stamp found too many stamp lines of a key — a stop, nothing printed"
+		exit 5
+		;;
+	*)
+		stamp_say "$ticket: factory stamp exited $_frc, a status it does not define — no stamp read, nothing printed"
+		exit 3
+		;;
+	esac
+elif ! stamp_fetch && ! stamp_fetch; then
 	stamp_say "fetching issue #$issue failed twice (the tracker's error is above) — a stop, never a missing line"
 	exit 4
 fi
@@ -149,9 +209,9 @@ stamp_covers_ok() { req_covers_ids "$(stamp_covers_value "$1")" >/dev/null; }
 # A NUL is a line break here: GNU grep reads a body holding one as binary and
 # lifts nothing, and a NUL inside a value must split it, never vanish from it.
 tr -d '\r' <"$_stamp_tmp/body" | tr '\000' '\n' |
-	grep -iE '^[[:space:]]*(tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier)[[:space:]]*:' >"$_stamp_tmp/lifted"
+	grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier)[[:space:]]*:" >"$_stamp_tmp/lifted"
 if [ ! -s "$_stamp_tmp/lifted" ]; then
-	stamp_say "issue #$issue carries no Tier:, Confidence:, Domain:, Targets:, Class:, Covers:, Risk:, Risk-confidence: or Test-tier: line — no stamp read, not a refusal"
+	stamp_say "$_subj carries no Tier:, Confidence:, ${_label_word}Domain:, Targets:, Class:, Covers:, Risk:, Risk-confidence: or Test-tier: line — no stamp read, not a refusal"
 	exit 3
 fi
 # The bound, per key whatever its spelling: the keys are the filter's words,
@@ -170,7 +230,7 @@ _over=$(awk -v max="$STAMP_PER_KEY" '
 		gsub(/[[:space:]_]+/, "-", k); n[tolower(k)]++
 	}
 	END {
-		split("class confidence covers domain risk risk-confidence targets test-tier tier", ks, " ")
+		split("class confidence covers domain label risk risk-confidence targets test-tier tier", ks, " ")
 		for (i = 1; i in ks; i++) {
 			k = ks[i]; m = (k in b) ? b[k] : max
 			if (n[k] > m) printf "%s%d %s lines", (s++ ? ", " : ""), n[k], k
@@ -178,7 +238,7 @@ _over=$(awk -v max="$STAMP_PER_KEY" '
 		if (s) { printf " — past the bound of %d a key", max; for (k in b) printf ", %d %s", b[k], k }
 	}' bounds="$_stamp_tmp/fields" "$_stamp_tmp/fields" "$_stamp_tmp/lifted")
 if [ -n "$_over" ]; then
-	stamp_say "issue #$issue: too many stamp lines — $_over; nothing checked, nothing printed — a stop"
+	stamp_say "$_subj: too many stamp lines — $_over; nothing checked, nothing printed — a stop"
 	exit 5
 fi
 
@@ -195,7 +255,7 @@ while IFS= read -r line; do
 	elif stamp_declared "$key"; then
 		printf '%s\n' "$line" >>"$_stamp_tmp/lines"
 	else
-		stamp_say "issue #$issue: the $key line names a field this project's policy does not declare — not checked, not printed"
+		stamp_say "$_subj: the $key line names a field this project's policy does not declare — not checked, not printed"
 		_dropped=1
 	fi
 done <"$_stamp_tmp/lifted"
@@ -208,13 +268,13 @@ _cov_bad=0
 if [ "$_covers" = 1 ]; then
 	_grammar="$_stamp_root/scripts/requirement.lib.sh"
 	if [ ! -r "$_grammar" ]; then
-		stamp_say "issue #$issue carries a Covers: line and the requirement grammar $_grammar is gone — no stamp read, nothing unchecked printed"
+		stamp_say "$_subj carries a Covers: line and the requirement grammar $_grammar is gone — no stamp read, nothing unchecked printed"
 		exit 3
 	fi
 	# shellcheck disable=SC1090
 	. "$_grammar"
 	command -v req_covers_ids >/dev/null 2>&1 || {
-		stamp_say "issue #$issue carries a Covers: line and the requirement grammar $_grammar defines no req_covers_ids — no stamp read, nothing unchecked printed"
+		stamp_say "$_subj carries a Covers: line and the requirement grammar $_grammar defines no req_covers_ids — no stamp read, nothing unchecked printed"
 		exit 3
 	}
 	_cov_seen=
@@ -232,7 +292,7 @@ _rc=0
 case $_rc in
 0)
 	if [ "$_dropped" = 1 ] && ! grep -qiE '^[[:space:]]*tier[[:space:]]*:' "$_stamp_tmp/lines"; then
-		stamp_say "issue #$issue: no Tier: line was checked — no stamp read"
+		stamp_say "$_subj: no Tier: line was checked — no stamp read"
 		exit 3
 	fi
 	cat "$_stamp_tmp/lines"
@@ -252,14 +312,14 @@ while IFS= read -r line; do
 	key=$(stamp_key "$line")
 	if [ "$key" = covers ]; then
 		stamp_covers_ok "$line" && continue
-		stamp_say "issue #$issue: the covers line is refused — it is neither a comma-separated list of requirement ids nor none (prefactor|open-issue|release); the value is not printed: it is the ticket's text"
+		stamp_say "$_subj: the covers line is refused — it is neither a comma-separated list of requirement ids nor none (prefactor|open-issue|release); the value is not printed: it is the ticket's text"
 		_named=1
 		continue
 	fi
 	printf '%s\n' "$line" | sh "$vocab" 2>/dev/null && continue
-	stamp_say "issue #$issue: the $key line is refused — its value is not in the $key vocabulary ($(sed -n -e "s/^$key (query):.*/a trace filter: kind=<kind> and up to seven <key>=<value> terms/p" -e "s/^$key (keyed): \\(.*\\)/a requirement id, then one of \\1/p" -e "s/^$key\\( (open)\\)\\{0,1\\}: //p" -e "s/^$key (qualified): //p" "$_stamp_tmp/fields")); the value is not printed: it is the ticket's text"
+	stamp_say "$_subj: the $key line is refused — its value is not in the $key vocabulary ($(sed -n -e "s/^$key (query):.*/a trace filter: kind=<kind> and up to seven <key>=<value> terms/p" -e "s/^$key (keyed): \\(.*\\)/a requirement id, then one of \\1/p" -e "s/^$key\\( (open)\\)\\{0,1\\}: //p" -e "s/^$key (qualified): //p" "$_stamp_tmp/fields")); the value is not printed: it is the ticket's text"
 	_named=1
 done <"$_stamp_tmp/lines"
 [ "$_named" = 1 ] ||
-	stamp_say "issue #$issue: the stamp lines are refused together — a field given two values, or a rule across fields; read them in the ticket"
+	stamp_say "$_subj: the stamp lines are refused together — a field given two values, or a rule across fields; read them in the ticket"
 exit 2

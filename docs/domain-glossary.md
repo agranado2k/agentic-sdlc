@@ -715,6 +715,20 @@ Grouped by the seam each term belongs to. Entry shape:
   differentiating) and generic (buy or copy). It decides where the design
   investment goes, and the brief's decision record carries it. Ref: PRD #107.
   - _Avoid_: "strategic design" — same reason.
+- **Factory project** — a repository that plans in the software factory: its
+  git top level holds the factory's project manifest, `.factory/project.yaml`.
+  The manifest's presence is the whole test — read and nothing more, so a
+  stray `.factory/` folder without it is no factory project, and nothing above
+  the git top level counts. Ref: PRD-12 (factory item), process/R128.
+  - _Avoid_: "factory repo", "factory-enabled" — one name, one test.
+- **Factory ticket** — a ticket the software factory holds as an item in a
+  factory project, named by its id, `T-` and digits (a temporary `T-~<hex>`
+  id, before `factory renumber`, is not yet one the kit reads). The kit never
+  opens its file: the stamp reader reads its stamp through the factory's own
+  reader, `factory stamp`, and checks what that prints as it checks an issue
+  body. Ref: PRD-12 (factory item), process/R128 to R134.
+  - _Avoid_: "factory item" for a ticket alone — an item is any of the
+    factory's records, a discovery or a PRD among them.
 
 ---
 

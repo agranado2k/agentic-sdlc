@@ -692,4 +692,172 @@ for sig in TERM:143 INT:130 HUP:129; do
 		fail "SIG${sig%%:*}: left behind: $(ls -A "$SCRATCH/tmpd")"
 done
 
+# ---------------------------------------------------------------------------
+banner "A factory ticket id: the reader runs \`factory stamp\` (process/R128 to R134, R138)"
+# ---------------------------------------------------------------------------
+# PRD-12 slice 1 (#934). In a factory project — the git top level of the
+# checkout the reader lives in holds .factory/project.yaml — `T-` and 1 to 6
+# digits is a factory ticket id, and the reader runs the factory's own stamp
+# reader there instead of fetching an issue. What that prints is an untrusted
+# body: the same lift, bound and checker run over it, `Label:` lines included
+# here and only here. The stand-in `factory` records where it ran and with
+# what, prints a fixture, writes a marker on stderr, and answers by exit; the
+# stand-in tracker (the gh stub above) must never be called.
+FPROJ="$SCRATCH/fproj"
+mkdir -p "$FPROJ/scripts" "$FPROJ/.factory" "$FPROJ/sub"
+for f in stamp.sh vocab.sh vocab.config.sh requirement.lib.sh; do cp "$KIT/scripts/$f" "$FPROJ/scripts/$f"; done
+: >"$FPROJ/.factory/project.yaml"
+git -C "$FPROJ" init -q -b main
+FTOP=$(cd "$FPROJ" && pwd -P)
+mkdir -p "$SCRATCH/fbin"
+cat >"$SCRATCH/fbin/factory" <<'STUB'
+#!/bin/sh
+printf '%s|%s\n' "$(pwd -P)" "$*" >>"$STUB_DIR/factory-calls"
+echo "FACTORY-STDERR-MARKER" >&2
+cat "$STUB_DIR/factory-out"
+exit "$(cat "$STUB_DIR/factory-exit")"
+STUB
+chmod +x "$SCRATCH/fbin/factory"
+
+# fstamp_says <exit> <printf format> — the stand-in's next answer.
+fstamp_says() {
+	# shellcheck disable=SC2059  # the format IS the fixture
+	printf "$2" >"$SCRATCH/factory-out"
+	echo "$1" >"$SCRATCH/factory-exit"
+	: >"$SCRATCH/factory-calls"
+	: >"$SCRATCH/calls"
+}
+fcalls() { wc -l <"$SCRATCH/factory-calls" | tr -d ' '; }
+# fstamp <id> — the fixture's reader, run from a cwd outside the fixture, with
+# the stand-in first on PATH.
+fstamp() {
+	cd "$SCRATCH" || exit 2
+	t_exec env PATH="$SCRATCH/fbin:$PATH" sh "$FPROJ/scripts/stamp.sh" "$@"
+	cd "$KIT" || exit 2
+}
+# no_tracker <label> — the stand-in tracker was never called.
+no_tracker() {
+	[ "$(calls)" = 0 ] && pass "$1: no tracker call" || fail "$1: the tracker was called: $(cat "$SCRATCH/calls")"
+}
+# quiet <label> — nothing on stdout, and none of the stand-in's stderr relayed.
+quiet() {
+	[ -z "$T_OUT" ] && pass "$1: nothing on stdout" || fail "$1: stdout should be empty, got '$T_OUT'"
+	expect_err_lacks "FACTORY-STDERR-MARKER" "$1: none of factory stamp's stderr reaches the reader's"
+}
+
+FOUR='Tier: mechanical\nLabel: ready-for-agent\nRisk: low\nCovers: process/R130\n'
+fstamp_says 0 "$FOUR"
+fstamp T-07
+expect_resolved "$(printf "$FOUR")" \
+	"process/R128: T-07 in a factory project: exit 0, Tier, Label, Risk and Covers printed"
+[ "$(cat "$SCRATCH/factory-calls")" = "$FTOP|stamp T-07" ] &&
+	pass "process/R128: the stand-in ran as 'factory stamp T-07' from the fixture's git top level" ||
+	fail "process/R128: the stand-in ran as: $(cat "$SCRATCH/factory-calls") (wanted $FTOP|stamp T-07)"
+no_tracker "process/R128"
+expect_err_lacks "FACTORY-STDERR-MARKER" "process/R133: a passing stamp relays none of factory stamp's stderr"
+
+# process/R129: the reader opens no file under the factory folder — a ticket
+# file there that says otherwise is never read.
+mkdir -p "$FPROJ/.factory/items/T-07"
+printf 'Tier: planner\nLabel: none\n' >"$FPROJ/.factory/items/T-07/ticket.md"
+fstamp_says 0 'Tier: mechanical\n'
+fstamp T-07
+expect_resolved "Tier: mechanical" "process/R129: only factory stamp's lines are read — the ticket file is never opened"
+rm -rf "$FPROJ/.factory/items"
+
+fstamp_says 0 'Tier: mechanical\nLabel: maybe\n'
+fstamp T-07
+expect_status 2 "process/R130: a Label: line the kit's checker refuses: exit 2"
+quiet "process/R130"
+expect_err_has "the label line is refused" "process/R130: the field is named"
+expect_err_lacks "maybe" "process/R130: the refused value is never printed"
+
+fstamp_says 0 "Tier: mechanical\nDomain: code';touch PWN;'\n"
+fstamp T-07
+expect_status 2 "process/R130: a value outside the vocabulary from factory stamp: exit 2"
+no_pwn "factory stamp's refused line"
+
+# The same lines as an issue body: the same verdicts, and no Label: lifted.
+body "$FOUR"
+stamp 934
+expect_resolved "$(printf 'Tier: mechanical\nRisk: low\nCovers: process/R130')" \
+	"process/R130: the same lines in an issue body: the same, except no Label: line is lifted"
+body 'Tier: mechanical\nLabel: maybe\n'
+stamp 934
+expect_resolved "Tier: mechanical" "process/R130: an issue's Label: line is never lifted, so never refused either"
+
+fstamp_says 2 ''
+fstamp T-07
+expect_status 2 "process/R131: factory stamp exits 2 (no such ticket, or refused): exit 2"
+quiet "process/R131"
+expect_err_has "T-07" "process/R131: stderr names the id"
+expect_err_has "factory stamp refused" "process/R131: stderr names the case"
+no_tracker "process/R131"
+
+mv "$FPROJ/.factory/project.yaml" "$SCRATCH/project.yaml.aside"
+fstamp_says 0 "$FOUR"
+fstamp T-07
+expect_status 2 "process/R131: a checkout with no project manifest: exit 2"
+quiet "process/R131 (no manifest)"
+expect_err_has "T-07" "process/R131: stderr names the id"
+expect_err_has "no factory project" "process/R131: stderr names the case"
+[ "$(fcalls)" = 0 ] && pass "process/R131: factory stamp is not run outside a factory project" ||
+	fail "process/R131: the stand-in ran: $(cat "$SCRATCH/factory-calls")"
+no_tracker "process/R131 (no manifest)"
+mv "$SCRATCH/project.yaml.aside" "$FPROJ/.factory/project.yaml"
+
+for rc in 3:3 7:3 1:3 4:3 5:5; do
+	fstamp_says "${rc%%:*}" "$FOUR"
+	fstamp T-07
+	expect_status "${rc#*:}" "process/R132/R133: factory stamp exits ${rc%%:*}: the reader exits ${rc#*:}"
+	quiet "process/R133 (factory exit ${rc%%:*})"
+	no_tracker "process/R132 (factory exit ${rc%%:*})"
+done
+
+# process/R132: never 4 — not even when the scratch directory cannot be made.
+fstamp_says 0 "$FOUR"
+cd "$SCRATCH" || exit 2
+t_exec env PATH="$SCRATCH/fbin:$PATH" TMPDIR="$SCRATCH/no/such/dir" sh "$FPROJ/scripts/stamp.sh" T-07
+cd "$KIT" || exit 2
+[ "$T_STATUS" != 4 ] && pass "process/R132: no scratch directory for a factory ticket is not exit 4 (got $T_STATUS)" ||
+	fail "process/R132: a factory ticket exited 4"
+
+# process/R134: the argument's shape, checked before anything runs.
+for bad in T-1234567 t-07 'T-~a1b2' T- T-07x 'T-07 ' '07-T'; do
+	fstamp_says 0 "$FOUR"
+	fstamp "$bad"
+	expect_status 2 "process/R134: '$bad' is a usage error, exit 2"
+	[ -z "$T_OUT" ] && [ "$(fcalls)" = 0 ] && [ "$(calls)" = 0 ] &&
+		pass "process/R134: '$bad': nothing printed, the stand-in and the tracker never run" ||
+		fail "process/R134: '$bad': stdout '$T_OUT', factory calls $(fcalls), tracker calls $(calls)"
+done
+fstamp_says 0 'Tier: mechanical\n'
+fstamp T-123456
+expect_resolved "Tier: mechanical" "process/R134: six digits is a factory ticket id"
+
+# process/R138: no `factory` on PATH — exit 3, one stderr line naming the
+# absent binary and the forge-issue form.
+NOFAC=
+_ifs=$IFS
+IFS=:
+for d in $PATH; do [ -x "$d/factory" ] || NOFAC="${NOFAC:+$NOFAC:}$d"; done
+IFS=$_ifs
+fstamp_says 0 "$FOUR"
+cd "$SCRATCH" || exit 2
+t_exec env PATH="$NOFAC" sh "$FPROJ/scripts/stamp.sh" T-07
+cd "$KIT" || exit 2
+expect_status 3 "process/R138: no factory binary on PATH: exit 3"
+[ -z "$T_OUT" ] && pass "process/R138: nothing on stdout" || fail "process/R138: stdout should be empty, got '$T_OUT'"
+[ "$(printf '%s\n' "$T_ERR" | wc -l | tr -d ' ')" = 1 ] && pass "process/R138: exactly one stderr line" ||
+	fail "process/R138: stderr has $(printf '%s\n' "$T_ERR" | wc -l | tr -d ' ') lines"
+expect_err_has "no \`factory\` binary on PATH" "process/R138: the line names the absent binary"
+expect_err_has "sh scripts/stamp.sh <issue-number>" "process/R138: …and the forge-issue form"
+no_tracker "process/R138"
+
+# process/R137: the release that ships this tells a consumer so.
+upd=$(awk '/^\*\*Arriving from 0\.99\.0 or older/ { on = 1 } on { print } on && /^$/ { exit }' "$KIT/UPDATING.md" | tr '\n' ' ')
+t_text_has "$upd" "factory ticket id" "process/R137: UPDATING.md says the stamp reader accepts a factory ticket id" "the 0.100.0 entry"
+t_text_has "$upd" "\`factory stamp\`" "process/R137: …that it runs factory stamp in a factory project" "the 0.100.0 entry"
+t_text_has "$upd" "issue number is unchanged" "process/R137: …and that an issue number reads as before" "the 0.100.0 entry"
+
 t_done "the stamp reader"
