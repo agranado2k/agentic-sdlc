@@ -300,6 +300,17 @@ bad=$(printf '%s\n' "$new_tokens" | grep -vxE '[a-z][a-z0-9-]*')
 [ -n "$new_tokens" ] && [ -z "$bad" ] && pass "process/R41: every new token has the shape [a-z][a-z0-9-]*" ||
 	fail "process/R41: tokens outside the shape: '$bad' (read: $(printf '%s' "$new_tokens" | tr '\n' ' '))"
 
+# acceptance/R4: the shipped policy declares accept-test a keyed field held
+# to the checker's test-pin grammar, bounded at 32 lines, and the checker's
+# built-in defaults say the same — section 1 holds the two equal line for
+# line; here, the declaration itself.
+for line in 'accept-test (keyed pin):' 'bound accept-test: 32'; do
+	printf '%s\n' "$FIELDS" | grep -qxF -- "$line" && pass "acceptance/R4: the shipped policy declares '$line'" ||
+		fail "acceptance/R4: the shipped policy does not declare '$line'"
+	printf '%s\n' "$DEFAULTS" | grep -qxF -- "$line" && pass "acceptance/R4: the checker's defaults declare '$line'" ||
+		fail "acceptance/R4: the checker's defaults do not declare '$line'"
+done
+
 # process/R44: the release that ships the five fields tells a consumer whose
 # own policy file predates it to add them — a policy file that is found is the
 # whole policy, so an update that copies the checker and not the words leaves
@@ -312,6 +323,18 @@ for word in '`risk`' '`risk-confidence`' '`test-tier`' '`result`' '`scope`' 'scr
 	case $note in
 	*"$word"*) pass "process/R44: the paragraph names $word" ;;
 	*) fail "process/R44: the paragraph does not name $word" ;;
+	esac
+done
+
+# acceptance/R7: the release that ships the Accept-test: line tells a consumer
+# whose own policy predates it to add the field and its bound.
+note=$(awk '/^\*\*Arriving from 0\.103\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$UPDATING" | tr '\n' ' ')
+[ -n "$note" ] && pass "acceptance/R7: UPDATING.md carries the arriving-from-0.103.0 paragraph" ||
+	fail "acceptance/R7: UPDATING.md has no 'Arriving from 0.103.0 or older' paragraph"
+for word in '`accept-test`' '`VOCAB_PIN=' '`accept-test=32`' '`VOCAB_BOUNDS`' 'scripts/vocab.config.sh' 'whole policy'; do
+	case $note in
+	*"$word"*) pass "acceptance/R7: the paragraph names $word" ;;
+	*) fail "acceptance/R7: the paragraph does not name $word" ;;
 	esac
 done
 

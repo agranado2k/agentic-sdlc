@@ -274,7 +274,7 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # verdict that ran names the head commit it reviewed, 40 hex digits, and its
 # model's provider, a token; and its verdict on one kit finding names that
 # lens finding's id, never a V- one, and a <path>:<line> place
-# (the kit's ADR-0043, #939).
+# (the kit's ADR-0044, #939).
 # `verify` advises on a raise and on a lens count
 # written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
 # from here).
@@ -287,7 +287,7 @@ TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[
 # no verdict a reader can count; and a post-merge outcome names its outcome,
 # or it is nothing a reader can count (the kit's ADR-0036, #875); a
 # verifier's verdict names its outcome, and its verdict on one finding its
-# outcome, the finding's id and the evidence's place (the kit's ADR-0043,
+# outcome, the finding's id and the evidence's place (the kit's ADR-0044,
 # #939). An empty
 # value is no value. The VALUE stays the shape row's, the outcome table's, and for a raise's severity the
 # vocabulary checker's (trace_check_severity). `verify` advises on a line
@@ -2960,7 +2960,7 @@ trace_fix_window() {
 # against its PR (never a failed QA) names its file, NOT HELD UP when
 # rejected or dismissed by a human with no such mistake, unlabelled else.
 # A verifier's V- finding is no lens finding and counts nowhere
-# (the kit's ADR-0043). A triage pairs with the latest raise of its id on
+# (the kit's ADR-0044). A triage pairs with the latest raise of its id on
 # its PR before it; a
 # dismissal with the latest raise at its `data.where` before it and every
 # raise at that where from the same run. A ratio over zero prints `n/a`.

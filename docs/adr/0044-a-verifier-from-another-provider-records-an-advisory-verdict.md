@@ -1,4 +1,4 @@
-# ADR-0043: A verifier from another provider reviews each PR head and records an advisory verdict of its own kind
+# ADR-0044: A verifier from another provider reviews each PR head and records an advisory verdict of its own kind
 
 - **Status**: Accepted
 - **Date**: 2026-11-01

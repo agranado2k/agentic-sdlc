@@ -295,6 +295,25 @@ Grouped by the seam each term belongs to. Entry shape:
   policy publishes. Ref: ADR-0037.
   - _Avoid_: "capability tier" or "tier" alone — the tier is the model's;
     the test tier is the test's.
+- **Acceptance test** — a test named on a ticket, before the build, as part
+  of the definition of done of one requirement the ticket covers. A
+  requirement may have several. A human approves them before the build
+  starts, and the build starts from them red and never edits them (PRD-14).
+  Ref: ADR-0037.
+  - _Avoid_: "the ticket's tests" — the build's own tests are tests too;
+    an acceptance test is one named before the build.
+- **`Accept-test:` line** — the stamp line that names one acceptance test:
+  `Accept-test: <requirement id> <test pin>`. A **keyed field** of the
+  vocabulary, like `Test-tier:`, but its value after the id is a test pin
+  held to the checker's grammar, never to tokens; the id must be on the
+  ticket's `Covers:` line, an id may repeat once per test, and a ticket
+  carries at most 32 such lines. `/to-tickets` rule 8 lets it name a path.
+  Ref: ADR-0037.
+- **Test pin** — `<path>::<test-name>`, the name of one test in one file,
+  split at its first `::`: at most 200 bytes of printable ASCII and no `|`,
+  the path relative, non-empty, with no space and no `..` segment, the test
+  name non-empty and free to hold spaces. The check table's evidence pin is
+  a test pin with `@<commit>` after it. Ref: ADR-0037.
 - **Check table** — the block in a PR body that shows, per requirement the
   ticket covers, the test tier that checked it, the **result** (`pass`,
   `fail`, `skipped`) and the evidence: a `<path>::<test>@<sha>` pin, an
@@ -379,7 +398,7 @@ Grouped by the seam each term belongs to. Entry shape:
   agent harness and one for the session's own, and a model's provider is its
   agent harness's. Comparing **families** (ADR-0027) is a different and finer
   test: two models of one provider can differ in family and share a provider.
-  The verifier's walk tries another provider first. Ref: ADR-0043, PRD-13.
+  The verifier's walk tries another provider first. Ref: ADR-0044, PRD-13.
   - _Avoid_: "vendor" for the policy's word (it is the plain meaning, not the
     token), and "agent harness" — the program a model runs in.
 - **Budget** — the two ceilings a dispatched worker's whole process tree runs
@@ -623,7 +642,7 @@ Grouped by the seam each term belongs to. Entry shape:
   advisory: its verdict, the trace kind `verify.verdict`, is never the review
   a landing requires, and its verdict on a finding, `finding.verify`, is never
   a triage, so it labels nothing. Its own findings carry a `V-` id (`V-H-1`).
-  Its one gating use is PRD-10's low-risk lane. Ref: ADR-0043, PRD-13.
+  Its one gating use is PRD-10's low-risk lane. Ref: ADR-0044, PRD-13.
   - _Avoid_: "second reviewer" or "co-signer" (it signs nothing), and
     "cross-check".
 - **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
@@ -764,6 +783,20 @@ Grouped by the seam each term belongs to. Entry shape:
   body. Ref: PRD-12 (factory item), process/R128 to R134.
   - _Avoid_: "factory item" for a ticket alone — an item is any of the
     factory's records, a discovery or a PRD among them.
+- **Factory skill** — the software factory's own planning skill for an item:
+  `factory-prd` for a PRD, `factory-tickets` for tickets. It is present when
+  its `SKILL.md` exists under the user's `~/.claude/skills/<name>/`, where
+  `factory install-skill` writes it, or the project's own
+  `.claude/skills/<name>/` — no other path counts. Ref: PRD-12 (factory item),
+  process/R225, ADR-0042.
+  - _Avoid_: "factory plugin" — it is a skill a harness discovers by directory.
+- **Deferral** — a planning skill's first step in a factory project whose
+  factory skill is present: one hand-off naming that factory skill, nothing
+  published to the forge, no trace event, and the run ends. Decided from the
+  manifest's and the skill's presence alone, never by running `factory`; only
+  the operator's own message in the session lifts it. Ref: PRD-12 (factory
+  item), process/R121 to R126, ADR-0042.
+  - _Avoid_: "redirect" — the kit writes nothing to the factory; it stops.
 
 ---
 
@@ -811,7 +844,7 @@ banned word and the word to use instead.
   stamped). Use **bootstrap** for the one-shot run, or **stamp** / **copy** for
   what it does to an individual file. Except: **the dependency sense** —
   `dependency install`, `npm install`, `unpinned installs`, `install error`,
-  `installed extension`.
+  `installed extension`, `skill is not installed` (the factory's hand-off words, ADR-0042).
 - **config** — ambiguous on its own between a **policy file** (the consumer's
   to edit) and shared-layer mechanism. Use **policy file** or **shared-layer
   mechanism**, or qualify it. The unabbreviated **configuration**, in its

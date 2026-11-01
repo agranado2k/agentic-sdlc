@@ -3627,7 +3627,75 @@
 # docs/specs/policy.md R9's manifest, the kit-ci job, and
 # tests/policy.test.sh's manifest case.
 
-shared-layer: 0.102.0
+# 0.103.0 — /to-tickets defers to the factory's own ticket skill in a
+# factory project (ticket #935, PRD-12 slice 2 of D-02, factory T-72). NO
+# file joins the shared layer and none leaves, and no shared file changes
+# content besides UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — SKILL.md opens with "A factory project defers,
+# before any other step", pointing at a new FACTORY.md beside it, whose
+# fenced factory_deferral answers `defer`, `missing` or `none` from the
+# presence of .factory/project.yaml at the git top level and of
+# factory-tickets/SKILL.md under ~/.claude/skills or the project's
+# .claude/skills, opening neither and running no `factory` command; `defer`
+# prints the hand-off naming /factory-tickets and ends, publishing and
+# tracing nothing; `missing` names `factory install-skill` once and runs the
+# forge flow; only the operator's own message lifts a deferral. /retro —
+# QUESTIONS.md and SKILL.md join every ticket query on a factory ticket's
+# `ticket:T-<digits>` subject beside `ticket:#N`, counted once (#967).
+# /merge-train — SKILL.md reads the landing line's handle as `#<N>` or a
+# canonical factory ticket id through an exact filter, and its merge.land
+# and feedback lines take `ticket:<handle>`; /pr-iterate — SKILL.md's
+# feedback line takes the same handle (#965).
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
+# adapters/claude-code — hooks/hook.lib.sh's Trace-Spawn parser and
+# hooks/spawn-guard.sh accept `ticket=T-<digits>`, a canonical factory id,
+# beside `#N` and `none`, and README.md says so (#964).
+# Kit-only, never shipped: ADR-0042 and its index row, bootstrap.sh's
+# KIT_OWN naming it, the glossary's Factory skill and Deferral and its
+# `skill is not installed` exception, docs/specs/process.md R121 to R127,
+# R136 and R223 to R225, config.mjs's skill-path exemption
+# `.claude/skills/factory-tickets/`, tests/spec-skills.test.sh's factory
+# section and tests/self-host.test.sh's process/R136 assertion.
+
+# 0.104.0 — a ticket's stamp carries `Accept-test:` lines (ticket #969,
+# PRD-14 slice 1 of D-02, factory T-95). NO file joins the shared layer and
+# none leaves. Two shared files change content besides UPDATING.md:
+# scripts/vocab.sh learns a pin field, VOCAB_PIN — a keyed field whose value
+# after the requirement id is a test pin `<path>::<test-name>` held to the
+# checker's grammar (at most 200 bytes, printable ASCII, no `|`, a relative
+# path with no space and no `..` segment, a non-empty test name), several
+# lines per id, two identical lines one answer; its defaults declare
+# `accept-test` so, bounded at 32 lines, and it refuses a field named `pin`
+# and a pin field that is not keyed or declares tokens. scripts/stamp.sh
+# lifts `Accept-test:` lines with the stamp, prints them as spelled, exits 2
+# naming accept-test on an id off the ticket's Covers: line, and 5 past 32
+# lines. UPDATING.md gains its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — SKILL.md's rule 8 (no file paths in ticket
+# bodies) gains its second exception, the `Accept-test:` line, and its quiz
+# step checks each such line with `sh scripts/vocab.sh 'Accept-test: <id>
+# <path>::<test-name>'` before the human sees the draft and shows them beside
+# the Test-tier: lines. /implement — STAMP.md gains a section for a
+# canonical factory ticket id: read through `factory show`, built on the
+# claim branch, moved to build as the branch's first commit and to review
+# once the PR exists, `ticket:T-<digits>` subjects and a T- landing line with
+# no closing keyword, every factory gate left to the operator; SKILL.md,
+# CHECK-TABLE.md and DISPATCHED-REVIEW.md point there; /review-pr's and
+# /pr-iterate's CHECK-TABLE.md take a factory ticket's side from the stamp
+# reader (#965, factory T-96). Wiring (9b): none. Templates (9c): none. Config (9d):
+# scripts/vocab.config.sh declares `accept-test` in VOCAB_FIELDS and
+# VOCAB_KEYED, a new VOCAB_PIN='accept-test', and `accept-test=32` in
+# VOCAB_BOUNDS — a consumer's own policy file that predates this takes them by
+# hand. Adapter (9e): none.
+# Kit-only, never shipped: ADR-0037's amendment and its index row, the new
+# docs/specs/acceptance.md (R1 to R7) and bootstrap.sh's KIT_OWN naming it,
+# docs/specs/process.md R43 modified and R220 and R221, the glossary's
+# Acceptance test, `Accept-test:` line and Test pin; with #965, ADR-0043 and
+# its index row, bootstrap.sh's KIT_OWN naming it, docs/specs/process.md
+# R228 to R239.
+
+shared-layer: 0.104.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

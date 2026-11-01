@@ -2877,3 +2877,31 @@ makes the project a factory project. The first build read a guards-policy
 date outside a factory project; the coordinator's ruling on PRD-14 §8
 dropped it, so a repository with no manifest prints nothing. The ADR was
 built as 0040 and renumbered at release, after 0.101.0 took that number.
+
+## 2026-11-01 — /to-tickets defers to the factory's own ticket skill
+
+PRD-12 slice 2 of D-02 (#935, factory T-72; released as 0.103.0,
+ADR-0042). `/to-tickets` decides a deferral before any other step, from two
+files' presence: `.factory/project.yaml` at the git top level and
+`factory-tickets/SKILL.md` under the user's or the project's
+`.claude/skills`. With both it hands off naming `/factory-tickets` and
+publishes nothing; with the manifest alone it names `factory install-skill`
+once and runs as before. The check is a fenced function in `FACTORY.md`
+beside the skill, and the suite runs that fence against fixture
+repositories, so the document's own code is what is tested. The ADR was
+built as 0040, renumbered 0041 after 0.101.0, and 0042 at release after
+0.102.0; the release waited behind 0.102.0 (ADR-0033).
+
+## 2026-11-01 — a ticket's stamp carries `Accept-test:` lines
+
+PRD-14 slice 1 of D-02 (#969, factory T-95; released as 0.104.0, ADR-0037
+amended in place). The vocabulary checker gains a pin field: `Accept-test:
+<id> <path>::<test-name>`, a keyed field whose value is held to a test-pin
+grammar the checker owns (200 bytes, printable ASCII, no `|`, a relative
+path with no space or `..`), several lines per id. The stamp reader lifts
+the lines, holds each id to the ticket's own `Covers:` line and bounds them
+at 32. `/to-tickets` rule 8 lets the line name a path. A new living spec,
+`docs/specs/acceptance.md`, opens the area with R1 to R7; the acceptance
+guard is slice 2. Built ahead of its slot and held behind 0.102.0 and
+0.103.0 (ADR-0033); the skill stayed under its byte ceiling, 34,940 of
+35,000, so no sidecar.

@@ -657,6 +657,70 @@ stamp_under "$SCRATCH/nobound.config.sh"
 expect_status 5 "process/R43: a policy that publishes no bound: the reader's own 8 holds, even for Test-tier:"
 
 # ---------------------------------------------------------------------------
+banner "Accept-test: lines — lifted, checked against Covers:, printed as spelled (acceptance/R5, R6)"
+# ---------------------------------------------------------------------------
+# UC1: issue #990 carries two Covers: ids, a Test-tier: line each, and two
+# Accept-test: lines for report/R3 — printed as spelled with the others.
+UC1A='Prose.\nTier: implementer\nCovers: report/R3, report/R4\nTest-tier: report/R3 suite\nTest-tier: report/R4 manual\nAccept-test: report/R3 tests/report.test.sh::totals by area\nAccept-test: report/R3 tests/report.test.sh::empty window prints zero\nMore prose.\n'
+body "$UC1A"
+stamp 990
+expect_resolved "$(printf 'Tier: implementer\nCovers: report/R3, report/R4\nTest-tier: report/R3 suite\nTest-tier: report/R4 manual\nAccept-test: report/R3 tests/report.test.sh::totals by area\nAccept-test: report/R3 tests/report.test.sh::empty window prints zero')" \
+	"acceptance/R5: the UC1 ticket's Accept-test: lines are lifted, checked and printed as spelled"
+body 'Tier: implementer\nCovers: report/R3\naccept test: report/R3 tests/a.sh::x\nACCEPT_TEST: report/R3 tests/b.sh::y\n'
+stamp 990
+expect_resolved "$(printf 'Tier: implementer\nCovers: report/R3\naccept test: report/R3 tests/a.sh::x\nACCEPT_TEST: report/R3 tests/b.sh::y')" \
+	"acceptance/R5: 'accept test:' and 'ACCEPT_TEST:' are lifted as the checker reads them"
+# UC1 2a: a space in the path — the checker refuses it, and the reader exits
+# 2 naming accept-test, the line never printed.
+body 'Tier: implementer\nCovers: report/R3\nAccept-test: report/R3 tests/report test.sh::totals\n'
+stamp 990
+refused "acceptance/R5: a space in the pin's path (UC1 2a)" accept-test "report test.sh"
+body "Tier: implementer\nCovers: report/R3\nAccept-test: report/R3 tests/a.sh::x';touch PWN;'\n"
+stamp 990
+expect_status 0 "acceptance/R5: a quote in the test name is pin text, not a command — accepted, never run"
+no_pwn "acceptance/R5: a quoted payload in a test name"
+body 'Tier: implementer\nCovers: report/R3\nAccept-test: report/R3 /etc/passwd::x\n'
+stamp 990
+refused "acceptance/R5: a leading / (UC1 2d)" accept-test "/etc/passwd"
+# UC1 2b: an id off the Covers: line — exit 2 naming accept-test.
+body 'Tier: implementer\nCovers: report/R3, report/R4\nAccept-test: report/R9 tests/report.test.sh::totals\n'
+stamp 990
+refused "acceptance/R6: an id not on the Covers: line (UC1 2b)" accept-test "report/R9"
+body 'Tier: implementer\nAccept-test: report/R3 tests/report.test.sh::totals\n'
+stamp 990
+refused "acceptance/R6: an Accept-test: line on a ticket with no Covers: line" accept-test "report/R3"
+body 'Tier: implementer\nCovers: none (release)\nAccept-test: report/R3 tests/report.test.sh::totals\n'
+stamp 990
+refused "acceptance/R6: an Accept-test: line on a ticket that covers none" accept-test "report/R3"
+body 'Tier: implementer\nCovers: report/R3\nAccept-test: report/R30 tests/a.sh::x\n'
+stamp 990
+refused "acceptance/R6: an id that merely starts like a covered one" accept-test "report/R30"
+# A consumer whose policy predates the field: the line is undeclared, so it
+# is dropped and named, never printed unchecked.
+body 'Tier: implementer\nCovers: report/R3\nAccept-test: report/R3 tests/a.sh::x\n'
+stamp_under "$SCRATCH/nodomain.config.sh"
+expect_status 0 "acceptance/R5: under a policy that predates accept-test, the reader still reads the Tier: line"
+expect_out_lacks "Accept-test" "acceptance/R5: …and prints no unchecked Accept-test: line"
+expect_err_has "the accept-test line names a field this project's policy does not declare"
+
+# ---------------------------------------------------------------------------
+banner "The bound holds Accept-test: lines at 32 (process/R43)"
+# ---------------------------------------------------------------------------
+accepts() { awk -v n="$1" 'BEGIN { print "Tier: implementer"; print "Covers: report/R3"; for (i = 1; i <= n; i++) printf "Accept-test: report/R3 tests/a.sh::case %d\n", i }'; }
+body "$(accepts 32)\n"
+stamp 990
+expect_status 0 "process/R43: 32 Accept-test: lines are within the bound — checked, exit 0"
+body "$(accepts 33)\n"
+stamp 990
+expect_status 5 "process/R43: 33 Accept-test: lines are past the bound: exit 5"
+[ -z "$T_OUT" ] && pass "process/R43: …nothing on stdout" || fail "process/R43: …stdout should be empty"
+expect_err_has "33 accept-test lines"
+body "$(accepts 40)\n"
+stamp 990
+expect_status 5 "process/R43: 40 Accept-test: lines (UC1 2c): exit 5, a stop"
+expect_err_lacks "tests/a.sh"
+
+# ---------------------------------------------------------------------------
 banner "Exit 4 — the fetch failed: never read as a missing line"
 # ---------------------------------------------------------------------------
 body 'Tier: implementer\n' 1
