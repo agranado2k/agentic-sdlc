@@ -3606,7 +3606,28 @@
 # scripts/trace.kit.config.sh's TRACE_FACTORY_IDS='ticket=T prd=PRD', and
 # tests/trace.test.sh section 21b that holds them.
 
-shared-layer: 0.101.0
+# 0.102.0 — in a factory project, a value the factory defines is read from
+# its manifest (ticket #959, PRD-12 slice 4 of D-02, factory T-88). NO file
+# joins the shared layer and none leaves. One shared file changes content
+# besides UPDATING.md: scripts/policy.sh counts .factory/project.yaml in its
+# judging set, and answers a fourth question, `value <name> [--base <ref>]`:
+# where the base commit or HEAD holds the manifest, `<name> <value>` or
+# `<name> unset` from the manifest's key, read at the base through the
+# reader's fetch (absent there or out of shape, `fail-closed missing|invalid
+# .factory/project.yaml`, exit 3) or from the working tree with no base;
+# elsewhere nothing printed, exit 0, no kit file read. One value today,
+# acceptance-tests-since (the manifest's acceptance_tests_since). UPDATING.md
+# gains its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none. Config (9d):
+# none. Adapter (9e): none.
+# Kit-only, never shipped: ADR-0041 and its index row (and ADR-0039's row
+# naming it), bootstrap.sh's KIT_OWN and KIT_ONLY lists naming it and
+# tests/factory-config.test.sh, docs/specs/process.md R226 and R227,
+# docs/specs/policy.md R9's manifest, the kit-ci job, and
+# tests/policy.test.sh's manifest case.
+
+shared-layer: 0.102.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
