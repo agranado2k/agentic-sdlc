@@ -1811,6 +1811,41 @@ for want in '"outcome":"pass"' '"provider":"openai"' '"rung":"cross-provider"'; 
 	esac
 done
 
+# The no-lens verdict is no review: a verifier that ran no lens is blocked,
+# never a pass, though it raised nothing.
+STUB_PR=54
+export STUB_PR
+cat >"$SCRATCH/v-nolens.md" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: BLOCKED — no lens ran; this is not a review
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+
+#### HIGH
+— none found.
+
+#### MEDIUM
+— none found.
+
+#### LOW
+— none found.
+
+## Axis 2 — Behavior (for a human)
+
+✅ SPECIFIED    b.md gains the two lines the ticket named.
+EOF
+broker 54 "$SCRATCH/v-nolens.md" --verifier --rung cross-provider --provider openai
+expect_status 0 "a verifier's no-lens report lands"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#54'
+case $(printf '%s\n' "$T_OUT" | grep -F '"kind":"verify.verdict"') in
+*'"outcome":"blocked"'*'"reason":"no lens ran"'* | *'"reason":"no lens ran"'*'"outcome":"blocked"'*) pass "runtime/R211: a no-lens verifier report records blocked, reason no lens ran — never a pass" ;;
+*) fail "runtime/R211: the no-lens verifier report did not record blocked with its reason: $T_OUT" ;;
+esac
+expect_out_lacks '"kind":"review.verdict"' "…and no review.verdict"
+
 # ---------------------------------------------------------------------------
 banner "V3. No rung, an unknown rung, or no provider: exit 65, nothing posted or recorded (runtime/R227)"
 # ---------------------------------------------------------------------------
