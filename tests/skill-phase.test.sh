@@ -448,6 +448,34 @@ for bad in 0587 abc '#' 1234567 '587 x'; do
 		fail "--ticket '$bad' exited $T_STATUS"
 done
 
+# A factory ticket id is a ticket too (runtime/R237, R238, #964): the
+# canonical id — `T-`, 2 to 6 digits, a leading zero only in the two-digit
+# form — rides the Trace-Spawn line as it was given; any other spelling is
+# refused, exit 2, before anything is staged.
+spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /tdd --tier implementer --ticket T-07 --prompt 'build it' --dry-run
+p=$(dry_prompt)
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$p" | sed -n 2p)" = "Trace-Spawn: tier=implementer domain=none skill=tdd ticket=T-07" ] &&
+	pass "--ticket T-07 writes ticket=T-07 on the Trace-Spawn line" ||
+	fail "--ticket T-07: exit $T_STATUS, line 2 '$(printf '%s\n' "$p" | sed -n 2p)': $T_ERR"
+spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /tdd --tier implementer --ticket T-123456 --prompt 'build it' --dry-run
+[ "$T_STATUS" = 0 ] && [ "$(dry_prompt | sed -n 2p)" = "Trace-Spawn: tier=implementer domain=none skill=tdd ticket=T-123456" ] &&
+	pass "--ticket T-123456, six digits, is a factory id too" ||
+	fail "--ticket T-123456: exit $T_STATUS: $T_ERR"
+for bad in T-7 07 T-07x T-007 T-1234567 t-07 '#T-07' T-; do
+	spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh /tdd --ticket "$bad" --prompt 'x' --dry-run
+	[ "$T_STATUS" = 2 ] && pass "--ticket '$bad' is refused (exit 2): not an issue number nor a canonical factory id" ||
+		fail "--ticket '$bad' exited $T_STATUS"
+done
+# Before anything is staged: a review dispatch that would hand back (exit 3)
+# and stage its prompt refuses the bad id with no staged review.
+_st964="$(git -C "$STUBTREE" rev-parse --absolute-git-dir 2>/dev/null)/skill-review"
+[ "$_st964" = /skill-review ] && _st964="$STUBTREE/.no-git-dir"
+rm -rf "$_st964"
+spawn_dispatch TRACE_RUN=$RUN587 sh scripts/skill-dispatch.kit.sh review-pr --tier reviewer --ticket T-7 --set BRANCH=HEAD --set BASE=HEAD --prompt 'spec'
+[ "$T_STATUS" = 2 ] && [ ! -e "$_st964" ] &&
+	pass "a review dispatch with --ticket T-7 exits 2 and stages nothing" ||
+	fail "a review dispatch with --ticket T-7 exited $T_STATUS, staged: $(ls "$_st964" 2>/dev/null)"
+
 # runtime/R2.
 # INSIDE A DISPATCHED WORKER (#743). scripts/agent-dispatch.sh opens the
 # worker's run with the trace's `begin --detached` (#746) and hands it down

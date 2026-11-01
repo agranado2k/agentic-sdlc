@@ -4729,6 +4729,35 @@ stop474 "$SCRATCH/spawn-627.jsonl"
 	pass "a prompt opening with the Trace-Spawn line, no run handed, is attributed (#627)" ||
 	fail "a Trace-Spawn first line: exit $T_STATUS, '$STOP'"
 
+# A factory ticket id rides the line as an issue number does (runtime/R240,
+# #964): `ticket=T-07` relates the stop to `ticket:T-07`, under a trace policy
+# that pairs `ticket` with the factory's `T` prefix (ADR-0040). A spelling
+# that is not the canonical id — `T-7`, `T-007` — is no line: unattributed.
+new_trace
+P964="$SCRATCH/policy-964.sh"
+printf "TRACE_DIR='%s'\nTRACE_NUMBERED_TYPES='ticket'\nTRACE_FACTORY_IDS='ticket=T'\n" "$TDIR" >"$P964"
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-964.jsonl" "Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=none skill=implement ticket=T-07\\\\nBuild it."
+stop474 "$SCRATCH/spawn-964.jsonl" TRACE_CONFIG="$P964"
+[ "$T_STATUS" = 0 ] && [ "$(str "$STOP" tier)" = implementer ] &&
+	pass "a Trace-Spawn line naming ticket=T-07 attributes the stop" ||
+	fail "a ticket=T-07 line: exit $T_STATUS, '$STOP', stderr '$T_ERR'"
+case " $(str "$STOP" related) " in
+*" ticket:T-07 "*) pass "…and relates it to ticket:T-07, as ticket=#N relates ticket:#N" ;;
+*) fail "a ticket=T-07 stop's related is '$(str "$STOP" related)', want ticket:T-07 among it" ;;
+esac
+prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/spawn-964n.jsonl" "Trace-Spawn: tier=implementer domain=none skill=implement ticket=T-07\\\\nBuild it."
+stop474 "$SCRATCH/spawn-964n.jsonl" TRACE_CONFIG="$P964"
+[ "$T_STATUS" = 0 ] && [ "$(data_of "$STOP" ticket)" = T-07 ] &&
+	pass "with no run handed, a factory id is the stop's data.ticket, as #N is" ||
+	fail "a ticket=T-07 stop with no run carries no data.ticket T-07: '$STOP'"
+for bad964 in T-7 T-007 T-07x t-07 'T-'; do
+	prompt474 "$SCRATCH/sub.jsonl" "$SCRATCH/bad-964.jsonl" "Trace-Run: $WT474\\\\nTrace-Spawn: tier=implementer domain=none skill=implement ticket=$bad964\\\\nBuild it."
+	stop474 "$SCRATCH/bad-964.jsonl" TRACE_CONFIG="$P964"
+	[ "$(str "$STOP" tier)" = unattributed ] && [ "$(str "$STOP" related)" = "session:$SESSION" ] &&
+		pass "a line naming ticket=$bad964 attributes nothing: not a canonical factory id" ||
+		fail "a ticket=$bad964 line gave tier '$(str "$STOP" tier)' related '$(str "$STOP" related)'"
+done
+
 # ---------------------------------------------------------------------------
 banner "51. A spawn whose prompt carries no well-formed Trace-Spawn line is refused (#627)"
 # ---------------------------------------------------------------------------
@@ -4787,6 +4816,9 @@ for bad627 in \
 	'Trace-Spawn: domain=none tier=implementer skill=implement ticket=#627' \
 	'Trace-Spawn: tier=implementer domain=none skill=$(touch pwned-627) ticket=#627' \
 	'Trace-Spawn: tier=implementer domain=none skill=implement ticket=627' \
+	'Trace-Spawn: tier=implementer domain=none skill=implement ticket=T-7' \
+	'Trace-Spawn: tier=implementer domain=none skill=implement ticket=T-007' \
+	'Trace-Spawn: tier=implementer domain=none skill=implement ticket=T-07x' \
 	"Trace-Run: $SG_RUN\\nGo.\\n$SG_LINE" \
 	"Trace-Run: not-a-run\\n$SG_LINE" \
 	"Go.\\n$SG_LINE" \
@@ -4804,6 +4836,8 @@ done
 for good627 in \
 	"Trace-Run: $SG_RUN\\n$SG_LINE\\nBuild it." \
 	"Trace-Run: $SG_RUN $SG_RUN\\nTrace-Spawn: tier=planner domain=self-implemented skill=review-pr ticket=none\\nReview it." \
+	"Trace-Run: $SG_RUN\\nTrace-Spawn: tier=implementer domain=none skill=implement ticket=T-07\\nBuild it." \
+	"Trace-Spawn: tier=implementer domain=none skill=implement ticket=T-123456\\nBuild it." \
 	"$SG_LINE\\nBuild it." \
 	"$SG_LINE"; do
 	new_trace

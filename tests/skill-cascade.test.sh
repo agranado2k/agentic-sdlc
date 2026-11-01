@@ -1150,4 +1150,119 @@ grep -q -- '--restart' "$ROOT/.agents/skills/implement/CASCADE.md" 2>/dev/null &
 unset FIXTURE_ORACLE_GREEN
 write_policy 'stub:model-cheap'
 
+# ---------------------------------------------------------------------------
+banner "11. A factory ticket id rides the cascade and its review (runtime/R238, R239, #964)"
+# ---------------------------------------------------------------------------
+# A ticket planned in the factory has no issue number: its id, `T-07`, is the
+# ticket. The cascade writes it where it writes `#<N>` — the rung's
+# Trace-Spawn line, the run's subject, the author record — and a review
+# dispatched with `--ticket T-07` takes that record, and no other ticket's.
+# Its stamp is the factory's: `sh scripts/stamp.sh T-07`, through a stand-in
+# `factory` here, with the --ticket-file as the ticket's text only — the
+# stand-in tracker the issue path uses is never built, and a `gh` that fails
+# if called proves nothing reached for one.
+cat >"$STUBTREE/scripts/agents.kit.stub.config.sh" <<CFG
+AGENT_HARNESSES='stub'
+AGENT_HARNESS_STUB_CMD='$STUB --model-flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_PLANNER='opus'
+AGENT_TIER_IMPLEMENTER='opus'
+AGENT_TIER_MECHANICAL='sonnet'
+AGENT_TIER_REVIEWER='sonnet'
+AGENT_TIER_REVIEWER_FALLBACK='opus'
+AGENT_CASCADE_MECHANICAL='sonnet'
+CFG
+_tc964=$(cat "$STUBTREE/scripts/trace.kit.config.sh")
+printf "TRACE_NUMBERED_TYPES='ticket'\nTRACE_FACTORY_IDS='ticket=T'\n" >>"$STUBTREE/scripts/trace.kit.config.sh"
+mkdir -p "$STUBTREE/.factory" "$SCRATCH/fbin964"
+: >"$STUBTREE/.factory/project.yaml"
+cat >"$SCRATCH/fbin964/factory" <<STUB964
+#!/bin/sh
+printf '%s\n' "\$*" >>"$SCRATCH/factory-calls-964"
+cat "$SCRATCH/factory-out-964"
+STUB964
+cat >"$SCRATCH/fbin964/gh" <<STUB964
+#!/bin/sh
+printf '%s\n' "\$*" >>"$SCRATCH/gh-calls-964"
+exit 1
+STUB964
+chmod +x "$SCRATCH/fbin964/factory" "$SCRATCH/fbin964/gh"
+printf 'Tier: mechanical\n' >"$SCRATCH/factory-out-964"
+: >"$SCRATCH/factory-calls-964"
+: >"$SCRATCH/gh-calls-964"
+_path964=$PATH
+PATH="$SCRATCH/fbin964:$PATH"
+export PATH
+
+fresh_wt
+rm -rf "$TRACE_DIR_T"
+FIXTURE_ORACLE_GREEN=1
+export FIXTURE_ORACLE_GREEN
+cascade_keep "$T_ORACLE" --ticket T-07
+[ "$T_STATUS" = 3 ] && grep -qx 'Trace-Spawn: tier=mechanical domain=none skill=implement ticket=T-07' "$(state_dir)/prompt" &&
+	pass "the handed-back rung's prompt names ticket=T-07 on its Trace-Spawn line" ||
+	fail "the rung's prompt under --ticket T-07: exit $T_STATUS, '$(sed -n 1,2p "$(state_dir)/prompt" 2>/dev/null)': $T_ERR"
+spawn_in_session sonnet
+cascade_keep "$T_ORACLE" --ticket T-07 --rung-done
+unset FIXTURE_ORACLE_GREEN
+_gd964=$(cd "$WT" && git rev-parse --absolute-git-dir)
+[ "$T_STATUS" = 0 ] && grep -qx 'ticket=T-07' "$_gd964/skill-cascade-author" 2>/dev/null &&
+	pass "a passed rung writes ticket=T-07 in the author record" ||
+	fail "the author record under --ticket T-07: exit $T_STATUS, '$(cat "$_gd964/skill-cascade-author" 2>/dev/null)': $T_ERR"
+cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep '"kind":"run.start"' | grep -q '"subject":"ticket:T-07"' &&
+	pass "…and the cascade's run is on ticket:T-07, the trace's factory-id subject" ||
+	fail "no run.start on ticket:T-07: $(cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep run.start)"
+cat "$TRACE_DIR_T"/*/*.jsonl "$TRACE_DIR_T"/*.jsonl 2>/dev/null | grep -q 'ticket:#' &&
+	fail "an event under --ticket T-07 was written on an issue subject" ||
+	pass "…and no event names an issue subject"
+
+: >"$SCRATCH/factory-calls-964"
+review opus "$T_MECH_CASC" --ticket T-07
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = opus ] &&
+	pass "a review dispatched with --ticket T-07 takes the T-07 record: the Sonnet rung gets the Opus reviewer" ||
+	fail "the T-07 review exited $T_STATUS with '$T_OUT': $T_ERR"
+grep -qx 'stamp T-07' "$SCRATCH/factory-calls-964" &&
+	pass "…its stamp read through 'factory stamp T-07', the scripts/stamp.sh factory path" ||
+	fail "the T-07 review never ran 'factory stamp T-07': '$(cat "$SCRATCH/factory-calls-964")'"
+[ ! -s "$SCRATCH/gh-calls-964" ] && pass "…and no tracker was called" ||
+	fail "the T-07 review called the tracker: $(cat "$SCRATCH/gh-calls-964")"
+for _other964 in 7 T-08; do
+	review opus "$T_MECH_CASC" --ticket "$_other964"
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] &&
+		pass "a review dispatched with --ticket $_other964 refuses the T-07 record" ||
+		fail "a review with --ticket $_other964 took the T-07 record: exit $T_STATUS, '$T_OUT': $T_ERR"
+done
+_ra_gd=$(cd "$WT" && git rev-parse --absolute-git-dir)
+printf 'model=sonnet\nticket=#682\n' >"$_ra_gd/skill-cascade-author"
+review opus "$T_MECH_CASC" --ticket 682
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = opus ] &&
+	pass "an issue number's record is still taken by its own --ticket, unchanged" ||
+	fail "the #682 record under --ticket 682: exit $T_STATUS, '$T_OUT': $T_ERR"
+
+# runtime/R239: the factory's stamp sizes the dispatch, the file is text only.
+printf 'Tier: planner\n' >"$SCRATCH/factory-out-964"
+: >"$SCRATCH/factory-calls-964"
+: >"$SCRATCH/gh-calls-964"
+t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --ticket T-07 --ticket-file "$T_IMPL" --prompt 'do the ticket' --dry-run
+case "$T_ERR" in
+*"tier 'planner'"*) pass "--ticket T-07 --ticket-file: the factory's stamp sizes the dispatch, not the file's" ;;
+*) fail "the T-07 dry run was not sized by the factory's stamp: exit $T_STATUS: $T_ERR" ;;
+esac
+grep -qx 'stamp T-07' "$SCRATCH/factory-calls-964" && [ ! -s "$SCRATCH/gh-calls-964" ] &&
+	pass "…read by 'factory stamp T-07', no tracker called" ||
+	fail "factory calls '$(cat "$SCRATCH/factory-calls-964")', gh calls '$(cat "$SCRATCH/gh-calls-964")'"
+t_exec env -C "$STUBTREE" AGENT_HARNESS_SELF=stub sh scripts/skill-dispatch.kit.sh \
+	implement --ticket 964 --ticket-file "$T_IMPL" --prompt 'do the ticket' --dry-run
+case "$T_ERR" in
+*"tier 'implementer'"*) pass "--ticket 964 --ticket-file: the file's stamp sizes it, as before" ;;
+*) fail "the issue-number dry run lost the file's stamp: exit $T_STATUS: $T_ERR" ;;
+esac
+
+PATH=$_path964
+export PATH
+rm -rf "$STUBTREE/.factory"
+printf '%s\n' "$_tc964" >"$STUBTREE/scripts/trace.kit.config.sh"
+write_policy 'stub:model-cheap'
+
 t_done "skill cascade"

@@ -11,7 +11,7 @@
 # WHAT IT WANTS is the line subagent-stop.sh reads, held by the same parser
 # (hook.lib.sh, hook_spawn_in), so it refuses exactly the prompts whose stop
 # would be `unattributed`:
-#   Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|none>
+#   Trace-Spawn: tier=<tier> domain=<domain|none> skill=<skill> ticket=<#N|T-<digits>|none>
 # as the prompt's second line under a well-formed `Trace-Run: <run id>
 # [<parent run id>]` first line, or as its first line when the session has no
 # run open to hand over. Whether a run is open is not asked: the payload's cwd
@@ -72,5 +72,5 @@ fi
 
 hook_deny spawn-guard "spawn-guard refused a spawn whose prompt carries no well-formed Trace-Spawn line"
 
-echo "spawn-guard: refused — this spawn's prompt carries no well-formed Trace-Spawn line (or its first line is a Trace-Run line that is not well-formed, which hides the line under it), so its subagent's stop would be unattributed. Open the prompt with: Trace-Spawn: tier=<planner|implementer|mechanical|reviewer> domain=<domain|none> skill=<skill> ticket=<#N|none> — exactly four fields, one space apart, a skill and a domain [a-z][a-z0-9-]*; under a 'Trace-Run: <run id> [<parent run id>]' first line when you hand the subagent a run, as the first line itself when you have none." >&2
+echo "spawn-guard: refused — this spawn's prompt carries no well-formed Trace-Spawn line (or its first line is a Trace-Run line that is not well-formed, which hides the line under it), so its subagent's stop would be unattributed. Open the prompt with: Trace-Spawn: tier=<planner|implementer|mechanical|reviewer> domain=<domain|none> skill=<skill> ticket=<#N|T-<digits>|none> — exactly four fields, one space apart, a skill and a domain [a-z][a-z0-9-]*; under a 'Trace-Run: <run id> [<parent run id>]' first line when you hand the subagent a run, as the first line itself when you have none." >&2
 exit 2
