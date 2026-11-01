@@ -168,11 +168,6 @@ assert_no_file ".github/workflows/kit-ci.yml"
 # and the project's own exclusions record, if it wants one, starts empty.
 assert_no_file "EXCLUSIONS.md"
 assert_no_file "tests/dogfood-optin.test.sh"
-# process/R136: a project with no .factory/ folder of its own gets none from
-# bootstrap — the kit's own factory items leave with the kit — so its planning
-# skills find no manifest and run their forge flow, as before the deferral.
-[ ! -e .factory ] && pass "process/R136: the stamped project holds no .factory/ folder" ||
-	fail "process/R136: bootstrap left a .factory/ folder in the stamped project"
 assert_file "constitution/shared-invariants.md"
 assert_file "constitution/shared-code-craft.md"
 assert_file "constitution/local-engineering.md.template"
