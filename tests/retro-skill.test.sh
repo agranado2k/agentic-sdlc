@@ -1764,7 +1764,8 @@ ba_ctx "$ba_kit" 2026-10-14T00:00:00Z 0.83.0 m-one
 	fail "the before-and-after fixture does not verify — the spans would be read over a damaged trace"
 if [ -n "$ba_list" ]; then
 	bl=$(ba_run "$ba_drop" "$ba_list" | sort -n | tr '\n' ' ')
-	assert_equal "process/R25: the listing names the tickets landed in the window or the one before it" "61 70 " "$bl"
+	[ "$bl" = "61 70 " ] && pass "process/R25: the listing names the tickets landed in the window or the one before it" ||
+		fail "process/R25: the listing printed '$bl', not '61 70 '"
 fi
 if [ -n "$ba_check" ]; then
 	ba_assert() {
@@ -1868,5 +1869,79 @@ if [ -n "$q2rec" ]; then
 		pass "process/R37: question 2's span prints one row per review area of the shipped lens-slice policy, six" ||
 		fail "process/R37: question 2's span printed: $(printf '%s' "$q2out" | tr '\n' ';')"
 fi
+
+# ---------------------------------------------------------------------------
+banner "20. Every join on a ticket takes a factory id beside an issue number (process/R242, #967)"
+# ---------------------------------------------------------------------------
+# A factory project names a ticket by its id, `ticket:T-90`, where an issue
+# tracker's names it `ticket:#41` (ADR-0040). Each span QUESTIONS.md carries
+# that joins or counts tickets RUNS here over one export holding both: the
+# flow span, the before-and-after listing and check, and question 8's
+# operator-verdict count. Each counts both tickets, once each, and names the
+# factory one as written. The fixtures are raw day-file lines, as sections 17
+# and 18 write theirs: the shipped trace policy names no factory prefix, and
+# export reads what is on disk.
+fx_flow="$SCRATCH/factory-flow.retro"
+fl_ev "$fx_flow" 2026-10-01T09:00:00Z ticket.start 'ticket:#41' read '' toil
+fl_ev "$fx_flow" 2026-10-01T10:00:00Z merge.land 'pr:#51' landed 'ticket:#41'
+fl_ev "$fx_flow" 2026-10-02T09:00:00Z ticket.start 'ticket:T-90' read '' toil
+fl_ev "$fx_flow" 2026-10-02T10:00:00Z ticket.start 'ticket:T-90' resumed '' toil
+fl_ev "$fx_flow" 2026-10-02T10:15:00Z pr.open 'pr:#52' opened 'ticket:T-90 branch:feat/t-90-x'
+fl_ev "$fx_flow" 2026-10-02T11:00:00Z pr.iterate 'pr:#52' green
+fl_ev "$fx_flow" 2026-10-02T11:30:00Z merge.land 'pr:#52' landed 'ticket:T-90'
+fl_ev "$fx_flow" 2026-10-03T09:00:00Z ticket.start 'ticket:T-91' read '' feature
+fl_ev "$fx_flow" 2026-10-03T09:10:00Z pr.open 'pr:#53' opened 'ticket:T-91 branch:feat/t-91-y'
+fl_ev "$fx_flow" 2026-10-03T10:00:00Z merge.land 'pr:#53' landed
+if [ -n "$flspan" ]; then
+	fxout=$(fl_run "$fx_flow")
+	for row in 'landing pr:#51 ticket:#41 lead 1h00m wait n/a' 'landing pr:#52 ticket:T-90 lead 2h30m wait 0h30m' \
+		'landing pr:#53 ticket:T-91 lead 1h00m wait n/a' 'toil: 2 of 3 landed'; do
+		printf '%s\n' "$fxout" | grep -qxF "$row" && pass "process/R242: the flow span joins both spellings: '$row'" ||
+			fail "process/R242: the flow span did not print '$row'; it printed: $(printf '%s' "$fxout" | tr '\n' ';')"
+	done
+fi
+# Before and after: section 18's fixture, its ticket 61 a factory ticket, T-61.
+fx_ba="$SCRATCH/factory-ba.retro"
+mkdir -p "$fx_ba/events"
+for f in "$ba_drop"/events/*.jsonl; do sed 's/"ticket:#61"/"ticket:T-61"/' "$f" >"$fx_ba/events/${f##*/}"; done
+fx_tf="$SCRATCH/factory-ba-targets"
+printf '%s\n' 'T-61 Tier: implementer' 'T-61 Targets: kind=finding.raise data.agent=security data.severity=high' \
+	'70 targets:  kind=finding.raise data.agent=security' 'T-62 stamp-exit 2' >"$fx_tf"
+fx_ba_run() {
+	_fb_span=$(printf '%s\n' "$1" | sed -e 's/<YYYY-MM-DD>/2026-10-11/g' -e 's|<targets-file>|"$BA_TF"|g')
+	( cd "$ROOT" && BA_TF=$fx_tf TRACE_DIR="$fx_ba" TRACE_QUIET=1 sh -c "$_fb_span" 2>/dev/null )
+}
+if [ -n "$ba_list" ]; then
+	fxl=$(fx_ba_run "$ba_list" | sort | tr '\n' ' ')
+	[ "$fxl" = "70 T-61 " ] && pass "process/R242: the listing names a factory ticket by its id beside an issue's number" ||
+		fail "process/R242: the listing printed '$fxl', not '70 T-61 '"
+fi
+if [ -n "$ba_check" ]; then
+	fxc=$(fx_ba_run "$ba_check")
+	for row in 'ticket:T-61 security/high: 2.00 → 0.33 per PR' 'ticket:#70 security: pending — its after window is still open' \
+		'ticket:T-62: stamp not read — scripts/stamp.sh exit 2'; do
+		printf '%s\n' "$fxc" | grep -qxF "$row" && pass "process/R242: the before-and-after check prints '$row'" ||
+			fail "process/R242: the before-and-after check did not print '$row'; it printed: $(printf '%s' "$fxc" | tr '\n' ';')"
+	done
+fi
+# Question 8's operator-verdict count: a factory ticket overridden on both of
+# its writes is one override, as an issue's is — the latest write per subject.
+fx_q8="$SCRATCH/factory-q8.retro"
+for w in '#41' 'T-90' 'T-90'; do
+	ba_ev "$fx_q8" 2026-10-02T09:00:00Z ticket.write ",\"subject\":\"ticket:$w\",\"tier\":\"planner\",\"outcome\":\"written\",\"reason\":\"fixture\",\"data\":{\"tier_proposed\":\"implementer\",\"confidence\":\"low\"}"
+done
+if [ -n "$v8" ]; then
+	[ "$(vcount "$fx_q8" "$v8")" = 2 ] && pass "process/R242: question 8 counts an issue's override and a factory ticket's, once each" ||
+		fail "process/R242: question 8's span printed '$(vcount "$fx_q8" "$v8")' over one issue and one factory ticket overridden, not 2"
+fi
+# The joins' prose names both spellings, and a factory ticket counts once.
+case "$(sed -n '1,/^## 1\./p' "$SIDECAR_ABS" | flat)" in
+*'`ticket:T-<digits>`'*'counted once'*) pass "process/R242: QUESTIONS.md's joins name a factory ticket's subject, counted once" ;;
+*) fail "process/R242: QUESTIONS.md's opening joins do not name \`ticket:T-<digits>\` and say it is counted once" ;;
+esac
+case "$(sed -n '/^## Procedure/,/^## Routing/p' "$SKILL_ABS" | flat)" in
+*'`ticket:T-<digits>`'*) pass "process/R242: SKILL.md's export step joins on a factory ticket's subject too" ;;
+*) fail "process/R242: SKILL.md's export step names no \`ticket:T-<digits>\` join" ;;
+esac
 
 t_done "/retro contract"
