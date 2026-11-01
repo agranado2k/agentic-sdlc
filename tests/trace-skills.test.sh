@@ -854,9 +854,9 @@ n_fb=$(printf '%s\n' "$mt_fb" | grep -c . | tr -d ' ')
 printf '%s\n' "$mt_fb" | grep -qF 'outcome=hit|adjusted|missed|unasked' &&
 	pass "the train's feedback outcome is hit|adjusted|missed|unasked" ||
 	fail "/merge-train's feedback line does not spell outcome=hit|adjusted|missed|unasked — an autonomous train has no outcome to record"
-printf '%s\n' "$mt_fb" | grep -qF 'subject=ticket:#<ticket>' && printf '%s\n' "$mt_fb" | grep -qF 'related=pr:#<N>' &&
+printf '%s\n' "$mt_fb" | grep -qF 'subject=ticket:<ticket>' && printf '%s\n' "$mt_fb" | grep -qF 'related=pr:#<N>' &&
 	pass "and it sits on the ticket, related to the PR — the join to merge.land" ||
-	fail "/merge-train's feedback line does not carry subject=ticket:#<ticket> related=pr:#<N> — nothing joins it to the landing"
+	fail "/merge-train's feedback line does not carry subject=ticket:<ticket> related=pr:#<N> — nothing joins it to the landing"
 printf '%s\n' "$step4" | grep -qF 'exit condition' &&
 	pass "step 4 names the feedback emit as the train's exit condition per landed PR" ||
 	fail "/merge-train step 4 does not call the feedback emit its exit condition — a landing with no verdict event can still end the train"
