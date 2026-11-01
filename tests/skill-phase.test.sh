@@ -681,6 +681,194 @@ t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$HBX" AGENT_HARNESS_SELF=local sh sc
 	fail "a dispatch exit 5 came back as $T_STATUS with stdout '$T_OUT', staged: $([ -e "$HBX_STATE" ] && echo yes || echo no): $T_ERR"
 
 # ---------------------------------------------------------------------------
+banner "4g. The verifier is staged as files, offline, and an absent one is recorded (runtime/R206, R208)"
+# ---------------------------------------------------------------------------
+# `review-pr --tier reviewer --domain cross-provider --pr <N>` is the verifier
+# (ADR-0044): its model comes from the kit wrapper's two-rung walk against the
+# diff's author, never the plain tier. The dispatcher stages the verifier
+# contract, the head's diff against its base and the ticket body as files
+# under <git dir>/skill-verify/, hands the worker no forge credential, and —
+# when the walk prints nothing, or a spawn still fails after one re-resolve —
+# records one `verify.verdict outcome=unavailable` on the PR, exit 6, nothing
+# staged for the broker.
+VTREE="$SCRATCH/verify-tree"
+cp -R "$HBTREE" "$VTREE"
+VTRACE="$SCRATCH/vtrace"
+printf "TRACE_DIR='%s'\n" "$VTRACE" >"$VTREE/scripts/trace.kit.config.sh"
+V_STATE="$(git -C "$VTREE" rev-parse --absolute-git-dir)/skill-verify"
+VSTUB="$SCRATCH/verify-harness"
+cat >"$VSTUB" <<'VSTUB_EOF'
+#!/bin/sh
+# Fails for any model named in $VSTUB_FAIL, as a refused spawn does.
+for m in ${VSTUB_FAIL:-}; do
+	case " $* " in *" --model $m "*) echo "stub: $m refused" >&2; exit 1 ;; esac
+done
+echo "ARGV: $*"
+echo "GH_TOKEN=${GH_TOKEN:-unset} GITHUB_TOKEN=${GITHUB_TOKEN:-unset}"
+echo "STDIN-BEGIN"
+cat
+echo "STDIN-END"
+VSTUB_EOF
+chmod +x "$VSTUB"
+# vstub: this session's harness is anthropic's, the stub harness another
+# provider's, and the stub's candidates come first.
+cat >"$VTREE/scripts/agents.kit.vstub.config.sh" <<VCFG
+AGENT_HARNESSES='stub'
+AGENT_HARNESS_STUB_CMD='$VSTUB --flag {model_flag} < {prompt_file}'
+AGENT_HARNESS_STUB_MODEL_FLAG='--model {model}'
+AGENT_TIER_REVIEWER='sonnet'
+AGENT_TIER_REVIEWER_FALLBACK='opus haiku'
+AGENT_KIT_PROVIDER_VSTUB='anthropic'
+AGENT_KIT_PROVIDER_STUB='otherco'
+AGENT_KIT_VERIFIER_CANDIDATES='stub:model-a stub:model-b'
+VCFG
+# vlocal: no other provider declared, so the walk's second rung answers.
+sed -e "s/^AGENT_KIT_VERIFIER_CANDIDATES=.*/AGENT_KIT_VERIFIER_CANDIDATES=''/" -e 's/^AGENT_KIT_PROVIDER_VSTUB=/AGENT_KIT_PROVIDER_VLOCAL=/' \
+	"$VTREE/scripts/agents.kit.vstub.config.sh" >"$VTREE/scripts/agents.kit.vlocal.config.sh"
+# Committed on the branch under review, so the working tree stays clean.
+t_commit "$VTREE" 'chore: verifier policies' >/dev/null
+V_SHA=$(git -C "$VTREE" rev-parse feat/under-review)
+printf 'the ticket body, staged for the verifier\n' >"$SCRATCH/v-spec.md"
+v_dispatch() {
+	_vd_self=$1
+	shift
+	t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$VTREE" AGENT_HARNESS_SELF="$_vd_self" AGENT_SESSION_MODEL="${V_AUTHOR:-sonnet}" \
+		GH_TOKEN=forge-secret GITHUB_TOKEN=forge-secret \
+		sh scripts/skill-dispatch.kit.sh review-pr --tier reviewer --domain cross-provider --ticket 941 \
+		--set BRANCH=feat/under-review --set BASE=main --set-file "SPEC=$SCRATCH/v-spec.md" "$@"
+}
+v_verdicts() { TRACE_CONFIG="$VTREE/scripts/trace.kit.config.sh" sh "$VTREE/scripts/trace.sh" show "pr:#$1" --kind verify.verdict 2>/dev/null; }
+
+v_dispatch vstub --pr 71
+[ "$T_STATUS" = 0 ] && pass "runtime/R206: a verifier on another provider's harness is dispatched, exit 0" ||
+	fail "runtime/R206: the dispatched verifier exited $T_STATUS: $T_ERR"
+case "$T_OUT" in
+*'--model model-a'*) pass "…on the walk's first cross-provider candidate" ;;
+*) fail "the verifier did not run on model-a: $T_OUT" ;;
+esac
+case "$T_OUT" in
+*'GH_TOKEN=unset GITHUB_TOKEN=unset'*) pass "runtime/R206: the worker is handed no forge credential" ;;
+*) fail "runtime/R206: a forge token reached the worker: $(printf '%s\n' "$T_OUT" | grep TOKEN)" ;;
+esac
+VP=$(staged_prompt)
+case "$VP" in
+*'verifier'*'no network'*) pass "runtime/R206: the prompt is the verifier contract: its role, then the offline review worker's" ;;
+*) fail "runtime/R206: the prompt does not carry the verifier role and the worker contract" ;;
+esac
+case "$VP" in
+*'<!--'* | *'%%'[A-Z]*'%%'*) fail "…but an editor header or an unfilled marker reached it" ;;
+*) pass "…every editor header stripped and every marker filled" ;;
+esac
+case "$VP" in
+*"$V_STATE/diff"*"$V_STATE/spec"*) pass "…naming the staged diff and the staged ticket body" ;;
+*) fail "the prompt names neither $V_STATE/diff nor $V_STATE/spec" ;;
+esac
+[ -n "$(cat "$V_STATE/diff" 2>/dev/null)" ] && [ "$(cat "$V_STATE/diff")" = "$(git -C "$VTREE" diff "main...$V_SHA")" ] &&
+	pass "runtime/R206: the head's diff against its base is staged as a file" ||
+	fail "runtime/R206: $V_STATE/diff is missing or is not git diff main...$V_SHA"
+cmp -s "$V_STATE/spec" "$SCRATCH/v-spec.md" &&
+	pass "runtime/R206: the ticket body is staged as a file" ||
+	fail "runtime/R206: $V_STATE/spec is not the ticket body"
+[ "$(cat "$V_STATE/rung" 2>/dev/null)" = cross-provider ] && [ "$(cat "$V_STATE/provider" 2>/dev/null)" = otherco ] &&
+	[ "$(cat "$V_STATE/commit" 2>/dev/null)" = "$V_SHA" ] &&
+	pass "…with the rung, the provider and the pinned commit the broker is passed" ||
+	fail "the staged rung/provider/commit are not cross-provider/otherco/$V_SHA"
+case "$T_ERR" in
+*'forge-broker.kit.sh 71 '*'--verifier --rung cross-provider --provider otherco'*) pass "…and stderr names the broker call that posts the report" ;;
+*) fail "stderr does not name the verifier's broker call: $T_ERR" ;;
+esac
+[ -z "$(git -C "$VTREE" status --porcelain)" ] && pass "…the working tree left clean" ||
+	fail "the verifier dirtied the working tree: $(git -C "$VTREE" status --porcelain)"
+
+# The second rung, in this session: handed back, exit 3, the model on stdout.
+rm -rf "$V_STATE"
+v_dispatch vlocal --pr 72
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = opus ] &&
+	pass "runtime/R206: a same-provider verifier is handed back, exit 3, its model alone on stdout" ||
+	fail "the same-provider verifier exited $T_STATUS with '$T_OUT': $T_ERR"
+[ -f "$V_STATE/prompt" ] && [ -f "$V_STATE/diff" ] && [ -f "$V_STATE/spec" ] && [ "$(cat "$V_STATE/rung" 2>/dev/null)" = same-provider ] &&
+	pass "…the prompt, the diff, the ticket body and the rung staged under <git dir>/skill-verify/" ||
+	fail "the hand-back staged no prompt, diff, spec or same-provider rung under $V_STATE"
+
+# runtime/R208: a walk that prints nothing.
+rm -rf "$V_STATE"
+V_AUTHOR='nobody:model' v_dispatch vstub --pr 73
+[ "$T_STATUS" = 6 ] && [ -z "$T_OUT" ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R208: no verifier resolved is exit 6, nothing on stdout, nothing staged" ||
+	fail "runtime/R208: an unresolved verifier exited $T_STATUS with '$T_OUT', staged: $([ -e "$V_STATE" ] && echo yes || echo no): $T_ERR"
+case $(v_verdicts 73) in
+*'"outcome":"unavailable"'*'"reason":'*'provider'*) pass "runtime/R208: …and one verify.verdict outcome=unavailable is recorded with the reason" ;;
+*) fail "runtime/R208: no unavailable verdict on pr:#73: $(v_verdicts 73)" ;;
+esac
+# runtime/R208: a walk that names a model whose provider the policy does not
+# declare is no verifier either — the verdict needs a provider token.
+sed '/^AGENT_KIT_PROVIDER_VLOCAL=/d' "$VTREE/scripts/agents.kit.vlocal.config.sh" >"$VTREE/scripts/agents.kit.vnoprov.config.sh"
+printf 'AGENT_KIT_PROVIDER_VNOPROV=%s\n' "''" >>"$VTREE/scripts/agents.kit.vnoprov.config.sh"
+t_commit "$VTREE" 'chore: a policy with no provider for its own harness' >/dev/null
+V_AUTHOR='stub:model-z' v_dispatch vnoprov --pr 77
+[ "$T_STATUS" = 6 ] && [ -z "$T_OUT" ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R208: a named model with no provider token for its harness is exit 6, nothing staged" ||
+	fail "runtime/R208: a model with no provider token exited $T_STATUS with '$T_OUT': $T_ERR"
+case $(v_verdicts 77) in
+*'"outcome":"unavailable"'*'provider token'*) pass "runtime/R208: …and records unavailable, its reason naming the missing provider token" ;;
+*) fail "runtime/R208: no unavailable verdict naming the provider on pr:#77: $(v_verdicts 77)" ;;
+esac
+# runtime/R208: a spawn that fails is re-resolved once, past the failed model.
+VSTUB_FAIL=model-a
+export VSTUB_FAIL
+v_dispatch vstub --pr 74
+[ "$T_STATUS" = 0 ] && _t_has "$T_OUT" '--model model-b' && [ "$(cat "$V_STATE/provider" 2>/dev/null)" = otherco ] &&
+	pass "runtime/R208: a refused spawn is re-resolved once with that model unreachable, and runs on the next" ||
+	fail "runtime/R208: the re-resolve did not run model-b (exit $T_STATUS): $T_OUT $T_ERR"
+[ -z "$(v_verdicts 74)" ] && pass "…recording no unavailable verdict" || fail "a verifier that ran recorded unavailable: $(v_verdicts 74)"
+VSTUB_FAIL='model-a model-b'
+v_dispatch vstub --pr 75
+[ "$T_STATUS" = 6 ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R208: a spawn that still fails after the one re-resolve is exit 6, nothing staged" ||
+	fail "runtime/R208: two refused spawns exited $T_STATUS, staged: $([ -e "$V_STATE" ] && echo yes || echo no): $T_ERR"
+case $(v_verdicts 75) in
+*'"outcome":"unavailable"'*) pass "runtime/R208: …and one unavailable verdict is recorded" ;;
+*) fail "runtime/R208: no unavailable verdict on pr:#75" ;;
+esac
+[ "$(v_verdicts 75 | grep -c verify.verdict)" = 1 ] && pass "…exactly one" || fail "more than one verdict on pr:#75: $(v_verdicts 75)"
+unset VSTUB_FAIL
+# An in-session spawn that failed is the session's to report: --spawn-failed
+# names the model, the walk re-resolves once past it, and a second failure
+# is unavailable.
+v_dispatch vlocal --pr 76
+v_dispatch vlocal --pr 76 --spawn-failed opus
+[ "$T_STATUS" = 3 ] && [ "$T_OUT" = haiku ] &&
+	pass "runtime/R208: --spawn-failed re-resolves once past the failed model and hands the next back" ||
+	fail "runtime/R208: --spawn-failed opus answered $T_STATUS '$T_OUT': $T_ERR"
+v_dispatch vlocal --pr 76 --spawn-failed haiku
+[ "$T_STATUS" = 6 ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R208: a second failed spawn is exit 6, the hand-back removed" ||
+	fail "runtime/R208: a second --spawn-failed answered $T_STATUS '$T_OUT', staged: $([ -e "$V_STATE" ] && echo yes || echo no)"
+case $(v_verdicts 76) in
+*'"outcome":"unavailable"'*) pass "runtime/R208: …and records unavailable" ;;
+*) fail "runtime/R208: no unavailable verdict on pr:#76" ;;
+esac
+# The verifier contract is kit-only, as the dispatcher that stages it is:
+# its role lives in the dispatcher, and nothing under .agents/prompts/, which
+# every consumer receives, carries it.
+grep -rlq 'You are the verifier' "$ROOT/.agents/prompts" &&
+	fail "runtime/R206: a file under .agents/prompts/ carries the verifier's role — it would ship" ||
+	pass "runtime/R206: the verifier's role ships nowhere: no file under .agents/prompts/ carries it"
+# runtime/R208: the record is the whole outcome, so a trace that refuses it
+# is said — never "Recorded".
+printf "TRACE_DIR='%s'\n" "$SCRATCH/v-trace-is-a-file" >"$VTREE/scripts/trace.kit.config.sh"
+: >"$SCRATCH/v-trace-is-a-file"
+V_AUTHOR='nobody:model' v_dispatch vstub --pr 78
+[ "$T_STATUS" = 6 ] && _t_has "$T_ERR" 'was NOT recorded' && ! _t_has "$T_ERR" 'Recorded verify.verdict' &&
+	pass "runtime/R208: an unavailable verdict the trace refused is said not recorded, still exit 6" ||
+	fail "runtime/R208: a refused unavailable record exited $T_STATUS and said: $T_ERR"
+git -C "$VTREE" checkout -q -- scripts/trace.kit.config.sh
+# The PR is the dispatcher's to record on: a verifier dispatch names it.
+v_dispatch vstub
+[ "$T_STATUS" = 2 ] && _t_has "$T_ERR" '--pr' && pass "a verifier dispatch with no --pr is a usage error naming it" ||
+	fail "a verifier dispatch with no --pr exited $T_STATUS: $T_ERR"
+
+# ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"
 # ---------------------------------------------------------------------------
 # The declaration is only worth having if it ends in an executable spawn. For
