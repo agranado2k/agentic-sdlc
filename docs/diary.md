@@ -2891,3 +2891,15 @@ beside the skill, and the suite runs that fence against fixture
 repositories, so the document's own code is what is tested. The ADR was
 built as 0040, renumbered 0041 after 0.101.0, and 0042 at release after
 0.102.0; the release waited behind 0.102.0 (ADR-0033).
+
+## 2026-11-01 — /to-prd defers to the factory's own PRD skill
+
+PRD-12 slice 3 of D-02 (#936, factory T-73; ADR-0042 already named it).
+`/to-prd` takes `/to-tickets`' deferral in the same shape: a `FACTORY.md`
+beside the skill, opened before the grilling question, running
+`factory_deferral factory-prd`. The fenced function is `/to-tickets`' own,
+byte for byte, and the suite holds the two fences equal before it runs
+`/to-prd`'s against fixtures of its own — a `factory-tickets` skill alone
+does not stand in for `factory-prd`. With both files it hands off naming
+`/factory-prd` and writes no `prd.write`; with the manifest alone it names
+`factory install-skill` once. Spec gains process/R120.
