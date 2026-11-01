@@ -353,6 +353,41 @@ t_commit "$E" "chore: hook" >/dev/null
 pol "$E" touched main HEAD
 expect_out_is ".githooks/pre-push" "policy/R14: touched still reads git after the policy's own PATH and function"
 
+banner "Run from a subdirectory, paths stay repository-relative (review M-1)"
+# ---------------------------------------------------------------------------
+pol "$B/scripts" thresholds --base main
+expect_resolved 'miss-rate-below 5
+precision-floor 80' "policy/R12: thresholds from scripts/ reads the risk policy at the repository's root"
+pol "$B/scripts" read .githooks/pre-push --base main
+expect_status 0 "policy/R1: read from a subdirectory takes a repository-relative path"
+
+banner "A diff the reader cannot compute fails closed (review M-2)"
+# ---------------------------------------------------------------------------
+base_repo
+R=$REPO
+git -C "$R" checkout -q --orphan stray
+git -C "$R" rm -rq --cached . >/dev/null
+t_write "$R" .githooks/pre-push 'exit 1
+'
+git -C "$R" add .githooks/pre-push
+git -C "$R" commit -q -m "chore: unrelated history"
+pol "$R" touched main HEAD
+expect_status 3 "policy/R10: touched with no merge base exits 3, never 2"
+expect_out_is "fail-closed no-base $RP" "policy/R8: the closed shape, naming the risk policy"
+
+banner "A judging path with a space is still judged"
+# ---------------------------------------------------------------------------
+base_repo
+S=$REPO
+t_write "$S" ".githooks/pre push" 'exit 0
+'
+t_commit "$S" "chore: a spaced hook" >/dev/null
+pol "$S" touched main HEAD
+expect_out_is ".githooks/pre push" "policy/R10: a judging file whose name holds a space is touched"
+on_main "$S" "chore: land it" sh -c 'mkdir -p .githooks && printf "exit 0\n" >".githooks/pre push"'
+pol "$S" read ".githooks/pre push" --base main
+expect_status 0 "policy/R9: and read at the base"
+
 banner "Caller errors exit 2 with nothing on stdout"
 # ---------------------------------------------------------------------------
 for args in "" "read" "read $RP" "read $RP --base" "thresholds" "thresholds --base" "touched main" "frobnicate" "touched main nosuchhead"; do

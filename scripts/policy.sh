@@ -34,7 +34,10 @@
 # cannot produce it), invalid (a `.sh` file fails `sh -n`, or a threshold or an
 # extra path is out of shape). The line carries nothing read from any file.
 # When the risk policy fails closed during `touched`, the paths the rest of the
-# set selects print first, then its line, and the exit is 3. When `read` is
+# set selects print first, then its line, and the exit is 3. `touched` with
+# no merge base between the two refs (unrelated histories, a shallow clone)
+# answers `fail-closed no-base scripts/risk.config.sh`, and a diff git cannot
+# produce `fail-closed unreadable scripts/risk.config.sh`. When `read` is
 # asked for a path outside the fixed set and the risk policy fails closed, its
 # line answers: the reader cannot say the path is not judged.
 #
@@ -64,11 +67,10 @@ usage="usage: sh scripts/policy.sh read <path> --base <ref> | touched <base> <he
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
 
 # plain_path <path> — 0 for a repository-relative path with no empty, `.` or
-# `..` segment, no leading or trailing `/`, and no whitespace.
+# `..` segment, and no leading or trailing `/`.
 plain_path() {
 	case $1 in
 	'' | /* | */ | *//* | . | .. | ./* | ../* | */. | */.. | */./* | */../*) return 1 ;;
-	*[[:space:]]*) return 1 ;;
 	esac
 	return 0
 }
@@ -119,7 +121,7 @@ trap 'exit 130' INT TERM HUP
 # REASON to the fail-closed reason. Status 0 on a copy.
 fetch() {
 	COPY= REASON=
-	_f_entry=$(git --literal-pathspecs ls-tree -z "$1" -- "$2" 2>/dev/null | tr '\0' '\n' | head -n 1) || _f_entry=
+	_f_entry=$(git --literal-pathspecs ls-tree --full-tree -z "$1" -- "$2" 2>/dev/null | tr '\0' '\n' | head -n 1)
 	if [ -z "$_f_entry" ]; then
 		if git cat-file -e "$1^{tree}" 2>/dev/null; then REASON=missing; else REASON=unreadable; fi
 		return 1
@@ -267,10 +269,19 @@ touched)
 		printf 'fail-closed no-base %s\n' "$RISK_POLICY"
 		exit 3
 	}
-	mb=$(git merge-base "$commit" "$head" 2>/dev/null) || die "no merge base between $2 and $3"
+	# No merge base (unrelated histories, a shallow clone) is a base the
+	# reader cannot reach from the head: closed, never a caller error.
+	mb=$(git merge-base "$commit" "$head" 2>/dev/null) || {
+		printf 'fail-closed no-base %s\n' "$RISK_POLICY"
+		exit 3
+	}
 	risk_eval "$commit" || EXTRA=
-	changed=$(git diff --name-only -z --no-renames "$mb" "$head" | tr '\0' '\n') ||
-		die "git diff failed"
+	git diff --quiet --no-renames "$mb" "$head" >/dev/null 2>&1
+	[ $? -le 1 ] || {
+		printf 'fail-closed unreadable %s\n' "$RISK_POLICY"
+		exit 3
+	}
+	changed=$(git diff --name-only -z --no-renames "$mb" "$head" | tr '\0' '\n')
 	hits=$(
 		IFS='
 '

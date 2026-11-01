@@ -84,7 +84,11 @@ Chosen: **one policy reader, `scripts/policy.sh`, shared layer**.
    produce it), `invalid` (a `.sh` judging file fails `sh -n`, or a threshold
    or an extra path is out of shape). The line carries nothing read from any
    file. When the risk policy fails closed during `touched`, the paths the
-   rest of the set selects print first, then its line, exit 3; when `read` is
+   rest of the set selects print first, then its line, exit 3; when `touched`
+   finds no merge base between its refs (unrelated histories, a shallow
+   clone) it answers `fail-closed no-base` and the risk policy's path, and a
+   diff git cannot produce `fail-closed unreadable` and that path, never a
+   caller error; when `read` is
    asked for a path outside the fixed set and the risk policy fails closed,
    that line answers, since the reader cannot say the path is not judged.
 5. **A policy file is code, evaluated only in a child process.** The base's
