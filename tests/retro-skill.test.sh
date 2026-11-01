@@ -1996,8 +1996,8 @@ if [ -n "$rspan" ]; then
 		printf '%s\n' "$rout" | grep -qxF "$row" && pass "process/R66, R67: the risk span prints '$row'" ||
 			fail "process/R66, R67: the risk span did not print '$row' over the fixture; it printed: $(printf '%s' "$rout" | tr '\n' ';')"
 	done
-	printf '%s\n' "$rout" | grep -q pattern && fail "the risk span counts a tripped verdict's area" ||
-		pass "…and a tripped verdict's area reaches no count"
+	printf '%s\n' "$rout" | grep -q pattern && fail "process/R67: the risk span counts a tripped verdict's area" ||
+		pass "process/R67: …and a tripped verdict's area reaches no count"
 fi
 # A small window, and trace text that is no declared reason or area: the
 # rate is replaced by the words, and neither value names a row.
