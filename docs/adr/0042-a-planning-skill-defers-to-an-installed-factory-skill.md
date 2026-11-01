@@ -1,4 +1,4 @@
-# ADR-0041: A planning skill defers to an installed factory skill, by name
+# ADR-0042: A planning skill defers to an installed factory skill, by name
 
 - **Status**: Accepted
 - **Date**: 2026-11-01

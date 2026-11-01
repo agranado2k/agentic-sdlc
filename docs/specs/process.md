@@ -93,3 +93,5 @@ R224. `/to-prd` and `/to-tickets` SHALL decide the deferral without running any 
 R225. A factory skill SHALL count as installed when its `SKILL.md` exists under the user's `~/.claude/skills/<name>/` or the project's `.claude/skills/<name>/`, and under no other path.
 R206. The shipped CI review prompt SHALL ask for `scope: inside` or `scope: outward` as the first words after the tag on each ⚠️ UNSPECIFIED item. [UC5 1]
 R207. The shipped CI review prompt SHALL ask for one line per `pass` row of the PR's check table, naming the row's id and `upheld` or `disputed`. [UC5 2]
+R226. WHERE the repository's git top level holds the project manifest, every configuration value the kit reads that the factory also defines SHALL be read from the factory's key in `.factory/project.yaml`, and the kit's own policy file SHALL be read for that value only where the repository is not a factory project.
+R227. WHERE the kit's policy reader reads a configuration value at a base ref, and R226 sends that value to `.factory/project.yaml`, the value SHALL be read from `.factory/project.yaml` at the same base ref through the policy reader, failing closed as the policy reader does.

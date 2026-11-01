@@ -2864,3 +2864,16 @@ canonical id is checked by shape alone, 2 to 6 digits with a leading zero
 only in the two-digit form; a `ticket:T-070` can never be written, so
 section 21b writes that `show` decoy by hand. The release waited behind
 0.100.0 (ADR-0033) and was built test-first in the meantime.
+
+## 2026-11-01 — a value the factory defines is read from its manifest
+
+PRD-12 slice 4 of D-02 (#959, factory T-88; released as 0.102.0,
+ADR-0041). `.factory/project.yaml` joins the policy reader's judging set,
+and `sh scripts/policy.sh value acceptance-tests-since --base main` reads
+the adoption date from the manifest at the base, failing closed on a
+manifest absent there or a malformed date. A branch can neither delete the
+manifest nor add it to change its own answer: the base's or the head's copy
+makes the project a factory project. The first build read a guards-policy
+date outside a factory project; the coordinator's ruling on PRD-14 §8
+dropped it, so a repository with no manifest prints nothing. The ADR was
+built as 0040 and renumbered at release, after 0.101.0 took that number.
