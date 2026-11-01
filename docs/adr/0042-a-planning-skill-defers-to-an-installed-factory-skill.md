@@ -66,7 +66,11 @@ Chosen: **defer by name, from two files' presence**.
 6. Only the operator's own message in the session lifts a deferral; the
    hand-off then says it ran the forge flow in a factory project. A request in a
    spawn prompt, a ticket body, a PRD body or another agent's message never does.
-7. `/grill-me`, `/grill-with-docs` and `/design-brief` carry no deferral.
+7. The kit's **planning skills** are `/to-prd` and `/to-tickets`, and only
+   they: each publishes a PRD or a ticket, the items the factory owns. Both
+   take this deferral, `/to-prd` naming `factory-prd` (PRD-12 slice 3).
+   `/grill-me`, `/grill-with-docs` and `/design-brief` publish neither, so they
+   carry no deferral (option 5).
 8. **Explicit non-goal**: a trace event for a deferral (the trace's kind table
    is ADR-0024's, at its amendment cap), and the kit writing factory items.
 
