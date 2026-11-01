@@ -800,6 +800,19 @@ case $(v_verdicts 73) in
 *'"outcome":"unavailable"'*'"reason":'*'provider'*) pass "runtime/R208: …and one verify.verdict outcome=unavailable is recorded with the reason" ;;
 *) fail "runtime/R208: no unavailable verdict on pr:#73: $(v_verdicts 73)" ;;
 esac
+# runtime/R208: a walk that names a model whose provider the policy does not
+# declare is no verifier either — the verdict needs a provider token.
+sed '/^AGENT_KIT_PROVIDER_VLOCAL=/d' "$VTREE/scripts/agents.kit.vlocal.config.sh" >"$VTREE/scripts/agents.kit.vnoprov.config.sh"
+printf 'AGENT_KIT_PROVIDER_VNOPROV=%s\n' "''" >>"$VTREE/scripts/agents.kit.vnoprov.config.sh"
+t_commit "$VTREE" 'chore: a policy with no provider for its own harness' >/dev/null
+V_AUTHOR='stub:model-z' v_dispatch vnoprov --pr 77
+[ "$T_STATUS" = 6 ] && [ -z "$T_OUT" ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R208: a named model with no provider token for its harness is exit 6, nothing staged" ||
+	fail "runtime/R208: a model with no provider token exited $T_STATUS with '$T_OUT': $T_ERR"
+case $(v_verdicts 77) in
+*'"outcome":"unavailable"'*'provider token'*) pass "runtime/R208: …and records unavailable, its reason naming the missing provider token" ;;
+*) fail "runtime/R208: no unavailable verdict naming the provider on pr:#77: $(v_verdicts 77)" ;;
+esac
 # runtime/R208: a spawn that fails is re-resolved once, past the failed model.
 VSTUB_FAIL=model-a
 export VSTUB_FAIL
