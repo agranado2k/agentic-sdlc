@@ -1959,8 +1959,9 @@ banner "21. Question 8 counts the risk rule's disagreements with the planner (pr
 # disagreed, splits the disagreements by the side that raised the risk, its
 # reason and the review area, and leaves a tripped switch's verdicts out,
 # saying how many (UC5). It RUNS here over a fixture trace whose counts are
-# UC5's: agreed 7, disagreed 4, tripped 1 — plus a PR judged twice (the
-# latest counts) and one whose earlier verdict was tripped.
+# UC5's, over twelve PRs: agreed 7, disagreed 4, tripped 1 — among them a
+# PR judged twice (the latest counts) and one whose earlier verdict was
+# tripped, and a tripped verdict's area that must reach no count.
 rspan=$(sec_of 8 | grep -o '`sh scripts/trace\.sh export[^`]*risk\\\.judge[^`]*`' | tr -d '`' | head -1)
 [ -n "$rspan" ] && pass "question 8 carries a span over the export that reads risk.judge" ||
 	fail "question 8 carries no \`sh scripts/trace.sh export … risk\\.judge …\` span counting the risk rule's disagreements (process/R66)"
@@ -1981,21 +1982,22 @@ rj "$rk" 1 agreed low low '' on
 for p in 2 3 4 5 6; do rj "$rk" "$p" agreed low low '' on; done
 rj "$rk" 7 agreed 'high security' 'high unlearned' security on
 rj "$rk" 8 disagreed low 'high unlearned' security on
+# PR 9 was tripped once, and judged again with the switch on.
+rj "$rk" 9 agreed low 'high unlearned' security tripped
 rj "$rk" 9 disagreed low 'high unlearned' security on
 rj "$rk" 10 disagreed low 'high outward' '' on
 rj "$rk" 11 disagreed 'high security' low '' on
 # PR 12's verdict was tripped: left out of every count, and counted apart.
 rj "$rk" 12 disagreed low 'high unlearned' pattern tripped
-# PR 13 was tripped once, and judged again with the switch on.
-rj "$rk" 13 agreed low 'high unlearned' pattern tripped
-rj "$rk" 13 disagreed low 'high unlearned' pattern on
 if [ -n "$rspan" ]; then
 	rout=$(rj_run "$rk")
-	for row in 'agreed 7' 'disagreed 5: rule raised 4 (unlearned 3: security 2, pattern 1; outward 1), planner raised 1 (security 1)' \
-		'tripped 1, left out' 'disagreement rate 5 of 12 42 %'; do
+	for row in 'agreed 7' 'disagreed 4: rule raised 3 (unlearned 2: security 2; outward 1), planner raised 1 (security 1)' \
+		'tripped 1, left out' 'disagreement rate 4 of 11 36 %'; do
 		printf '%s\n' "$rout" | grep -qxF "$row" && pass "process/R66, R67: the risk span prints '$row'" ||
 			fail "process/R66, R67: the risk span did not print '$row' over the fixture; it printed: $(printf '%s' "$rout" | tr '\n' ';')"
 	done
+	printf '%s\n' "$rout" | grep -q pattern && fail "the risk span counts a tripped verdict's area" ||
+		pass "…and a tripped verdict's area reaches no count"
 fi
 # A small window, and trace text that is no declared reason or area: the
 # rate is replaced by the words, and neither value names a row.
