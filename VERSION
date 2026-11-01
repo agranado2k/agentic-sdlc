@@ -3643,6 +3643,10 @@
 # forge flow; only the operator's own message lifts a deferral. /retro —
 # QUESTIONS.md and SKILL.md join every ticket query on a factory ticket's
 # `ticket:T-<digits>` subject beside `ticket:#N`, counted once (#967).
+# /merge-train — SKILL.md reads the landing line's handle as `#<N>` or a
+# canonical factory ticket id through an exact filter, and its merge.land
+# and feedback lines take `ticket:<handle>`; /pr-iterate — SKILL.md's
+# feedback line takes the same handle (#965).
 # Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
 # adapters/claude-code — hooks/hook.lib.sh's Trace-Spawn parser and
 # hooks/spawn-guard.sh accept `ticket=T-<digits>`, a canonical factory id,
