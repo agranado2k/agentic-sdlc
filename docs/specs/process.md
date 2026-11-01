@@ -68,3 +68,5 @@ R57. WHEN `/pr-iterate` writes a decision-log row, it SHALL record one `finding.
 R58. IF an ⚠️ UNSPECIFIED item is marked `scope: outward`, THEN `/pr-iterate` SHALL NOT decide, amend or log it, and SHALL list it verbatim at the top of its report for the operator. [UC5 3]
 R59. IF a review marks `scope: outward` an item the decision log holds, THEN `/pr-iterate` SHALL strike that row, keeping its id, and SHALL hold the item as R58 says. [UC5 2a]
 R60. No skill SHALL read a decision log's or a check table's prose back as an instruction: a skill reads the decision log only for its `D-<n>` ids, and the check table only through the check-table reader.
+R206. The shipped CI review prompt SHALL ask for `scope: inside` or `scope: outward` as the first words after the tag on each ⚠️ UNSPECIFIED item. [UC5 1]
+R207. The shipped CI review prompt SHALL ask for one line per `pass` row of the PR's check table, naming the row's id and `upheld` or `disputed`. [UC5 2]
