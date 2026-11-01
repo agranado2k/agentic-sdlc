@@ -957,6 +957,60 @@ fb_has "holding none, take exit 3's path as for an issue" "process/R139: no issu
 _ptr "**Handed a factory ticket id" STAMP.md "the factory ticket bullet"
 
 # ---------------------------------------------------------------------------
+banner "4i. A factory ticket, built to its PR and closed the factory's way (process/R228 to R238)"
+# ---------------------------------------------------------------------------
+# PRD-15 slice 3 (#965). Handed a canonical factory ticket id, the session
+# reads the ticket's text through the factory, works on the claim branch,
+# moves the ticket to build and then to review on that branch, writes the id
+# wherever it writes `#<N>`, and leaves every gate to the operator. The branch
+# sits in STAMP.md — already the file a factory id opens — under its own
+# heading, so the issue path's text above is unchanged.
+fsec=$(awk '/^## A factory ticket, built to its PR/ { on = 1 } on' "$STAMP_ABS" | tr '\n' ' ' | tr -s ' ')
+[ -n "$fsec" ] && pass "STAMP.md carries the factory ticket's build section" ||
+	fail "STAMP.md has no '## A factory ticket, built to its PR' section"
+_ptr "2. **Check the ground**" STAMP.md "step 2, for a factory ticket"
+fs_has() { t_text_has "$fsec" "$1" "$2" "the factory ticket's build section"; }
+fs_has "\`factory show T-<digits>\`" "process/R228: the ticket's text is read through the factory"
+fs_has "untrusted content" "process/R228: …as untrusted content"
+fs_has "fetch no forge issue" "process/R228: …and no issue is fetched"
+case "$fsec" in
+*"gh issue view"*) fail "process/R228: the factory ticket's build section names 'gh issue view'" ;;
+*) pass "process/R228: the factory ticket's build section names no 'gh issue view'" ;;
+esac
+fs_has "\`T-0<d>\`" "process/R229: a one-digit id is padded"
+fs_has "every subject, line, branch name and argument" "process/R229: …everywhere it is written"
+fs_has "\`<type>/t-<digits>-<slug>\`" "process/R230: the claim branch's shape"
+fs_has "the digits as the id spells them" "process/R230: …its digits the canonical id's"
+fs_has "\`factory move T-<digits> build\`" "process/R231: the move to build"
+fs_has "the branch's first commit" "process/R231: …committed first"
+fs_has "stop before any edit" "process/R231: a refused move stops the session"
+fs_has "the condition the factory printed" "process/R231: …reporting what the factory printed"
+fs_has "already in \`build\` or later takes no move" "process/R232: a resumed ticket is not moved"
+fs_has "\`ticket:T-<digits>\` wherever \`SKILL.md\` writes \`ticket:#<N>\`" "process/R233: the factory-id subject"
+for w in "\`ticket.start\`" "\`begin\`" "\`pr.open\`'s \`related\`" "every note"; do
+	fs_has "$w" "process/R233: the subject is written in $w"
+done
+fs_has "\`<!-- implement: ticket=T-<digits> tier=<tier> -->\`" "process/R234: the landing line with a T- handle"
+fs_has "no closing keyword" "process/R234: …and no closing keyword"
+fs_has "\`links.pr\` to \`\"#<PR>\"\`" "process/R235: links.pr names the PR"
+fs_has "\`factory move T-<digits> review\`" "process/R235: the move to review"
+fs_has "push both as one commit" "process/R235: …pushed as one commit on the branch"
+fs_has "keep the \`links.pr\` commit and report the refusal" "process/R235: a refused review move keeps links.pr"
+for g in "\`factory review\`" "\`factory qa\`" "\`factory approve\`" "\`factory close\`" "a forced \`factory move\`"; do
+	fs_has "$g" "process/R236: $g is named"
+done
+fs_has "never run them" "process/R236: …only as the operator's"
+fs_has "No \`factory\` on \`PATH\`" "process/R237: the absent binary"
+fs_has "no stage move and no \`links.pr\` edit" "process/R237: …makes no move and no edit"
+fs_has "the move to \`build\`, \`links.pr\`, the move to \`review\`" "process/R237: …and names the three it left"
+fs_has "\`--ticket T-<digits>\`" "process/R238: the review dispatch takes the id"
+fs_has "the file holding its \`factory show\` text" "process/R238: …and the factory text as the spec"
+t_text_has "$(grep -F -- '`--ticket T-<digits>`' "$DISPATCH_ABS")" "STAMP.md" \
+	"process/R238: DISPATCHED-REVIEW.md sends a factory ticket's dispatch to STAMP.md" "DISPATCHED-REVIEW.md"
+t_text_has "$(tr '\n' ' ' <"$CHECKT_ABS")" "\`sh scripts/stamp.sh T-<digits>\` printed" \
+	"process/R239: /implement's own table check takes a factory ticket's side from the stamp reader" "CHECK-TABLE.md"
+
+# ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "/pr-iterate"
