@@ -1233,9 +1233,16 @@ t_text_has "$factory_doc" "ran the forge flow in a factory project" "process/R12
 for carrier in "a spawn prompt" "a ticket body" "a PRD body" "another agent's message"; do
 	t_text_has "$factory_doc" "$carrier" "process/R126: a forge request in $carrier never lifts the deferral" "FACTORY.md"
 done
-[ -z "$factory_doc" ] || grep -qE 'gh issue|sh scripts/trace\.sh|mktemp' "$FACTORY_ABS" &&
+[ -z "$factory_doc" ] || grep -qE 'gh (issue|pr|api)|trace(\.kit)?\.sh|mktemp|mkdir' "$FACTORY_ABS" &&
 	fail "process/R121: FACTORY.md spells a publish, a trace call or a scratch directory" ||
 	pass "process/R121: FACTORY.md spells no publish, no trace call and no scratch directory"
+
+# …and the `defer` answer's own text carries no fenced block: the path that
+# ends the run spells no command to run.
+fd_defer=$(awk '/^- \*\*`defer`\*\*/ { on = 1 } on && /^- \*\*`missing`\*\*/ { exit } on' "$FACTORY_ABS" 2>/dev/null)
+[ -n "$fd_defer" ] && ! printf '%s\n' "$fd_defer" | grep -q '^ *```' &&
+	pass "process/R121: the defer answer's text holds no fenced command" ||
+	fail "process/R121: the defer answer is missing, or its text holds a fenced command"
 
 # process/R127: the skills that publish no PRD or ticket carry no deferral.
 for s in grill-me grill-with-docs design-brief; do
