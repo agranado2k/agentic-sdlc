@@ -2905,3 +2905,16 @@ at 32. `/to-tickets` rule 8 lets the line name a path. A new living spec,
 guard is slice 2. Built ahead of its slot and held behind 0.102.0 and
 0.103.0 (ADR-0033); the skill stayed under its byte ceiling, 34,940 of
 35,000, so no sidecar.
+
+## 2026-11-01 — the trace records a verifier's verdict
+
+PRD-13 slice 1 of D-02 (#939, factory T-76; released as 0.105.0, ADR-0044).
+The trace gains `verify.verdict` (`pass`, `blocked`, `unavailable`; the head
+reviewed and the provider required on a verdict that ran) and
+`finding.verify` (`confirmed`, `disputed`, on a lens finding id with a
+`<path>:<line>` place), and a raise or a non-local triage takes a `V-` id.
+Two calls made in the build: the record reader skips `V-` raises now, so the
+lenses' earned record stays the kit's own before the verifier's row exists,
+and a local triage still takes only a lens id, a verifier finding being
+triaged as a bot's. Built ahead of its slot as 0043 and renumbered 0044
+after 0.104.0, whose wave took 0043 (ADR-0033).

@@ -393,6 +393,14 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: the bare "harness" — see "Words this project does not use";
     "provider" (that is the vendor behind the model, not the program running
     it); and "runner".
+- **Provider** — the vendor behind a model, as the agent-harness entry above
+  already uses the word. The kit's agents policy declares one provider per
+  agent harness and one for the session's own, and a model's provider is its
+  agent harness's. Comparing **families** (ADR-0027) is a different and finer
+  test: two models of one provider can differ in family and share a provider.
+  The verifier's walk tries another provider first. Ref: ADR-0044, PRD-13.
+  - _Avoid_: "vendor" for the policy's word (it is the plain meaning, not the
+    token), and "agent harness" — the program a model runs in.
 - **Budget** — the two ceilings a dispatched worker's whole process tree runs
   inside: a task ceiling and a memory ceiling, decided at dispatch time as a
   percentage of the host — the task ceiling the operator's own session runs
@@ -625,6 +633,18 @@ Grouped by the seam each term belongs to. Entry shape:
   - _Avoid_: "proxy" (a proxy forwards what it is given; the broker refuses
     most of it), "relay" (the operator pasting a review by hand — the thing
     the broker replaces), "poster".
+- **Verifier** — a reviewer-tier spawn in the `cross-provider` domain that
+  reviews one PR head beside the kit's own `/review-pr`, with the review
+  worker's contract. Its model is resolved by a walk: a model of another
+  **provider** than the diff's author first, else one of the author's provider
+  and another family, else none (`unavailable`). It also judges each `pass`
+  row of the PR's check table and each finding the kit's review raised. It is
+  advisory: its verdict, the trace kind `verify.verdict`, is never the review
+  a landing requires, and its verdict on a finding, `finding.verify`, is never
+  a triage, so it labels nothing. Its own findings carry a `V-` id (`V-H-1`).
+  Its one gating use is PRD-10's low-risk lane. Ref: ADR-0044, PRD-13.
+  - _Avoid_: "second reviewer" or "co-signer" (it signs nothing), and
+    "cross-check".
 - **Retro** — the retrospective: `/retro`, the one sanctioned reader of the
   trace beside the operator and a diagnosis (ADR-0008 clause 7). Over a
   window — by default since its own last run end — it answers eight fixed
