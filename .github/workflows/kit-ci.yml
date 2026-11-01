@@ -511,6 +511,15 @@ jobs:
       - name: Check-table reader suite
         run: sh tests/check-table.test.sh
 
+  policy:
+    name: The policy reader reads a judging file at the base, failing closed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Policy reader suite
+        run: sh tests/policy.test.sh
+
   failure-signature:
     name: A loop stops on the third identical failure
     runs-on: ubuntu-latest

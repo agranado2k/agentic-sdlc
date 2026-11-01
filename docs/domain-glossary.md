@@ -167,6 +167,35 @@ Grouped by the seam each term belongs to. Entry shape:
   2026-09-02).
   - _Avoid_: "baseline", "ground truth" — the oracle is the complete context
     of comparison, not a single number or an assumption.
+- **Base branch's version** — a file's content at the commit a base ref names,
+  read from git's objects, never from a working tree: in CI the pull request
+  event's base commit, in a review the ref the review diffs against. The base
+  branch's tip, never the merge base, so a tightening binds every open pull
+  request from the moment it lands. Ref: ADR-0039.
+  - _Avoid_: "main's copy" — the base is whatever ref the judge names.
+- **Judging file** — a file whose content decides how a change is judged. The
+  **judging set** is fixed by place and suffix: every `.config.sh` file directly
+  under `scripts/`, the docs gate's `config.mjs` and `local-vocabulary.mjs`,
+  every file directly under `.githooks/` and `.github/workflows/`, the risk
+  policy, plus each path the risk policy's extra list names at the base. Every
+  **policy file** is one; so is the wiring that runs a guard or the gate.
+  Matched by whole path: a file of the same name elsewhere is not. Ref:
+  ADR-0039, `policy/R9`.
+- **Policy reader** — `scripts/policy.sh`, the one program that reads a
+  judging file at a base ref. Three questions: `read`, `touched` and
+  `thresholds`. Shared layer. Ref: ADR-0039, `docs/specs/policy.md`.
+- **Fail closed** — the policy reader's answer when it cannot give the base
+  branch's version: one `fail-closed <reason> <path>` line, exit 3, the reason
+  one of `no-base`, `missing`, `unreadable`, `invalid`, and nothing read from a
+  file. Each judge maps it to its strictest path, never to a pass. Ref:
+  ADR-0039.
+  - _Avoid_: "fall back" — a fail-closed answer never falls back to the working
+    tree or to a shipped default.
+- **Risk policy** — `scripts/risk.config.sh`, the policy file holding the two
+  thresholds a review area must meet (`miss-rate-below`, `precision-floor`, whole
+  percents) and the extra list of judging paths. Ships filled, no twin (the
+  ADR-0003 amendment), and is always read at a base. Ref: ADR-0039,
+  `policy/R15`.
 
 ## Process — how work moves
 

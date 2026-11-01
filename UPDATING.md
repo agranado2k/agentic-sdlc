@@ -227,6 +227,35 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
+**Arriving from 0.98.0 or older, one script joins: the policy reader, and
+one policy file is new: the risk policy.** `scripts/policy.sh` joins the
+shared layer at 0.99.0 — see "When a file joins the shared layer" below. It
+reads a **judging file** — a `.config.sh` file directly under `scripts/`,
+the docs gate's `config.mjs` and `local-vocabulary.mjs`, a file directly
+under `.githooks/` or `.github/workflows/`, the risk policy, or a path the
+risk policy's extra list names — as a base ref has it, from git's objects
+alone, never from your working tree. `sh scripts/policy.sh read <path>
+--base <ref>` prints the path of a copy under your git directory; `sh
+scripts/policy.sh touched <base> <head>` prints the judging files a diff
+changes and exits 1 on any; `sh scripts/policy.sh thresholds --base <ref>`
+prints `miss-rate-below <n>` and `precision-floor <n>`. An answer it cannot
+give is one `fail-closed <reason> <path>` line and exit 3, the reason
+`no-base`, `missing`, `unreadable` or `invalid`; a path outside the judging
+set is exit 2. Nothing in the layer reads through it yet: your guards, gate
+and review behave as before. **One policy file is new (9d):
+`scripts/risk.config.sh`**, shipped filled — `RISK_MISS_RATE_BELOW=5`,
+`RISK_PRECISION_FLOOR=80`, `RISK_JUDGING_EXTRA=''`. Missing in your tree,
+take it whole (`kit_take "${TO_REF}" scripts/risk.config.sh
+scripts/risk.config.sh`) and commit it to your base branch: the reader only
+ever reads it at a base, so a copy that exists only on a branch fails
+closed as `missing`. **One template moves (9c):
+`templates/workflows/ai-review-prompt.md`** (#946, landed before this bump)
+— the CI review prompt asks for `scope: inside` or `scope: outward` as the
+first words after each ⚠️ UNSPECIFIED tag, and for one `pin: <id> —
+<upheld|disputed>` line per `pass` row of the PR body's check table. If you
+copied it into `.github/workflows/`, take the two paragraphs by hand. No
+skill, wiring or adapter moves.
+
 **Arriving from 0.97.0 or older, the outcome recorder records failed
 factory QA.** No file joins or leaves at 0.98.0. One shared file changes
 content besides this recipe: where your repository holds a `.factory/`
@@ -1688,7 +1717,7 @@ addition.
 
 A real run, captured from `tests/docs-demo.sh` in the kit. The setup: a consumer
 that bootstrapped at shared-layer **0.1.0** (whose layer was
-`constitution/shared-invariants.md` alone), updating to **0.98.0** (by which point
+`constitution/shared-invariants.md` alone), updating to **0.99.0** (by which point
 the guards, the gate, the harness engine, the tier resolver, the code-craft
 article and this file have all joined the layer). The consumer has one local edit to a shared file — the
 drift case, because the clean case teaches nothing.
@@ -1700,10 +1729,10 @@ order by the locale's collation, and only the paths move, never the verdicts.
 
 ```console
 $ kit tag --list --sort=-v:refname
-v0.98.0
+v0.99.0
 v0.1.0
 $ echo "$FROM_REF -> $TO_REF"
-v0.1.0 -> v0.98.0
+v0.1.0 -> v0.99.0
 
 $ comm -13 "$WORK/from.list" "$WORK/to.list"   # JOINING
 UPDATING.md
@@ -1737,6 +1766,7 @@ scripts/failure-signature.sh
 scripts/guards.lib.sh
 scripts/lens-slice.sh
 scripts/manifest.lib.sh
+scripts/policy.sh
 scripts/requirement.lib.sh
 scripts/stamp.sh
 scripts/tdd-pairing-guard-ci.sh
@@ -1747,10 +1777,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3450 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3483 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3604 insertions(+), 1 deletion(-)
+ 3 files changed, 3637 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
@@ -1817,13 +1847,14 @@ $ # step 5 — apply
   updated scripts/guards.lib.sh
   updated scripts/lens-slice.sh
   updated scripts/manifest.lib.sh
+  updated scripts/policy.sh
   updated scripts/requirement.lib.sh
   updated scripts/stamp.sh
   updated scripts/tdd-pairing-guard-ci.sh
   updated scripts/tdd-pairing-guard.sh
   updated scripts/trace.sh
   updated scripts/vocab.sh
-  NOTE  UPDATING.md changed in v0.98.0 — RE-READ IT before continuing
+  NOTE  UPDATING.md changed in v0.99.0 — RE-READ IT before continuing
 
 $ # step 6 — verbatim check (bytes AND mode), then the gate
 verbatim  UPDATING.md
@@ -1858,6 +1889,7 @@ verbatim  scripts/failure-signature.sh
 verbatim  scripts/guards.lib.sh
 verbatim  scripts/lens-slice.sh
 verbatim  scripts/manifest.lib.sh
+verbatim  scripts/policy.sh
 verbatim  scripts/requirement.lib.sh
 verbatim  scripts/stamp.sh
 verbatim  scripts/tdd-pairing-guard-ci.sh
@@ -1894,10 +1926,10 @@ WARN  docs conformance: advisories (gate stays green)
   [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
       -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
-OK  docs gate: all checks passed (shared-layer 0.98.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.99.0, engine: docs harness)
 $ sed -n 's/^shared-layer:[[:space:]]*//p' VERSION
-0.98.0
-Part 1 complete — shared layer at v0.98.0. The update is not done: go to step 8.
+0.99.0
+Part 1 complete — shared layer at v0.99.0. The update is not done: go to step 8.
 ```
 
 **Read the last two lines before the drift block.** `NOTE  UPDATING.md changed`
@@ -2626,6 +2658,7 @@ because both facts change what you do with it:
 | `scripts/docs-conformance/local-vocabulary.mjs` | **only a `.template`** | reading the diff of the `.template` |
 | `scripts/vocab.config.sh` | a file at that path, since 0.25.0 — and shipped **filled** | key sets (`NAME=`), then the diff of the values |
 | `scripts/trace.config.sh` | a file at that path, in new-project bootstraps since 0.25.0, adopted repos since 0.29.0, and named here since 0.29.0 — shipped **empty** | key sets (`NAME=`), then the diff |
+| `scripts/risk.config.sh` | a file at that path, since 0.99.0 — shipped **filled**, and read only at a base | key sets (`NAME=`), then the diff of the values |
 
 The fourth row is not a footnote. It is why the first question below has to be
 asked about *both* refs rather than one.
@@ -2770,7 +2803,7 @@ else
 fi
 ```
 
-`MERGE` is the 0.4.0 → 0.98.0 case for this file, and `ADD` is the 0.3.0 → 0.98.0
+`MERGE` is the 0.4.0 → 0.99.0 case for this file, and `ADD` is the 0.3.0 → 0.99.0
 one: `scripts/agents.config.sh` did **not** exist at 0.3.0 — it arrived with the
 0.4.0 wave's tier resolver — so a 0.3.0 consumer copies the whole file and then
 edits it. Nothing is at risk there, which is precisely why it is worth checking
@@ -3140,14 +3173,14 @@ The same test, a different consumer. This one bootstrapped at shared-layer
 **0.3.0** with `/dogfood` declined, adapted `/to-tickets` with a local note (a
 legitimate edit — skills are yours), **deleted `.github/workflows/tdd-pairing.yml`
 on purpose** after folding that gate into its own CI, and has just finished Part
-1: its `VERSION` says 0.98.0 and `scripts/agents.lib.sh` is on disk — and the gate
+1: its `VERSION` says 0.99.0 and `scripts/agents.lib.sh` is on disk — and the gate
 is **red** with `article-unreferenced`, because Part 1 landed the code-craft
 article and nothing in this consumer's manual points at it yet. That pointer is
 step 9b's hand edit, which is the point.
 
 > **The file list below is this pair of releases, and this consumer.** What
 > `changed.yours` prints is every non-shared path the kit touched between *your*
-> two refs — a real `v0.3.0 → v0.98.0` clone prints more lines than the fixture
+> two refs — a real `v0.3.0 → v0.99.0` clone prints more lines than the fixture
 > here, because the fixture models only the parts of the wave the example is
 > about. Read the transcript for the **shape** of each decision, never as a list
 > to check yours against: a line you have and this one does not is normal.
@@ -3362,7 +3395,7 @@ NEW       docs/specs/README.md
 
 $ # 9d — config: MERGE, ADD or STAMPED? Ask about BOTH refs first.
 $ # kit cat-file -e "${FROM_REF}:$C" — did it exist at the release we are on?
-ADD     scripts/agents.config.sh is new at v0.98.0 — nothing of ours to preserve
+ADD     scripts/agents.config.sh is new at v0.99.0 — nothing of ours to preserve
 $ sed -n 's/^\(AGENT_TIER_[A-Z]*\)=.*/\1/p' "$C"
 AGENT_TIER_PLANNER
 AGENT_TIER_IMPLEMENTER
@@ -3392,7 +3425,7 @@ WARN  docs conformance: advisories (gate stays green)
   [trace-off] ! scripts/trace.config.sh [trace-off] — leaves TRACE_DIR empty, so the trace is off — while .gitignore already ignores .trace/
       -> Nothing the chain decides is being recorded, so `/retro` will have no trace to read. Set TRACE_DIR='.trace' in scripts/trace.config.sh to turn it on (the ignore entry already keeps it out of every push), or, if off is your decision, drop the .trace/ line from .gitignore to say so. traceOff in the gate config names the files read.
 
-OK  docs gate: all checks passed (shared-layer 0.98.0, engine: docs harness)
+OK  docs gate: all checks passed (shared-layer 0.99.0, engine: docs harness)
 ```
 
 Seven things in that transcript are worth reading twice.
@@ -3406,7 +3439,7 @@ provenance file 9a delivers, in a consumer that took 9a's delta for one skill
 and not the file beside it. Read every advisory the way you read this one: a
 finding about prose you own, printed so you can decide, never a failed push.
 
-**`ADD     scripts/agents.config.sh is new at v0.98.0`.** The tier→model map did
+**`ADD     scripts/agents.config.sh is new at v0.99.0`.** The tier→model map did
 not exist at 0.3.0; it arrived with the resolver. So this consumer copies the
 whole file — nothing of theirs is at risk — and then edits it. That is *this*
 pair of releases, not a rule: the same path is a destructive overwrite for a

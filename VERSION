@@ -19,6 +19,7 @@
 #   scripts/agents.config.sh                       tier -> model, your provider's
 #   scripts/vocab.config.sh                        the words a decision line may carry — ships FILLED
 #   scripts/lens-slice.config.sh                   which changed paths each review lens reads — ships FILLED
+#   scripts/risk.config.sh                         the risk thresholds and extra judging paths, read at a base — ships FILLED
 #   scripts/trace.config.sh                        whether and where decisions are traced — ships EMPTY
 #
 # Edit those freely — the whole point of stamping a template is that the copy
@@ -3519,7 +3520,37 @@
 # tests/outcome-recorder.test.sh section 6 and tests/retro-skill.test.sh
 # section 19.
 
-shared-layer: 0.98.0
+# 0.99.0 — a judging file is read at the base branch, failing closed (ticket
+# #904, PRD-08 slice 1 of K2, the kit's ADR-0039). ONE file joins the shared
+# layer: scripts/policy.sh, the policy reader, whose `read <path> --base
+# <ref>` writes a copy of the base's version of one judging file under the
+# git directory (policy/<base commit>/<path>) and prints its absolute path,
+# `touched <base> <head>` prints the judging-set paths the diff adds,
+# modifies, deletes or renames, sorted, exit 1 on any, and `thresholds
+# --base <ref>` prints miss-rate-below then precision-floor from the risk
+# policy at the base; any answer it cannot give is one `fail-closed
+# <reason> <path>` line and exit 3, the reasons no-base, missing,
+# unreadable and invalid; a path outside the judging set exit 2. It reads
+# git's objects only, and evaluates a shell judging file only in a child
+# process. No judge reads through it yet. One more shared file changes
+# content: UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c):
+# templates/workflows/ai-review-prompt.md (#946, PR #962, landed untagged
+# before this bump) — the CI review prompt writes `scope: inside|outward`
+# after each ⚠️ UNSPECIFIED tag, and one `pin: <id> — <upheld|disputed>`
+# line per `pass` row of the PR body's check table.
+# Config (9d): scripts/risk.config.sh, NEW and shipped FILLED —
+# RISK_MISS_RATE_BELOW=5, RISK_PRECISION_FLOOR=80, RISK_JUDGING_EXTRA='' —
+# listed among the policy files above and copied by bootstrap's adopt arm;
+# take it whole when your tree lacks it. Adapter (9e): none.
+# Kit-only, never shipped: the kit's ADR-0039, docs/specs/policy.md R1 to
+# R15, the glossary's Base branch's version, Judging file, Policy reader,
+# Fail closed and Risk policy, AGENTS.md's policy-reader row, README.md's
+# rows and suite line, the kit-ci job, and tests/policy.test.sh; from
+# #962, docs/specs/process.md R206 and R207 and tests/ai-review-template.test.sh.
+
+shared-layer: 0.99.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -3554,6 +3585,7 @@ files:
   scripts/tdd-pairing-guard-ci.sh
   scripts/behavior-delta.sh
   scripts/lens-slice.sh
+  scripts/policy.sh
   scripts/check.sh
   scripts/docs-conformance/index.mjs
   scripts/docs-conformance/context.mjs

@@ -2818,3 +2818,21 @@ the second run wrote 0. Open from #898's demo: 6 of its 24 `fixed` outcomes
 were a release bump "fixing" the previous release PR by rewriting the
 VERSION, README and UPDATING.md pin lines — a candidate follow-up, not
 fixed here.
+
+## 2026-11-01 — a judging file is read at the base branch, failing closed
+
+PRD-08 slice 1 of K2 (#904, ADR-0039, released as 0.99.0).
+`scripts/policy.sh` joins the shared layer: `read <path> --base <ref>`
+copies the base's version of one judging file to
+`<git common dir>/policy/<base commit>/<path>` and prints that path,
+`touched <base> <head>` prints the judging files a diff changes (exit 1 on
+any), and `thresholds --base <ref>` prints the two numbers from the new
+risk policy, `scripts/risk.config.sh` (5 and 80, shipped filled, no twin).
+Anything it cannot answer is one `fail-closed <reason> <path>` line and
+exit 3. No judge reads through it yet; slices 2 to 4 wire the guard, the
+gate and the review. Measured on the kit, two cores, git 2.55: five `read
+scripts/lens-slice.config.sh --base origin/main` runs took 32 to 82 ms
+wall, about 60 ms typical; one `read` of the docs gate's `config.mjs`, 52
+ms. Until this lands, `thresholds --base origin/main` on the kit prints
+`fail-closed missing scripts/risk.config.sh`, the reader holding its own
+rule.
