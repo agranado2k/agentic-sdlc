@@ -8,7 +8,7 @@ Opened from `/pr-iterate` step 4 when a push lands on a PR whose body carries a 
 
 ## Read it
 
-The ticket is the one the PR body's `<!-- implement: ticket=#<T> tier=<tier> -->` line names, its digits only. Fetch both bodies into the iteration's scratch directory, unread, and run the reader on them:
+The ticket is the one the PR body's `<!-- implement: ticket=#<T> tier=<tier> -->` line names, its digits only — or its `<!-- implement: ticket=T-<digits> tier=<tier> -->` form, a factory ticket's canonical id, matched whole. Fetch both bodies into the iteration's scratch directory, unread, and run the reader on them:
 
 ```
 gh pr view <N> --json body -q .body >"$scratch/pr-body"
@@ -16,7 +16,9 @@ gh issue view <T> --json body -q .body >"$scratch/ticket-body"
 sh scripts/check-table.sh "$scratch/pr-body" "$scratch/ticket-body"
 ```
 
-Exit 3 is a body with no table: nothing here applies, unless `sh scripts/stamp.sh <T>` prints a `Covers:` line other than a `none` one — then every covered id reads `missing-row`. Exit 2 is a table the reader refused: every covered id reads as failing until the row it names is rewritten.
+**A factory ticket fetches no issue**: it has none. Its side is the stamp reader's checked `Covers:` and `Test-tier:` lines, so the second line becomes `sh scripts/stamp.sh T-<digits> >"$scratch/ticket-body"`, and the other two run as written.
+
+Exit 3 is a body with no table: nothing here applies, unless `sh scripts/stamp.sh <T>` (`T-<digits>` for a factory ticket) prints a `Covers:` line other than a `none` one — then every covered id reads `missing-row`. Exit 2 is a table the reader refused: every covered id reads as failing until the row it names is rewritten.
 
 ## Rewrite it after a push (step 4)
 
