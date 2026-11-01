@@ -795,7 +795,7 @@ Grouped by the seam each term belongs to. Entry shape:
   published to the forge, no trace event, and the run ends. Decided from the
   manifest's and the skill's presence alone, never by running `factory`; only
   the operator's own message in the session lifts it. Ref: PRD-12 (factory
-  item), process/R121 to R126, ADR-0042.
+  item), process/R120 to R126, ADR-0042.
   - _Avoid_: "redirect" — the kit writes nothing to the factory; it stops.
 
 ---

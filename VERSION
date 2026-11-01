@@ -3713,7 +3713,26 @@
 # KIT_OWN naming it, docs/specs/runtime.md R200 to R202 and R221, the
 # glossary's Verifier and Provider, and tests/trace.test.sh section 44.
 
-shared-layer: 0.105.0
+# 0.106.0 — /to-prd defers to the factory's own PRD skill in a factory
+# project (ticket #936, PRD-12 slice 3 of D-02, factory T-73). NO file joins
+# the shared layer and none leaves, and no shared file changes content
+# besides UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-prd — SKILL.md opens with "A factory project defers,
+# before any other step", ahead of its grilling question, pointing at a new
+# FACTORY.md beside it whose fenced factory_deferral is /to-tickets' own,
+# byte for byte, asked for factory-prd: `defer` prints the hand-off naming
+# /factory-prd and ends, publishing nothing and writing no prd.write;
+# `missing` names `factory install-skill` once and runs the forge flow;
+# `none` changes nothing; only the operator's own message lifts a deferral.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
+# none.
+# Kit-only, never shipped: docs/specs/process.md R120, the glossary's
+# Deferral reference widened to R120, config.mjs's skill-path exemption
+# `.claude/skills/factory-prd/`, and tests/spec-skills.test.sh's /to-prd
+# factory section.
+
+shared-layer: 0.106.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

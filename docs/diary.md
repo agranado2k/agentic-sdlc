@@ -2918,3 +2918,15 @@ lenses' earned record stays the kit's own before the verifier's row exists,
 and a local triage still takes only a lens id, a verifier finding being
 triaged as a bot's. Built ahead of its slot as 0043 and renumbered 0044
 after 0.104.0, whose wave took 0043 (ADR-0033).
+
+## 2026-11-01 — /to-prd defers to the factory's own PRD skill
+
+PRD-12 slice 3 of D-02 (#936, factory T-73; released as 0.106.0; ADR-0042 already named it).
+`/to-prd` takes `/to-tickets`' deferral in the same shape: a `FACTORY.md`
+beside the skill, opened before the grilling question, running
+`factory_deferral factory-prd`. The fenced function is `/to-tickets`' own,
+byte for byte, and the suite holds the two fences equal before it runs
+`/to-prd`'s against fixtures of its own — a `factory-tickets` skill alone
+does not stand in for `factory-prd`. With both files it hands off naming
+`/factory-prd` and writes no `prd.write`; with the manifest alone it names
+`factory install-skill` once. Spec gains process/R120.
