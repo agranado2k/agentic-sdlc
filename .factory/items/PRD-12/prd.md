@@ -449,7 +449,7 @@ the maintainer confirms them at approval):
   first instance. Wherever the kit's policy reader (PRD-08, K2) reads such a key at the base,
   the read happens at the base too (R227), so PRD-08's reader (T-41) must carry
   `.factory/project.yaml` in its judging set and honour the rule. Slice 4 delivers it, as
-  T-86 (#959).
+  T-88 (#959).
 
 **Settled after approval** (§9's remaining questions, closed 2026-10-31):
 
@@ -500,7 +500,7 @@ on 2026-10-31 (§8).
 
 ## 10. Dogfood plan
 
-Four build tickets in slice order, slice 4's being T-86 (#959). Slice 1's tag lets the factory's tickets in this repository be
+Four build tickets in slice order, slice 4's being T-88 (#959). Slice 1's tag lets the factory's tickets in this repository be
 built by their `T-<n>` id rather than by a mirrored issue once K7b lands (§8); until then
 they are built and landed by their mirrored issue. Slices 2 and 3 are first run here as in any
 factory project, with the operator's per-run override for exceptions (§8). The first
