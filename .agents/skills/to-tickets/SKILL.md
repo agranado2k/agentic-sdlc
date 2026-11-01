@@ -10,6 +10,10 @@ metadata:
 
 Turn a PRD (an issue from `/to-prd`, or a spec agreed in this conversation) into small, independently workable tickets. Each ticket is a **tracer bullet**: a thin vertical slice through every layer it needs, demoable on its own (shared invariant §2).
 
+## A factory project defers, before any other step
+
+First of all — before you fetch a PRD body or make the pre-screen's scratch directory — open [FACTORY.md](FACTORY.md) and run its check, `factory_deferral factory-tickets`. `defer` ends the run at its hand-off; `missing` is said once; `none` changes nothing.
+
 ## Rules for every ticket
 
 1. **The admission test: "what behavior can I demo?"** If the ticket's outcome can't be demonstrated (a layer, a refactor-for-later, "add the types"), it is a horizontal slice — reject or merge it. The PRD's Scenarios are the first list of demos — start there. The two exceptions are **prefactoring** (below) and the ticket that answers an open issue (rule 12), whose demo is the answer, recorded.

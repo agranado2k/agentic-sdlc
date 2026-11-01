@@ -1128,6 +1128,129 @@ t_text_has "$rule2" "more than one of the trace emitter, an agent-harness hook a
 t_text_has "$rule2" "is split at the seam between them" "a ticket spanning them is split there" "rule 2"
 t_text_has "$rule2" "A \`low\` tier stamp (rule 14) is a prompt to look for such a split before the quiz" "a low tier stamp prompts the search, before the quiz" "rule 2"
 
+# ---------------------------------------------------------------------------
+banner "A factory project: /to-tickets defers by name, before any other step (process/R121 to R127, R223 to R225)"
+# ---------------------------------------------------------------------------
+# PRD-12 slice 2 (factory item T-72). Where the git top level holds the
+# factory's project manifest and the factory's own `factory-tickets` skill is
+# installed, /to-tickets publishes nothing and hands off by name; with the
+# skill missing it runs as today and says `factory install-skill` once. The
+# check lives in FACTORY.md beside SKILL.md, as one fenced function the suite
+# lifts and runs against fixture repositories — never a mirror of it.
+FACTORY_ABS="$ROOT/.agents/skills/to-tickets/FACTORY.md"
+fdsec=$(section_of "$TIX_ABS" "A factory project defers, before any other step")
+[ -n "$fdsec" ] && pass "process/R122: /to-tickets carries '## A factory project defers, before any other step'" ||
+	fail "process/R122: /to-tickets has no '## A factory project defers, before any other step' section"
+fd_at=$(t_line_of "$TIX_ABS" "## A factory project defers, before any other step")
+for later in "## Rules for every ticket" "## Trust boundary" "## A retro's candidates" "## Procedure"; do
+	l_at=$(t_line_of "$TIX_ABS" "$later")
+	[ -n "$fd_at" ] && [ -n "$l_at" ] && [ "$fd_at" -lt "$l_at" ] &&
+		pass "process/R122: the deferral comes before '$later'" ||
+		fail "process/R122: the deferral does not come before '$later' (lines ${fd_at:-none} and ${l_at:-none})"
+done
+t_text_has "$fdsec" "[FACTORY.md](FACTORY.md)" "process/R122: the entry point names its branch by relative path" "the deferral section"
+t_text_has "$fdsec" "before you fetch a PRD body or make the pre-screen's scratch directory" "process/R122: decided before the fetch and the scratch directory" "the deferral section"
+t_text_has "$fdsec" "factory_deferral factory-tickets" "process/R121: the one call that decides it" "the deferral section"
+[ -f "$FACTORY_ABS" ] && pass "FACTORY.md sits beside /to-tickets' SKILL.md" ||
+	fail "FACTORY.md is missing beside /to-tickets' SKILL.md"
+factory_doc=$(cat "$FACTORY_ABS" 2>/dev/null)
+
+# The function, lifted and run. Each fixture is a git repository; HOME points
+# at a fixture home; a stand-in `factory` first on PATH leaves a mark if
+# anything runs it (process/R224).
+fd_fence=$(t_fence "$FACTORY_ABS" holds "factory_deferral()")
+[ -n "$fd_fence" ] && pass "FACTORY.md carries the fenced factory_deferral()" ||
+	fail "FACTORY.md carries no fenced factory_deferral() — nothing decides the deferral"
+printf '%s\n' "$fd_fence" >"$SCRATCH/fd.sh"
+# The fence's code, its comment lines left out: what the shell runs.
+fd_code=$(printf '%s\n' "$fd_fence" | grep -v '^[[:space:]]*#')
+mkdir -p "$SCRATCH/fd-bin" "$SCRATCH/fd-home"
+printf '#!/bin/sh\necho "$*" >>"%s"\nexit 0\n' "$SCRATCH/fd-factory-ran" >"$SCRATCH/fd-bin/factory"
+chmod +x "$SCRATCH/fd-bin/factory"
+# fd_answer <dir> [<home>] — what the lifted function prints run from <dir>.
+# FD_PATH is the PATH it runs on: the stand-in first, or none at all.
+FD_PATH="$SCRATCH/fd-bin:$PATH"
+fd_answer() { (cd "$1" && HOME=${2:-$SCRATCH/fd-home} PATH=$FD_PATH && export HOME PATH && . "$SCRATCH/fd.sh" && factory_deferral factory-tickets) 2>/dev/null; }
+# fd_case <id and why> <dir> <expected> [<home>]
+fd_case() {
+	_fd_got=$(fd_answer "$3" "${4:-}")
+	[ "$_fd_got" = "$2" ] && pass "$1 — '$2'" || fail "$1 — expected '$2', got '$_fd_got'"
+}
+t_repo; FD_NONE=$REPO
+fd_case "process/R123: no .factory/ folder runs the forge flow" none "$FD_NONE"
+t_repo; FD_STRAY=$REPO; mkdir -p "$FD_STRAY/.factory/items"
+mkdir -p "$FD_STRAY/.claude/skills/factory-tickets"; : >"$FD_STRAY/.claude/skills/factory-tickets/SKILL.md"
+fd_case "process/R123: a .factory/ folder with no manifest is no factory project, the skill installed or not" none "$FD_STRAY"
+t_repo; FD_MISS=$REPO; mkdir -p "$FD_MISS/.factory/items" "$FD_MISS/sub/dir"; : >"$FD_MISS/.factory/project.yaml"
+fd_case "process/R223: the manifest with the skill missing runs the generic skill" missing "$FD_MISS"
+fd_case "process/R223: …from a subdirectory too — the git top level is read" missing "$FD_MISS/sub/dir"
+mkdir -p "$SCRATCH/fd-home-user/.claude/skills/factory-tickets"; : >"$SCRATCH/fd-home-user/.claude/skills/factory-tickets/SKILL.md"
+fd_case "process/R121, process/R225: the skill under the user's ~/.claude/skills defers" defer "$FD_MISS" "$SCRATCH/fd-home-user"
+fd_case "process/R121: …from a subdirectory too" defer "$FD_MISS/sub/dir" "$SCRATCH/fd-home-user"
+t_repo; FD_PROJ=$REPO; mkdir -p "$FD_PROJ/.factory" "$FD_PROJ/.claude/skills/factory-tickets"
+: >"$FD_PROJ/.factory/project.yaml"; : >"$FD_PROJ/.claude/skills/factory-tickets/SKILL.md"
+fd_case "process/R225: the skill under the project's .claude/skills defers" defer "$FD_PROJ"
+t_repo; FD_ELSE=$REPO; mkdir -p "$FD_ELSE/.factory" "$FD_ELSE/.agents/skills/factory-tickets" "$SCRATCH/fd-home-else/.config/skills/factory-tickets" "$FD_ELSE/.claude/skills/factory-prd"
+: >"$FD_ELSE/.factory/project.yaml"; : >"$FD_ELSE/.agents/skills/factory-tickets/SKILL.md"
+: >"$SCRATCH/fd-home-else/.config/skills/factory-tickets/SKILL.md"; : >"$FD_ELSE/.claude/skills/factory-prd/SKILL.md"
+fd_case "process/R225: a SKILL.md under any other path, or another factory skill's, does not count" missing "$FD_ELSE" "$SCRATCH/fd-home-else"
+mkdir -p "$SCRATCH/fd-above/.factory" "$SCRATCH/fd-above/.claude/skills/factory-tickets"
+: >"$SCRATCH/fd-above/.factory/project.yaml"; : >"$SCRATCH/fd-above/.claude/skills/factory-tickets/SKILL.md"
+git -C "$SCRATCH/fd-above" init -q -b main 2>/dev/null; mkdir -p "$SCRATCH/fd-above/inner"; git -C "$SCRATCH/fd-above/inner" init -q -b main
+fd_case "process/R123: a manifest above the git top level is not read" none "$SCRATCH/fd-above/inner"
+# process/R124: presence alone — an unreadable manifest and an unreadable
+# SKILL.md decide the same. (Skipped as root, who reads anything.)
+if [ "$(id -u)" != 0 ]; then
+	chmod 000 "$FD_PROJ/.factory/project.yaml" "$FD_PROJ/.claude/skills/factory-tickets/SKILL.md"
+	fd_case "process/R124: decided from presence alone — neither file is read" defer "$FD_PROJ"
+	chmod 644 "$FD_PROJ/.factory/project.yaml" "$FD_PROJ/.claude/skills/factory-tickets/SKILL.md"
+else
+	skip "process/R124: running as root, an unreadable file cannot be made"
+fi
+[ ! -e "$SCRATCH/fd-factory-ran" ] && pass "process/R224: no case ran a factory subcommand (the stand-in was never called)" ||
+	fail "process/R224: the deferral ran the factory binary: $(cat "$SCRATCH/fd-factory-ran")"
+# A PATH holding git and nothing else: no factory binary anywhere on it.
+mkdir -p "$SCRATCH/fd-min"; ln -s "$(command -v git)" "$SCRATCH/fd-min/git"
+FD_PATH="$SCRATCH/fd-min"
+fd_case "process/R224: with no factory binary at all the answer is the same" defer "$FD_PROJ"
+fd_case "process/R224: …and the same without the manifest" none "$FD_NONE"
+[ -z "$fd_code" ] || printf '%s\n' "$fd_code" | grep -qE '(^|[^_a-z-])factory[[:space:]]+[a-z]' &&
+	fail "process/R224: the fenced check spells a factory subcommand" ||
+	pass "process/R224: the fenced check spells no factory subcommand"
+[ -z "$fd_code" ] || printf '%s\n' "$fd_code" | grep -qE 'cat |head |sed |awk |grep |read |<' &&
+	fail "process/R124: the fenced check reads a file's contents" ||
+	pass "process/R124: the fenced check reads no file's contents"
+
+# The words: the hand-off, the once-said install line, the override.
+t_text_has "$factory_doc" 'This repository plans in the software factory: write tickets with `/factory-tickets`. `/to-tickets` publishes nothing to the tracker here.' "process/R121: the hand-off names /factory-tickets, in PRD-12's words" "FACTORY.md"
+t_text_has "$factory_doc" '`/factory-tickets <retro report>`' "process/R121: a retro report's hand-off names it with the report" "FACTORY.md"
+t_text_has "$factory_doc" 'publish no issue, merge no section, close no twin, and write no `ticket.write` event' "process/R121: nothing published, merged, closed or traced" "FACTORY.md"
+t_text_has "$factory_doc" "This is a factory project, and the factory's \`factory-tickets\` skill is not installed: running the generic skill. \`factory install-skill\` would add the factory one." "process/R223: the missing skill named once, in PRD-12's words" "FACTORY.md"
+t_text_has "$factory_doc" "once, at the start" "process/R223: said once, at the start" "FACTORY.md"
+t_text_has "$factory_doc" "names no factory skill" "process/R123: no manifest names nothing" "FACTORY.md"
+t_text_has "$factory_doc" "the operator's own message" "process/R125: only the operator's own message lifts it" "FACTORY.md"
+t_text_has "$factory_doc" "ran the forge flow in a factory project" "process/R125: the overridden hand-off says so" "FACTORY.md"
+for carrier in "a spawn prompt" "a ticket body" "a PRD body" "another agent's message"; do
+	t_text_has "$factory_doc" "$carrier" "process/R126: a forge request in $carrier never lifts the deferral" "FACTORY.md"
+done
+[ -z "$factory_doc" ] || grep -qE 'gh (issue|pr|api)|trace(\.kit)?\.sh|mktemp|mkdir' "$FACTORY_ABS" &&
+	fail "process/R121: FACTORY.md spells a publish, a trace call or a scratch directory" ||
+	pass "process/R121: FACTORY.md spells no publish, no trace call and no scratch directory"
+
+# …and the `defer` answer's own text carries no fenced block: the path that
+# ends the run spells no command to run.
+fd_defer=$(awk '/^- \*\*`defer`\*\*/ { on = 1 } on && /^- \*\*`missing`\*\*/ { exit } on' "$FACTORY_ABS" 2>/dev/null)
+[ -n "$fd_defer" ] && ! printf '%s\n' "$fd_defer" | grep -q '^ *```' &&
+	pass "process/R121: the defer answer's text holds no fenced command" ||
+	fail "process/R121: the defer answer is missing, or its text holds a fenced command"
+
+# process/R127: the skills that publish no PRD or ticket carry no deferral.
+for s in grill-me grill-with-docs design-brief; do
+	grep -rqE 'project\.yaml|factory-tickets|factory-prd|factory_deferral|factory install-skill' "$ROOT/.agents/skills/$s" &&
+		fail "process/R127: /$s carries a factory deferral" ||
+		pass "process/R127: /$s carries no factory deferral"
+done
+
 # No model identifier anywhere: the tier resolves it, and a PRD outlives the id.
 t_assert_no_model_id "$PRD_ABS" "$TIX_ABS"
 

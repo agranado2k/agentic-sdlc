@@ -168,19 +168,22 @@ lands only after the release is cut, through the script, never merged past
 its gate.
 
 **With no landing script, record each PR's fate as the train decides it**,
-one event per PR (`<ticket>` is the ticket it implemented), in the landing
-script's fields:
-`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:#<ticket> outcome=landed|skipped|stopped data.via=train data.method=merge data.merge_sha='<the merge sha>' data.waited='<seconds 4d waited>' data.workflows=success|failure|none|unknown data.implement=yes|no data.implement_tier='<its tier>' data.release=v<version> data.tagged=yes|no data.reruns='<runs 4c2 re-ran>' reason='<the PR title, its quote characters dropped; why it was skipped; what stopped the train>' || :`.
+one event per PR (`<ticket>` is the ticket it implemented, as its handle:
+`#<N>` for an issue, the canonical factory ticket id — `T-07`, never `T-7` —
+for a factory ticket), in the landing script's fields:
+`sh scripts/trace.sh emit kind=merge.land subject=pr:#<N> related=ticket:<ticket> outcome=landed|skipped|stopped data.via=train data.method=merge data.merge_sha='<the merge sha>' data.waited='<seconds 4d waited>' data.workflows=success|failure|none|unknown data.implement=yes|no data.implement_tier='<its tier>' data.release=v<version> data.tagged=yes|no data.reruns='<runs 4c2 re-ran>' reason='<the PR title, its quote characters dropped; why it was skipped; what stopped the train>' || :`.
 A key with no answer is left off: the merge's on a PR not merged, the
 release's on a merge that bumps nothing. Read the body's `<!-- implement: -->` line through a filter that
 prints only that line's two values, never the body:
-`gh pr view <N> --json body --jq .body | tr -d '\r' | sed -n 's/^<!-- implement: ticket=#\([0-9]*\) tier=\([a-z-]*\) -->$/\1 \2/p'`.
+`gh pr view <N> --json body --jq .body | tr -d '\r' | sed -n -e 's/^<!-- implement: ticket=\(#[0-9]\{1,9\}\) tier=\([a-z-]*\) -->$/\1 \2/p' -e 's/^<!-- implement: ticket=\(T-0[0-9]\) tier=\([a-z-]*\) -->$/\1 \2/p' -e 's/^<!-- implement: ticket=\(T-[1-9][0-9]\{1,5\}\) tier=\([a-z-]*\) -->$/\1 \2/p'`.
+The line's handle is `#<N>` or a canonical factory ticket id; any other spelling is no line.
+A PR that closes no issue takes the factory ticket its line names as its ticket.
 `implement=yes` only on exactly one output line whose ticket is this one; its tier
 recorded only when the `Tier` vocabulary lists it (`sh scripts/vocab.sh fields`).
 
 **Then ask the operator, once per landed PR — after the plan step, never
 before the merge** — whether the slice hit its target, and record the answer
-as the slice's verdict: `sh scripts/trace.sh emit kind=feedback subject=ticket:#<ticket> related=pr:#<N> outcome=hit|adjusted|missed|unasked data.by=operator|train reason='<one line, no quote character: by=operator, the operator verdict - what the slice taught, what gets re-cut; by=train, the PR and ticket numbers the train judged from; unasked, the instruction that made the train autonomous>' || :`.
+as the slice's verdict: `sh scripts/trace.sh emit kind=feedback subject=ticket:<ticket> related=pr:#<N> outcome=hit|adjusted|missed|unasked data.by=operator|train reason='<one line, no quote character: by=operator, the operator verdict - what the slice taught, what gets re-cut; by=train, the PR and ticket numbers the train judged from; unasked, the instruction that made the train autonomous>' || :`.
 `hit` is the slice as planned; `adjusted` is the next slices re-cut on what
 this one taught; `missed` is a slice that did not do what it was for. This is
 the tracer bullet's adjust-aim record, the one the next slice is chosen from.

@@ -744,6 +744,20 @@ Grouped by the seam each term belongs to. Entry shape:
   body. Ref: PRD-12 (factory item), process/R128 to R134.
   - _Avoid_: "factory item" for a ticket alone — an item is any of the
     factory's records, a discovery or a PRD among them.
+- **Factory skill** — the software factory's own planning skill for an item:
+  `factory-prd` for a PRD, `factory-tickets` for tickets. It is present when
+  its `SKILL.md` exists under the user's `~/.claude/skills/<name>/`, where
+  `factory install-skill` writes it, or the project's own
+  `.claude/skills/<name>/` — no other path counts. Ref: PRD-12 (factory item),
+  process/R225, ADR-0042.
+  - _Avoid_: "factory plugin" — it is a skill a harness discovers by directory.
+- **Deferral** — a planning skill's first step in a factory project whose
+  factory skill is present: one hand-off naming that factory skill, nothing
+  published to the forge, no trace event, and the run ends. Decided from the
+  manifest's and the skill's presence alone, never by running `factory`; only
+  the operator's own message in the session lifts it. Ref: PRD-12 (factory
+  item), process/R121 to R126, ADR-0042.
+  - _Avoid_: "redirect" — the kit writes nothing to the factory; it stops.
 
 ---
 
@@ -791,7 +805,7 @@ banned word and the word to use instead.
   stamped). Use **bootstrap** for the one-shot run, or **stamp** / **copy** for
   what it does to an individual file. Except: **the dependency sense** —
   `dependency install`, `npm install`, `unpinned installs`, `install error`,
-  `installed extension`.
+  `installed extension`, `skill is not installed` (the factory's hand-off words, ADR-0042).
 - **config** — ambiguous on its own between a **policy file** (the consumer's
   to edit) and shared-layer mechanism. Use **policy file** or **shared-layer
   mechanism**, or qualify it. The unabbreviated **configuration**, in its
