@@ -1013,6 +1013,7 @@ sh tests/worktree-cleanup.test.sh                      # the pruning rule
 sh tests/exclusions.test.sh                            # EXCLUSIONS.md has not gone stale
 sh tests/agents-tiers.test.sh                          # the capability-tier resolver
 sh tests/agent-harness.test.sh                         # the agent-harness axis of that resolver
+sh tests/agents-verifier.test.sh                       # the kit wrapper's verifier walk, two rungs
 sh tests/agent-dispatch.test.sh                        # running a tier on another agent harness
 sh tests/agent-roster.test.sh                          # bootstrap's agent-roster prompt
 sh tests/implement-deliver.test.sh                     # /implement's Deliver phase

@@ -132,6 +132,13 @@ medium: a diff the session wrote itself, chosen at spawn time. It is unmapped
 since ADR-0020, so it gives the plain reviewer's answer, and the session's own
 family is refused through `AGENT_SESSION_MODEL` — then answered by the
 fallback, for a Sonnet session (ADR-0027).
+`cross-provider` on the reviewer tier is the **verifier** (ADR-0044), and the
+kit wrapper answers it itself, never by a mapping: with the diff's author in
+`AGENT_SESSION_MODEL`, the first of `AGENT_KIT_VERIFIER_CANDIDATES` whose
+provider (`AGENT_KIT_PROVIDER_<HARNESS>`, an unprefixed model on the session's
+own harness) differs from the author's; else the reviewer walk's first model of
+another family; else nothing, warned, exit 0. The rung that answered,
+`cross-provider` or `same-provider`, is on stderr, and `--rung` prints it alone.
 `code` is unmapped: the plain tier is its answer. `/to-tickets` stamps an
 optional `Domain:` line when the medium would change the model, and `/implement`
 passes it as the second argument; a situation domain is never stamped on a
