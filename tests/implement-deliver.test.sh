@@ -981,8 +981,17 @@ fs_has "\`T-0<d>\`" "process/R229: a one-digit id is padded"
 fs_has "every subject, line, branch name and argument" "process/R229: …everywhere it is written"
 fs_has "\`<type>/t-<digits>-<slug>\`" "process/R230: the claim branch's shape"
 fs_has "the digits as the id spells them" "process/R230: …its digits the canonical id's"
-fs_has "\`factory move T-<digits> build\`" "process/R231: the move to build"
-fs_has "the branch's first commit" "process/R231: …committed first"
+# A rule is held inside its own bullet, not anywhere in the section (review of
+# #984): the move and its commit share one bullet, and the five gate commands
+# share the one that says they are never run.
+fs_bullet() { grep -F -- "$1" "$STAMP_ABS"; }
+mv_b=$(fs_bullet "**Its move to \`build\`.**")
+t_text_has "$mv_b" "\`factory move T-<digits> build\`" "process/R231: the move to build" "the move bullet"
+t_text_has "$mv_b" "the branch's first commit" "process/R231: …committed first, in the same bullet" "the move bullet"
+gate_b=$(fs_bullet "**The gates are the operator's.**")
+for g in "\`factory review\`" "\`factory qa\`" "\`factory approve\`" "\`factory close\`" "a forced \`factory move\`" "you never run them"; do
+	t_text_has "$gate_b" "$g" "process/R236: $g, in the gates bullet" "the gates bullet"
+done
 fs_has "stop before any edit" "process/R231: a refused move stops the session"
 fs_has "the condition the factory printed" "process/R231: …reporting what the factory printed"
 fs_has "already in \`build\` or later takes no move" "process/R232: a resumed ticket is not moved"
@@ -997,10 +1006,6 @@ fs_has "\`factory move T-<digits> review\`" "process/R235: the move to review"
 fs_has "push both as one commit" "process/R235: …pushed as one commit on the branch"
 fs_has "keep the \`links.pr\` commit and report the refusal" "process/R235: a refused review move keeps links.pr"
 fs_has "Push it before you record the branch tip for step 9's review" "process/R235: the close is pushed before the review pins its commit (review M-1)"
-for g in "\`factory review\`" "\`factory qa\`" "\`factory approve\`" "\`factory close\`" "a forced \`factory move\`"; do
-	fs_has "$g" "process/R236: $g is named"
-done
-fs_has "never run them" "process/R236: …only as the operator's"
 fs_has "No \`factory\` on \`PATH\`" "process/R237: the absent binary"
 fs_has "no stage move and no \`links.pr\` edit" "process/R237: …makes no move and no edit"
 fs_has "the move to \`build\`, \`links.pr\`, the move to \`review\`" "process/R237: …and names the three it left"
