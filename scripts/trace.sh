@@ -245,8 +245,8 @@ TRACE_EVENT_CAP=4000
 # on every kind but those TRACE_REQUIRED names (below, #832). The kind
 # list after it stays a literal line, because the skill suites read it as
 # one; the trace suite holds the two to the same kinds, row for row.
-TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
+TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed verify.verdict=pass|blocked|unavailable finding.verify=confirmed|disputed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome verify.verdict finding.verify hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567,
 # 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins
@@ -269,21 +269,30 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # /review-pr records (#832); and a post-merge outcome's evidence is a commit
 # sha, 40 hex digits, or for a failed QA the factory ticket's id, required on
 # the outcomes it proves, and its days are digits (the kit's ADR-0036, #875).
+# A verifier's finding is the review's severity id with V- before it, so it
+# never shares an id with a lens's finding on the same PR; a verifier's
+# verdict that ran names the head commit it reviewed, 40 hex digits, and its
+# model's provider, a token; and its verdict on one kit finding names that
+# lens finding's id, never a V- one, and a <path>:<line> place
+# (the kit's ADR-0043, #939).
 # `verify` advises on a raise and on a lens count
 # written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
 # from here).
-TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2 merge.outcome=by_sha:[0-9a-f]{40} merge.outcome=days:[0-9]+ merge.outcome/outcome~reverted|fixed=by_sha!:[0-9a-f]{40} merge.outcome/outcome~qa-failed=ticket!:[A-Za-z0-9._-]+'
+TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2 merge.outcome=by_sha:[0-9a-f]{40} merge.outcome=days:[0-9]+ merge.outcome/outcome~reverted|fixed=by_sha!:[0-9a-f]{40} merge.outcome/outcome~qa-failed=ticket!:[A-Za-z0-9._-]+ verify.verdict=reviewed:[0-9a-f]{40} verify.verdict=provider:[a-z][a-z0-9._-]* verify.verdict/outcome~pass|blocked=reviewed!:[0-9a-f]{40} verify.verdict/outcome~pass|blocked=provider!:[a-z][a-z0-9._-]* finding.verify=id:[CHML]-[0-9]+ finding.verify=where:.+:[0-9]+'
 # THE REQUIRED KEYS (the kit's ADR-0034, amending the kit's ADR-0024 clause 1, #832):
 # a field or data key every line of a kind must carry, whatever its outcome.
 # Each entry is `<kind>=outcome` or `<kind>=data.<key>`. A raise names its
 # finding by id and severity, and a verdict its axis and outcome: a line
 # missing one joins no triage, falls out of every per-severity count, or is
 # no verdict a reader can count; and a post-merge outcome names its outcome,
-# or it is nothing a reader can count (the kit's ADR-0036, #875). An empty
+# or it is nothing a reader can count (the kit's ADR-0036, #875); a
+# verifier's verdict names its outcome, and its verdict on one finding its
+# outcome, the finding's id and the evidence's place (the kit's ADR-0043,
+# #939). An empty
 # value is no value. The VALUE stays the shape row's, the outcome table's, and for a raise's severity the
 # vocabulary checker's (trace_check_severity). `verify` advises on a line
 # already written without one (TRACE_AWK_REQUIRED reads this table).
-TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome'
+TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome verify.verdict=outcome finding.verify=outcome finding.verify=data.id finding.verify=data.where'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -2950,7 +2959,9 @@ trace_fix_window() {
 # the area's counted landings: HELD UP when accepted at triage or a mistake
 # against its PR (never a failed QA) names its file, NOT HELD UP when
 # rejected or dismissed by a human with no such mistake, unlabelled else.
-# A triage pairs with the latest raise of its id on its PR before it; a
+# A verifier's V- finding is no lens finding and counts nowhere
+# (the kit's ADR-0043). A triage pairs with the latest raise of its id on
+# its PR before it; a
 # dismissal with the latest raise at its `data.where` before it and every
 # raise at that where from the same run. A ratio over zero prints `n/a`.
 # Nothing is compared to a threshold and nothing is written. Unconfigured: nothing on stdout, exit 0, like every reader.
@@ -2987,7 +2998,7 @@ trace_record() {
 		k == "merge.outcome" && s != "" { print "O\t" s "\t" tr_str(e, "outcome") "\t" dstr(tr_data($0), "files") }
 		k == "finding.raise" && s != "" {
 			d = tr_data($0); i = dstr(d, "id"); w = dstr(d, "where")
-			if (i != "" && w != "") print "R\t" t "\t" s "\t" i "\t" wpath(w) "\t" tr_str(e, "run") "\t" w
+			if (i != "" && w != "" && i !~ /^V-/) print "R\t" t "\t" s "\t" i "\t" wpath(w) "\t" tr_str(e, "run") "\t" w
 		}
 		k == "finding.triage" && s != "" {
 			d = tr_data($0); i = dstr(d, "id")
