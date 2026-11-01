@@ -376,6 +376,8 @@ grep -qF '[`RISK.md`](RISK.md)' "$PI" && pass "process/R64: /pr-iterate's step 6
 pi_flat=$(cat "$PIR" | tr '\n' ' ' | tr -s ' ')
 t_text_has "$pi_flat" 'sh scripts/risk.sh <base> <head> --pr <N>' "process/R64: /pr-iterate runs the risk rule at the PR's head"
 t_text_has "$pi_flat" '--ticket-file' "process/R64: with the ticket it holds"
+t_text_has "$pi_flat" '--ticket-file "$scratch/ticket-body"; rc=$?' "process/R64: the step keeps the rule's exit status, so a rule that judged nothing is told from a verdict"
+printf '%s\n' "$pi_flat" | grep -qF 'ticket-body" || :' && fail "process/R64: the step discards the rule's exit status" || pass "process/R64: the step never discards the rule's exit status"
 t_text_has "$pi_flat" 'Risk: <the effective line> (reported only)' "process/R64: the report opens with the effective risk, marked reported only"
 _pi_title=$(t_line_of "$PI" 'PR #<N> — "<title>" — iteration <i>')
 _pi_risk=$(grep -n '^Risk: <the effective line> (reported only)' "$PI" | head -1 | cut -d: -f1)
