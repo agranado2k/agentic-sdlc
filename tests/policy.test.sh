@@ -346,7 +346,7 @@ precision-floor 80" ] || { echo "got: $out"; exit 7; }
 	command -v git >/dev/null || exit 4
 	[ "$(type git 2>/dev/null | grep -c function)" = 0 ] || exit 3
 	echo clean' _ "$E" "$READER"
-expect_resolved clean "policy/R14: a policy that cds, sets variables and defines a function leaves the reader and its caller unchanged"
+expect_resolved clean "the caller of a policy that cds, sets variables and defines a function is unchanged (the reader is its own process; the load-bearing R14 checks are the touched line below and the clobber cases further down)"
 t_write "$E" .githooks/pre-push 'exit 2
 '
 t_commit "$E" "chore: hook" >/dev/null
@@ -387,6 +387,26 @@ expect_out_is ".githooks/pre push" "policy/R10: a judging file whose name holds 
 on_main "$S" "chore: land it" sh -c 'mkdir -p .githooks && printf "exit 0\n" >".githooks/pre push"'
 pol "$S" read ".githooks/pre push" --base main
 expect_status 0 "policy/R9: and read at the base"
+
+banner "R13, R14. The caller's environment never fills a value the base lacks"
+# ---------------------------------------------------------------------------
+base_repo
+K=$REPO
+on_main "$K" "chore: drop the floor" sh -c "sed '/^RISK_PRECISION_FLOOR=/d' $RP >$RP.new && mv $RP.new $RP"
+t_exec env RISK_PRECISION_FLOOR=80 RISK_MISS_RATE_BELOW=5 sh -c 'cd "$1" && sh "$2" thresholds --base main' _ "$K" "$READER"
+expect_status 3 "policy/R13: an exported RISK_PRECISION_FLOOR does not stand in for the base's missing one"
+expect_out_is "fail-closed invalid $RP" "policy/R13: unset at the base is invalid, whatever the environment holds"
+
+base_repo
+Q=$REPO
+on_main "$Q" "chore: a policy that clobbers the reader's names" sh -c "sed \"s|^RISK_JUDGING_EXTRA=.*|RISK_JUDGING_EXTRA='docs/notes.md'|\" $RP >$RP.new && mv $RP.new $RP && printf 'COPY=/nonexistent\nRISK_POLICY=elsewhere\ncommit=0000\nstore=/nonexistent\nEXTRA=\nPATH=/nonexistent\n' >>$RP"
+pol "$Q" read docs/notes.md --base main
+expect_status 0 "policy/R14: read of an extra path survives a policy that sets the reader's own variable names"
+QSHA=$(git -C "$Q" rev-parse main)
+case $T_OUT in */"$QSHA"/docs/notes.md) pass "policy/R14: the copy is still at <base commit>/docs/notes.md" ;; *) fail "policy/R14: copy at [$T_OUT]" ;; esac
+pol "$Q" thresholds --base main
+expect_resolved 'miss-rate-below 5
+precision-floor 80' "policy/R14: thresholds is unmoved by those names"
 
 banner "Caller errors exit 2 with nothing on stdout"
 # ---------------------------------------------------------------------------

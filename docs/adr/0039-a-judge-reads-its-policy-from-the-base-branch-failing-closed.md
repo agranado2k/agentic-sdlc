@@ -70,8 +70,9 @@ Chosen: **one policy reader, `scripts/policy.sh`, shared layer**.
    is not in the set.
 3. **Three questions.** `read <path> --base <ref>` writes a copy of the
    base's file under the repository's git directory, at
-   `policy/<base commit>/<path>` so a module's relative import of its sibling
-   resolves, and prints its absolute path. `touched <base> <head>` prints,
+   `policy/<base commit>/<path>` so a module's relative import resolves once
+   its sibling is read too (each `read` copies one file), and prints its
+   absolute path. `touched <base> <head>` prints,
    sorted, each judging-set path the diff from the merge base to the head
    adds, modifies, deletes, or renames from or to, and exits 1 on any.
    `thresholds --base <ref>` prints `miss-rate-below <n>` then

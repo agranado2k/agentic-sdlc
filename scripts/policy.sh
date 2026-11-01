@@ -11,7 +11,8 @@
 #
 # read        writes the base's version of one JUDGING FILE to a copy under the
 #             repository's git directory — policy/<base commit>/<path>, so a
-#             module's relative import of its sibling resolves — prints the
+#             module's relative import resolves once its sibling is read too
+#             (each `read` copies one file) — prints the
 #             copy's absolute path, and exits 0. A file whose name ends `.sh`
 #             must pass `sh -n` there.
 # touched     prints, sorted, one per line, each judging-set path the diff from
@@ -175,10 +176,13 @@ risk_eval() {
 		RISK_REASON=$REASON
 		return 1
 	fi
-	# The child sources the base's copy and prints only what it validated —
+	# The child starts with the three names unset, so a caller's exported
+	# value never stands in for one the base lacks; it sources the base's
+	# copy and prints only what it validated —
 	# two whole percents (or `x`) then the extra paths — through `command`,
 	# so a function the policy defines cannot speak for it.
 	_re_out=$(sh -c '
+		unset RISK_MISS_RATE_BELOW RISK_PRECISION_FLOOR RISK_JUDGING_EXTRA
 		. "$1" >/dev/null 2>&1 </dev/null
 		set -f
 		for v in "${RISK_MISS_RATE_BELOW-}" "${RISK_PRECISION_FLOOR-}"; do
