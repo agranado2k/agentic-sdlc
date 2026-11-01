@@ -70,6 +70,23 @@ TRACE_DIR=''
 # file sets it: an environment value is ignored.
 TRACE_NUMBERED_TYPES=''
 
+# TRACE_FACTORY_IDS — pairs a numbered type with a factory's id prefix, as
+# words `<type>=<PREFIX>`, so the type takes a second spelling beside
+# `<type>:#<digits>`: the canonical factory id, `<type>:<PREFIX>-<digits>` —
+# 2 to 6 digits, a leading zero only in the two-digit form (`ticket:T-07`,
+# `ticket:T-101`, `prd:PRD-15`; never `ticket:T-7` or `ticket:T-007`). Any other
+# spelling of a paired type is refused at emit, as an unpaired one's is.
+#
+#   ''                    no pairing (the shipped default) — every subject is
+#                         judged exactly as TRACE_NUMBERED_TYPES alone says
+#   'ticket=T prd=PRD'    a project that sets TRACE_NUMBERED_TYPES and plans
+#                         in the factory, whose tickets are T-07 and PRDs PRD-15
+#
+# Each type must be one TRACE_NUMBERED_TYPES names — an open type takes any
+# reference already — and each prefix 1 to 8 uppercase letters; anything else
+# is exit 2. Only this file sets it: an environment value is ignored.
+TRACE_FACTORY_IDS=''
+
 # TRACE_TOOLS — whether every TOOL CALL is captured too. Two honest values:
 #
 #   ''    tool capture is OFF (the shipped default)

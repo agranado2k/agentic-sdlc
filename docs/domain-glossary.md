@@ -512,8 +512,23 @@ Grouped by the seam each term belongs to. Entry shape:
   shipped; the kit's own is `ticket pr prd`): a numbered type is spelled one
   way, `<type>:#<digits>` with no leading zero, as in `ticket:#<digits>` — any
   other spelling is refused at emit, and an old one already in the trace is
-  only an advisory. An event may name secondary subjects under `related`.
+  only an advisory. A numbered type the policy pairs with a factory prefix
+  (`TRACE_FACTORY_IDS`, empty as shipped; the kit's own is `ticket=T prd=PRD`)
+  takes a second spelling, the **factory-id subject** `<type>:<PREFIX>-<digits>`
+  with a canonical factory id: `ticket:T-07`, `prd:PRD-15` (ADR-0040). An event
+  may name secondary subjects under `related`.
   - _Avoid_: "target", "ref" alone.
+- **Ticket handle** — what the chain names a ticket by: an issue number,
+  written `#<N>`, or a canonical factory id, `T-07`. One ticket has one
+  handle: a ticket mirrored as an issue is named by its number, any other
+  factory ticket by its id (PRD-15).
+  - _Avoid_: "ticket ref", "ticket key".
+- **Canonical factory id** — a factory item's id as the factory writes it in
+  the item's `id:` field: its prefix, a hyphen, then 2 to 6 digits with a
+  leading zero only in the two-digit form — `T-07`, `T-101`, `PRD-15`; never
+  `T-7`, `T-007` or `t-07`. Checked by shape alone, and the one spelling the
+  chain writes, so a one-digit id is padded before it is written.
+  - _Avoid_: "factory number", "short id".
 - **Run** — one invocation of a skill, with an id the trace hands out at
   `begin` and closes at `end`; every event emitted in between carries it, a
   nested skill carries the outer as `parent`, and a dispatched worker gets

@@ -384,6 +384,20 @@ trace_load_config() {
 	for _tl_w in $TRACE_NUMBERED_TYPES; do
 		case $_tl_w in *[!a-z]*) trace_glob_on; die "TRACE_NUMBERED_TYPES word '$_tl_w' in $_tl_path is not a lowercase type" ;; esac
 	done
+	# Each factory-id pairing is <type>=<PREFIX>: a type the numbered list
+	# names (an open type takes any reference already, so pairing one would
+	# change nothing) and 1 to 8 uppercase letters — anything else would be a
+	# pairing the subject check silently never matches.
+	for _tl_w in $TRACE_FACTORY_IDS; do
+		_tl_t=${_tl_w%%=*}
+		_tl_p=${_tl_w#*=}
+		_tl_ok=1
+		[ "$_tl_t" = "$_tl_w" ] && _tl_ok=0
+		case " $TRACE_NUMBERED_TYPES " in *" $_tl_t "*) ;; *) _tl_ok=0 ;; esac
+		case $_tl_t in '' | *[!a-z]*) _tl_ok=0 ;; esac
+		case $_tl_p in '' | *[!A-Z]* | ?????????*) _tl_ok=0 ;; esac
+		[ "$_tl_ok" = 1 ] || { trace_glob_on; die "TRACE_FACTORY_IDS word '$_tl_w' in $_tl_path is not <type>=<PREFIX> — a type TRACE_NUMBERED_TYPES names, then 1 to 8 uppercase letters"; }
+	done
 	trace_glob_on
 	# The environment wins over the file — set on its own line after the
 	# source, so a policy file that assigns TRACE_DIR cannot undo it, even
@@ -667,7 +681,15 @@ trace_check_token() {
 # before the file is sourced, so an environment value never reaches the check.
 # `verify` holds the same rule to the lines already written, as an advisory,
 # and hands its awk this same list as `numbered` — one list, never two.
+#   A numbered type the policy also PAIRS with a factory prefix, in
+# TRACE_FACTORY_IDS (`ticket=T prd=PRD`), takes a second spelling beside its
+# number: the canonical factory id, `<type>:<PREFIX>-<digits>` — 2 to 6
+# digits, a leading zero only in the two-digit form, the one spelling the
+# factory writes in an item's id: field (PRD-15, decision record ADR-0040).
+# The shape is checked alone; the trace runs no factory command. Same
+# policy-only rule: the assignment below precedes the source.
 TRACE_NUMBERED_TYPES=''
+TRACE_FACTORY_IDS=''
 trace_check_subject() {
 	TRACE_SUBJECT_FORM='<type>:<reference>'
 	case $1 in *' '* | *'"'* | *'\'* | '') return 1 ;; esac
@@ -679,10 +701,28 @@ trace_check_subject() {
 	case " $TRACE_NUMBERED_TYPES " in
 	*" $_cs_type "*)
 		TRACE_SUBJECT_FORM="$_cs_type:#<digits> (no leading zero)"
-		case $_cs_ref in '#' | '#'*[!0-9]* | '#0'?* | [!#]*) return 1 ;; esac
+		case $_cs_ref in '#' | '#'*[!0-9]* | '#0'?* | [!#]*) ;; *) return 0 ;; esac
+		for _cs_w in $TRACE_FACTORY_IDS; do
+			[ "${_cs_w%%=*}" = "$_cs_type" ] || continue
+			_cs_p=${_cs_w#*=}
+			TRACE_SUBJECT_FORM="$TRACE_SUBJECT_FORM or $_cs_type:$_cs_p-<digits> (2 to 6 digits, a leading zero only in the two-digit form)"
+			case $_cs_ref in "$_cs_p-"*) trace_factory_digits "${_cs_ref#"$_cs_p-"}" && return 0 ;; esac
+		done
+		return 1
 		;;
 	esac
 	return 0
+}
+
+# trace_factory_digits <digits> — 0 when <digits> is a canonical factory id's
+# number: 2 to 6 digits, a leading zero only in the two-digit form.
+trace_factory_digits() {
+	case $1 in
+	[0-9][0-9]) return 0 ;;
+	'' | 0* | *[!0-9]* | ???????*) return 1 ;;
+	??*) return 0 ;;
+	esac
+	return 1
 }
 
 # trace_json_str <value> — prints the JSON string body, without the quotes.
@@ -1924,11 +1964,28 @@ trace_show() {
 # Single-quoted, so it may carry no apostrophe.
 TRACE_AWK_SPELLED='
 function spelled_type(v,   t) { t = v; sub(/:.*/, "", t); return t }
-function spelled_ok(v,   t, r) {
+function spelled_ok(v,   t, r, n, w, i, p, d) {
 	t = spelled_type(v)
 	if (index(numbered, " " t " ") == 0) return 1
 	r = substr(v, length(t) + 2)
-	return (r ~ /^#(0|[1-9][0-9]*)$/)
+	if (r ~ /^#(0|[1-9][0-9]*)$/) return 1
+	n = split(factory, w, " ")
+	for (i = 1; i <= n; i++) {
+		if (substr(w[i], 1, length(t) + 1) != t "=") continue
+		p = substr(w[i], length(t) + 2) "-"
+		if (substr(r, 1, length(p)) != p) continue
+		d = substr(r, length(p) + 1)
+		if (d ~ /^[0-9][0-9]$/ || (d ~ /^[1-9][0-9]+$/ && length(d) <= 6)) return 1
+	}
+	return 0
+}
+function spelled_form(v,   t, f, n, w, i) {
+	t = spelled_type(v)
+	f = t ":#<digits>"
+	n = split(factory, w, " ")
+	for (i = 1; i <= n; i++)
+		if (substr(w[i], 1, length(t) + 1) == t "=") f = f " or " t ":" substr(w[i], length(t) + 2) "-<digits>"
+	return f
 }
 function spelled_scan(line,   env, d, m, i, tok) {
 	env = line
@@ -2135,7 +2192,7 @@ trace_spelling_note() {
 	trace_glob_off
 	for _sn_f in $_sn_files; do
 		IFS=$_sn_ifs
-		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" -v lens_re="$_sn_lre" -v roster_re="$_sn_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" -v required=" $TRACE_REQUIRED " -v sev_words="$_sn_sev" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL$TRACE_AWK_REQUIRED"'
+		_sn_c=$(awk -v numbered=" $TRACE_NUMBERED_TYPES " -v factory="$TRACE_FACTORY_IDS" -v outcomes=" $TRACE_OUTCOMES " -v raise_re="$_sn_re" -v lens_re="$_sn_lre" -v roster_re="$_sn_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" -v required=" $TRACE_REQUIRED " -v sev_words="$_sn_sev" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL$TRACE_AWK_REQUIRED"'
 		function spelled(field, v) { if (!spelled_ok(v)) n++ }
 		function key_missing(k, f) { q++ }
 		function severity_bad(v) { q++ }
@@ -2210,10 +2267,10 @@ trace_verify() {
 		# note goes to stderr through a pipe, which POSIX awk has where it has no
 		# /dev/stderr. `summary` and `export` switch the per-line notes off and
 		# say the count once instead (trace_spelling_note).
-		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" -v lens_re="$_vf_lre" -v roster_re="$_vf_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" -v required=" $TRACE_REQUIRED " -v sev_words="$_vf_sev" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL$TRACE_AWK_REQUIRED"'
+		awk -v kinds=" $TRACE_KINDS " -v numbered=" $TRACE_NUMBERED_TYPES " -v factory="$TRACE_FACTORY_IDS" -v outcomes=" $TRACE_OUTCOMES " -v q="'" -v f="$_vf_f" -v advise="${_trace_quiet_advice:-list}" -v raise_re="$_vf_raise" -v lens_re="$_vf_lre" -v roster_re="$_vf_rre" -v model_on="$_ms_on" -v model_ids="$_ms_ids" -v required=" $TRACE_REQUIRED " -v sev_words="$_vf_sev" "$TRACE_AWK_SPELLED$TRACE_AWK_OUTCOME$TRACE_AWK_RAISE$TRACE_AWK_LENS$TRACE_AWK_MODEL$TRACE_AWK_REQUIRED"'
 		function spelled(field, v) {
 			if (advise != "list" || spelled_ok(v)) return
-			printf "!  trace: %s:%d: %s %s is not %s:#<digits> — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_type(v) | "cat 1>&2"
+			printf "!  trace: %s:%d: %s %s is not %s — written before the rule, kept as history; advisory, the verdict is unchanged\n", f, NR, field, v, spelled_form(v) | "cat 1>&2"
 		}
 		function outcome_bad(k, o,   w) {
 			if (advise != "list") return
