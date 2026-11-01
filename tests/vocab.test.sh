@@ -1313,6 +1313,8 @@ pin_policy_refused() {
 }
 pin_policy_refused "a pin field that is not keyed" "$(printf '%s\n' "VOCAB_FIELDS='accept-test'" "VOCAB_PIN='accept-test'")" \
 	"policy: VOCAB_PIN names 'accept-test', which is not a keyed field"
+pin_policy_refused "a field named pin, the checker's own variable" "$(printf '%s\n' "VOCAB_FIELDS='pin'" "VOCAB_PIN='x'")" \
+	"policy: field name 'pin' is reserved"
 pin_policy_refused "a pin field that declares tokens" "$(printf '%s\n' "VOCAB_FIELDS='accept-test'" "VOCAB_KEYED='accept-test'" "VOCAB_PIN='accept-test'" "VOCAB_ACCEPT_TEST='unit'")" \
 	"a pin is held to its grammar, never to tokens"
 
