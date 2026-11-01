@@ -5,6 +5,7 @@
 #   sh scripts/policy.sh read <path> --base <ref>
 #   sh scripts/policy.sh touched <base> <head>
 #   sh scripts/policy.sh thresholds --base <ref>
+#   sh scripts/policy.sh value <name> [--base <ref>]
 #
 # A guard, gate or review reader that judges a pull request reads its policy
 # through this script, so no pull request can loosen the rule that judges it.
@@ -20,11 +21,26 @@
 #             renames from or to; exit 1 when it printed one, 0 when none.
 # thresholds  prints `miss-rate-below <n>` then `precision-floor <n>`, read from
 #             the risk policy (scripts/risk.config.sh) at the base; exit 0.
+# value       prints `<name> <value>`, or `<name> unset`, for one configuration
+#             value the kit reads that the software factory defines; exit 0.
+#             Its one home in a FACTORY PROJECT — the base's commit or HEAD's
+#             holds .factory/project.yaml — is the factory's key in that
+#             manifest (the kit's ADR-0041). Outside one it prints NOTHING and
+#             exits 0: the value has no home there, and no kit file stands in.
+#             With --base the manifest is read at the base, through `fetch`
+#             like any judging file: absent there, or a value out of shape,
+#             fails closed. With no --base it reads the git top level's working
+#             tree — the one working-tree read, for a local session; a judge
+#             always passes --base. The values, each a YYYY-MM-DD date:
+#               acceptance-tests-since  manifest `acceptance_tests_since`
+#             The next value the factory comes to define joins `factory_value`
+#             below, and its kit judges read it through here.
 #
 # THE JUDGING SET, matched by whole repository-relative path: every file
 # directly under scripts/ whose name ends `.config.sh`; the docs gate's
 # scripts/docs-conformance/config.mjs and local-vocabulary.mjs; every file
-# directly under .githooks/ and .github/workflows/; the risk policy; and each
+# directly under .githooks/ and .github/workflows/; the risk policy; the
+# software factory's project manifest, .factory/project.yaml; and each
 # path the risk policy's RISK_JUDGING_EXTRA names AT THE BASE. A file of the
 # same name anywhere else is not in it.
 #
@@ -46,7 +62,7 @@
 # path outside the judging set — nothing on stdout, nothing written; 3 failed
 # closed.
 #
-# IT READS GIT'S OBJECTS ONLY: no checkout, no fetch, no read of the working
+# IT READS GIT'S OBJECTS ONLY (`value` with no --base aside): no checkout, no fetch, no read of the working
 # tree — an unfetched ref is no-base, and the working tree's copy of a file is
 # never a fallback. A shell judging file is evaluated only in a child process,
 # so nothing it sets, defines or changes reaches this script or its caller.
@@ -57,13 +73,14 @@
 set -uf
 
 RISK_POLICY=scripts/risk.config.sh
+MANIFEST=.factory/project.yaml
 
 die() {
 	echo "policy: $*" >&2
 	exit 2
 }
 
-usage="usage: sh scripts/policy.sh read <path> --base <ref> | touched <base> <head> | thresholds --base <ref>"
+usage="usage: sh scripts/policy.sh read <path> --base <ref> | touched <base> <head> | thresholds --base <ref> | value <name> [--base <ref>]"
 
 git rev-parse --git-dir >/dev/null 2>&1 || die "not inside a git repository"
 
@@ -91,7 +108,7 @@ _directly_under() {
 in_fixed() {
 	plain_path "$1" || return 1
 	case $1 in
-	"$RISK_POLICY" | scripts/docs-conformance/config.mjs | scripts/docs-conformance/local-vocabulary.mjs) return 0 ;;
+	"$RISK_POLICY" | "$MANIFEST" | scripts/docs-conformance/config.mjs | scripts/docs-conformance/local-vocabulary.mjs) return 0 ;;
 	*.config.sh) _directly_under scripts/ "$1" && return 0 ;;
 	esac
 	_directly_under .githooks/ "$1" && return 0
@@ -228,6 +245,51 @@ risk_eval() {
 # in_extra <path> — 0 when the path is on the extra list risk_eval read.
 in_extra() { [ -n "$EXTRA" ] && printf '%s\n' "$EXTRA" | grep -qxF -- "$1"; }
 
+# factory_value <name> — the registry of configuration values the kit reads
+# that the factory defines (process/R226): FV_KEY, the manifest's top-level
+# key. Status 1 for a name not listed.
+factory_value() {
+	case $1 in
+	acceptance-tests-since) FV_KEY=acceptance_tests_since ;;
+	*) return 1 ;;
+	esac
+}
+
+# date_ok <text> — 0 for one line holding a real YYYY-MM-DD calendar date.
+date_ok() {
+	printf '%s\n' "$1" | awk '
+		NR > 1 || !/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { bad = 1; next }
+		{
+			y = substr($0, 1, 4) + 0; m = substr($0, 6, 2) + 0; d = substr($0, 9, 2) + 0
+			split("31 28 31 30 31 30 31 31 30 31 30 31", dm, " ")
+			if (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) dm[2] = 29
+			if (m < 1 || m > 12 || d < 1 || d > dm[m]) bad = 1
+		}
+		END { exit bad }'
+}
+
+# value_in <file> — set VALUE from the manifest copy <file>'s FV_KEY: the
+# value bare or quoted, a trailing comment allowed. Empty is unset. Status 1
+# when the value is out of shape or the key is written twice.
+value_in() {
+	_vi_out=$(awk -v k="$FV_KEY" '
+		index($0, k ":") == 1 {
+			n++
+			v = substr($0, length(k) + 2)
+			sub(/^[ \t]+/, "", v); sub(/^#.*/, "", v); sub(/[ \t]+#.*$/, "", v); sub(/[ \t\r]+$/, "", v)
+			if (v ~ /^".*"$/ || v ~ /^\047.*\047$/) v = substr(v, 2, length(v) - 2)
+		}
+		END { if (n > 1) exit 1; printf "%s.", v }' "$1" 2>/dev/null) || return 1
+	VALUE=${_vi_out%.}
+	[ -z "$VALUE" ] || date_ok "$VALUE"
+}
+
+# closed <reason> <path> — the fail-closed line, exit 3.
+closed() {
+	printf 'fail-closed %s %s\n' "$1" "$2"
+	exit 3
+}
+
 cmd=${1:-}
 case $cmd in
 read)
@@ -299,6 +361,32 @@ touched)
 		exit 3
 	fi
 	[ -n "$hits" ] && exit 1
+	exit 0
+	;;
+value)
+	if [ $# -eq 4 ] && [ "$3" = --base ]; then
+		ref=$4
+	elif [ $# -eq 2 ]; then
+		ref=
+	else
+		die "$usage"
+	fi
+	factory_value "$2" || die "no configuration value named: $2"
+	if [ -z "$ref" ]; then
+		top=$(git rev-parse --show-toplevel 2>/dev/null) || die "no working tree to read"
+		{ [ -e "$top/$MANIFEST" ] || [ -L "$top/$MANIFEST" ]; } || exit 0
+		[ -f "$top/$MANIFEST" ] && [ -r "$top/$MANIFEST" ] || closed unreadable "$MANIFEST"
+		value_in "$top/$MANIFEST" || closed invalid "$MANIFEST"
+	else
+		# A factory project when the base or the head holds the manifest:
+		# a branch can neither delete it nor add it to change its own answer.
+		commit=$(base_commit "$ref") || closed no-base "$MANIFEST"
+		git cat-file -e "HEAD:$MANIFEST" 2>/dev/null ||
+			git cat-file -e "$commit:$MANIFEST" 2>/dev/null || exit 0
+		fetch "$commit" "$MANIFEST" || closed "$REASON" "$MANIFEST"
+		value_in "$COPY" || closed invalid "$MANIFEST"
+	fi
+	printf '%s %s\n' "$2" "${VALUE:-unset}"
 	exit 0
 	;;
 *)

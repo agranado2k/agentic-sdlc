@@ -520,6 +520,15 @@ jobs:
       - name: Policy reader suite
         run: sh tests/policy.test.sh
 
+  factory-config:
+    name: A value the factory defines is read from its manifest, at the base too
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Factory configuration reads suite
+        run: sh tests/factory-config.test.sh
+
   failure-signature:
     name: A loop stops on the third identical failure
     runs-on: ubuntu-latest
