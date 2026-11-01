@@ -295,6 +295,25 @@ Grouped by the seam each term belongs to. Entry shape:
   policy publishes. Ref: ADR-0037.
   - _Avoid_: "capability tier" or "tier" alone — the tier is the model's;
     the test tier is the test's.
+- **Acceptance test** — a test named on a ticket, before the build, as part
+  of the definition of done of one requirement the ticket covers. A
+  requirement may have several. A human approves them before the build
+  starts, and the build starts from them red and never edits them (PRD-14).
+  Ref: ADR-0037.
+  - _Avoid_: "the ticket's tests" — the build's own tests are tests too;
+    an acceptance test is one named before the build.
+- **`Accept-test:` line** — the stamp line that names one acceptance test:
+  `Accept-test: <requirement id> <test pin>`. A **keyed field** of the
+  vocabulary, like `Test-tier:`, but its value after the id is a test pin
+  held to the checker's grammar, never to tokens; the id must be on the
+  ticket's `Covers:` line, an id may repeat once per test, and a ticket
+  carries at most 32 such lines. `/to-tickets` rule 8 lets it name a path.
+  Ref: ADR-0037.
+- **Test pin** — `<path>::<test-name>`, the name of one test in one file,
+  split at its first `::`: at most 200 bytes of printable ASCII and no `|`,
+  the path relative, non-empty, with no space and no `..` segment, the test
+  name non-empty and free to hold spaces. The check table's evidence pin is
+  a test pin with `@<commit>` after it. Ref: ADR-0037.
 - **Check table** — the block in a PR body that shows, per requirement the
   ticket covers, the test tier that checked it, the **result** (`pass`,
   `fail`, `skipped`) and the evidence: a `<path>::<test>@<sha>` pin, an

@@ -66,19 +66,23 @@
 # VOCAB_<FIELD>_REASONS — the reasons VOCAB_<FIELD>_RESERVED names written
 # only by a caller that declares itself the risk rule (`--writer risk-rule`).
 # VOCAB_KEYED names the fields whose value is a requirement id, then one
-# token: the line repeats once per id, one token per id. No rule reads a
-# qualified or a keyed field either.
+# token: the line repeats once per id, one token per id. VOCAB_PIN names the
+# keyed fields whose value after the id is a TEST PIN, `<path>::<test-name>`,
+# held to a grammar the checker owns rather than to tokens: such a field is
+# keyed too, declares no VOCAB_<FIELD>, and may repeat an id once per test.
+# No rule reads a qualified or a keyed field either.
 #
 # VOCAB_BOUND and VOCAB_BOUNDS are the LINE BOUNDS a stamp reader holds a
 # ticket to: at most VOCAB_BOUND lines of any one stamp key, and the
 # per-field exceptions as `<field>=<count>`. Published here, not hard-coded,
 # so a planner outside the kit reads them from the same file.
 
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier result scope'
+VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope'
 VOCAB_OPEN='domain class'
 VOCAB_QUERY='targets'
 VOCAB_QUALIFIED='risk'
-VOCAB_KEYED='test-tier'
+VOCAB_KEYED='test-tier accept-test'
+VOCAB_PIN='accept-test'
 
 # tier — owned by scripts/agents.lib.sh (see above); stamped by /to-tickets
 # as `Tier:`, read by /implement.
@@ -166,6 +170,13 @@ VOCAB_RISK_CONFIDENCE='low medium high'
 # the ticket's Covers: line; the tier of test that checks the requirement.
 VOCAB_TEST_TIER='unit suite e2e manual'
 
+# accept-test — KEYED, a PIN: `Accept-test: <requirement id> <path>::<test-name>`,
+# a test named before the build as part of the done of one id on the
+# ticket's Covers: line — several lines for one id, one per test. The pin's
+# grammar is the checker's (vocab_pin_ok): at most 200 bytes, printable
+# ASCII, no `|`, a relative path with no space and no `..` segment, a
+# non-empty test name. No tokens here.
+
 # result — a check-table row's result, written by /implement into the PR
 # body: the test passed, failed, or was not run (a manual row no human has
 # checked yet).
@@ -175,9 +186,10 @@ VOCAB_RESULT='pass fail skipped'
 # inside the change, or a user, a consumer or another skill sees it.
 VOCAB_SCOPE='inside outward'
 
-# The line bounds: 8 lines of any one stamp key, 32 Test-tier: lines.
+# The line bounds: 8 lines of any one stamp key, 32 Test-tier: lines and 32
+# Accept-test: lines.
 VOCAB_BOUND='8'
-VOCAB_BOUNDS='test-tier=32'
+VOCAB_BOUNDS='test-tier=32 accept-test=32'
 
 # ---------------------------------------------------------------------------
 # THE RULES. One per line: `<field>=<value> => <field>=<value>` demands the

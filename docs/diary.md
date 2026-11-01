@@ -2891,3 +2891,17 @@ beside the skill, and the suite runs that fence against fixture
 repositories, so the document's own code is what is tested. The ADR was
 built as 0040, renumbered 0041 after 0.101.0, and 0042 at release after
 0.102.0; the release waited behind 0.102.0 (ADR-0033).
+
+## 2026-11-01 — a ticket's stamp carries `Accept-test:` lines
+
+PRD-14 slice 1 of D-02 (#969, factory T-95; released as 0.104.0, ADR-0037
+amended in place). The vocabulary checker gains a pin field: `Accept-test:
+<id> <path>::<test-name>`, a keyed field whose value is held to a test-pin
+grammar the checker owns (200 bytes, printable ASCII, no `|`, a relative
+path with no space or `..`), several lines per id. The stamp reader lifts
+the lines, holds each id to the ticket's own `Covers:` line and bounds them
+at 32. `/to-tickets` rule 8 lets the line name a path. A new living spec,
+`docs/specs/acceptance.md`, opens the area with R1 to R7; the acceptance
+guard is slice 2. Built ahead of its slot and held behind 0.102.0 and
+0.103.0 (ADR-0033); the skill stayed under its byte ceiling, 34,940 of
+35,000, so no sidecar.

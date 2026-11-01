@@ -555,6 +555,17 @@ draft=$(awk '/^## Procedure/ { on = 1; next } on && /^2\. / { print; exit }' "$T
 t_text_has "$draft" 'the oracle: `<command>`' "step 2 drafts a mechanical ticket's oracle line, so the quiz sees it before the human confirms the tier"
 rule8=$(printf '%s\n' "$rules" | grep -F '**No file paths')
 t_text_has "$rule8" "oracle line" "rule 8 makes the one exception for a mechanical ticket's oracle line, which names a command and may name its path"
+# process/R220: rule 8's second exception — an Accept-test: line names a
+# test file by path, pinned by the approval commit and held by the guard.
+t_text_has "$rule8" "The second is an \`Accept-test:\` line" "process/R220: rule 8 excepts Accept-test: lines from its no-file-paths rule"
+t_text_has "$rule8" "approval commit pins each path" "process/R220: …because the approval commit pins each path"
+# process/R221: each Accept-test: line is checked with the vocabulary checker
+# before the quiz, and shown at it beside the ticket's Test-tier: lines.
+quiz3=$(awk '/^## Procedure/ { on = 1; next } on && /^3\. / { print; exit }' "$TIX_ABS")
+t_text_has "$quiz3" "'Accept-test: <id> <path>::<test-name>'" "process/R221: the quiz step checks each Accept-test: line with the vocabulary checker"
+in_order "$quiz3" "process/R221: the Accept-test: check runs before the human sees the draft" \
+	"'Accept-test: <id> <path>::<test-name>'" "Then present the draft"
+t_text_has "$quiz3" "its \`Accept-test:\` lines beside them" "process/R221: the quiz shows the Accept-test: lines beside the Test-tier: lines"
 t_text_has "$conf" "A \`mechanical\` stamp with either of the rubric's two conditions in doubt is \`low\`." "rule 14: a doubt on either mechanical condition is a low confidence, never a quiet high"
 tier_entry=$(awk '/^- \*\*Tier\*\*/ { on = 1; print; next } on && (/^- \*\*/ || /^  - /) { exit } on { print }' "$ROOT/docs/domain-glossary.md" | tr '\n' ' ' | tr -s ' ')
 [ -n "$tier_entry" ] && pass "the glossary carries a **Tier** entry" || fail "docs/domain-glossary.md has no **Tier** entry"
