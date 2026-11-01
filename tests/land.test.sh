@@ -1846,7 +1846,17 @@ cd "$KIT" || fail "could not return to the kit"
 # (process/R240, R241), and /pr-iterate's verdict takes the same handle.
 MT="$KIT/.agents/skills/merge-train/SKILL.md"
 PI="$KIT/.agents/skills/pr-iterate/SKILL.md"
-assert_file_has "$MT" 'ticket=\([#T][-0-9]*\)'
+# The train's filter, run as the skill spells it, prints the handle for each
+# canonical spelling and nothing for any other (process/R241).
+mt_filter=$(grep -o "sed -n -e 's/^<!-- implement: .*/p'" "$MT" | head -n 1)
+[ -n "$mt_filter" ] && pass "process/R241: /merge-train spells its landing-line filter" ||
+	fail "process/R241: /merge-train's landing-line filter is not the three-expression sed"
+for _mf in '#77 #77' 'T-07 T-07' 'T-90 T-90' 'T-123456 T-123456' 'T-9 ' 'T-007 ' 'T-1234567 ' 't-07 ' '#-1 ' 'PRD-15 '; do
+	_mf_in=${_mf%% *} _mf_want=${_mf#* }
+	_mf_got=$(printf '<!-- implement: ticket=%s tier=planner -->\n' "$_mf_in" | eval "$mt_filter" | cut -d' ' -f1)
+	[ "$_mf_got" = "$_mf_want" ] && pass "process/R241: /merge-train's filter reads ticket=$_mf_in as '${_mf_want}'" ||
+		fail "process/R241: /merge-train's filter read ticket=$_mf_in as '$_mf_got', not '$_mf_want'"
+done
 mt_flat=$(tr '\n' ' ' <"$MT" | tr -s ' ')
 t_text_has "$mt_flat" 'related=ticket:<ticket>' "/merge-train's merge.land relates ticket:<ticket>, the handle as the line names it"
 t_text_has "$mt_flat" 'subject=ticket:<ticket>' "process/R240: /merge-train's feedback is on ticket:<ticket>"

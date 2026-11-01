@@ -175,7 +175,7 @@ for a factory ticket), in the landing script's fields:
 A key with no answer is left off: the merge's on a PR not merged, the
 release's on a merge that bumps nothing. Read the body's `<!-- implement: -->` line through a filter that
 prints only that line's two values, never the body:
-`gh pr view <N> --json body --jq .body | tr -d '\r' | sed -n 's/^<!-- implement: ticket=\([#T][-0-9]*\) tier=\([a-z-]*\) -->$/\1 \2/p'`.
+`gh pr view <N> --json body --jq .body | tr -d '\r' | sed -n -e 's/^<!-- implement: ticket=\(#[0-9]\{1,9\}\) tier=\([a-z-]*\) -->$/\1 \2/p' -e 's/^<!-- implement: ticket=\(T-0[0-9]\) tier=\([a-z-]*\) -->$/\1 \2/p' -e 's/^<!-- implement: ticket=\(T-[1-9][0-9]\{1,5\}\) tier=\([a-z-]*\) -->$/\1 \2/p'`.
 The line's handle is `#<N>` or a canonical factory ticket id; any other spelling is no line.
 A PR that closes no issue takes the factory ticket its line names as its ticket.
 `implement=yes` only on exactly one output line whose ticket is this one; its tier
