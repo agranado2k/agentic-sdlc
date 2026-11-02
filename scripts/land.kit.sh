@@ -30,7 +30,11 @@
 #      '<reason>' names why — data.reviewed=no with data.no_review, or
 #      data.reviewed=yes. One refusal names every check that failed. A
 #      prose-only PR nobody iterated or reviewed — a diary stamp — lands on
-#      both overrides, each with its reason. Unconfigured, the trace holds
+#      both overrides, each with its reason. The verifier is read beside
+#      them and never checked: merge.land carries data.verified, the
+#      outcome of the latest verify.verdict on pr:#<N> at or after the head
+#      commit's date, or none; no outcome of it refuses, waits or merges
+#      (runtime/R214, R215, ADR-0044). Unconfigured, the trace holds
 #      nothing to read and records nothing: both checks are skipped, and
 #      stderr says so.
 #   1c. REFUSES the same way a PR that moves a file VERSION's files: list
@@ -255,6 +259,7 @@ esac
 ITERATED=
 REVIEWED=
 REVIEWED_BLOCKED=
+VERIFIED=
 # at_head <kind> — print "<outcome> <axis>" for each <kind> event on pr:#<PR>
 # stamped at or after $HEAD_AT; exit 1 when there is none. The subject,
 # stamp and outcome are read from the envelope only — up to the data map, as
@@ -284,12 +289,17 @@ if [ -z "$(trace_read dir)" ]; then
 else
 	ITERATED=no
 	REVIEWED=no
+	VERIFIED=none
 	case $HEAD_AT in
 	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z)
 		! at_head pr.iterate >/dev/null || ITERATED=yes
 		_verdicts=$(at_head review.verdict) || _verdicts=
 		! printf '%s\n' "$_verdicts" | awk '$2 == "1" && $1 != "blocked" { f = 1 } END { exit !f }' || REVIEWED=yes
 		! printf '%s\n' "$_verdicts" | grep -qx 'blocked 1' || REVIEWED_BLOCKED=yes
+		# What the verifier said at the head: the latest verify.verdict's
+		# outcome, read and recorded, never checked (runtime/R214, R215).
+		VERIFIED=$(at_head verify.verdict | awk '{ o = $1 } END { print o }')
+		case $VERIFIED in pass | blocked | unavailable) ;; *) VERIFIED=none ;; esac
 		;;
 	*) HEAD_AT='<undated>' ;;
 	esac
@@ -409,6 +419,7 @@ fi
 [ "$ITERATED" != no ] || set -- "$@" "data.no_iteration=$NO_ITERATION"
 [ -z "$REVIEWED" ] || set -- "$@" "data.reviewed=$REVIEWED"
 [ "$REVIEWED" != no ] || set -- "$@" "data.no_review=$NO_REVIEW"
+[ -z "$VERIFIED" ] || set -- "$@" "data.verified=$VERIFIED"
 
 # --- 1d. a PR the trace never saw opened (#638) --------------------------------
 # A PR opened outside /implement left no pr.open, and /retro joins a ticket to

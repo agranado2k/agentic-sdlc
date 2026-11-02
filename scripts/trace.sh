@@ -2964,11 +2964,29 @@ trace_fix_window() {
 # the area's counted landings: HELD UP when accepted at triage or a mistake
 # against its PR (never a failed QA) names its file, NOT HELD UP when
 # rejected or dismissed by a human with no such mistake, unlabelled else.
-# A verifier's V- finding is no lens finding and counts nowhere
-# (the kit's ADR-0044). A triage pairs with the latest raise of its id on
-# its PR before it; a
-# dismissal with the latest raise at its `data.where` before it and every
-# raise at that where from the same run. A ratio over zero prints `n/a`.
+# Only the kit's own review's findings count there: a verifier's — a V- id,
+# or `data.agent=verifier` — never does (the kit's ADR-0044). A triage pairs
+# with the latest raise of its id on its PR before it; a dismissal with the
+# latest raise at its `data.where` before it and every raise at that where
+# from the same run, the kit's and the verifier's apart.
+#
+# Each area's row is followed by its VERIFIER ROW once per rung (PRD-13
+# runtime/R216, R223, R228), over the same landings:
+#
+#   <area> verifier <rung>: held up <h> of <l>, not held up <x>,
+#     unlabelled <u>, precision <p>, caught <c>, blocked where the review
+#     passed <b>; kit findings confirmed: held up, not held up, unlabelled;
+#     disputed: held up, not held up, unlabelled
+#
+# A verifier finding is labelled as a lens finding is, and counts in the row
+# of the rung its PR's verdict names — the `verify.verdict` (pass or blocked)
+# at or after its raise. It CATCHES a mistake that is no failed QA when,
+# rejected at triage, it names one of its files. A landing counts as blocked
+# where the review passed when its `merge.land` says `data.verified=blocked`
+# and `data.reviewed=yes`, in the row of the latest verdict before it. A
+# `finding.verify` pairs with the latest kit raise of its id on its PR before
+# it, in its verdict's rung, the latest standing; it moves no lens count and
+# no label. `--settled` prints no verifier row. A ratio over zero prints `n/a`.
 # Nothing is compared to a threshold and nothing is written. Unconfigured: nothing on stdout, exit 0, like every reader.
 #
 # `record --settled` is the RISK RULE's form (scripts/risk.sh, PRD-09
@@ -3022,22 +3040,30 @@ trace_record() {
 		k == "merge.land" && tr_str(e, "outcome") == "landed" {
 			d = tr_data($0)
 			m = match(d, /"merge_sha":"[0-9a-f]+"/) ? substr(d, RSTART + 13, RLENGTH - 14) : ""
-			if (m != "" && s != "" && t >= ts[s]) { ts[s] = t; sha[s] = m }
+			if (m != "" && s != "" && t >= ts[s]) { ts[s] = t; sha[s] = m; vf[s] = dstr(d, "verified"); rv[s] = dstr(d, "reviewed") }
 		}
 		k == "merge.outcome" && s != "" { print "O\t" s "\t" tr_str(e, "outcome") "\t" dstr(tr_data($0), "files") }
 		k == "finding.raise" && s != "" {
 			d = tr_data($0); i = dstr(d, "id"); w = dstr(d, "where")
-			if (i != "" && w != "" && i !~ /^V-/) print "R\t" t "\t" s "\t" i "\t" wpath(w) "\t" tr_str(e, "run") "\t" w
+			if (i != "" && w != "") print "R\t" t "\t" s "\t" i "\t" wpath(w) "\t" tr_str(e, "run") "\t" w "\t" (i ~ /^V-/ || dstr(d, "agent") == "verifier" ? 1 : 0)
 		}
 		k == "finding.triage" && s != "" {
 			d = tr_data($0); i = dstr(d, "id")
-			if (i ~ /^[CHML]-[0-9]+$/) print "T\t" t "\t" s "\t" i "\t" tr_str(e, "outcome")
+			if (i ~ /^(V-)?[CHML]-[0-9]+$/) print "T\t" t "\t" s "\t" i "\t" tr_str(e, "outcome")
 		}
 		k == "finding.dismiss" && s != "" {
 			w = dstr(tr_data($0), "where")
 			if (w != "") print "D\t" t "\t" s "\t" w
 		}
-		END { for (s in sha) print "L\t" ts[s] "\t" s "\t" sha[s] }')
+		k == "verify.verdict" && s != "" {
+			o = tr_str(e, "outcome"); g = dstr(tr_data($0), "rung")
+			if ((o == "pass" || o == "blocked") && (g == "cross-provider" || g == "same-provider")) print "V\t" t "\t" s "\t" g
+		}
+		k == "finding.verify" && s != "" {
+			o = tr_str(e, "outcome"); i = dstr(tr_data($0), "id")
+			if ((o == "confirmed" || o == "disputed") && i ~ /^[CHML]-[0-9]+$/) print "Y\t" t "\t" s "\t" i "\t" o
+		}
+		END { for (s in sha) print "L\t" ts[s] "\t" s "\t" sha[s] "\t" vf[s] "\t" rv[s] }')
 	_rc_shas=$(printf '%s\n' "$_rc_ev" | awk -F '\t' '$1 == "L" { print $4 }' | sort -u)
 	_rc_have=
 	if [ -n "$_rc_shas" ]; then
@@ -3070,59 +3096,96 @@ trace_record() {
 		$1 == "A" && $3 == "" { if (!($2 in known)) { known[$2] = 1; order[++na] = $2 } next }
 		$1 == "A" { inarea[$3, $2] = 1; next }
 		$1 == "F" { paths[$2] = paths[$2] "\n" $3; next }
-		$1 == "L" { nl++; lts[nl] = $2; lpr[nl] = $3; lsha[nl] = $4; next }
+		$1 == "L" { nl++; lts[nl] = $2; lpr[nl] = $3; lsha[nl] = $4; lvf[nl] = $5; lrv[nl] = $6; next }
 		$1 == "O" { mistake[$2] = 1; no[$2]++; oout[$2, no[$2]] = $3; ofiles[$2, no[$2]] = $4; next }
-		$1 == "R" { nr++; rts[nr] = $2; rpr[nr] = $3; rid[nr] = $4; rpath[nr] = $5; rrun[nr] = $6; rwhere[nr] = $7; byp[$3] = byp[$3] " " nr; next }
+		$1 == "R" { nr++; rts[nr] = $2; rpr[nr] = $3; rid[nr] = $4; rpath[nr] = $5; rrun[nr] = $6; rwhere[nr] = $7; rver[nr] = $8 + 0; byp[$3] = byp[$3] " " nr; next }
 		$1 == "T" { nt++; tts[nt] = $2; tpr[nt] = $3; tid[nt] = $4; tout[nt] = $5; next }
 		$1 == "D" { nd++; dts[nd] = $2; dpr[nd] = $3; dwhere[nd] = $4; next }
+		$1 == "V" { nv++; vts[nv] = $2; vrung[nv] = $4; byv[$3] = byv[$3] " " nv; next }
+		$1 == "Y" { ny++; yts[ny] = $2; ypr[ny] = $3; yid[ny] = $4; yout[ny] = $5; next }
 		# names(files, path) — whether a space-separated `data.files` names the path.
 		function names(f, path) { return path != "" && index(" " f " ", " " path " ") > 0 }
 		function ratio(n, d) { return d == 0 ? "n/a" : sprintf("%.2f", n / d) }
-		# latest(pr, ts, key, val) — the latest raise on the PR at or before ts
-		# whose id (key 1) or where (key 2) is val, or 0.
-		function latest(pr, t, key, val,   m, rs, q, r, best) {
+		# latest(pr, ts, key, val, pop) — the latest raise on the PR at or before
+		# ts whose id (key 1) or where (key 2) is val, of the kit`s review (pop
+		# 0), the verifier`s (1) or either (-1), or 0.
+		function latest(pr, t, key, val, pop,   m, rs, q, r, best) {
 			best = 0; m = split(byp[pr], rs, " ")
 			for (q = 1; q <= m; q++) {
 				r = rs[q] + 0
-				if (rts[r] > t || (key == 1 ? rid[r] : rwhere[r]) != val) continue
+				if (rts[r] > t || (key == 1 ? rid[r] : rwhere[r]) != val || (pop >= 0 && rver[r] != pop)) continue
 				if (!best || rts[r] >= rts[best]) best = r
 			}
 			return best
 		}
+		# rung(pr, t, after) — the rung of the PR`s verifier verdict: the
+		# earliest at or after t (after 1), or the latest at or before t
+		# (after 0); empty when there is none.
+		function rung(pr, t, after,   m, vs, q, v, best) {
+			best = 0; m = split(byv[pr], vs, " ")
+			for (q = 1; q <= m; q++) {
+				v = vs[q] + 0
+				if (after ? vts[v] < t : vts[v] > t) continue
+				if (!best || (after ? vts[v] < vts[best] : vts[v] >= vts[best])) best = v
+			}
+			return best ? vrung[best] : ""
+		}
+		# label(r) — 1 held up, 2 not held up, 3 unlabelled.
+		function label(r) { return tri[r] == "accepted" || (r in vind) ? 1 : (tri[r] == "rejected" || (r in dism) ? 2 : 3) }
 		END {
 			# A triage pairs with the latest raise of its id on its PR before it,
 			# the ids restarting with every review; the latest triage stands.
 			for (x = 1; x <= nt; x++) {
-				r = latest(tpr[x], tts[x], 1, tid[x])
+				r = latest(tpr[x], tts[x], 1, tid[x], -1)
 				if (r && (!(r in trits) || tts[x] >= trits[r])) { trits[r] = tts[x]; tri[r] = tout[x] }
 			}
 			# A dismissal pairs with the latest raise at its where before it, and
-			# with every raise at that where from the same review run.
-			for (x = 1; x <= nd; x++) {
-				r = latest(dpr[x], dts[x], 2, dwhere[x])
-				if (!r) continue
-				m = split(byp[dpr[x]], rs, " ")
-				for (q = 1; q <= m; q++) {
-					y = rs[q] + 0
-					if (y == r || (rwhere[y] == rwhere[r] && rrun[y] == rrun[r] && rrun[r] != "")) dism[y] = 1
+			# with every raise at that where from the same review run — the
+			# kit`s review and the verifier each apart, so neither moves the
+			# other`s labels.
+			for (x = 1; x <= nd; x++)
+				for (pop = 0; pop <= 1; pop++) {
+					r = latest(dpr[x], dts[x], 2, dwhere[x], pop)
+					if (!r) continue
+					m = split(byp[dpr[x]], rs, " ")
+					for (q = 1; q <= m; q++) {
+						y = rs[q] + 0
+						if (y == r || (rver[y] == pop && rwhere[y] == rwhere[r] && rrun[y] == rrun[r] && rrun[r] != "")) dism[y] = 1
+					}
 				}
-			}
 			# Vindicated: a mistake against its PR names its file. A failed QA
 			# names no file, whatever its line carries.
 			for (r = 1; r <= nr; r++)
 				for (o = 1; o <= no[rpr[r]]; o++)
 					if (oout[rpr[r], o] != "qa-failed" && names(ofiles[rpr[r], o], rpath[r])) vind[r] = 1
-			# Missed: a mistake no finding rejected at triage named a file of; a
-			# failed QA always.
+			# A verifier finding counts in the row of the rung its PR`s verdict
+			# names: the verdict at or after the raise, its broker run`s.
+			for (r = 1; r <= nr; r++) if (rver[r]) rr[r] = rung(rpr[r], rts[r], 1)
+			# Missed: a mistake no kit finding rejected at triage named a file of;
+			# a failed QA always. Caught by a rung: one of its verifier findings,
+			# rejected at triage, named a file of a mistake that is no failed QA.
 			for (pr in no)
 				for (o = 1; o <= no[pr]; o++) {
 					caught = 0
 					if (oout[pr, o] != "qa-failed") {
 						m = split(byp[pr], rs, " ")
-						for (q = 1; q <= m; q++) { y = rs[q] + 0; if (tri[y] == "rejected" && names(ofiles[pr, o], rpath[y])) caught = 1 }
+						for (q = 1; q <= m; q++) {
+							y = rs[q] + 0
+							if (tri[y] != "rejected" || !names(ofiles[pr, o], rpath[y])) continue
+							if (rver[y]) vcaught[pr, rr[y]] = 1
+							else caught = 1
+						}
 					}
 					if (!caught) missed[pr] = 1
 				}
+			# A finding verdict pairs with the latest kit raise of its id on its
+			# PR before it, and counts in its verdict`s rung; the latest stands.
+			for (x = 1; x <= ny; x++) {
+				r = latest(ypr[x], yts[x], 1, yid[x], 0)
+				g = rung(ypr[x], yts[x], 1)
+				if (!r || g == "") continue
+				if (!((r, g) in fvts) || yts[x] >= fvts[r, g]) { fvts[r, g] = yts[x]; fv[r, g] = yout[x] }
+			}
 			now = day(today)
 			for (i = 1; i <= na; i++) {
 				a = order[i]
@@ -3141,13 +3204,13 @@ trace_record() {
 				# Settled: a landing inside the fix window is not counted toward
 				# the 20, but a missed mistake on one is said (window-missed).
 				c = 0; w = 0; mk = 0; km = 0; um = 0
-				split("", counted)
+				split("", counted); split("", cl)
 				for (x = 1; x <= n && c < cap; x++) {
 					j = cand[x]
 					inw = now - day(lts[j]) < window
 					if (settled && inw) { if (lpr[j] in missed) um++; continue }
 					c++
-					counted[lpr[j]] = 1
+					counted[lpr[j]] = 1; cl[c] = j
 					if (inw) w++
 					if (lpr[j] in mistake) mk++
 					if (lpr[j] in missed) km++
@@ -3155,7 +3218,7 @@ trace_record() {
 				# The findings raised on those landings at a path of the area.
 				hu = 0; nh = 0; ul = 0; st = 0; sh = 0; so = 0
 				for (r = 1; r <= nr; r++) {
-					if (!(rpr[r] in counted) || !((rpath[r], a) in inarea)) continue
+					if (rver[r] || !(rpr[r] in counted) || !((rpath[r], a) in inarea)) continue
 					if (tri[r] == "accepted" || tri[r] == "rejected") st++
 					if (r in dism) sh++
 					if (r in vind) so++
@@ -3165,6 +3228,22 @@ trace_record() {
 				}
 				if (settled) { printf "%s landings %d missed %d held %d judged %d window-missed %d\n", a, c, km, hu, hu + nh, um; continue }
 				printf "%s: landings %d of %d, in the fix window %d, mistakes %d, missed %d of %d, miss rate %s, held up %d of %d, not held up %d, unlabelled %d, precision %s, labels from triage %d, human %d, outcome %d\n", a, c, cap, w, mk, km, c, ratio(km, c), hu, hu + nh, nh, ul, ratio(hu, hu + nh), st, sh, so
+				# The verifier`s row, once per rung, over the same landings.
+				for (gi = 1; gi <= 2; gi++) {
+					g = gi == 1 ? "cross-provider" : "same-provider"
+					split("", n3); split("", cf); split("", dp); vc = 0; vb = 0
+					for (r = 1; r <= nr; r++) {
+						if (!(rpr[r] in counted) || !((rpath[r], a) in inarea)) continue
+						if (rver[r]) { if (rr[r] == g) n3[label(r)]++ }
+						else if ((r, g) in fv) { if (fv[r, g] == "confirmed") cf[label(r)]++; else dp[label(r)]++ }
+					}
+					for (x = 1; x <= c; x++) {
+						j = cl[x]
+						if ((lpr[j], g) in vcaught) vc++
+						if (lvf[j] == "blocked" && lrv[j] == "yes" && rung(lpr[j], lts[j], 0) == g) vb++
+					}
+					printf "%s verifier %s: held up %d of %d, not held up %d, unlabelled %d, precision %s, caught %d, blocked where the review passed %d; kit findings confirmed: held up %d, not held up %d, unlabelled %d; disputed: held up %d, not held up %d, unlabelled %d\n", a, g, n3[1], n3[1] + n3[2], n3[2], n3[3], ratio(n3[1], n3[1] + n3[2]), vc, vb, cf[1], cf[2], cf[3], dp[1], dp[2], dp[3]
+				}
 			}
 		}'
 }
