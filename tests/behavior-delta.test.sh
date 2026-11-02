@@ -20,6 +20,9 @@ DELTA="$KIT/scripts/behavior-delta.sh"
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
 t_init
+# A judge reads its policy at POLICY_BASE when set (ADR-0039): a run that
+# inherited one would judge every fixture by a ref it does not hold.
+unset POLICY_BASE GUARDS_CONFIG
 
 # A representative contract-artifact configuration: four surfaces, standard test
 # and feature patterns.
@@ -346,5 +349,58 @@ assert_separation_has "docs/events.md"
 # src/b.ts is not a configured surface — the section lists contract artifacts,
 # not everything the flagged commit happened to touch.
 assert_separation_lacks "src/b.ts"
+
+# ---------------------------------------------------------------------------
+banner "Judged by the base's guards policy — POLICY_BASE (ADR-0039, PRD-08 slice 4)"
+# ---------------------------------------------------------------------------
+# A pull request must not empty the surfaces that list its own behavior. With
+# POLICY_BASE naming a ref, the lister reads the guards policy through the
+# policy reader at that ref; unset, the working tree's copy, as before.
+
+# at_base <repo> [env…] — the kit's lister in <repo>, the policy named by override.
+at_base() {
+	_ab_repo=$1
+	shift
+	t_exec env GUARDS_CONFIG=scripts/guards.config.sh "$@" sh -c 'cd "$1" && sh "$2" main' _ "$_ab_repo" "$DELTA"
+}
+
+t_repo
+repo=$REPO
+t_guards_config "$repo" "$CONFIG_STD"
+t_write "$repo" "docs/api/openapi.yaml" "paths: {}
+"
+t_commit "$repo" "chore: base" >/dev/null
+branch "$repo" pr
+t_guards_config "$repo" "BEHAVIOR_DELTA_SURFACES=''"
+t_write "$repo" "docs/api/openapi.yaml" "paths: {/x: {}}
+"
+t_write "$repo" "notes.txt" "n
+"
+t_commit "$repo" "feat: empty the surfaces and change the API" >/dev/null
+at_base "$repo" POLICY_BASE=main
+case $T_OUT in
+*"## API surface"*"docs/api/openapi.yaml"*) pass "policy/R28: under POLICY_BASE=main the lister reads main's surfaces — the API change is listed" ;;
+*) fail "policy/R28: the API change is not listed under main's policy: $T_OUT" ;;
+esac
+at_base "$repo"
+expect_out_has "No contract artifacts configured" "policy/R16: with POLICY_BASE unset the working tree's (emptied) policy is read"
+
+git -C "$repo" checkout -q main
+git -C "$repo" rm -q scripts/guards.config.sh
+git -C "$repo" commit -q -m "chore: drop the guards policy"
+git -C "$repo" checkout -q pr
+at_base "$repo" POLICY_BASE=main
+[ "$(printf '%s\n' "$T_OUT" | head -1)" = "fail-closed missing scripts/guards.config.sh" ] &&
+	pass "policy/R29: the fail-closed line is the first line printed" || fail "policy/R29: first line was: $(printf '%s\n' "$T_OUT" | head -1)"
+_r29=ok
+for p in docs/api/openapi.yaml notes.txt scripts/guards.config.sh; do
+	printf '%s\n' "$T_OUT" | grep -qx "  $p" || _r29=$p
+done
+[ "$_r29" = ok ] && pass "policy/R29: every path the diff changes is listed as a candidate" || fail "policy/R29: $_r29 is not listed: $T_OUT"
+expect_out_lacks "No contract artifacts configured"
+[ "$T_STATUS" = 0 ] && pass "the failed-closed list still exits 0: it is a list, judging nothing" || fail "failed-closed list: exit $T_STATUS"
+at_base "$repo" POLICY_BASE=no-such-ref
+[ "$(printf '%s\n' "$T_OUT" | head -1)" = "fail-closed no-base scripts/guards.config.sh" ] &&
+	pass "a POLICY_BASE naming no commit fails closed the same way" || fail "no-base: $T_OUT"
 
 t_done "behavior-delta.sh"

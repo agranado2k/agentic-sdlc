@@ -1,9 +1,11 @@
 #!/bin/sh
 # guards.lib.sh — the one loader the guards share.
 #
-# Sourced, never executed. Its only job is finding and reading
+# Sourced, never executed. Its job is finding and reading
 # scripts/guards.config.sh so that three scripts do not carry three copies of
-# the same resolution order (and drift).
+# the same resolution order (and drift) — and, with POLICY_BASE set, the one
+# base read (policy_at_base, policy_value) every judge shares, the review's
+# lens slicer and vocabulary checker among them.
 #
 # Resolution order, first hit wins:
 #   1. $GUARDS_CONFIG        — explicit. If it is set and does not exist, that
@@ -175,18 +177,21 @@ policy_value() {
 #     as guards_load_config reads it.
 #
 # The base's copy is evaluated in a child shell; only GUARD_SOURCE_RE,
-# GUARD_SOURCE_EXCLUDE_RE and GUARD_TEST_RE come back from it.
+# GUARD_SOURCE_EXCLUDE_RE, GUARD_TEST_RE and the behavior-delta lister's
+# BEHAVIOR_DELTA_SURFACES and BEHAVIOR_DELTA_FEATURE_RE come back from it.
 #
 # Returns 0 loaded, 1 unconfigured (POLICY_BASE unset only). When the base
 # cannot be read it prints the reader's `fail-closed <reason> <path>` line, or
 # its own account when the reader gave none, on stderr and returns 3: the
-# caller's strictest path, never its unconfigured one.
+# caller's strictest path, never its unconfigured one. POLICY_FAIL then holds
+# the reader's line, or is empty, for a caller that prints it elsewhere.
 guards_load_policy() {
 	[ -n "${POLICY_BASE:-}" ] || {
 		guards_load_config "${1:-}"
 		return
 	}
 	_gp_here=${1:-}
+	POLICY_FAIL=
 	_gp_top=$(git rev-parse --show-toplevel 2>/dev/null) && _gp_top=$(cd "$_gp_top" && pwd -P) || {
 		echo "guards: POLICY_BASE is set but this is not a git working tree." >&2
 		return 3
@@ -218,5 +223,7 @@ guards_load_policy() {
 	GUARD_SOURCE_RE=$(policy_value "$POLICY_COPY" GUARD_SOURCE_RE)
 	GUARD_SOURCE_EXCLUDE_RE=$(policy_value "$POLICY_COPY" GUARD_SOURCE_EXCLUDE_RE)
 	GUARD_TEST_RE=$(policy_value "$POLICY_COPY" GUARD_TEST_RE)
+	BEHAVIOR_DELTA_SURFACES=$(policy_value "$POLICY_COPY" BEHAVIOR_DELTA_SURFACES)
+	BEHAVIOR_DELTA_FEATURE_RE=$(policy_value "$POLICY_COPY" BEHAVIOR_DELTA_FEATURE_RE)
 	return 0
 }
