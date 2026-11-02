@@ -40,9 +40,15 @@
 # directly under scripts/ whose name ends `.config.sh`; the docs gate's
 # scripts/docs-conformance/config.mjs and local-vocabulary.mjs; every file
 # directly under .githooks/ and .github/workflows/; the risk policy; the
-# software factory's project manifest, .factory/project.yaml; and each
-# path the risk policy's RISK_JUDGING_EXTRA names AT THE BASE. A file of the
-# same name anywhere else is not in it.
+# software factory's project manifest, .factory/project.yaml; every factory
+# ticket file, `ticket.md` directly under a directory directly under
+# .factory/items/; and each path the risk policy's RISK_JUDGING_EXTRA names
+# AT THE BASE. A file of the same name anywhere else is not in it. `touched`
+# reports a factory ticket file only when its front matter's `tests:`
+# approval record — the `tests:` key and the lines indented under it —
+# differs between the merge base and the head: added, removed or changed. The
+# factory moves a ticket's stage on every build branch; the approval record
+# is the operator's act alone.
 #
 # FAIL CLOSED. Any answer it cannot give is ONE line on stdout,
 #   fail-closed <reason> <path>
@@ -113,7 +119,33 @@ in_fixed() {
 	esac
 	_directly_under .githooks/ "$1" && return 0
 	_directly_under .github/workflows/ "$1" && return 0
+	ticket_file "$1"
+}
+
+# ticket_file <path> — 0 for a factory ticket file, `ticket.md` directly
+# under a directory directly under .factory/items/.
+ticket_file() {
+	case $1 in
+	.factory/items/*/ticket.md)
+		_tf_dir=${1#.factory/items/}
+		_tf_dir=${_tf_dir%/ticket.md}
+		case $_tf_dir in '' | */*) return 1 ;; esac
+		return 0
+		;;
+	esac
 	return 1
+}
+
+# approval_at <commit> <path> — the `tests:` approval record of the factory
+# ticket file at the commit, as raw front-matter lines (the `tests:` key and
+# every indented line under it), or nothing when the file or the record is
+# absent. Read from git's objects; compared, never printed.
+approval_at() {
+	git cat-file blob "$1:$2" 2>/dev/null | awk '
+		NR == 1 { if ($0 !~ /^---[ \t\r]*$/) exit; next }
+		/^---[ \t\r]*$/ { exit }
+		/^[^ \t]/ { on = ($0 ~ /^tests[ \t]*:/) }
+		on { print }'
 }
 
 # base_commit <ref> — the commit a ref names here, or status 1.
@@ -352,7 +384,14 @@ touched)
 		IFS='
 '
 		for p in $changed; do
-			if in_fixed "$p" || in_extra "$p"; then printf '%s\n' "$p"; fi
+			if ticket_file "$p" && ! in_extra "$p"; then
+				# A factory ticket file is reported only when its
+				# approval record differs (policy/R10): the factory moves
+				# a ticket's stage on every build branch.
+				[ "$(approval_at "$mb" "$p")" = "$(approval_at "$head" "$p")" ] || printf '%s\n' "$p"
+			elif in_fixed "$p" || in_extra "$p"; then
+				printf '%s\n' "$p"
+			fi
 		done | LC_ALL=C sort -u
 	)
 	[ -n "$hits" ] && printf '%s\n' "$hits"
