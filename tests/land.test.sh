@@ -1973,8 +1973,10 @@ printf '%s\n' "$_s7" | grep -qiwE 'lane|landing script|ADR|pr-iterate|trace' &&
 _lane_adr=$(grep -l '^- \*\*Supersedes / amends\*\*: supersedes shared invariant §7 for the low-risk lane only' "$KIT"/docs/adr/[0-9]*.md 2>/dev/null | head -1)
 if [ -n "$_lane_adr" ]; then
 	pass "a record supersedes shared invariant §7 for the low-risk lane only"
-	for _la_w in 'amends ADR-0024 clause 7' 'ADR-0036' '§5 keeps its text' 'standing authorization' 'lane policy' 'closed'; do
-		grep -qF "$_la_w" "$_lane_adr" && pass "…and it says: $_la_w" || fail "the lane record lacks: $_la_w"
+	for _la_w in 'amends ADR-0024 clause 7' 'ADR-0036' '§5 keeps its text' 'standing authorization' 'lane policy' 'closed' \
+		'closed until the lane policy names an operator' 'a hold is exit 4 and an event; a refusal stays exit 2 and silent' \
+		'held by path, whatever the risk' 'only a failed QA gets a revert pull request' 'a red base branch holds the lane'; do
+		tr '\n' ' ' <"$_lane_adr" | sed 's/  */ /g' | grep -qiF "$_la_w" && pass "…and it says: $_la_w" || fail "the lane record lacks: $_la_w"
 	done
 	_la_row=$(grep -F "($(basename "$_lane_adr"))" "$KIT/docs/adr/INDEX.md")
 	printf '%s\n' "$_la_row" | grep -qF 'supersedes shared invariant §7 for the low-risk lane only' &&

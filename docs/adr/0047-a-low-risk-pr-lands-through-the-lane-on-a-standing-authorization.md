@@ -66,7 +66,9 @@ Chosen option 4.
    operator (a forge login), the landing command `/pr-iterate` runs, and the
    hold patterns. It ships empty, with a kit-only twin that holds the kit's
    values, as the agents policy has. The lane is **open** only when that
-   policy names an operator and can be read, and **closed** otherwise.
+   policy names an operator and can be read, and **closed** otherwise: it
+   stays closed until the lane policy names an operator, so a consumer's
+   lane, and the kit's until the operator lands their login, is closed.
    Opening and closing are changes to that policy, which only the operator
    lands: a lane run holds any pull request that touches it.
 3. **Every refusal stays.** In lane mode the landing script makes every
@@ -81,15 +83,30 @@ Chosen option 4.
    `lane: held <token>` line and one `merge.land outcome=skipped
    data.via=lane` event; a refusal stays exit 2 and silent. Only past all of
    them does it merge the head the risk rule judged, recording `merge.land
-   data.via=lane`.
+   data.via=lane`. Three of these are decisions in their own right:
+   - **A hold is exit 4 and an event; a refusal stays exit 2 and silent.**
+     Today's refusals mean "not ready" and keep that meaning on the
+     operator's path; a hold is the lane's judgement, and D-02's measure of
+     how often the operator is still needed counts it.
+   - **The hold list is held by path, whatever the risk.** The risk rule
+     leaves a shared-layer change to the planner's stamp; the lane is where
+     a never-learnable change would land unread, so it holds the
+     `VERSION`-listed files, the policy files and the hold patterns itself,
+     and writes no `Risk:` reason of its own.
+   - **A red base branch holds the lane**, and the operator gets a notice.
+     It is not a counted mistake, but an agent landing onto a red base
+     branch compounds one; holding is the closed failure.
 5. **The stop is at once.** The kill switch (ADR-0045) makes every pull
    request high, so a tripped switch holds every lane run; removing the
    operator's name closes the lane. Either alone keeps pull requests off it.
 6. **Escaped mistakes return to the operator.** An escape is a post-merge
    outcome (ADR-0036) against a lane landing. Each gets one notice to the
-   lane's operator, a forge issue assigned to them; a failed factory QA also
-   gets a revert pull request (or a fix ticket where the revert conflicts),
-   held for the operator. The area's demotion is the risk rule's, read from
+   lane's operator, a forge issue assigned to them. Only a failed QA gets a
+   revert pull request (or a fix ticket where the revert conflicts, since a
+   fix needs an implementation session), held for the operator: a
+   `reverted` or `fixed` outcome means something already undid or repaired
+   the change, and reverting it then would undo the repair, so those two
+   notify only. The area's demotion is the risk rule's, read from
    the earned record: an escape is a missed mistake, so the area reads
    unlearned and the lane holds every pull request touching it.
 7. **ADR-0024 clause 7 and ADR-0036 clause 5, amended:** the landing script
