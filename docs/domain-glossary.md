@@ -337,6 +337,12 @@ Grouped by the seam each term belongs to. Entry shape:
 - **Owed** — a ticket that is not exempt, has no approval record, and covers
   an id stamped with a `Test-tier:` other than `manual`: its acceptance tests
   must be approved before it is built. Ref: ADR-0046.
+- **Tests-first mode** — how `/implement` builds a factory ticket the
+  acceptance guard's `tests` answers `approved` for: the approved files
+  committed alone and unchanged as the build's first commit, run red before
+  any other code, never edited, and all green with the full suite before the
+  pull request opens. An `owed` ticket or a failed-closed answer stops the
+  build before its first commit. Ref: ADR-0046, `docs/specs/acceptance.md`.
 - **Check table** — the block in a PR body that shows, per requirement the
   ticket covers, the test tier that checked it, the **result** (`pass`,
   `fail`, `skipped`) and the evidence: a `<path>::<test>@<sha>` pin, an
