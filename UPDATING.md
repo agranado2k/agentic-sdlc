@@ -229,8 +229,11 @@ the step 9 sub-step that needs it.
 
 **Arriving from 0.109.0 or older, `/to-tickets` stamps a risk on every
 ticket.** No file joins or leaves at 0.110.0; only this recipe changes
-content. **One skill moves (9a): `/to-tickets`** — take its new `RISK.md`
-beside `SKILL.md` and the `SKILL.md` that points at it from rule 17. Every
+content. **Two skills move (9a): `/to-tickets`** — take its new `RISK.md`
+beside `SKILL.md` and the `SKILL.md` that points at it from rule 17 — **and
+`/pr-iterate`**, whose `SKILL.md` and `CHECK-TABLE.md` now request the
+verifier at each new head, triage its findings as a bot's and list its
+disputes and ⚠️ items at the top of the report; take both. Every
 ticket it writes now carries one `Risk:` line (`Risk: low`, or `Risk: high
 <reason>` with one of `irreversible`, `security`, `invisible`,
 `shared-layer`, `unclear`) and one `Risk-confidence:` line, both checked by
@@ -1998,10 +2001,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3710 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3713 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3864 insertions(+), 1 deletion(-)
+ 3 files changed, 3867 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

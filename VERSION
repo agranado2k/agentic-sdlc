@@ -3826,14 +3826,22 @@
 # the quiz and shows them beside the tier; step 4 publishes both lines and
 # records `data.risk`, `data.risk_proposed` and `data.risk_confidence` on
 # each ticket.write; rule 15's "stamps no Risk: line" sentence goes.
+# /pr-iterate — SKILL.md and CHECK-TABLE.md's new section "The verifier on
+# the PR": each iteration requests the verifier at a new head beside the
+# review, triages its findings as a bot's, lists its disputed check-table
+# rows, its disputes of the kit's findings and its ⚠️ items at the top of
+# the report, and lets no verifier verdict hold back ✅ converged (#944,
+# factory T-81, landed after 0.109.0's tag).
 # Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/docs-conformance/config.mjs (yours) — the kit raised
 # /to-tickets' skillCeilings entry from 35000 to 35500 bytes; raise yours
 # the same if your gate holds that skill to a ceiling.
 # Adapter (9e): none.
-# Kit-only, never shipped: docs/specs/process.md R61 to R63,
+# Kit-only, never shipped: docs/specs/process.md R61 to R63 (and R201 to
+# R208, #944),
 # tests/spec-skills.test.sh's risk-stamp section and
-# tests/trace-skills.test.sh's ticket.write keys.
+# tests/trace-skills.test.sh's ticket.write keys, and
+# tests/review-pr-output.test.sh's verifier section (#944).
 
 shared-layer: 0.110.0
 
