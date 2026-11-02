@@ -3975,7 +3975,35 @@
 # AGENTS.md quick-reference row for the slicer's exit 3, and (from #1005)
 # docs/specs/acceptance.md R24 to R31 and the glossary's tests-first mode.
 
-shared-layer: 0.116.0
+# 0.117.0 — the review and the check table read a ticket's approved tests
+# (ticket #972, PRD-14 slice 4 of D-02, factory T-89). No file joins or
+# leaves. Two shared files change content: scripts/check-table.sh reads the
+# ticket's `Accept-test:` lines through the vocabulary checker, bounded by
+# its accept-test bound, prints `not-approved: <id>` for a row whose evidence
+# cites none of its id's approved tests (a URL or `-` included), and admits a
+# pin whose test name holds spaces (any printable ASCII after the `::`, the
+# sha after the last `@`); and UPDATING.md, its entry and both worked
+# examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /review-pr — ACCEPTANCE.md is new beside SKILL.md, opened from
+# Agent 7's new fifth input: in a factory project the coordinator runs
+# `POLICY_BASE=<base> sh scripts/acceptance-guard.sh check <base> HEAD` and
+# hands its output to Agent 7, which lists each `changed:` line as
+# `❌ MISSING <id> — approved test changed` and, on the guard's exit 3, every
+# approved id as MISSING with the fail-closed line in the summary;
+# CHECK-TABLE.md names the `not-approved` word. .agents/prompts/review-worker.md
+# (the offline worker contract) lists an `Acceptance guard:` block the same
+# way. /implement — CHECK-TABLE.md: an id with `Accept-test:` lines cites one
+# of them, as stamped, `@<commit>`; DISPATCHED-REVIEW.md appends the guard's
+# output to a dispatched review's spec. /pr-iterate — SKILL.md and
+# CHECK-TABLE.md never converge while the reader prints `not-approved:`.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/acceptance.md R32 to R34, process R46
+# and R47 restated, the verifier's pin parse (scripts/skill-dispatch.kit.sh)
+# and the broker's `data.approved_changed` count (scripts/forge-broker.kit.sh),
+# and the AGENTS.md quick-reference row's `not-approved:`.
+
+shared-layer: 0.117.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
