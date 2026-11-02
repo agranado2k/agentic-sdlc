@@ -40,7 +40,7 @@ Read `$rc` and the file, nothing of the ticket: the guard prints ids, paths and 
 
 ```sh
 commit=$(sed -n '1s/^approved //p' "$out")
-sed -n 's/^Accept-test: [^ ]* //p' "$out" | sed 's/::.*//' | sort -u >"$out.paths"
+sed -n 's/^Accept-test: [^ ]* //p' "$out" | sed 's/::.*//' | LC_ALL=C sort -u >"$out.paths"
 xargs git checkout "$commit" -- <"$out.paths"
 git commit -q -m "test: $t's approved acceptance tests" -- $(cat "$out.paths")
 git diff-tree --no-commit-id --name-only -r HEAD | cmp -s - "$out.paths" && git diff --quiet "$commit" HEAD -- $(cat "$out.paths") && echo unchanged
