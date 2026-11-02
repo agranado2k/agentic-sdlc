@@ -1294,6 +1294,17 @@ env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" em
 land 617
 no_rev "runtime/R213: a verify.verdict pass alone at the head" 617
 
+# …and the other way round: a blocked verifier beside the kit's Axis-1 pass is
+# not refused for review — the verifier decides nothing at the landing.
+seed pr.iterate green 618
+verdict 618 pass data.axis=1 data.lenses=6 data.roster=6 reason=seeded
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=verify.verdict \
+	'subject=pr:#618' outcome=blocked data.via=broker "data.reviewed=$STUB_SHA" data.provider=anthropic \
+	data.rung=same-provider data.disputed=0 reason=seeded </dev/null >/dev/null 2>&1 ||
+	fail "runtime/R213: could not seed a verify.verdict on pr:#618"
+land 618
+landed_with 618 "runtime/R213: a blocked verify.verdict beside an Axis-1 pass" '"reviewed":"yes"'
+
 seed pr.iterate green 607
 land 607 --no-review 'the review degraded; read by hand'
 landed_with 607 "no review.verdict, with --no-review" '"reviewed":"no"' '"no_review":"the review degraded; read by hand"' '"iterated":"yes"'
