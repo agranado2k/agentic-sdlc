@@ -3859,7 +3859,11 @@
 # `finding-verdict` to VOCAB_FIELDS and declare
 # VOCAB_FINDING_VERDICT='confirmed disputed'. A policy file that is found is
 # the whole policy, so a consumer whose own file predates 0.111.0 lacks it.
-# Adapter (9e): none.
+# Adapter (9e): adapters/claude-code/hooks/root-guard.sh and
+# adapters/claude-code/README.md — while the risk rule's trip marker exists in git's common directory, the
+# root guard refuses an agent's tool call that deletes, moves or overwrites
+# it, and lets the operator's own calls on it through (#919, factory T-56,
+# landed after 0.110.0's tag).
 # Kit-only, never shipped: scripts/skill-dispatch.kit.sh (pins and kit
 # findings staged for the verifier, unavailable with no kit Axis-1 verdict at
 # the head), scripts/forge-broker.kit.sh (`--staged`, pin lines and finding

@@ -240,7 +240,11 @@ then prints `finding-verdict: confirmed disputed`. **One skill moves (9a):
 passes the broker the directory the skill dispatcher staged
 (`--staged "<git dir>/skill-verify"`) and names `--pr-body <file>`. A
 project whose root manual names no verifier call dispatches none, and the
-step is inert there. No wiring, template or adapter moves.
+step is inert there. **Adapter (9e), Claude Code only:** take
+`adapters/claude-code/hooks/root-guard.sh` and its README — while the risk
+rule's trip marker (`risk-switch-tripped`) exists in git's common directory,
+the root guard refuses an agent's tool call that deletes, moves or
+overwrites it. No wiring or template moves.
 
 **Arriving from 0.109.0 or older, `/to-tickets` stamps a risk on every
 ticket.** No file joins or leaves at 0.110.0; only this recipe changes
@@ -2016,10 +2020,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3728 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3732 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3882 insertions(+), 1 deletion(-)
+ 3 files changed, 3886 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
