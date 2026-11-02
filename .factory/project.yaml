@@ -9,3 +9,4 @@ stages:
   discovery: [exploring, shaped, closed]
   prd: [draft, review, approved, done]
   ticket: [proposed, ready, build, review, qa, done]
+acceptance_tests_since: 2026-11-02
