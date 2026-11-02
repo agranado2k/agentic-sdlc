@@ -1905,9 +1905,11 @@ for want in '"outcome":"blocked"' '"disputed":"1"'; do
 	*) fail "runtime/R211: the verdict lacks $want: $T_OUT" ;;
 	esac
 done
+# The comment's lines are the shape /pr-iterate's readers take (its
+# CHECK-TABLE.md, vf_rows and vf_disputes): JSON-escaped here, as posted.
 case $(payload issues/55/comments) in
-*'runtime/R1'*'disputed'*) pass "…and the posted comment shows the row's verdict" ;;
-*) fail "the posted comment does not show runtime/R1 disputed" ;;
+*'### Check-table rows, judged\n\n- `runtime/R1` — disputed\n'*) pass "…and the posted comment lists the row under 'Check-table rows, judged' in the shape /pr-iterate reads" ;;
+*) fail "the posted comment does not list '- \`runtime/R1\` — disputed' under its heading: $(payload issues/55/comments)" ;;
 esac
 STUB_PR=56
 export STUB_PR
@@ -1998,6 +2000,11 @@ done
 case $(payload issues/58/comments) in
 *'H-1'*'confirmed'*'src/app.sh:3'*'M-2'*'disputed'*'src/app.sh:4'*) pass "runtime/R222: the posted comment shows each verdict with its evidence" ;;
 *) fail "runtime/R222: the posted comment does not show both verdicts with their evidence" ;;
+esac
+case $(payload issues/58/comments) in
+*"### The kit review's findings, judged"'\n\n- **H-1** — confirmed — `src/app.sh:3` — quoting: '*'\n- **M-2** — disputed — `src/app.sh:4` — quoting: echo done'*)
+	pass "runtime/R222: …in the line shape /pr-iterate's vf_disputes reads" ;;
+*) fail "runtime/R222: the finding verdict lines are not in the shape /pr-iterate reads: $(payload issues/58/comments)" ;;
 esac
 v_show 58 verify.verdict
 case "$T_OUT" in
