@@ -87,6 +87,41 @@ list_files() {
 }
 
 # ---------------------------------------------------------------------------
+# 0. Whose config judges — the working tree's, or the base's (POLICY_BASE)
+# ---------------------------------------------------------------------------
+# With POLICY_BASE naming a ref (the kit's ADR-0039), the gate config is read
+# as that ref has it, through scripts/policy.sh, so a pull request cannot
+# exempt its own violation in the same diff. The reduced form below reads its
+# values from that copy; the harness reads POLICY_BASE itself, config and
+# local vocabulary both. A base the reader cannot answer for fails CLOSED
+# here, before any check runs: the reader's `fail-closed <reason> <path>`
+# line, exit 1 — never a fallback to the working tree's config. Unset, the
+# working tree's config is read, as a local push reads it.
+gate_cfg="scripts/docs-conformance/config.mjs"
+if [ -n "${POLICY_BASE:-}" ]; then
+	if [ ! -f scripts/policy.sh ]; then
+		echo "check.sh: POLICY_BASE is set but scripts/policy.sh is missing, so the gate config at $POLICY_BASE cannot be read." >&2
+		exit 2
+	fi
+	pb_rc=0
+	pb_copy=$(sh scripts/policy.sh read "$gate_cfg" --base "$POLICY_BASE" 2>"$vfile") || pb_rc=$?
+	case $pb_rc in
+	0) gate_cfg=$pb_copy ;;
+	3)
+		printf '%s\n' "$pb_copy" >&2
+		echo "FAIL  docs gate: the gate config at POLICY_BASE=$POLICY_BASE cannot be read — failing closed, no check ran." >&2
+		exit 1
+		;;
+	*)
+		cat "$vfile" >&2
+		echo "check.sh: the policy reader could not read $gate_cfg at POLICY_BASE=$POLICY_BASE (exit $pb_rc)." >&2
+		exit 2
+		;;
+	esac
+	: >"$vfile"
+fi
+
+# ---------------------------------------------------------------------------
 # 1. No unstamped placeholders  (always, POSIX)
 # ---------------------------------------------------------------------------
 # The pattern is assembled from variables so this script does not itself contain
@@ -294,7 +329,9 @@ if [ "$engine" = "fallback" ]; then
 	# harness's answer too. One exclusion is the engine's, not the policy's: a
 	# file under the harness's own tree, scripts/docs-conformance/, never
 	# cites, in both engines (#561).
-	ls_cfg="scripts/docs-conformance/config.mjs"
+	# With POLICY_BASE set, $gate_cfg is the base's copy (section 0), so every
+	# block this reduced form reads by text is read as the base has it.
+	ls_cfg=$gate_cfg
 	specs_dir="" spec_globs=""
 	if [ -f "$ls_cfg" ]; then
 		specs_dir=$(sed -n 's/^[[:space:]]*specsDir:[[:space:]]*"\([^"]*\)".*/\1/p' "$ls_cfg" | head -1)

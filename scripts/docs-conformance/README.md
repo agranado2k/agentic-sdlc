@@ -37,6 +37,15 @@ delegates here whenever `node` is on PATH. See "Two engines" below.
 by diffing against a new kit release. `config.mjs`, `local-vocabulary.mjs` and
 `test/` are **yours**: the engine is common, the rules are not.
 
+**Judged by the base.** With `POLICY_BASE` naming a ref, `index.mjs` loads
+`config.mjs` and `local-vocabulary.mjs` as that ref has them, through
+`scripts/policy.sh`, so a pull request cannot exempt its own violation in the
+same diff; `scripts/check.sh`'s reduced form reads its config values from the
+same copy. A vocabulary missing at the ref is an empty one; a config the
+reader cannot read there prints its `fail-closed <reason> <path>` line and
+exits 1 with no validator run. The shipped docs gate workflow sets the
+variable to the pull request's base commit.
+
 ## Two engines, one gate
 
 `scripts/check.sh` always runs two checks in POSIX sh (no unstamped placeholder
