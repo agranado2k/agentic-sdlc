@@ -31,6 +31,8 @@ slice (#906), the review at the head; R65 to R67 with its third (#907),
 the kill switch.
 The verifier's dispatch and its broker joined as R206, R208 to R211 and
 R227, from PRD-13 slice 1 (#941, ADR-0044).
+R103 joined from PRD-10 slice 4 (#919), keeping the PRD's number: the root
+guard keeps the trip marker from an agent.
 
 R1. WHEN the dispatcher dispatches a worker, the worker's run id SHALL have the shape the trace mints.
 R2. WHEN the skill dispatcher runs inside a dispatched worker, the staged prompt SHALL open with a `Trace-Run:` line naming the worker's run and a `Trace-Spawn:` line.
@@ -101,6 +103,7 @@ R66. The kill switch SHALL read tripped when the base branch's policy sets it so
 R67. The risk rule SHALL read the thresholds and the switch value only through the base-branch policy contract, never from the environment or the PR's own tree. [UC4 2a]
 R68. The risk rule SHALL exit 0 whatever risk it prints, and SHALL write nothing but its `risk.judge` event. [UC1 8]
 R69. The risk rule SHALL print and record only risk tokens, review area names from the lens-slice policy, `none`, the switch words, digits and commit shas, and no text from a ticket body, a PR body or a commit message.
+R103. The adapter's root guard SHALL refuse an agent's tool call that deletes, moves or overwrites the kill switch's trip marker. [UC4 5]
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
 R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]

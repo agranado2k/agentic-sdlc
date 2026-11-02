@@ -833,6 +833,24 @@ model on stderr; exit 0 lets the call through. Nothing goes to stdout.
   more. Unlike the trace hooks above it does exit non-zero — changing the
   session is its whole purpose — and records nothing.
 
+### The kill switch's trip marker
+
+The same hook keeps the risk rule's kill switch tripped once someone has
+tripped it. While the trip marker — `risk-switch-tripped` in git's common
+directory, the file `scripts/risk.sh` reads — exists, an agent's call that
+deletes, moves or overwrites it is refused from the root and from every
+worktree alike: an Edit, Write, MultiEdit or notebook edit on it, and in Bash
+an `rm` or `unlink` of it or of a directory holding it, a `mv` of it away or
+onto it, and a redirect, `tee`, `sed -i` or `cp` onto it. The refusal names
+the kill switch and leaves the reset to the operator. The guard tells the
+operator's call from an agent's the way the commit hook does: a call made with
+none of the agent-harness markers in the table below set is the operator's,
+and goes through, and so does anything typed in a shell no agent harness
+hooks. Creating the marker is
+let through — tripping the switch is anyone's — so an absent marker is never
+guarded. A marker that is a link is the link, never its target. The Bash
+reading is the same tripwire as below, with the same gaps.
+
 ### Which commits the commit hook refuses
 
 `.githooks/pre-commit` refuses agents only. A commit is refused when one of
