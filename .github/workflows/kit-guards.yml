@@ -110,3 +110,39 @@ jobs:
       # hooks path per fixture, so it needs nothing from the runner's git config.
       - name: End-to-end guards demo
         run: sh tests/guards-demo.sh
+
+  # The acceptance guard, run from the BASE commit's copy of itself on every
+  # pull request (PRD-14, the kit's ADR-0047). The kit is a factory project,
+  # so this is the real hold, not a suite: the same step the shipped
+  # templates/workflows/tdd-pairing.yml carries, held equal by
+  # tests/acceptance-guard.test.sh. Full history: an approval commit off main
+  # must be reachable, and absent it fails closed.
+  acceptance:
+    name: Acceptance guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history for the approval commits)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The acceptance guard: a factory ticket's approved acceptance test
+      # files may not change until the ticket is done. THE JUDGE IS THE
+      # BASE'S: the guard and the scripts it reads through are taken from the
+      # base commit's objects, never this pull request's copy, so a PR cannot
+      # edit the guard that judges it. A base with no guard yet holds nothing.
+      # Outside a factory project (no .factory/project.yaml) it passes.
+      - name: Approved acceptance tests unchanged
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POLICY_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if ! git cat-file -e "$BASE_SHA:scripts/acceptance-guard.sh" 2>/dev/null; then
+            echo "::notice::No acceptance guard at the base commit: nothing is held yet."
+            exit 0
+          fi
+          judge=$(mktemp -d)
+          git archive "$BASE_SHA" scripts | tar -x -C "$judge"
+          sh "$judge/scripts/acceptance-guard.sh" check "$BASE_SHA" "$HEAD_SHA"

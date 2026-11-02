@@ -314,6 +314,29 @@ Grouped by the seam each term belongs to. Entry shape:
   the path relative, non-empty, with no space and no `..` segment, the test
   name non-empty and free to hold spaces. The check table's evidence pin is
   a test pin with `@<commit>` after it. Ref: ADR-0037.
+- **Approval record** — the `tests:` block of a factory ticket's front
+  matter, `commit`, `by` and `at`, which the software factory writes when the
+  operator approves the ticket's acceptance tests. The kit reads it and never
+  writes one. Ref: ADR-0047.
+- **Approval commit** — an approval record's `commit`: a commit whose tree
+  holds every file the ticket's `Accept-test:` lines name, at the approved
+  content. It need not be on the base branch. Ref: ADR-0047.
+- **Held ticket** — a factory ticket that, read at the base, carries an
+  approval record and whose `stage` is not `done`. Its approved test files
+  are held from the approval until it is done. Ref: ADR-0047.
+  - _Avoid_: "locked test" — the hold is a check at the base, not a lock.
+- **Acceptance guard** — `scripts/acceptance-guard.sh`: `check` names each
+  held file a diff changed, `tests` says what a ticket's approved tests are or
+  that they are owed, `held` lists the held files, each read at a base
+  through the policy reader and failing closed. CI runs the base's copy of it,
+  never the pull request's. Ref: ADR-0047, `docs/specs/acceptance.md`.
+- **Adoption date** — the factory project manifest's
+  `acceptance_tests_since`: a ticket created before it is exempt from owing
+  approved tests, the one exemption there is. Unset, nothing is owed, and
+  approvals already recorded are still held. Ref: ADR-0047.
+- **Owed** — a ticket that is not exempt, has no approval record, and covers
+  an id stamped with a `Test-tier:` other than `manual`: its acceptance tests
+  must be approved before it is built. Ref: ADR-0047.
 - **Check table** — the block in a PR body that shows, per requirement the
   ticket covers, the test tier that checked it, the **result** (`pass`,
   `fail`, `skipped`) and the evidence: a `<path>::<test>@<sha>` pin, an

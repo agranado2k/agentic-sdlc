@@ -520,6 +520,15 @@ jobs:
       - name: Policy reader suite
         run: sh tests/policy.test.sh
 
+  acceptance-guard:
+    name: The acceptance guard holds an approved test file at the base, failing closed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Acceptance guard suite
+        run: sh tests/acceptance-guard.test.sh
+
   risk:
     name: The risk rule judges a PR from its review areas' earned records
     runs-on: ubuntu-latest

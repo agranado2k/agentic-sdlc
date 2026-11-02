@@ -19,7 +19,10 @@ name: TDD pairing
 # POLICY_BASE to the PR's base commit, so the guard reads
 # scripts/guards.config.sh as the base has it (through scripts/policy.sh), and a
 # PR cannot loosen the pattern that judges it. A base with no readable policy
-# fails the job rather than passing it.
+# fails the job rather than passing it. The ACCEPTANCE GUARD is the one SCRIPT
+# exception: its step runs scripts/acceptance-guard.sh as the base commit has
+# it, read from git's objects, so a PR cannot edit the guard that holds an
+# approved acceptance test (a factory project's; elsewhere it passes).
 #
 # WHY ITS OWN WORKFLOW, and not a job inside your test workflow:
 #   1. The label hatch only works if the gate re-runs on `labeled`/`unlabeled`.
@@ -84,3 +87,23 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           POLICY_BASE: ${{ github.event.pull_request.base.sha }}
         run: sh scripts/tdd-pairing-guard-ci.sh
+
+      # The acceptance guard: a factory ticket's approved acceptance test
+      # files may not change until the ticket is done. THE JUDGE IS THE
+      # BASE'S: the guard and the scripts it reads through are taken from the
+      # base commit's objects, never this pull request's copy, so a PR cannot
+      # edit the guard that judges it. A base with no guard yet holds nothing.
+      # Outside a factory project (no .factory/project.yaml) it passes.
+      - name: Approved acceptance tests unchanged
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POLICY_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if ! git cat-file -e "$BASE_SHA:scripts/acceptance-guard.sh" 2>/dev/null; then
+            echo "::notice::No acceptance guard at the base commit: nothing is held yet."
+            exit 0
+          fi
+          judge=$(mktemp -d)
+          git archive "$BASE_SHA" scripts | tar -x -C "$judge"
+          sh "$judge/scripts/acceptance-guard.sh" check "$BASE_SHA" "$HEAD_SHA"

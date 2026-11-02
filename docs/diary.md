@@ -2984,3 +2984,19 @@ as PRD-09 §8 says, so the policy reader does not move; an unset value reads
 tripped, so a consumer must add `RISK_KILL_SWITCH=on` (UPDATING, 9d). ADR-0045
 is amended in place with the switch's home and the marker. Until this lands,
 the kit's own base has no value, so this PR's own rule runs read tripped.
+
+## 2026-11-02 — the acceptance guard holds an approved test at the base (#970, T-94)
+
+PRD-14 slice 2. `scripts/acceptance-guard.sh` answers `check`, `tests` and
+`held`, reading every factory ticket at the base through the policy reader,
+whose judging set now counts `.factory/items/<id>/ticket.md` and whose
+`touched` reports one only when its `tests:` approval record changes
+(ADR-0047). Both the shipped pairing workflow and the kit's guards workflow
+run the base's copy of the guard on each pull request. Measured, as PRD-14 §7
+asks: one `check` on the kit, 99 factory tickets read at `origin/main`,
+3.2 s wall (1.6 s user); one `tests` 0.09 s. Ruled here: a covered id with no
+`Test-tier:` line owes nothing (the requirement text, read literally); a
+`tests:` record written as a flow mapping is `invalid`; a base with no guard
+yet passes the CI step with a notice. The kit's manifest sets no
+`acceptance_tests_since` in this diff: the release that lands it sets the
+landing day, until then nothing is owed and approvals are still held.

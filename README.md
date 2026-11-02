@@ -724,6 +724,20 @@ skeleton (K0).
   unlearned`, and unreadable thresholds, an unconfigured trace and an unknown
   `SCHEMA` fail closed at exit 0; no ticket text leaves the rule, and
   `/pr-iterate` reports the verdict without acting on it.
+- `sh tests/acceptance-guard.test.sh` holds `scripts/acceptance-guard.sh`,
+  the acceptance guard (PRD-14 slice 2, the kit's ADR-0047): in throwaway
+  factory projects with a `main`, a branch and an approval commit off
+  `main`, `check` prints `changed: <ticket> <id> <path>` and exits 1 for a
+  held file the branch changed or deleted, passes one left at its approval
+  content, and judges a branch that rewrites its own approval record by the
+  base's; a `done` or unapproved ticket is not held; an unknown approval
+  commit, a missing `by`, a refused `Accept-test:` line or an approved path
+  absent at the approval commit is `fail-closed invalid`, and the policy
+  reader's own fail-closed line ends it; outside a factory project it prints
+  nothing. `tests` answers `approved`, `owed` and all three `no-tests`
+  reasons, `held` lists exactly the held files, and the CI step both
+  workflows carry runs the base's guard with `POLICY_BASE` set, so a pull
+  request that edits the guard to always pass still fails.
 - `sh tests/policy.test.sh` holds `scripts/policy.sh`, the policy reader
   (PRD-08 slice 1, the kit's ADR-0039), and the risk policy it reads: in
   throwaway repositories with a `main` and a branch, `thresholds`, `read`
@@ -1017,6 +1031,7 @@ sh tests/tdd-pairing-guard-ci.test.sh
 sh tests/behavior-delta.test.sh
 sh tests/lens-slice.test.sh                            # each review lens reads only its slice
 sh tests/policy.test.sh                                # the policy reader reads a judging file at the base, failing closed
+sh tests/acceptance-guard.test.sh                      # the acceptance guard holds an approved test file at the base, failing closed
 sh tests/risk.test.sh                                  # the risk rule judges a PR from its review areas' earned records
 sh tests/factory-config.test.sh                        # a value the factory defines is read from its manifest, at the base too
 sh tests/outcome-recorder.test.sh                      # a revert, or a fix inside the fix window, is recorded against the PR
