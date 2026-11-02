@@ -255,7 +255,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.113.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.114.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -572,6 +572,12 @@ skeleton (K0).
   on a green tree is relayed by `scripts/check.sh` — the entry point the hook
   and CI run — and a tree with nothing to advise prints no advisory block.
 
+- `sh tests/docs-gate-base.test.sh` proves the docs gate is judged by the base
+  branch's config: with `POLICY_BASE` set, a pull request that exempts its own
+  violation in the gate config or the local vocabulary still fails, in both
+  engines; a base with no gate config fails closed with no check run; and the
+  docs gate workflows set the variable from the pull request's base commit.
+
 - `sh tests/trace.test.sh` proves the decision trace (ADR-0008): an
   unconfigured emit is a silent no-op, a configured one appends one JSON line
   in a fixed field order, the escaper and the closed kind vocabulary refuse
@@ -725,7 +731,7 @@ skeleton (K0).
   `SCHEMA` fail closed at exit 0; no ticket text leaves the rule, and
   `/pr-iterate` reports the verdict without acting on it.
 - `sh tests/acceptance-guard.test.sh` holds `scripts/acceptance-guard.sh`,
-  the acceptance guard (PRD-14 slice 2, the kit's ADR-0047): in throwaway
+  the acceptance guard (PRD-14 slice 2, the kit's ADR-0046): in throwaway
   factory projects with a `main`, a branch and an approval commit off
   `main`, `check` prints `changed: <ticket> <id> <path>` and exits 1 for a
   held file the branch changed or deleted, passes one left at its approval
@@ -1049,6 +1055,7 @@ sh tests/setup-demo.sh                                 # the one-line agent setu
 sh tests/review-pr-output.test.sh                      # the /review-pr output contract
 sh tests/adopt-demo.sh                                 # the existing-repo adoption arm
 sh tests/docs-gate-advisory.test.sh                    # the warning channel is audible through the gate
+sh tests/docs-gate-base.test.sh                        # the docs gate reads its config at POLICY_BASE, failing closed
 sh tests/trace.test.sh                                 # the decision trace: emit, show, verify, and the worktree property
 sh tests/forge-broker.test.sh                          # the broker lands a dispatched review on the PR, through a stub forge CLI
 sh tests/land.test.sh                                  # one PR landed by hand records merge.land and feedback, through a stub forge CLI

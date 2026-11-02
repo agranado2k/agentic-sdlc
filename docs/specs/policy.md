@@ -33,3 +33,7 @@ R18. WHERE `POLICY_BASE` names a ref, the TDD pairing guard SHALL read the guard
 R19. IF `POLICY_BASE` names a ref and the policy reader fails closed on the guards policy, THEN the pairing guard SHALL print the fail-closed line and exit non-zero, and SHALL NOT warn and pass.
 R20. WHERE the guards policy at `POLICY_BASE` is present and sets no source pattern, the pairing guard SHALL warn once and pass.
 R21. The shipped TDD pairing workflow SHALL set `POLICY_BASE` to the pull request's base commit.
+R22. WHERE `POLICY_BASE` names a ref, the docs gate SHALL load its config module and local-vocabulary module from the policy reader's copies at that ref, in its full form, and SHALL read its two config values from the copy at that ref in its reduced POSIX form.
+R23. IF `POLICY_BASE` names a ref and the policy reader fails closed on the docs gate's config module, THEN the docs gate SHALL print the fail-closed line, run no validator, and exit 1.
+R24. IF the local-vocabulary module is missing at `POLICY_BASE`, THEN the docs gate SHALL read an empty local vocabulary.
+R25. The shipped docs gate workflow, and each job of the kit's own CI that runs the docs gate on a pull request, SHALL set `POLICY_BASE` to the pull request's base commit, with that commit fetched.

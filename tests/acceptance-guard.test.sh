@@ -2,7 +2,7 @@
 # tests/acceptance-guard.test.sh — self-tests for scripts/acceptance-guard.sh,
 # the ACCEPTANCE GUARD: a factory ticket's approved acceptance test files held
 # from the approval to the ticket's done, judged from the base, failing closed
-# (PRD-14 slice 2, factory T-94; the kit's ADR-0047).
+# (PRD-14 slice 2, factory T-94; the kit's ADR-0046).
 #
 # The guard reads git's objects and factory tickets, so every case builds a
 # REAL throwaway factory project — a `main`, a branch, an approval commit off

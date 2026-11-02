@@ -1,4 +1,4 @@
-# ADR-0047: Approved acceptance tests are held from approval to done, judged from the base
+# ADR-0046: Approved acceptance tests are held from approval to done, judged from the base
 
 - **Status**: Accepted
 - **Date**: 2026-11-02

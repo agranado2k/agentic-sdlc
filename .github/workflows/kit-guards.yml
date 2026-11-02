@@ -112,7 +112,7 @@ jobs:
         run: sh tests/guards-demo.sh
 
   # The acceptance guard, run from the BASE commit's copy of itself on every
-  # pull request (PRD-14, the kit's ADR-0047). The kit is a factory project,
+  # pull request (PRD-14, the kit's ADR-0046). The kit is a factory project,
   # so this is the real hold, not a suite: the same step the shipped
   # templates/workflows/tdd-pairing.yml carries, held equal by
   # tests/acceptance-guard.test.sh. Full history: an approval commit off main

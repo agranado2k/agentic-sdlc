@@ -9,6 +9,13 @@ name: Docs gate
 # reason a freshly created project can run it on day one, before it has chosen
 # a language.
 #
+# JUDGED BY THE BASE'S CONFIG. The step sets POLICY_BASE to the PR's base
+# commit, so the gate reads scripts/docs-conformance/config.mjs (and the
+# local-vocabulary module beside it) as the base has it, through
+# scripts/policy.sh: a PR cannot exempt its own violation in the same diff. A
+# base with no readable gate config fails the job rather than passing it. The
+# full-history checkout is what puts the base commit in reach.
+#
 # TEMPLATE. bootstrap.sh copies this into .github/workflows/ of YOUR project.
 # The kit itself does not run it (a template repo running its consumers' CI on
 # itself would be gating the wrong tree); the kit's own CI is
@@ -28,6 +35,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Run the docs gate
+        env:
+          POLICY_BASE: ${{ github.event.pull_request.base.sha }}
         run: sh scripts/check.sh

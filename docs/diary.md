@@ -2991,7 +2991,7 @@ PRD-14 slice 2. `scripts/acceptance-guard.sh` answers `check`, `tests` and
 `held`, reading every factory ticket at the base through the policy reader,
 whose judging set now counts `.factory/items/<id>/ticket.md` and whose
 `touched` reports one only when its `tests:` approval record changes
-(ADR-0047). Both the shipped pairing workflow and the kit's guards workflow
+(ADR-0046). Both the shipped pairing workflow and the kit's guards workflow
 run the base's copy of the guard on each pull request. Measured, as PRD-14 §7
 asks: one `check` on the kit, 99 factory tickets read at `origin/main`,
 3.2 s wall (1.6 s user); one `tests` 0.09 s. Ruled here: a covered id with no

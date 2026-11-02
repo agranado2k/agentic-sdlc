@@ -3903,7 +3903,29 @@
 # Config (9d): none. Adapter (9e): none.
 # Kit-only, never shipped: docs/specs/policy.md R16 to R21, and their suites.
 
-shared-layer: 0.113.0
+# 0.114.0 — the docs gate is judged by the base's gate config (ticket #909,
+# PRD-08 of D-02, factory T-46). No file joins or leaves. Three shared files
+# change content: scripts/check.sh, with POLICY_BASE naming a ref, reads
+# scripts/docs-conformance/config.mjs at that ref through scripts/policy.sh
+# before any check runs, its reduced form reads every config value from that
+# copy, and a base the reader cannot answer for prints the reader's
+# fail-closed line and exits 1 with no check run;
+# scripts/docs-conformance/index.mjs loads the config module and its
+# local-vocabulary sibling from the reader's copies at that ref (a vocabulary
+# missing there is an empty one) and fails closed the same way; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none.
+# Templates (9c): templates/workflows/docs-gate.yml — the checkout fetches full
+# history and the gate's step sets POLICY_BASE to the pull request's base
+# commit; a consumer's own .github/workflows/docs-gate.yml takes both by hand.
+# Config (9d): none — scripts/docs-conformance/README.md (yours, shipped)
+# describes the read. Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/policy.md R22 to R25, the kit CI's
+# portability and self-host jobs setting POLICY_BASE, and
+# tests/docs-gate-base.test.sh with its job.
+
+shared-layer: 0.114.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
