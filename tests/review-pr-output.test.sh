@@ -1894,7 +1894,7 @@ review_ct_missing() {
 	has "$_rc" "hand \`\$d/check-table\` to Agent 7 as a file, beside \`scripts/behavior-delta.sh\`'s output" || printf '%s\n' 'handed as a file'
 	has "$_rc" "$CT_ONLY" || printf '%s\n' 'only through the reader'
 	has "$_rc" "appends \`\$d/check-table\`, under a \`Check-table reader:\` line, to the spec file" || printf '%s\n' 'dispatched appends'
-	for _w in missing-row extra-row tier-differs fail skipped; do
+	for _w in missing-row extra-row tier-differs not-approved fail skipped; do
 		has "$_rc" "\`$_w\`" || printf '%s\n' "word $_w"
 	done
 }
@@ -1908,12 +1908,12 @@ iter_ct_missing() {
 	_s4=$(region '^### 4 — Act' '^### 5 — ' "$1" | tr '\n' ' ' | tr -s ' ')
 	has "$_s4" "rewrite its rows at the new head — [\`CHECK-TABLE.md\`](CHECK-TABLE.md)" || printf '%s\n' 'rewrite at push'
 	region '^### 6 — ' '^## Output format' "$1" |
-		grep -qF -- "- The check-table reader prints \`fail:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` → never ✅ converged" ||
+		grep -qF -- "- The check-table reader prints \`fail:\`, \`not-approved:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` → never ✅ converged" ||
 		printf '%s\n' 'not converged'
 	awk '/^⚠️ For you/ { f = NR } /^Manual checks awaiting you: / { m = NR } /^Status:$/ { s = NR }
 		END { exit !(f && m && s && f < m && m < s) }' "$1" || printf '%s\n' 'manual checks at top'
 	_ic=$(unwrap "$2")
-	has "$_ic" "While the reader prints a \`fail:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` line, the PR is not converged" || printf '%s\n' 'four blocking words'
+	has "$_ic" "While the reader prints a \`fail:\`, \`not-approved:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` line, the PR is not converged" || printf '%s\n' 'five blocking words'
 	has "$_ic" "\`skipped:\` ids are manual checks awaiting the operator, listed at the top of the report" || printf '%s\n' 'skipped is manual'
 	has "$_ic" "the result from this iteration's full-suite run at the new head, the pin \`<path>::<test>@<the new head's sha>\`" || printf '%s\n' 'rewrite from suite run'
 	has "$_ic" "$CT_ONLY" || printf '%s\n' 'only through the reader'
@@ -1960,7 +1960,9 @@ for b in \
 	'rewrite at push|1|s/rewrite its rows at the new head/rewrite its rows/' \
 	'not converged|1|s/ or `tier-differs:` → never ✅ converged/ → never ✅ converged/' \
 	'manual checks at top|1|/^Manual checks awaiting you: /d' \
-	'four blocking words|2|s/`extra-row:` or `tier-differs:` line, the PR/`extra-row:`, `tier-differs:` or `skipped:` line, the PR/' \
+	'five blocking words|2|s/`extra-row:` or `tier-differs:` line, the PR/`extra-row:`, `tier-differs:` or `skipped:` line, the PR/' \
+	'five blocking words|2|s/`fail:`, `not-approved:`, /`fail:`, /' \
+	'not converged|1|s/`fail:`, `not-approved:`, `missing-row:`/`fail:`, `missing-row:`/' \
 	'skipped is manual|2|s/listed at the top of the report/listed under Next/' \
 	'rewrite from suite run|2|s/at the new head, the pin/at the base, the pin/' \
 	'only through the reader|2|s/No step reads the check table except through the reader/Read the check table/'; do
@@ -2410,5 +2412,57 @@ for want in 'Exit 3 is its policy failing closed at the base' 'every lens runs o
 	*) fail "policy/R33: the slicer paragraph does not say \"$want\"" ;;
 	esac
 done
+
+# ---------------------------------------------------------------------------
+banner "29. The review reads the diff against the approved tests (acceptance/R32 acceptance/R33 acceptance/R34)"
+# ---------------------------------------------------------------------------
+# PRD-14 slice 4, UC4. In a factory project the coordinator runs the
+# acceptance guard from the review's base, judged at that base, and hands its
+# output to Agent 7 as a file; Agent 7 lists each changed approved test as a
+# ❌ MISSING item, and a guard that fails closed lists every approved id and
+# puts the fail-closed line in the summary. The dispatched worker reads the
+# same rule from its contract.
+ACC_ABS="$ROOT/.agents/skills/review-pr/ACCEPTANCE.md"
+[ -f "$ACC_ABS" ] && pass ".agents/skills/review-pr/ACCEPTANCE.md exists" || fail ".agents/skills/review-pr/ACCEPTANCE.md is missing"
+ACC_RULE=$(printf '%s' "list each \`changed: <ticket> <id> <path>\` line it holds as \`❌ MISSING      <id> — approved test changed\`, and on its \`exit: 3\` every id on the ticket's \`Accept-test:\` lines as \`❌ MISSING      <id> — acceptance guard failed closed\`; an id it lists is listed once." | tr -s ' ')
+# acc_missing <review-pr SKILL.md> <its ACCEPTANCE.md> <worker contract> — rules lost.
+acc_missing() {
+	_a7=$(region '^#### Agent 7' '^\*\*Commit separation' "$1" | tr '\n' ' ' | tr -s ' ')
+	has "$_a7" "5. The acceptance guard's output, in a factory project — [\`ACCEPTANCE.md\`](ACCEPTANCE.md)." || printf '%s\n' 'agent 7 input'
+	_ac=$(unwrap "$2")
+	has "$_ac" 'POLICY_BASE=<base> sh scripts/acceptance-guard.sh check <base> HEAD >"$d/acceptance" 2>/dev/null; echo "exit: $?" >>"$d/acceptance"' || printf '%s\n' 'coordinator runs guard'
+	has "$_ac" '`.factory/project.yaml`' || printf '%s\n' 'factory project'
+	has "$_ac" "hand \`\$d/acceptance\` to Agent 7 as a file" || printf '%s\n' 'handed as a file'
+	has "$_ac" "$ACC_RULE" || printf '%s\n' 'agent 7 rule'
+	has "$_ac" "the summary carries \`Acceptance guard: <its fail-closed line>\` under its **Verdict:** line" || printf '%s\n' 'summary line'
+	has "$_ac" "appends \`\$d/acceptance\`, under an \`Acceptance guard:\` line, to the spec file" || printf '%s\n' 'dispatched appends'
+	_wc=$(unwrap "$3")
+	has "$_wc" "$ACC_RULE" || printf '%s\n' 'worker rule'
+	has "$_wc" "carries an \`Acceptance guard:\` block" || printf '%s\n' 'worker block'
+	has "$_wc" "your VERDICT line quotes its \`fail-closed\` line" || printf '%s\n' 'worker verdict'
+}
+miss=$(acc_missing "$SKILL_ABS" "$ACC_ABS" "$WORKER_ABS" 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "acceptance/R32 acceptance/R33 acceptance/R34: the coordinator runs the guard at the base, Agent 7 lists each changed approved test, and a fail-closed guard lists every approved id and reaches the summary" ||
+	fail "acceptance/R32 acceptance/R33 acceptance/R34: /review-pr's acceptance-guard rules are missing: $miss"
+for b in \
+	'agent 7 input|1|s/^5\. The acceptance guard.s output.*$/5. Nothing else./' \
+	'coordinator runs guard|2|s/POLICY_BASE=<base> sh scripts\/acceptance-guard.sh/sh scripts\/acceptance-guard.sh/' \
+	'agent 7 rule|2|s/— approved test changed`/— changed`/' \
+	'summary line|2|s/under its \*\*Verdict:\*\* line/somewhere/' \
+	'dispatched appends|2|s/under an `Acceptance guard:` line/under the spec/' \
+	'worker rule|3|s/and on its `exit: 3` every$/and on its `exit: 2` every/' \
+	'worker verdict|3|s/your VERDICT line quotes its `fail-closed` line/your VERDICT line says so/'; do
+	r=${b%%|*}; rest=${b#*|}; which=${rest%%|*}; sx=${rest#*|}
+	set -- "$SKILL_ABS" "$ACC_ABS" "$WORKER_ABS"
+	eval "src=\${$which}"
+	bait_copy "$src" "$SCRATCH/acc-bait.md" "$sx" || { fail "bait: '$r' planted nothing"; continue; }
+	case $which in
+	1) acc_missing "$SCRATCH/acc-bait.md" "$ACC_ABS" "$WORKER_ABS" ;;
+	2) acc_missing "$SKILL_ABS" "$SCRATCH/acc-bait.md" "$WORKER_ABS" ;;
+	3) acc_missing "$SKILL_ABS" "$ACC_ABS" "$SCRATCH/acc-bait.md" ;;
+	esac 2>/dev/null | grep -qxF -- "$r" && pass "bait: /review-pr without '$r' goes red" ||
+		fail "bait: /review-pr without '$r' was not caught"
+done
+rm -f "$SCRATCH/acc-bait.md"
 
 t_done "/review-pr output contract"

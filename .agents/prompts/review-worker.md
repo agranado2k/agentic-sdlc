@@ -275,5 +275,15 @@ become table cells.
     id on the ticket's `Covers:` line, the word `refused` or `missing-row`;
     an id it lists is listed once, with the reader's word.
 
+    **When the spec above carries an `Acceptance guard:` block** — the
+    acceptance guard's lines and a last `exit: <n>` line, which the session
+    that dispatched you appended after running the guard from the base to
+    the head — list each `changed: <ticket> <id> <path>` line it holds as
+    `❌ MISSING      <id> — approved test changed`, and on its `exit: 3` every
+    id on the ticket's `Accept-test:` lines as
+    `❌ MISSING      <id> — acceptance guard failed closed`; an id it lists is
+    listed once. On that `exit: 3`, your VERDICT line quotes its `fail-closed` line
+    as the block holds it. A changed approved test is never ✅ SPECIFIED.
+
 Do not modify any file. Do not commit, do not push, and do not open or merge a
 pull request. A review that edits the code it is reviewing is not a review.

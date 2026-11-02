@@ -41,7 +41,7 @@ The chain is the safety: a fetch that failed, an empty rows file or an empty res
 
 ## What the reader's answer means (step 6 and the report)
 
-While the reader prints a `fail:`, `missing-row:`, `extra-row:` or `tier-differs:` line, the PR is not converged — whatever its checks, threads and review say: record `red`, the reader's word and the id as its reason, and the next iteration fixes the test, the code or the row. A reader exit 2 is the same answer. The `skipped:` ids are manual checks awaiting the operator, listed at the top of the report, on its `Manual checks awaiting you:` line — they never hold convergence back, and no agent checks them.
+While the reader prints a `fail:`, `not-approved:`, `missing-row:`, `extra-row:` or `tier-differs:` line, the PR is not converged — whatever its checks, threads and review say: record `red`, the reader's word and the id as its reason, and the next iteration fixes the test, the code or the row. A reader exit 2 is the same answer. The `skipped:` ids are manual checks awaiting the operator, listed at the top of the report, on its `Manual checks awaiting you:` line — they never hold convergence back, and no agent checks them.
 
 ## The decision log (hard rule 4)
 
