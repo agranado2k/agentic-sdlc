@@ -3843,7 +3843,34 @@
 # tests/trace-skills.test.sh's ticket.write keys, and
 # tests/review-pr-output.test.sh's verifier section (#944).
 
-shared-layer: 0.110.0
+# 0.111.0 — the verifier judges the check table and the kit's findings
+# (ticket #943, PRD-13 of D-02, factory T-80). No file joins or leaves. Two
+# shared files change content: scripts/vocab.sh, whose built-in defaults gain
+# the field `finding-verdict` (`confirmed disputed`), the verifier's word on
+# a finding the kit's own review raised; and UPDATING.md, its entry and both
+# worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /implement — DISPATCHED-REVIEW.md's verifier section passes
+# the broker `--staged "<git dir>/skill-verify"` and names the dispatcher's
+# `--pr-body <file>` (the verifier step itself came with #942, factory T-79,
+# landed after 0.110.0's tag).
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/vocab.config.sh (yours) — add the field: append
+# `finding-verdict` to VOCAB_FIELDS and declare
+# VOCAB_FINDING_VERDICT='confirmed disputed'. A policy file that is found is
+# the whole policy, so a consumer whose own file predates 0.111.0 lacks it.
+# Adapter (9e): the Claude Code adapter's root guard, root-guard.sh, and
+# adapters/claude-code/README.md — while the risk rule's trip marker exists in git's common directory, the
+# root guard refuses an agent's tool call that deletes, moves or overwrites
+# it, and lets the operator's own calls on it through (#919, factory T-56,
+# landed after 0.110.0's tag).
+# Kit-only, never shipped: scripts/skill-dispatch.kit.sh (pins and kit
+# findings staged for the verifier, unavailable with no kit Axis-1 verdict at
+# the head), scripts/forge-broker.kit.sh (`--staged`, pin lines and finding
+# verdict lines, `finding.verify`, `data.disputed`), docs/specs/runtime.md
+# R207, R212, R217 to R220 and R222, and their suites.
+
+shared-layer: 0.111.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

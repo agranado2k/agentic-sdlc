@@ -1721,6 +1721,13 @@ STUB_PR=12
 export STUB_PR
 
 
+# The files the dispatcher staged for a verifier's run (runtime/R207, R217):
+# here, no check-table pin and no kit finding to judge.
+V_EMPTY="$SCRATCH/v-staged-empty"
+mkdir -p "$V_EMPTY"
+: >"$V_EMPTY/pins"
+: >"$V_EMPTY/findings"
+
 # ---------------------------------------------------------------------------
 banner "V1. A verifier's report posts under its own markers, beside a kit review (runtime/R209, R210)"
 # ---------------------------------------------------------------------------
@@ -1735,7 +1742,7 @@ printf '%s\n' "https://forge.invalid/pull/50#pullrequestreview-7	$KIT_MARKER alr
 printf '%s\n' "https://forge.invalid/pull/50#issuecomment-8	$KIT_MARKER already here" >"$SCRATCH/v-comments.tsv"
 STUB_REVIEWS="$SCRATCH/v-reviews.tsv" STUB_COMMENTS="$SCRATCH/v-comments.tsv"
 export STUB_REVIEWS STUB_COMMENTS
-broker 50 "$GOOD" --verifier --rung same-provider --provider anthropic --model opus
+broker 50 "$GOOD" --verifier --rung same-provider --provider anthropic --model opus --staged "$V_EMPTY"
 expect_status 0 "runtime/R210: a verifier report beside an already posted kit review of the same bytes exits 0"
 assert_mutating 2 "runtime/R210: …and posts its own review and comment — the kit's marker is not the verifier's"
 REVIEW=$(payload pulls/50/reviews)
@@ -1764,7 +1771,7 @@ broker 50 "$GOOD"
 expect_status 0 "runtime/R210: a kit review beside an already posted verifier report exits 0"
 assert_mutating 2 "runtime/R210: …and posts — the verifier's marker never stops the kit's post"
 # And a verifier re-run finds its own marker and posts nothing.
-broker 50 "$GOOD" --verifier --rung same-provider --provider anthropic
+broker 50 "$GOOD" --verifier --rung same-provider --provider anthropic --staged "$V_EMPTY"
 expect_status 0 "a retried verifier run exits 0"
 assert_mutating 0 "…and finds its own marker: nothing posted twice"
 unset STUB_REVIEWS STUB_COMMENTS
@@ -1774,7 +1781,7 @@ banner "V2. The verifier's verdict is its own kind, with its rung (runtime/R211,
 # ---------------------------------------------------------------------------
 STUB_PR=51
 export STUB_PR
-broker 51 "$GOOD" --verifier --rung same-provider --provider anthropic --model opus
+broker 51 "$GOOD" --verifier --rung same-provider --provider anthropic --model opus --staged "$V_EMPTY"
 expect_status 0 "a verifier report with a HIGH finding lands"
 t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#51' --kind verify.verdict
 V=$(printf '%s\n' "$T_OUT" | grep -F '"kind":"verify.verdict"')
@@ -1801,7 +1808,7 @@ expect_out_lacks '"kind":"review.verdict"' "the verifier records no review.verdi
 STUB_PR=52
 export STUB_PR
 awk '/^\*\*H-1\*\*/ { skip = 2 } skip { skip--; next } { print } /^#### HIGH$/ { print "— none found." }' "$GOOD" >"$SCRATCH/v-pass.md"
-broker 52 "$SCRATCH/v-pass.md" --verifier --rung cross-provider --provider openai --harness codex
+broker 52 "$SCRATCH/v-pass.md" --verifier --rung cross-provider --provider openai --harness codex --staged "$V_EMPTY"
 expect_status 0 "a verifier report with a MEDIUM finding only lands"
 t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#52' --kind verify.verdict
 for want in '"outcome":"pass"' '"provider":"openai"' '"rung":"cross-provider"'; do
@@ -1837,7 +1844,7 @@ VERDICT: BLOCKED — no lens ran; this is not a review
 
 ✅ SPECIFIED    b.md gains the two lines the ticket named.
 EOF
-broker 54 "$SCRATCH/v-nolens.md" --verifier --rung cross-provider --provider openai
+broker 54 "$SCRATCH/v-nolens.md" --verifier --rung cross-provider --provider openai --staged "$V_EMPTY"
 expect_status 0 "a verifier's no-lens report lands"
 t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#54'
 case $(printf '%s\n' "$T_OUT" | grep -F '"kind":"verify.verdict"') in
@@ -1851,9 +1858,13 @@ banner "V3. No rung, an unknown rung, or no provider: exit 65, nothing posted or
 # ---------------------------------------------------------------------------
 STUB_PR=53
 export STUB_PR
-for args in '--verifier --provider anthropic' '--verifier --rung sideways --provider anthropic' '--verifier --rung same-provider'; do
+for args in '--verifier --provider anthropic' '--verifier --rung sideways --provider anthropic' '--verifier --rung same-provider' \
+	'--verifier --rung same-provider --provider anthropic --staged-none'; do
 	# shellcheck disable=SC2086 # each case is its words
-	broker 53 "$GOOD" $args
+	case $args in
+	*--staged-none) broker 53 "$GOOD" ${args% --staged-none} ;;
+	*) broker 53 "$GOOD" $args --staged "$V_EMPTY" ;;
+	esac
 	expect_status 65 "runtime/R227: '$args' exits 65"
 	assert_mutating 0 "runtime/R227: '$args' posts nothing"
 done
@@ -1863,7 +1874,166 @@ expect_out_lacks '"subject":"pr:#53"' "runtime/R227: nothing recorded on pr:#53"
 broker 53 "$GOOD" --rung same-provider
 expect_status 2 "--rung without --verifier is a usage error"
 assert_mutating 0 "…and posts nothing"
-STUB_PR=12
+
+# v_none <pr> <label> — nothing recorded on pr:#<pr>.
+v_none() {
+	t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show "pr:#$1"
+	expect_out_lacks "\"subject\":\"pr:#$1\"" "$2"
+}
+# v_show <pr> <kind> — the <kind> events on pr:#<pr>, in T_OUT.
+v_show() { t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show "pr:#$1" --kind "$2"; }
+
+# ---------------------------------------------------------------------------
+banner "V4. One pin line per staged pass row: disputed blocks, missing or another word is exit 65 (runtime/R211, R212)"
+# ---------------------------------------------------------------------------
+# The dispatcher staged one `pass` row; the report answers it with the CI
+# review prompt's own shape, `pin: <id> — <upheld|disputed>`.
+V_PINS="$SCRATCH/v-staged-pins"
+mkdir -p "$V_PINS"
+printf 'runtime/R1\ttests/pin.test.sh\truntime/R1\tabc1234\n' >"$V_PINS/pins"
+: >"$V_PINS/findings"
+v_pinned() { { cat "$SCRATCH/v-pass.md"; [ -z "$2" ] || printf '%s\n' "$2"; } >"$1"; }
+STUB_PR=55
 export STUB_PR
+v_pinned "$SCRATCH/v-pin-disputed.md" 'pin: runtime/R1 — disputed'
+broker 55 "$SCRATCH/v-pin-disputed.md" --verifier --rung cross-provider --provider openai --staged "$V_PINS"
+expect_status 0 "a verifier report disputing its one pinned row lands"
+v_show 55 verify.verdict
+for want in '"outcome":"blocked"' '"disputed":"1"'; do
+	case "$T_OUT" in
+	*"$want"*) pass "runtime/R211: a report disputing one row, and no CRITICAL or HIGH finding, records $want" ;;
+	*) fail "runtime/R211: the verdict lacks $want: $T_OUT" ;;
+	esac
+done
+# The comment's lines are the shape /pr-iterate's readers take (its
+# CHECK-TABLE.md, vf_rows and vf_disputes): JSON-escaped here, as posted.
+case $(payload issues/55/comments) in
+*'### Check-table rows, judged\n\n- `runtime/R1` — disputed\n'*) pass "…and the posted comment lists the row under 'Check-table rows, judged' in the shape /pr-iterate reads" ;;
+*) fail "the posted comment does not list '- \`runtime/R1\` — disputed' under its heading: $(payload issues/55/comments)" ;;
+esac
+STUB_PR=56
+export STUB_PR
+v_pinned "$SCRATCH/v-pin-upheld.md" 'pin: runtime/R1 — upheld'
+broker 56 "$SCRATCH/v-pin-upheld.md" --verifier --rung cross-provider --provider openai --staged "$V_PINS"
+expect_status 0 "a verifier report upholding its one pinned row lands"
+v_show 56 verify.verdict
+case "$T_OUT" in
+*'"outcome":"pass"'*'"disputed":"0"'* | *'"disputed":"0"'*'"outcome":"pass"'*) pass "runtime/R211: an upheld row leaves the verdict pass, data.disputed=0" ;;
+*) fail "runtime/R211: an upheld row did not record pass with disputed 0: $T_OUT" ;;
+esac
+# A pin line written as a list item, or indented as the contract's example
+# is, is still the pin line.
+STUB_PR=60
+export STUB_PR
+v_pinned "$SCRATCH/v-pin-bullet.md" '- pin: runtime/R1 — upheld'
+broker 60 "$SCRATCH/v-pin-bullet.md" --verifier --rung cross-provider --provider openai --staged "$V_PINS"
+expect_status 0 "runtime/R212: a pin line written as a list item is read"
+v_pinned "$SCRATCH/v-pin-indent.md" '    pin: runtime/R1 — upheld'
+broker 60 "$SCRATCH/v-pin-indent.md" --verifier --rung cross-provider --provider openai --staged "$V_PINS"
+expect_status 0 "runtime/R212: …and so is one indented as the contract's example"
+STUB_PR=57
+export STUB_PR
+v_pinned "$SCRATCH/v-pin-missing.md" ''
+v_pinned "$SCRATCH/v-pin-agreed.md" 'pin: runtime/R1 — agreed'
+v_pinned "$SCRATCH/v-pin-unstaged.md" "$(printf '%s\n' 'pin: runtime/R1 — upheld' 'pin: runtime/R9 — upheld')"
+for f in missing agreed unstaged; do
+	broker 57 "$SCRATCH/v-pin-$f.md" --verifier --rung cross-provider --provider openai --staged "$V_PINS"
+	expect_status 65 "runtime/R212: a report whose pin line is $f exits 65"
+	assert_mutating 0 "runtime/R212: …and posts nothing"
+done
+v_none 57 "runtime/R212: …and nothing is recorded"
+# A verifier's report is held to what was staged for it: no staged directory,
+# or one missing either file, is exit 65 before anything is read.
+mkdir -p "$SCRATCH/v-staged-half"
+: >"$SCRATCH/v-staged-half/pins"
+broker 57 "$SCRATCH/v-pin-upheld.md" --verifier --rung cross-provider --provider openai --staged "$SCRATCH/v-staged-half"
+expect_status 65 "a staged directory with no findings file exits 65"
+assert_mutating 0 "…and posts nothing"
+
+# ---------------------------------------------------------------------------
+banner "V5. One finding verdict line per staged kit finding, its span found at the head (runtime/R220, R222)"
+# ---------------------------------------------------------------------------
+# The cited file is read at the reviewed commit, from the checkout the broker
+# runs in: a scratch repository whose one commit is the PR head here.
+VREPO="$SCRATCH/v-repo"
+mkdir -p "$VREPO/src"
+git -C "$VREPO" init -q -b main
+git -C "$VREPO" config user.name "Broker Fixture"
+git -C "$VREPO" config user.email "fixture@example.invalid"
+git -C "$VREPO" config commit.gpgsign false
+printf '%s\n' '#!/bin/sh' 'set -eu' 'rm -rf "$target"' 'echo done' "$(printf 'col1\tcol2')" >"$VREPO/src/app.sh"
+git -C "$VREPO" add -A
+git -C "$VREPO" commit -q -m 'feat: the head'
+VSHA=$(git -C "$VREPO" rev-parse HEAD)
+V_FIND="$SCRATCH/v-staged-findings"
+mkdir -p "$V_FIND"
+: >"$V_FIND/pins"
+printf 'H-1\thigh\tsrc/app.sh:3\tthe removal is unquoted\nM-2\tmedium\tsrc/app.sh:4\tthe echo is noise\n' >"$V_FIND/findings"
+# v_judged <file> <line>… — the pass report at $VSHA with the given lines.
+v_judged() {
+	_vj=$1
+	shift
+	{ sed "s/^REVIEWED: .*/REVIEWED: $VSHA/" "$SCRATCH/v-pass.md"; for _l in "$@"; do printf '%s\n' "$_l"; done; } >"$_vj"
+}
+H1_OK='finding: H-1 — confirmed — src/app.sh:3 — rm -rf "$target"'
+M2_OK='finding: M-2 — disputed — src/app.sh:4 — echo done'
+STUB_HEAD=$VSHA
+export STUB_HEAD
+cd "$VREPO" || exit 1
+STUB_PR=58
+export STUB_PR
+v_judged "$SCRATCH/v-judged.md" "$H1_OK" "$M2_OK"
+broker 58 "$SCRATCH/v-judged.md" --verifier --rung cross-provider --provider openai --staged "$V_FIND"
+expect_status 0 "a verifier report confirming H-1 and disputing M-2, spans on their cited lines, lands"
+assert_mutating 2 "…posting its one review and one comment"
+v_show 58 finding.verify
+for want in 'H-1:confirmed:src/app.sh:3' 'M-2:disputed:src/app.sh:4'; do
+	id=${want%%:*} rest=${want#*:} out=${rest%%:*} where=${rest#*:}
+	case $(printf '%s\n' "$T_OUT" | grep -F "\"id\":\"$id\"") in
+	*"\"outcome\":\"$out\""*'"agent":"verifier"'*"\"where\":\"$where\""* | *"\"outcome\":\"$out\""*"\"where\":\"$where\""*'"agent":"verifier"'*)
+		pass "runtime/R222: one finding.verify $out on $id, data.agent=verifier, data.where=$where" ;;
+	*) fail "runtime/R222: no finding.verify $out on $id with the verifier and $where: $T_OUT" ;;
+	esac
+done
+[ "$(printf '%s\n' "$T_OUT" | grep -c '"kind":"finding.verify"')" = 2 ] && pass "runtime/R222: …exactly two" ||
+	fail "runtime/R222: expected two finding.verify events: $T_OUT"
+case $(payload issues/58/comments) in
+*'H-1'*'confirmed'*'src/app.sh:3'*'M-2'*'disputed'*'src/app.sh:4'*) pass "runtime/R222: the posted comment shows each verdict with its evidence" ;;
+*) fail "runtime/R222: the posted comment does not show both verdicts with their evidence" ;;
+esac
+case $(payload issues/58/comments) in
+*"### The kit review's findings, judged"'\n\n- **H-1** — confirmed — `src/app.sh:3` — quoting: '*'\n- **M-2** — disputed — `src/app.sh:4` — quoting: echo done'*)
+	pass "runtime/R222: …in the line shape /pr-iterate's vf_disputes reads" ;;
+*) fail "runtime/R222: the finding verdict lines are not in the shape /pr-iterate reads: $(payload issues/58/comments)" ;;
+esac
+v_show 58 verify.verdict
+case "$T_OUT" in
+*'"outcome":"pass"'*) pass "runtime/R222: a disputed kit finding leaves an otherwise clean report's verdict pass" ;;
+*) fail "runtime/R222: the verdict moved: $T_OUT" ;;
+esac
+STUB_PR=59
+export STUB_PR
+v_judged "$SCRATCH/v-judged-missing.md" "$H1_OK"
+v_judged "$SCRATCH/v-judged-unstaged.md" "$H1_OK" "$M2_OK" 'finding: M-3 — confirmed — src/app.sh:4 — echo done'
+v_judged "$SCRATCH/v-judged-agreed.md" "$H1_OK" 'finding: M-2 — agreed — src/app.sh:4 — echo done'
+v_judged "$SCRATCH/v-judged-offline.md" "$H1_OK" 'finding: M-2 — disputed — src/app.sh:2 — echo done'
+v_judged "$SCRATCH/v-judged-nofile.md" "$H1_OK" 'finding: M-2 — disputed — src/gone.sh:1 — echo done'
+for f in missing unstaged agreed offline nofile; do
+	broker 59 "$SCRATCH/v-judged-$f.md" --verifier --rung cross-provider --provider openai --staged "$V_FIND"
+	expect_status 65 "runtime/R220: a report whose finding verdict is $f exits 65"
+	assert_mutating 0 "runtime/R220: …and posts nothing"
+done
+v_none 59 "runtime/R220: …and nothing is recorded"
+# A span copied exactly from a line holding a tab is found there: the report
+# and the cited line read tabs alike.
+STUB_PR=61
+export STUB_PR
+v_judged "$SCRATCH/v-judged-tab.md" "$H1_OK" "$(printf 'finding: M-2 — disputed — src/app.sh:5 — col1\tcol2')"
+broker 61 "$SCRATCH/v-judged-tab.md" --verifier --rung cross-provider --provider openai --staged "$V_FIND"
+expect_status 0 "runtime/R220: a span holding a tab, copied exactly from its line, is found there"
+cd "$KIT" || exit 1
+STUB_HEAD=$HEAD_SHA
+STUB_PR=12
+export STUB_HEAD STUB_PR
 
 t_done "tests/forge-broker.test.sh"
