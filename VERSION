@@ -3953,7 +3953,9 @@
 # scripts/policy.sh at POLICY_BASE when it is set, each failing closed to its
 # strictest path — the slicer every lens the whole diff and exit 3, the lister
 # its fail-closed line then every changed path, the checker its line and exit
-# 3 (a checker extracted outside any repository reads the policy beside it),
+# 3 (POLICY_BASE judges the caller's repository: a checker of another reads
+# its own policy, and one extracted outside any repository the policy beside
+# it),
 # the check-table reader its line and exit 2; scripts/guards.lib.sh gains
 # the shared base read (policy_at_base, policy_value) and hands the lister its
 # surfaces from the base; and UPDATING.md, its entry and both worked examples
