@@ -283,6 +283,7 @@ Test-tier: report/R6 manual')"
 on_main "$R" .factory/items/T-15/ticket.md "$(ticket T-15 build 2026-11-05 - 'No stamp here.')"
 on_main "$R" .factory/items/T-14/ticket.md "$(ticket T-14 build yesterday - "$SUITE")"
 on_main "$R" .factory/items/T-16/ticket.md "$(ticket T-16 build '' - "$SUITE")"
+on_main "$R" .factory/items/T-17/ticket.md "$(ticket T-17 build 2026-02-30 - "$SUITE")"
 ag "$R" -- tests T-91 --base main
 expect_status 4 "acceptance/R20: a ticket owed its tests — exit 4"
 expect_out_is "owed T-91" "acceptance/R20: owed T-91"
@@ -297,6 +298,10 @@ expect_status 4 "acceptance/R35: a created that is not a date never exempts — 
 expect_out_is "owed T-14" "acceptance/R35: owed T-14"
 ag "$R" -- tests T-16 --base main
 expect_out_is "owed T-16" "acceptance/R35: a missing created never exempts"
+# The same calendar rule as the policy reader's for the adoption date: an
+# impossible day, though it sorts before the date, never exempts.
+ag "$R" -- tests T-17 --base main
+expect_out_is "owed T-17" "acceptance/R35: created 2026-02-30, no calendar day, never exempts"
 # The base is the judge: a branch that approves T-91 for itself is still owed.
 t_write "$R" .factory/items/T-91/ticket.md "$(ticket T-91 build 2026-11-05 "$APPROVAL" "$SUITE")"
 t_commit "$R" "chore: approve myself" >/dev/null
@@ -319,13 +324,15 @@ done
 
 banner "R22. An adoption date out of shape fails closed"
 # ---------------------------------------------------------------------------
-fp_repo "acceptance_tests_since: 2026-13-01"
+for bad in 2026-13-01 2026-02-30; do
+fp_repo "acceptance_tests_since: $bad"
 R=$REPO
 for args in "check main HEAD" "tests T-90 --base main" "held --base main"; do
 	# shellcheck disable=SC2086
 	ag "$R" POLICY_BASE=main -- $args
-	expect_status 3 "acceptance/R22: $args — exit 3"
-	expect_out_is "fail-closed invalid .factory/project.yaml" "acceptance/R22: $args — the manifest's invalid line"
+	expect_status 3 "acceptance/R22: $bad, $args — exit 3"
+	expect_out_is "fail-closed invalid .factory/project.yaml" "acceptance/R22: $bad, $args — the manifest's invalid line"
+done
 done
 
 banner "Caller errors exit 2 with nothing on stdout"

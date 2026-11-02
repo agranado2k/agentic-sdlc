@@ -299,7 +299,9 @@ approved() {
 	IFS=$_ap_ifs
 }
 
-# date_ok <text> — 0 for a real YYYY-MM-DD calendar date.
+# date_ok <text> — 0 for a real YYYY-MM-DD calendar date. The same rule as
+# date_ok in scripts/policy.sh, which judges the adoption date: the two move
+# together, and tests/acceptance-guard.test.sh feeds both the same dates.
 date_ok() {
 	printf '%s\n' "$1" | awk '
 		NR > 1 || !/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { bad = 1; next }

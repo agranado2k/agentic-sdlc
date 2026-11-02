@@ -288,6 +288,8 @@ factory_value() {
 }
 
 # date_ok <text> — 0 for one line holding a real YYYY-MM-DD calendar date.
+# scripts/acceptance-guard.sh holds the same rule for a ticket's `created`:
+# the two move together, and its suite feeds both the same dates.
 date_ok() {
 	printf '%s\n' "$1" | awk '
 		NR > 1 || !/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { bad = 1; next }
