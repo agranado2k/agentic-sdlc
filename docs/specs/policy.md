@@ -27,3 +27,9 @@ R12. WHEN asked for `thresholds --base <ref>`, the policy reader SHALL print exa
 R13. IF a threshold in the risk policy at the ref is unset, empty, or not a whole number from 0 to 100, THEN the policy reader SHALL print `fail-closed invalid <risk policy path>`, print no threshold line, and exit 3.
 R14. The policy reader SHALL evaluate a shell judging file only in a child process, so that no variable, function or directory change the file makes reaches the reader's caller.
 R15. The risk policy SHALL ship with `miss-rate-below` 5, `precision-floor` 80 and an empty extra list.
+R16. WHERE `POLICY_BASE` is unset, the pairing guard, the behavior-delta lister, the docs gate, the lens slicer and the vocabulary checker SHALL read their policy files from the working tree as they do today.
+R17. WHERE `POLICY_BASE` names a ref, a policy override that names a judging file SHALL be read at that ref through the policy reader, and one that names a path outside the judging set SHALL be read as given.
+R18. WHERE `POLICY_BASE` names a ref, the TDD pairing guard SHALL read the guards policy through the policy reader at that ref.
+R19. IF `POLICY_BASE` names a ref and the policy reader fails closed on the guards policy, THEN the pairing guard SHALL print the fail-closed line and exit non-zero, and SHALL NOT warn and pass.
+R20. WHERE the guards policy at `POLICY_BASE` is present and sets no source pattern, the pairing guard SHALL warn once and pass.
+R21. The shipped TDD pairing workflow SHALL set `POLICY_BASE` to the pull request's base commit.

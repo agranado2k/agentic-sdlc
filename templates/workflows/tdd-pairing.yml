@@ -15,7 +15,11 @@ name: TDD pairing
 # does NOT cover itself"). It guards honest mistakes, not an adversary, and the
 # blast radius of that is nil: the job holds a read-only token, installs
 # nothing, and makes no API call. Human review is what covers a diff that
-# weakens the guard.
+# weakens the guard. POLICY DATA is the exception: the step below sets
+# POLICY_BASE to the PR's base commit, so the guard reads
+# scripts/guards.config.sh as the base has it (through scripts/policy.sh), and a
+# PR cannot loosen the pattern that judges it. A base with no readable policy
+# fails the job rather than passing it.
 #
 # WHY ITS OWN WORKFLOW, and not a job inside your test workflow:
 #   1. The label hatch only works if the gate re-runs on `labeled`/`unlabeled`.
@@ -70,10 +74,13 @@ jobs:
         with:
           node-version: 22
 
+      # POLICY_BASE: the base commit, already fetched by the full-history
+      # checkout above — the guard's policy is read there, never from the PR.
       # GITHUB_EVENT_PATH is set by the runner — that is where the `tdd-exempt`
       # label is read from, so this job needs no token and makes no API call.
       - name: Source changes carry test changes
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POLICY_BASE: ${{ github.event.pull_request.base.sha }}
         run: sh scripts/tdd-pairing-guard-ci.sh

@@ -34,7 +34,8 @@
 # Exit codes:  0 paired, exempt, or the guard is unconfigured · 1 unpaired
 #              source change · 2 the gate could not run (missing range,
 #              unresolvable merge base). A gate that cannot run must not report
-#              green, so 2 fails the job.
+#              green, so 2 fails the job · 3 POLICY_BASE is set and the guards
+#              policy cannot be read at it: failed closed, which fails the job.
 
 set -u
 
