@@ -2414,7 +2414,7 @@ for want in 'Exit 3 is its policy failing closed at the base' 'every lens runs o
 done
 
 # ---------------------------------------------------------------------------
-banner "29. The review reads the diff against the approved tests (acceptance/R32 R33 R34)"
+banner "29. The review reads the diff against the approved tests (acceptance/R32 acceptance/R33 acceptance/R34)"
 # ---------------------------------------------------------------------------
 # PRD-14 slice 4, UC4. In a factory project the coordinator runs the
 # acceptance guard from the review's base, judged at that base, and hands its
@@ -2442,8 +2442,8 @@ acc_missing() {
 	has "$_wc" "your VERDICT line quotes its \`fail-closed\` line" || printf '%s\n' 'worker verdict'
 }
 miss=$(acc_missing "$SKILL_ABS" "$ACC_ABS" "$WORKER_ABS" 2>/dev/null | tr '\n' ',' | sed 's/,$//')
-[ -z "$miss" ] && pass "acceptance/R32 R33 R34: the coordinator runs the guard at the base, Agent 7 lists each changed approved test, and a fail-closed guard lists every approved id and reaches the summary" ||
-	fail "acceptance/R32 R33 R34: /review-pr's acceptance-guard rules are missing: $miss"
+[ -z "$miss" ] && pass "acceptance/R32 acceptance/R33 acceptance/R34: the coordinator runs the guard at the base, Agent 7 lists each changed approved test, and a fail-closed guard lists every approved id and reaches the summary" ||
+	fail "acceptance/R32 acceptance/R33 acceptance/R34: /review-pr's acceptance-guard rules are missing: $miss"
 for b in \
 	'agent 7 input|1|s/^5\. The acceptance guard.s output.*$/5. Nothing else./' \
 	'coordinator runs guard|2|s/POLICY_BASE=<base> sh scripts\/acceptance-guard.sh/sh scripts\/acceptance-guard.sh/' \
