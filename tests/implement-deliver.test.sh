@@ -928,6 +928,28 @@ else
 	fail "process/R47: scripts/check-table.sh is missing — the table the skill writes has no reader"
 fi
 
+# acceptance/R46 (PRD-14 slice 4): an id the ticket carries approved
+# acceptance tests for cites one of them, as stamped, its name free to hold
+# spaces; the reader's not-approved: is a gap like the others.
+CT_ACC_WORDS='**An id the ticket carries `Accept-test:` lines for cites one of them**
+its `<path>::<test>` exactly as `scripts/stamp.sh` printed it on one of that id'"'"'s `Accept-test:` lines, then `@<commit>`
+a URL or `-` is no evidence for it
+The path uses only letters, digits, `.`, `/`, `_` and `-`; the test name any printable ASCII, spaces included
+`not-approved:`'
+while IFS= read -r word; do
+	t_text_has "$ct" "$word" "process/R46: the approved-test citation, in CHECK-TABLE.md" "CHECK-TABLE.md"
+done <<WORDS
+$CT_ACC_WORDS
+WORDS
+weakened "process/R46: any test may stand for an approved one" 's/cites one of them\*\*/cites any test**/' "$ct" "$CT_ACC_WORDS"
+# EXECUTED: a row written the way the branch says passes the reader.
+if [ -f "$ROOT/scripts/check-table.sh" ]; then
+	printf 'Covers: acceptance/R3\nTest-tier: acceptance/R3 suite\nAccept-test: acceptance/R3 tests/report.test.sh::totals by area\n' >"$SCRATCH/ct-acc-ticket"
+	printf '<!-- check-table -->\n| Requirement | Test tier | Result | Evidence |\n| --- | --- | --- | --- |\n| acceptance/R3 | suite | pass | tests/report.test.sh::totals by area@3f9c2e1 |\n' >"$SCRATCH/ct-acc-body"
+	t_exec sh "$ROOT/scripts/check-table.sh" "$SCRATCH/ct-acc-body" "$SCRATCH/ct-acc-ticket"
+	expect_resolved "" "process/R46: a row citing its approved test as CHECK-TABLE.md says passes the reader"
+fi
+
 # ---------------------------------------------------------------------------
 banner "4h. A factory ticket id: one call, the same exits, a fall-back said once (process/R135 R139 R222)"
 # ---------------------------------------------------------------------------
