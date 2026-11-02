@@ -2997,6 +2997,7 @@ asks: one `check` on the kit, 99 factory tickets read at `origin/main`,
 3.2 s wall (1.6 s user); one `tests` 0.09 s. Ruled here: a covered id with no
 `Test-tier:` line owes nothing (the requirement text, read literally); a
 `tests:` record written as a flow mapping is `invalid`; a base with no guard
-yet passes the CI step with a notice. The kit's manifest sets no
-`acceptance_tests_since` in this diff: the release that lands it sets the
-landing day, until then nothing is owed and approvals are still held.
+yet passes the CI step with a notice; a held path absent at both the base
+and the head was never brought in and is not changed, so an unrelated pull
+request passes while approved tests still live off `main` (review of #1003).
+The kit's manifest sets `acceptance_tests_since: 2026-11-02`, the landing day.

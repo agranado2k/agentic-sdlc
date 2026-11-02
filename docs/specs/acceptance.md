@@ -22,7 +22,7 @@ R6. IF a ticket's `Accept-test:` line names an id that is not on its `Covers:` l
 R7. WHEN the release that ships acceptance/R1 to R6 lands, `UPDATING.md` SHALL tell a consumer whose own vocabulary policy file predates it to add the `accept-test` field and its bound.
 R8. WHEN asked to `check <base> <head>`, the acceptance guard SHALL print, sorted, one `changed: <ticket> <requirement-id> <path>` line for each `Accept-test:` path of a held ticket whose content at the head differs from its content at the ticket's approval commit, and SHALL exit 1 when it printed one and 0 when it printed none. [UC3 2, 3]
 R9. The acceptance guard SHALL hold only tickets whose front matter at the base carries an approval record and whose stage is not `done`. [UC3 2a, 2b]
-R10. A held path that is absent at the head SHALL count as changed. [UC3 3a]
+R10. A held path that is absent at the head SHALL count as changed WHERE the base holds it; a held path absent at both the base and the head SHALL NOT count as changed. [UC3 3a]
 R11. WHERE `POLICY_BASE` names a ref, the acceptance guard SHALL read the guards policy, the factory project manifest and every factory ticket through the policy reader at that ref, and SHALL read neither from the working tree. [UC3 1, 2, 2c]
 R12. WHERE `POLICY_BASE` is unset, the acceptance guard SHALL read the guards policy, the factory project manifest and the factory tickets from the working tree.
 R13. IF a held ticket's approval commit names no commit in the repository, its approval record lacks `commit`, `by` or `at`, one of its `Accept-test:` lines is refused by the checker, or an approved path is absent at the approval commit, THEN the acceptance guard SHALL print `fail-closed invalid <ticket path>` and exit 3. [UC3 2d; UC2 1c]

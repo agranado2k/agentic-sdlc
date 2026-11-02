@@ -120,15 +120,29 @@ banner "R12. POLICY_BASE unset: the tickets are read from the working tree"
 ag "$R" -- check main HEAD
 expect_resolved '' "acceptance/R12: unset, the working tree's rewritten record is the one read — exit 0"
 
-banner "R10. A held file absent at the head is changed"
+banner "R10. A held file the pull request deletes is changed; one never brought in is not"
 # ---------------------------------------------------------------------------
+# The held file reached main (T-90's build landed it; the ticket is not done
+# yet), and the branch deletes it.
 fp_repo
 R=$REPO
+git -C "$R" checkout -q main && git -C "$R" merge -q --ff-only work && git -C "$R" checkout -q -b drop
 git -C "$R" rm -q "$TF"
 t_commit "$R" "test: delete the approved file" >/dev/null
 ag "$R" POLICY_BASE=main -- check main HEAD
-expect_status 1 "acceptance/R10: a deleted held file — exit 1"
+expect_status 1 "acceptance/R10: a held file present at the base and deleted at the head — exit 1"
 expect_out_is "changed: T-90 report/R3 $TF" "acceptance/R10: the deleted file is reported as changed"
+# An unrelated pull request, cut from main before T-90's build brought the
+# file in: absent at the base and the head, it is not changed — the approved
+# tests live off main until the build (ADR-0046).
+fp_repo
+R=$REPO
+git -C "$R" checkout -q -b other main
+t_write "$R" docs/notes.md 'unrelated
+'
+t_commit "$R" "docs: an unrelated change" >/dev/null
+ag "$R" POLICY_BASE=main -- check main HEAD
+expect_resolved '' "acceptance/R10: an unrelated PR that never brought the held file in passes — exit 0"
 
 banner "R9. Only an approved ticket not at done is held"
 # ---------------------------------------------------------------------------

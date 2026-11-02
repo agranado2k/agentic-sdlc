@@ -35,7 +35,9 @@
 # check   prints, sorted, one `changed: <ticket> <requirement-id> <path>`
 #         line per `Accept-test:` path of a held ticket whose content at
 #         <head> differs from its content at the approval commit — a path
-#         absent at <head> is changed — and exits 1 when it printed one, 0
+#         absent at <head> is changed when <base> holds it (the pull request
+#         deleted it); one absent at both was never brought in, and is not —
+#         and exits 1 when it printed one, 0
 #         when none. Every held ticket is scanned, not one PR's.
 # tests   for a ticket with an approval record, `approved <commit>` then its
 #         `Accept-test:` lines as spelled, exit 0. Without one:
@@ -109,7 +111,7 @@ ref= head= want=
 case $cmd in
 check)
 	[ $# -eq 3 ] || die "$usage"
-	commit_of "$2" >/dev/null || die "the base ref names no commit: $2"
+	basec=$(commit_of "$2") || die "the base ref names no commit: $2"
 	head=$(commit_of "$3") || die "the head ref names no commit: $3"
 	ref=${POLICY_BASE:-}
 	;;
@@ -378,7 +380,14 @@ out=$(
 				continue
 			fi
 			want_obj=$(git rev-parse --verify --quiet "$R_COMMIT:$file" 2>/dev/null)
-			have_obj=$(git rev-parse --verify --quiet "$head:$file" 2>/dev/null) || have_obj=
+			have_obj=$(git rev-parse --verify --quiet "$head:$file" 2>/dev/null) || {
+				# Absent at the head is changed only when the base held the
+				# file: the PR deleted it. One absent at both was never
+				# brought in — the approved tests live off the base branch
+				# until the ticket's build lands them.
+				git cat-file -e "$basec:$file" 2>/dev/null || continue
+				have_obj=
+			}
 			[ "$want_obj" = "$have_obj" ] || printf 'changed: %s %s %s\n' "$id" "$rid" "$file"
 		done
 	done

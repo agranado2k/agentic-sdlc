@@ -41,8 +41,10 @@ Chosen option 4 (PRD-14 §8; options 1 to 3 are its alternatives considered).
 1. **The guard is `scripts/acceptance-guard.sh`, shared layer**, with three
    questions, each at a base: `check <base> <head>` prints, sorted, one
    `changed: <ticket> <id> <path>` per held file whose content at the head
-   differs from its content at the approval commit, an absent file counting
-   as changed, exit 1 on any; `tests <ticket> --base <ref>` prints
+   differs from its content at the approval commit, a file the base holds and
+   the head lacks counting as changed, exit 1 on any; a file absent at both
+   was never brought in and is not changed, so an unrelated pull request
+   passes while the approved tests still live off `main` (clause 2); `tests <ticket> --base <ref>` prints
    `approved <commit>` and the `Accept-test:` lines (exit 0),
    `no-tests <ticket> <reason>` (exit 0), or `owed <ticket>` (exit 4);
    `held --base <ref>` lists `<ticket> <path>` per held file. These shapes
