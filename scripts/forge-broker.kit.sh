@@ -973,6 +973,9 @@ tagcount() { LC_ALL=C grep -c "^[^A-Za-z0-9]*$1" "$TMP/behavior" || :; }
 N_UNSPEC=$(tagcount UNSPECIFIED)
 N_MIXED=$(tagcount 'MIXED COMMIT')
 N_MISSING=$(tagcount MISSING)
+# Of those, the approved acceptance tests the diff changed (acceptance/R33):
+# a MISSING item whose line ends `— approved test changed`.
+N_APPROVED=$(LC_ALL=C grep -c '^[^A-Za-z0-9]*MISSING.*— approved test changed[[:blank:]]*$' "$TMP/behavior" || :)
 # The ⚠️ items read as outward (process/R54–R55, ADR-0038): every one but an
 # item whose tag is followed by `scope: inside`, a word the vocabulary's scope
 # field holds; a missing or unknown scope fails closed to the operator.
@@ -983,6 +986,6 @@ N_OUTWARD=$((N_UNSPEC - N_INSIDE))
 AX2=pass
 [ $((N_UNSPEC + N_MIXED + N_MISSING)) = 0 ] || AX2=confirm
 trace quiet kind=review.verdict "subject=pr:#$PR" "outcome=$AX2" data.axis=2 data.via=broker \
-	"data.unspecified=$N_UNSPEC" "data.outward=$N_OUTWARD" "data.mixed=$N_MIXED" "data.missing=$N_MISSING" \
+	"data.unspecified=$N_UNSPEC" "data.outward=$N_OUTWARD" "data.mixed=$N_MIXED" "data.missing=$N_MISSING" "data.approved_changed=$N_APPROVED" \
 	"reason=the confirm-list counted by tag; the items are on the PR comment"
 exit 0

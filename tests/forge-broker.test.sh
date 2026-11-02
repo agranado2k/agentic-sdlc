@@ -1475,6 +1475,34 @@ for want in '"outcome":"confirm"' '"missing":"1"' '"unspecified":"0"' '"mixed":"
 	*) fail "process/R9: the axis-2 verdict lacks $want: $AX2" ;;
 	esac
 done
+# acceptance/R33: an approved acceptance test the diff changed is a MISSING
+# item ending `— approved test changed`; the broker lands it like any other
+# MISSING and counts it apart, so the trace says how many approved tests a
+# review found changed.
+sed -e 's/^VERDICT: .*/VERDICT: not blocking — an approved test changed; confirm it/' \
+	-e 's/^✅ SPECIFIED    R8 .*/❌ MISSING      acceptance\/R3 — approved test changed/' "$IDS" >"$SCRATCH/approved.md"
+STUB_PR=39
+export STUB_PR
+broker 39 "$SCRATCH/approved.md"
+expect_status 0 "acceptance/R33: a report listing an approved test changed passes the contract"
+COMMENT=$(payload issues/39/comments)
+case "$COMMENT" in
+*'MISSING      acceptance/R3 — approved test changed'*) pass "acceptance/R33: the comment carries the approved-test item verbatim" ;;
+*) fail "acceptance/R33: the comment lost the approved-test item"; printf '%s\n' "$COMMENT" | sed 's/^/        | /' ;;
+esac
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#39' --kind review.verdict
+AX2=$(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"')
+for want in '"outcome":"confirm"' '"missing":"2"' '"approved_changed":"1"'; do
+	case "$AX2" in
+	*"$want"*) pass "acceptance/R33: the axis-2 verdict carries $want" ;;
+	*) fail "acceptance/R33: the axis-2 verdict lacks $want: $AX2" ;;
+	esac
+done
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#35' --kind review.verdict
+case "$(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"')" in
+*'"approved_changed":"0"'*) pass "acceptance/R33: a review with no approved test changed counts 0" ;;
+*) fail "acceptance/R33: the #35 axis-2 verdict does not count approved_changed 0" ;;
+esac
 STUB_PR=12
 export STUB_PR
 
