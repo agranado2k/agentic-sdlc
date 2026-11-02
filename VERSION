@@ -3781,7 +3781,39 @@
 # Kit-only, never shipped: docs/specs/runtime.md R59 and R60, AGENTS.md's
 # risk-rule row, and tests/risk.test.sh section 11.
 
-shared-layer: 0.108.0
+# 0.109.0 — the risk rule's kill switch (ticket #907, PRD-09 slice 3 of
+# D-02, factory T-44). No file joins or leaves. Two shared files change
+# content: scripts/risk.sh, which reads the switch — tripped when the risk
+# policy at the base sets `RISK_KILL_SWITCH=tripped`, when that value cannot
+# be read there (unset, any other word, or the policy reader failing
+# closed), or when the trip marker `risk-switch-tripped` exists in the
+# clone's git directory (`git rev-parse --git-common-dir`); `on` otherwise —
+# and while it is tripped turns the rule's `low` into `high unlearned`,
+# prints `switch: tripped` and records `data.switch=tripped`, never reading
+# the value from the environment or the pull request's tree; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate — RISK.md names the kill switch among what the
+# rule reads. /retro — SKILL.md and QUESTIONS.md: question 8 counts the
+# latest risk.judge per PR as agreed or disagreed, split by the side that
+# raised it, its reason and its review area, leaves a `data.switch=tripped`
+# verdict out and counts it apart, and reads the risk stamp per
+# Risk-confidence (#912, factory T-49, landed after 0.108.0's tag).
+# /implement — SKILL.md step 9 and DISPATCHED-REVIEW.md's last section:
+# once the review is requested, where `reviewer cross-provider` resolves to
+# a model, request the verifier on the same head commit (#942, factory
+# T-79, landed after 0.108.0's tag).
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/risk.config.sh gains `RISK_KILL_SWITCH=on` and its
+# comment — add the line to your copy and land it on your base branch, or
+# every pull request's rule reads `switch: tripped`.
+# Adapter (9e): none.
+# Kit-only, never shipped: the kit's ADR-0045 amended with the switch's home
+# and the trip marker, its index row, the glossary's Kill switch and Trip
+# marker, docs/specs/runtime.md R65 to R67, AGENTS.md's risk-rule row, and
+# tests/risk.test.sh section 12.
+
+shared-layer: 0.109.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

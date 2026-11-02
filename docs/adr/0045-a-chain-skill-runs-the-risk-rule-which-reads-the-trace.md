@@ -138,3 +138,38 @@ unlearned`, the failing-closed paths, the checker's refusal, caller errors,
 `/pr-iterate`'s step and its reported-only words, and the landing script
 reading nothing of the rule. `tests/trace.test.sh` holds the kind's row and
 its refusals; `tests/land.test.sh` lands a pull request the rule calls high.
+
+### Amendment, 2026-11-01 — the kill switch (#907, PRD-09 slice 3)
+
+Clause 10 left the switch reading `on` until slice 3; #907 is that slice and
+widens nothing the rule may read or write, so the record is amended in place.
+
+- **Its home.** The switch's value is `RISK_KILL_SWITCH` in the risk policy,
+  `scripts/risk.config.sh`, beside the thresholds: `on` or `tripped`. The
+  rule reads it only through the policy reader at the base (`policy.sh read
+  scripts/risk.config.sh --base <base>`), evaluated in a child process that
+  starts with the name unset — never the environment, never the pull
+  request's tree (runtime/R67). A value the base cannot give — the reader
+  failing closed, the name unset, any other word — reads tripped, the cause
+  on standard error (runtime/R66). The shipped policy sets it `on`.
+- **The trip marker.** A file named `risk-switch-tripped` in the clone's git
+  directory, `git rev-parse --git-common-dir`, so every worktree of the clone
+  shares it, and outside version control, so no pull request can delete it.
+  Its existence trips the switch, whatever it holds (runtime/R66).
+- **While tripped**, the rule's `low` becomes `high unlearned`, a rule already
+  high keeps its reason, the last line prints `switch: tripped` and the event
+  records `data.switch=tripped` (runtime/R65); the area lines and
+  `data.unlearned` still say what the record says. No new reason token: the
+  contract's reason list is fixed (ADR-0037), and `data.switch` keeps tripped
+  verdicts apart for `/retro`.
+- **Who resets it.** Tripping is open to anyone, since it only makes pull
+  requests high. Resetting is the operator's: deleting the marker, or landing
+  the policy value on the base branch. An agent's deletion of the marker is
+  refused by a later ticket (T-56, #919), not here.
+
+`tests/risk.test.sh` case 12 holds each bullet: the marker turning an
+all-earned `rule: low` into `rule: high unlearned` and back, a worktree of
+the clone reading the clone's marker, a tripped base with the switch reset
+in the pull request's tree, a switch tripped only in the tree left unread,
+an unset, misspelt or unreadable base value, and exported `RISK_*` values
+that move neither the switch nor a threshold.

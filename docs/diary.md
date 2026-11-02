@@ -2967,3 +2967,20 @@ re-review of the same head supersedes the one before. `/pr-iterate`'s
 `RISK.md` now says to run the rule after the iteration's review recorded its
 verdict. The verdict read (`show pr:#<N> --kind review.verdict`) takes 0.8 s
 wall on the kit's trace.
+
+## 2026-11-01 — The risk rule's kill switch
+
+PRD-09 slice 3 of D-02 (#907, factory T-44; released as 0.109.0).
+`scripts/risk.sh` now reads a kill switch: `RISK_KILL_SWITCH` in the risk
+policy, read through the policy reader at the base and evaluated in a child
+that starts with the name unset, and the trip marker `risk-switch-tripped`
+in the clone's git directory. Either trips it, and so does a value the base
+cannot give; while tripped a rule's `low` becomes `high unlearned`, a rule
+already high keeps its reason, and the event records `data.switch=tripped`.
+Ruled here: the marker sits in `git rev-parse --git-common-dir`, so one act
+trips every worktree of the clone; its name is `risk-switch-tripped`; the
+value is read through `policy.sh read` rather than a new reader subcommand,
+as PRD-09 §8 says, so the policy reader does not move; an unset value reads
+tripped, so a consumer must add `RISK_KILL_SWITCH=on` (UPDATING, 9d). ADR-0045
+is amended in place with the switch's home and the marker. Until this lands,
+the kit's own base has no value, so this PR's own rule runs read tripped.
