@@ -242,7 +242,12 @@ slicer's `--areas` form never reads a base. **One skill moves (9a):
 `/review-pr`** — `SKILL.md` and `CHECK-TABLE.md` run the three readers with
 `POLICY_BASE=<base>`, and a slicer exit 3 sends every lens its whole-diff
 slice with the fail-closed line in the summary; take both files, or merge the
-hunks into a local edit. No wiring, template, config or adapter moves.
+hunks into a local edit. **A second skill moves (9a): `/implement`** gains
+tests-first mode, `STAMP.md`'s last section, which `SKILL.md` step 2 opens: in
+a factory project it asks the acceptance guard for the ticket's approved tests
+at the base before the first edit, commits them alone and unchanged first,
+runs them red, never edits one, and opens no PR until they, the suite and the
+guard pass; take both files. No wiring, template, config or adapter moves.
 
 **Arriving from 0.114.0 or older, one script joins: the acceptance guard.**
 `scripts/acceptance-guard.sh` joins the shared layer at 0.115.0 — see "When a
@@ -2115,10 +2120,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3829 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3834 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3983 insertions(+), 1 deletion(-)
+ 3 files changed, 3988 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
