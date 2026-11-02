@@ -21,9 +21,9 @@ const VOCABULARY = "scripts/docs-conformance/local-vocabulary.mjs";
 
 /**
  * The gate config that judges. With POLICY_BASE unset, this tree's own
- * config.mjs, as a local push reads it. With POLICY_BASE naming a ref (the
- * kit's ADR-0039), the base's copy, read through the policy reader beside the
- * harness (scripts/policy.sh): the config module and its local-vocabulary
+ * config.mjs, as a local push reads it. With POLICY_BASE naming a ref
+ * (the kit's ADR-0039), the base's copy, read through the policy reader beside
+ * the harness (scripts/policy.sh): the config module and its local-vocabulary
  * sibling are both copied to the reader's directory for that commit, so the
  * copy's import of its sibling resolves there — and a vocabulary missing at the
  * base is an empty one, as it is today. Any other answer the reader cannot
