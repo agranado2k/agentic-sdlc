@@ -48,13 +48,19 @@
 #      the row number (`row <n>`, counted from the first row under the
 #      separator), or the header or the separator row; a body with two
 #      check-table markers; a ticket whose `Covers:` or `Test-tier:` lines are
-#      refused; a usage error or an unreadable file. NOTHING on stdout;
+#      refused; a usage error or an unreadable file. NOTHING on stdout — but
+#      for a vocabulary policy that fails closed at POLICY_BASE (below);
 #   3  the PR body carries no check table: stderr says so, stdout empty.
 #
 # THE GRAMMAR is not spelled here twice: the id, the Covers: value and the
 # fence are scripts/requirement.lib.sh's, the tokens and the bound are
 # scripts/vocab.sh's (its `fields`), both read from beside this script, and
 # without either the reader refuses (exit 2) rather than read nothing.
+#
+# POLICY_BASE (the kit's ADR-0039): set to a ref, scripts/vocab.sh reads the
+# vocabulary policy as that ref has it. A policy the base cannot give is a
+# refusal: the policy reader's `fail-closed <reason> <path>` line, alone on
+# stdout, and exit 2 — so a review lists every covered id as missing.
 #
 # Shared layer, beside scripts/coverage.sh: /implement writes the table, and
 # the review and iteration skills read it through this script and no other way.
@@ -101,6 +107,16 @@ done
 
 # --- the vocabulary ---------------------------------------------------------
 fields=$(sh "$vocab" fields 2>/dev/null) || {
+	# With POLICY_BASE set, a vocabulary policy the base cannot give is the
+	# checker's exit 3 and the reader's fail-closed line: a refusal here, the
+	# line passed on — it names a reason and a path, never a body's text.
+	case $fields in
+	fail-closed\ *)
+		printf '%s\n' "$fields" | head -1
+		ct_say "the vocabulary policy at POLICY_BASE=${POLICY_BASE:-} cannot be read — failing closed"
+		exit 2
+		;;
+	esac
 	ct_say "scripts/vocab.sh could not print its fields — the vocabulary policy is broken"
 	exit 2
 }

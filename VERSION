@@ -3946,7 +3946,36 @@
 # acceptance_tests_since, the kit-guards acceptance job, and
 # tests/acceptance-guard.test.sh with its job.
 
-shared-layer: 0.115.0
+# 0.116.0 — the review is judged by the base branch's policy (ticket #910,
+# PRD-08 slice 4 of D-02, factory T-47). No file joins or leaves. Six shared
+# files change content: scripts/lens-slice.sh, scripts/behavior-delta.sh,
+# scripts/vocab.sh and scripts/check-table.sh read their policy through
+# scripts/policy.sh at POLICY_BASE when it is set, each failing closed to its
+# strictest path — the slicer every lens the whole diff and exit 3, the lister
+# its fail-closed line then every changed path, the checker its line and exit
+# 3 (POLICY_BASE judges the caller's repository: a checker of another reads
+# its own policy, and one extracted outside any repository the policy beside
+# it),
+# the check-table reader its line and exit 2; scripts/guards.lib.sh gains
+# the shared base read (policy_at_base, policy_value) and hands the lister its
+# surfaces from the base; and UPDATING.md, its entry and both worked examples
+# re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /review-pr — SKILL.md runs the slicer and the behavior-delta
+# lister with POLICY_BASE=<base>, and on a slicer exit 3 runs every lens on its
+# whole-diff slice and puts the fail-closed line in its summary; CHECK-TABLE.md
+# runs the check-table reader with POLICY_BASE=<base>. And /implement, from
+# #1005 (T-93) on main since 0.115.0: tests-first mode, STAMP.md's last
+# section, opened by SKILL.md step 2 — in a factory project it asks the
+# acceptance guard for the ticket's approved tests at the base before the
+# first edit, commits them alone and unchanged first, runs them red, never
+# edits one, and opens no PR until they, the suite and the guard pass.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/policy.md R26 to R33, the
+# AGENTS.md quick-reference row for the slicer's exit 3, and (from #1005)
+# docs/specs/acceptance.md R24 to R31 and the glossary's tests-first mode.
+
+shared-layer: 0.116.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

@@ -10,6 +10,10 @@
 #
 # Usage:  scripts/behavior-delta.sh [<base-ref>]     (default base: origin/main)
 #
+# POLICY_BASE: set to a ref, the guards policy is read as that ref has it, and
+# a policy the base cannot give fails closed — its line first, then every
+# changed path as a candidate (see below). Unset, the working tree's.
+#
 # WHICH SURFACES COUNT is configuration, not code: BEHAVIOR_DELTA_SURFACES in
 # scripts/guards.config.sh, one `label|extended-regex` record per line. One home
 # per surface — the branch-level sections below and the per-commit separation
@@ -25,7 +29,14 @@ set -eu
 here=$(dirname "$0")
 # shellcheck source=./guards.lib.sh
 . "$here/guards.lib.sh"
-guards_load_config "$here" || true
+# With POLICY_BASE naming a ref (the kit's ADR-0039) the guards policy is read
+# as that ref has it; one the base cannot give FAILS CLOSED: the reader's
+# `fail-closed <reason> <path>` line is printed first, and every path the diff
+# changes is listed as a candidate — no surface is trusted to narrow the list.
+failed=
+guards_load_policy "$here" || {
+	[ $? -ne 3 ] || failed=${POLICY_FAIL:--}
+}
 
 surfaces=${BEHAVIOR_DELTA_SURFACES:-}
 test_re=${GUARD_TEST_RE:-}
@@ -50,7 +61,13 @@ status=$(git diff --name-status "$base" HEAD)
 all=$(printf '%s\n' "$status" | awk '{print $NF}')
 modified=$(printf '%s\n' "$status" | awk '$1 ~ /^M/ {print $NF}')
 
+[ -z "$failed" ] || [ "$failed" = - ] || printf '%s\n' "$failed"
 echo "# Behavior-delta candidates — $(git rev-parse --abbrev-ref HEAD) vs $base_ref (merge-base $(git rev-parse --short "$base"))"
+
+if [ -n "$failed" ]; then
+	section "Every changed path — the guards policy at POLICY_BASE=$POLICY_BASE cannot be read, so each is a candidate" "$all"
+	exit 0
+fi
 
 if [ -z "$surfaces" ]; then
 	printf '\nNo contract artifacts configured. Add surfaces to BEHAVIOR_DELTA_SURFACES\n'
