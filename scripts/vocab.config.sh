@@ -187,7 +187,7 @@ VOCAB_RESULT='pass fail skipped'
 VOCAB_SCOPE='inside outward'
 
 # finding-verdict — the verifier's word on a finding the kit's own review
-# raised: real at the head it judged, or not (ADR-0044; runtime/R219-R222).
+# raised: real at the head it judged, or not.
 VOCAB_FINDING_VERDICT='confirmed disputed'
 
 # The line bounds: 8 lines of any one stamp key, 32 Test-tier: lines and 32

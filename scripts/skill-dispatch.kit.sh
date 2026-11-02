@@ -1370,10 +1370,11 @@ _verify_stage_pins() {
 		return 0
 		;;
 	esac
+	# The grammar is requirement.lib.sh's, never spelled here: its fence
+	# filter, its bounded id and its requirement line.
 	(
 		. "$ROOT/scripts/requirement.lib.sh"
-		tr -d '\r' <"$_v_tmp/body" | fence_strip
-	) | awk '
+		tr -d '\r' <"$_v_tmp/body" | fence_strip | awk -v idre="^($REQ_AREA_ERE/)?$REQ_PRD_ID_ERE\$" '
 		function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 		/^[ \t]*<!-- explain-diff-appendix -->[ \t]*$/ { exit }
 		state == 0 { if ($0 ~ /^[ \t]*<!-- check-table -->[ \t]*$/) state = 1; next }
@@ -1383,7 +1384,7 @@ _verify_stage_pins() {
 			line = trim($0); line = substr(line, 2, length(line) - 2)
 			split(line, c, "|")
 			id = trim(c[1]); res = trim(c[3]); ev = trim(c[4])
-			if (res != "pass" || id !~ /^([a-z][a-z0-9-]*\/)?R[0-9]+$/ || seen[id]++) next
+			if (res != "pass" || id !~ idre || seen[id]++) next
 			path = "-"; test = "-"; sha = "-"
 			if (ev ~ /^[A-Za-z0-9._\/-]+::[A-Za-z0-9._\/-]+@[0-9a-fA-F]+$/) {
 				path = ev; sub(/::.*/, "", path)
@@ -1392,17 +1393,19 @@ _verify_stage_pins() {
 			}
 			printf "%s\t%s\t%s\t%s\n", id, path, test, sha
 		}
-	' >"$_v_state/pins"
+		'
+	) >"$_v_state/pins"
 	_vp_n=0
 	while IFS='	' read -r _vp_id _vp_path _vp_test _vp_sha; do
 		_vp_n=$((_vp_n + 1))
 		: >"$_v_state/pin/$_vp_n.spec"
 		: >"$_v_state/pin/$_vp_n.test"
 		case $_vp_id in
-		*/R*)
-			_vp_area=${_vp_id%%/*} _vp_num=${_vp_id#*/R}
-			(cd "$_v_wt" && git show "$_rh_sha:docs/specs/$_vp_area.md" 2>/dev/null) |
-				grep -E "^(~~)?R$_vp_num\." | head -n 1 >"$_v_state/pin/$_vp_n.spec"
+		*/*)
+			(cd "$_v_wt" && git show "$_rh_sha:docs/specs/${_vp_id%%/*}.md" 2>/dev/null) | (
+				. "$ROOT/scripts/requirement.lib.sh"
+				req_spec_lines | awk -v id="${_vp_id#*/}." 'index($0, id) == 1 { print; exit }'
+			) >"$_v_state/pin/$_vp_n.spec"
 			;;
 		esac
 		[ "$_vp_path" = - ] ||
