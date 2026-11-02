@@ -112,7 +112,9 @@
 # naming a judging file in this file's repository; an override outside the
 # judging set is read as given. A policy the base cannot give FAILS CLOSED:
 # the reader's `fail-closed <reason> <path>` line on stdout, and exit 3 —
-# never the working tree's file, never the shipped defaults below.
+# never the working tree's file, never the shipped defaults below. A checker
+# outside any git repository (extracted from a commit) reads the policy beside
+# it, failing closed when there is none.
 #
 # Shared layer (see VERSION): this file is copied verbatim; the vocabularies
 # in scripts/vocab.config.sh are yours, never overwritten by an update.
@@ -208,8 +210,15 @@ vocab_fail_closed() {
 # which the caller reads as given; fails closed on anything else.
 vocab_load_at_base() {
 	_vb_root=$(vocab_git rev-parse --show-toplevel) && _vb_root=$(cd "$_vb_root" && pwd -P) || {
-		vocab_refuse "POLICY_BASE is set but this checker is not in a git repository."
-		vocab_fail_closed
+		# Outside any git repository there is no working tree a pull request
+		# could have edited: this checker is a copy extracted from a commit
+		# (a CI step runs the base's scripts from `git archive`), and the
+		# policy beside it is that commit's. Read it — or fail closed, never
+		# the shipped defaults.
+		[ -n "${VOCAB_CONFIG:-}" ] && return 1
+		[ -f "$_vocab_here/vocab.config.sh" ] || vocab_fail_closed
+		. "$_vocab_here/vocab.config.sh"
+		return 0
 	}
 	[ -f "$_vocab_here/guards.lib.sh" ] || {
 		vocab_refuse "POLICY_BASE is set but guards.lib.sh, the base read, is missing beside this checker."

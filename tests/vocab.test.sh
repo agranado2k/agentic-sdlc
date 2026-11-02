@@ -1498,4 +1498,20 @@ expect_status 3 "fields fails closed the same way"
 own_vocab POLICY_BASE=no-such-ref -- 'Tier: implementer'
 expect_out_is "fail-closed no-base scripts/vocab.config.sh" "a POLICY_BASE naming no commit fails closed"
 
+# A checker outside any git repository has no working tree a pull request
+# could edit: it is a copy extracted from a commit (the acceptance step runs
+# the base's scripts so, from `git archive`). It reads the policy beside it —
+# that commit's — and, with none there, fails closed rather than fall back to
+# the shipped defaults.
+XDIR="$SCRATCH/extracted/scripts"
+mkdir -p "$XDIR"
+cp "$VOCAB" "$KIT/scripts/policy.sh" "$KIT/scripts/guards.lib.sh" "$KIT/scripts/requirement.lib.sh" "$KIT/scripts/vocab.config.sh" "$XDIR/"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh "$2" "Tier: implementer"' _ "$VREPO" "$XDIR/vocab.sh"
+expect_resolved "" "an extracted checker under POLICY_BASE reads the policy beside it"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh "$2" "Tier: wizard"' _ "$VREPO" "$XDIR/vocab.sh"
+expect_status 2 "…and holds a line to it"
+rm "$XDIR/vocab.config.sh"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh "$2" "Tier: implementer"' _ "$VREPO" "$XDIR/vocab.sh"
+expect_status 3 "an extracted checker with no policy beside it fails closed — never the shipped defaults"
+
 t_done "vocab"
