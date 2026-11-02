@@ -1908,12 +1908,12 @@ iter_ct_missing() {
 	_s4=$(region '^### 4 — Act' '^### 5 — ' "$1" | tr '\n' ' ' | tr -s ' ')
 	has "$_s4" "rewrite its rows at the new head — [\`CHECK-TABLE.md\`](CHECK-TABLE.md)" || printf '%s\n' 'rewrite at push'
 	region '^### 6 — ' '^## Output format' "$1" |
-		grep -qF -- "- The check-table reader prints \`fail:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` → never ✅ converged" ||
+		grep -qF -- "- The check-table reader prints \`fail:\`, \`not-approved:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` → never ✅ converged" ||
 		printf '%s\n' 'not converged'
 	awk '/^⚠️ For you/ { f = NR } /^Manual checks awaiting you: / { m = NR } /^Status:$/ { s = NR }
 		END { exit !(f && m && s && f < m && m < s) }' "$1" || printf '%s\n' 'manual checks at top'
 	_ic=$(unwrap "$2")
-	has "$_ic" "While the reader prints a \`fail:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` line, the PR is not converged" || printf '%s\n' 'four blocking words'
+	has "$_ic" "While the reader prints a \`fail:\`, \`not-approved:\`, \`missing-row:\`, \`extra-row:\` or \`tier-differs:\` line, the PR is not converged" || printf '%s\n' 'five blocking words'
 	has "$_ic" "\`skipped:\` ids are manual checks awaiting the operator, listed at the top of the report" || printf '%s\n' 'skipped is manual'
 	has "$_ic" "the result from this iteration's full-suite run at the new head, the pin \`<path>::<test>@<the new head's sha>\`" || printf '%s\n' 'rewrite from suite run'
 	has "$_ic" "$CT_ONLY" || printf '%s\n' 'only through the reader'
@@ -1960,7 +1960,9 @@ for b in \
 	'rewrite at push|1|s/rewrite its rows at the new head/rewrite its rows/' \
 	'not converged|1|s/ or `tier-differs:` → never ✅ converged/ → never ✅ converged/' \
 	'manual checks at top|1|/^Manual checks awaiting you: /d' \
-	'four blocking words|2|s/`extra-row:` or `tier-differs:` line, the PR/`extra-row:`, `tier-differs:` or `skipped:` line, the PR/' \
+	'five blocking words|2|s/`extra-row:` or `tier-differs:` line, the PR/`extra-row:`, `tier-differs:` or `skipped:` line, the PR/' \
+	'five blocking words|2|s/`fail:`, `not-approved:`, /`fail:`, /' \
+	'not converged|1|s/`fail:`, `not-approved:`, `missing-row:`/`fail:`, `missing-row:`/' \
 	'skipped is manual|2|s/listed at the top of the report/listed under Next/' \
 	'rewrite from suite run|2|s/at the new head, the pin/at the base, the pin/' \
 	'only through the reader|2|s/No step reads the check table except through the reader/Read the check table/'; do
