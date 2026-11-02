@@ -1113,6 +1113,8 @@ weakened "acceptance/R27: the approved files may ride with code" 's/commit those
 weakened "acceptance/R28: a green approved test let through" 's/green before the build: stop/green before the build: note it/g' "$TF_FLAT" "$TF_WORDS"
 weakened "acceptance/R29: an approved file may be edited" 's/Never edit, move or delete/Rarely edit/g' "$TF_FLAT" "$TF_WORDS"
 weakened "acceptance/R31: the PR on a green suite alone" 's/every approved test passes at the head and //g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R26: the fail-closed line paraphrased" 's/the fail-closed line as the guard printed it/a summary/g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R30: the approved file may be changed" 's/leave the file unchanged/change the file/g' "$TF_FLAT" "$TF_WORDS"
 
 # The fixture run (slice 3's Accept): the section's own fenced commands, lifted
 # verbatim and run on UC2's repository — main holds the guards policy, the
