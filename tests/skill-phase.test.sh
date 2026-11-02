@@ -725,19 +725,59 @@ VCFG
 # vlocal: no other provider declared, so the walk's second rung answers.
 sed -e "s/^AGENT_KIT_VERIFIER_CANDIDATES=.*/AGENT_KIT_VERIFIER_CANDIDATES=''/" -e 's/^AGENT_KIT_PROVIDER_VSTUB=/AGENT_KIT_PROVIDER_VLOCAL=/' \
 	"$VTREE/scripts/agents.kit.vstub.config.sh" >"$VTREE/scripts/agents.kit.vlocal.config.sh"
+# The check-table reader, its grammar and vocabulary, a living spec and a
+# test file the check table pins (runtime/R207): the pinned test is committed
+# first, then rewritten, so "as it stood at the pinned commit" is observable.
+cp "$ROOT/scripts/check-table.sh" "$ROOT/scripts/requirement.lib.sh" "$ROOT/scripts/vocab.sh" \
+	"$ROOT/scripts/vocab.config.sh" "$VTREE/scripts/"
+mkdir -p "$VTREE/docs/specs" "$VTREE/tests"
+printf '# Runtime\n\nR1. The first requirement, which the pinned test checks.\nR2. The second requirement.\nR3. The third requirement.\nR4. The fourth, checked in CI.\n' \
+	>"$VTREE/docs/specs/runtime.md"
+printf 'the pinned test, as it stood at the pinned commit\n' >"$VTREE/tests/pin.test.sh"
+V_PIN=$(t_commit "$VTREE" 'test: the pinned test')
+printf 'the pinned test, rewritten after the pin\n' >"$VTREE/tests/pin.test.sh"
 # Committed on the branch under review, so the working tree stays clean.
 t_commit "$VTREE" 'chore: verifier policies' >/dev/null
 V_SHA=$(git -C "$VTREE" rev-parse feat/under-review)
 printf 'the ticket body, staged for the verifier\n' >"$SCRATCH/v-spec.md"
+# A PR body with no check table, the default; and one whose table holds one
+# row of each result (runtime/R207).
+printf '## Summary\n\nNo check table here.\n' >"$SCRATCH/v-body-none.md"
+cat >"$SCRATCH/v-body.md" <<VBODY
+## Check table
+
+<!-- check-table -->
+| Requirement | Test tier | Result | Evidence |
+| --- | --- | --- | --- |
+| runtime/R1 | suite | pass | tests/pin.test.sh::runtime/R1@$V_PIN |
+| runtime/R2 | suite | fail | tests/pin.test.sh::runtime/R2@$V_PIN |
+| runtime/R3 | manual | skipped | - |
+| runtime/R4 | suite | pass | https://ci.invalid/runs/4 |
+
+<!-- explain-diff-appendix -->
+VBODY
 v_dispatch() {
 	_vd_self=$1
 	shift
 	t_exec env -u TRACE_RUN -u TRACE_PARENT -C "$VTREE" AGENT_HARNESS_SELF="$_vd_self" AGENT_SESSION_MODEL="${V_AUTHOR:-sonnet}" \
 		GH_TOKEN=forge-secret GITHUB_TOKEN=forge-secret \
 		sh scripts/skill-dispatch.kit.sh review-pr --tier reviewer --domain cross-provider --ticket 941 \
-		--set BRANCH=feat/under-review --set BASE=main --set-file "SPEC=$SCRATCH/v-spec.md" "$@"
+		--set "BRANCH=${V_BRANCH:-feat/under-review}" --set BASE=main --set-file "SPEC=$SCRATCH/v-spec.md" \
+		--pr-body "${V_BODY:-$SCRATCH/v-body-none.md}" "$@"
 }
 v_verdicts() { TRACE_CONFIG="$VTREE/scripts/trace.kit.config.sh" sh "$VTREE/scripts/trace.sh" show "pr:#$1" --kind verify.verdict 2>/dev/null; }
+# v_emit <field=value>… — an event in the verifier tree's trace, as the kit's
+# own review records it.
+v_emit() { env -u TRACE_RUN -u TRACE_PARENT TRACE_CONFIG="$VTREE/scripts/trace.kit.config.sh" sh "$VTREE/scripts/trace.sh" emit "$@" </dev/null >/dev/null 2>&1; }
+# runtime/R218: the verifier runs only once the kit's own Axis-1 verdict is
+# recorded at the head — so every PR a leg below dispatches on gets one,
+# recorded after the last commit that moved the head.
+v_kit_at_head() {
+	for _v_pr in "$@"; do
+		v_emit kind=review.verdict "subject=pr:#$_v_pr" outcome=pass data.axis=1 'reason=the kit review at the head'
+	done
+}
+v_kit_at_head 71 72 73
 
 v_dispatch vstub --pr 71
 [ "$T_STATUS" = 0 ] && pass "runtime/R206: a verifier on another provider's harness is dispatched, exit 0" ||
@@ -805,6 +845,7 @@ esac
 sed '/^AGENT_KIT_PROVIDER_VLOCAL=/d' "$VTREE/scripts/agents.kit.vlocal.config.sh" >"$VTREE/scripts/agents.kit.vnoprov.config.sh"
 printf 'AGENT_KIT_PROVIDER_VNOPROV=%s\n' "''" >>"$VTREE/scripts/agents.kit.vnoprov.config.sh"
 t_commit "$VTREE" 'chore: a policy with no provider for its own harness' >/dev/null
+v_kit_at_head 74 75 76 77 78
 V_AUTHOR='stub:model-z' v_dispatch vnoprov --pr 77
 [ "$T_STATUS" = 6 ] && [ -z "$T_OUT" ] && [ ! -e "$V_STATE" ] &&
 	pass "runtime/R208: a named model with no provider token for its harness is exit 6, nothing staged" ||
@@ -867,6 +908,96 @@ git -C "$VTREE" checkout -q -- scripts/trace.kit.config.sh
 v_dispatch vstub
 [ "$T_STATUS" = 2 ] && _t_has "$T_ERR" '--pr' && pass "a verifier dispatch with no --pr is a usage error naming it" ||
 	fail "a verifier dispatch with no --pr exited $T_STATUS: $T_ERR"
+
+# ---------------------------------------------------------------------------
+banner "4h. The verifier is staged the check table's passing rows and the kit review's findings (runtime/R207, R217, R218)"
+# ---------------------------------------------------------------------------
+# For each `pass` row the check-table reader returns: the line of the head's
+# living spec carrying the row's id, and the pinned test file as it stood at
+# the pinned commit. `fail` and `skipped` rows stage nothing. And the kit's
+# own review's findings at the head, one data file — empty when it raised
+# none — but never the verifier's own.
+rm -rf "$V_STATE"
+v_kit_at_head 81 83
+v_emit kind=finding.raise subject=pr:#81 outcome=raised data.id=H-1 data.severity=high data.agent=security \
+	data.where=scripts/a.sh:3 data.posted=yes 'reason=the kit finding, in its words'
+v_emit kind=finding.raise subject=pr:#81 outcome=raised data.id=V-M-1 data.severity=medium data.agent=verifier \
+	data.where=scripts/a.sh:4 data.posted=yes 'reason=a verifier finding'
+v_emit kind=finding.raise subject=pr:#80 outcome=raised data.id=M-9 data.severity=medium data.agent=security \
+	data.where=scripts/a.sh:5 data.posted=yes 'reason=a finding on another PR'
+V_BODY="$SCRATCH/v-body.md"
+v_dispatch vstub --pr 81
+unset V_BODY
+[ "$T_STATUS" = 0 ] && pass "a verifier on a PR body carrying a check table is dispatched, exit 0" ||
+	fail "the verifier on a check-table PR exited $T_STATUS: $T_ERR"
+[ "$(cut -f1 "$V_STATE/pins" 2>/dev/null | tr '\n' ' ')" = 'runtime/R1 runtime/R4 ' ] &&
+	pass "runtime/R207: one pin is staged per pass row — none for the fail or the skipped row" ||
+	fail "runtime/R207: the staged pins are not runtime/R1 and runtime/R4: $(cat "$V_STATE/pins" 2>/dev/null)"
+[ "$(cat "$V_STATE/pin/1.spec" 2>/dev/null)" = 'R1. The first requirement, which the pinned test checks.' ] &&
+	pass "runtime/R207: …with the head's living spec line that carries its id" ||
+	fail "runtime/R207: the staged spec line is '$(cat "$V_STATE/pin/1.spec" 2>/dev/null)'"
+[ "$(cat "$V_STATE/pin/1.test" 2>/dev/null)" = 'the pinned test, as it stood at the pinned commit' ] &&
+	pass "runtime/R207: …and the pinned test file as it stood at the pinned commit, not at the head" ||
+	fail "runtime/R207: the staged test file is '$(cat "$V_STATE/pin/1.test" 2>/dev/null)'"
+[ "$(sed -n 2p "$V_STATE/pins")" = "$(printf 'runtime/R4\t-\t-\t-')" ] &&
+	[ "$(cat "$V_STATE/pin/2.spec" 2>/dev/null)" = 'R4. The fourth, checked in CI.' ] && [ -f "$V_STATE/pin/2.test" ] && [ ! -s "$V_STATE/pin/2.test" ] &&
+	pass "runtime/R207: a pass row whose evidence is a URL stages its spec line and no test file, its pin fields '-'" ||
+	fail "runtime/R207: the URL-evidence row staged '$(sed -n 2p "$V_STATE/pins")', spec '$(cat "$V_STATE/pin/2.spec" 2>/dev/null)'"
+[ ! -e "$V_STATE/pin/3.spec" ] && [ ! -e "$V_STATE/pin/3.test" ] &&
+	pass "runtime/R207: …and nothing else under pin/" || fail "runtime/R207: a third pin was staged"
+[ "$(cat "$V_STATE/findings" 2>/dev/null)" = "$(printf 'H-1\thigh\tscripts/a.sh:3\tthe kit finding, in its words')" ] &&
+	pass "runtime/R217: the kit review's finding at the head is staged — id, severity, place, text — and the verifier's own is not" ||
+	fail "runtime/R217: the staged findings are: $(cat "$V_STATE/findings" 2>/dev/null)"
+VP=$(staged_prompt)
+case "$VP" in
+*"$V_STATE/pins"*"$V_STATE/findings"*) pass "runtime/R217: the prompt names the staged pins and findings files" ;;
+*) fail "runtime/R217: the prompt names neither $V_STATE/pins nor $V_STATE/findings" ;;
+esac
+case "$VP" in
+*'pin: <id> — <upheld|disputed>'*) pass "runtime/R207: the contract asks for the CI review prompt's pin line shape" ;;
+*) fail "runtime/R207: the contract does not ask for 'pin: <id> — <upheld|disputed>'" ;;
+esac
+case "$VP" in
+*'finding: <id> — <confirmed|disputed> — <path>:<line> — <span>'*) pass "runtime/R219: the contract asks for one finding verdict line, its evidence a path:line and a quoted span" ;;
+*) fail "runtime/R219: the contract does not ask for the finding verdict line" ;;
+esac
+case "$T_ERR" in
+*"--staged $V_STATE"*) pass "…and the broker call it names passes the staged directory" ;;
+*) fail "the broker call does not pass --staged $V_STATE: $T_ERR" ;;
+esac
+# A PR with no table and no kit finding: both files staged, both empty.
+rm -rf "$V_STATE"
+v_dispatch vstub --pr 83
+[ "$T_STATUS" = 0 ] && [ -f "$V_STATE/pins" ] && [ ! -s "$V_STATE/pins" ] && [ -f "$V_STATE/findings" ] && [ ! -s "$V_STATE/findings" ] &&
+	pass "runtime/R217: a PR with no table and no kit finding stages an empty pins file and an empty findings file" ||
+	fail "runtime/R217: exit $T_STATUS, pins '$(cat "$V_STATE/pins" 2>/dev/null)', findings '$(cat "$V_STATE/findings" 2>/dev/null)': $T_ERR"
+# runtime/R218: no kit Axis-1 verdict at the head — none at all, and one
+# recorded before the head's commit — is unavailable, recorded, nothing staged.
+rm -rf "$V_STATE"
+v_dispatch vstub --pr 82
+[ "$T_STATUS" = 6 ] && [ -z "$T_OUT" ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R218: no kit Axis-1 verdict at the head is exit 6, nothing on stdout, nothing staged" ||
+	fail "runtime/R218: a PR with no kit verdict exited $T_STATUS with '$T_OUT': $T_ERR"
+case $(v_verdicts 82) in
+*'"outcome":"unavailable"'*'Axis-1'*) pass "runtime/R218: …and records verify.verdict outcome=unavailable naming that reason" ;;
+*) fail "runtime/R218: no unavailable verdict naming the kit review on pr:#82: $(v_verdicts 82)" ;;
+esac
+v_emit kind=review.verdict subject=pr:#84 outcome=pass data.axis=2 'reason=an Axis-2 verdict is no standards review'
+git -C "$VTREE" checkout -qb feat/future
+GIT_COMMITTER_DATE='2099-01-01T00:00:00Z' t_commit "$VTREE" 'feat: a head committed after every verdict' >/dev/null
+git -C "$VTREE" checkout -q feat/under-review
+v_emit kind=review.verdict subject=pr:#84 outcome=pass data.axis=1 'reason=a kit review of an earlier head'
+V_BRANCH=feat/future
+v_dispatch vstub --pr 84
+unset V_BRANCH
+[ "$T_STATUS" = 6 ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R218: a kit verdict recorded before the head's commit is not at the head — exit 6" ||
+	fail "runtime/R218: a stale kit verdict exited $T_STATUS: $T_ERR"
+v_emit kind=review.verdict subject=pr:#85 outcome=confirm data.axis=2 'reason=the confirm-list alone'
+v_dispatch vstub --pr 85
+[ "$T_STATUS" = 6 ] && [ ! -e "$V_STATE" ] &&
+	pass "runtime/R218: an Axis-2 verdict alone at the head is no kit standards review — exit 6" ||
+	fail "runtime/R218: an Axis-2-only head exited $T_STATUS: $T_ERR"
 
 # ---------------------------------------------------------------------------
 banner "5. EVERY skill, in BOTH policies, resolves to a model something can run"

@@ -131,7 +131,7 @@ VOCAB_TOKEN_MAX=64
 # file: a file is the whole policy, never a layer over these — a rule it
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
-	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope'
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope finding-verdict'
 	VOCAB_OPEN='domain class'
 	VOCAB_QUERY='targets'
 	VOCAB_QUALIFIED='risk'
@@ -155,6 +155,7 @@ vocab_shipped_defaults() {
 	VOCAB_TEST_TIER='unit suite e2e manual'
 	VOCAB_RESULT='pass fail skipped'
 	VOCAB_SCOPE='inside outward'
+	VOCAB_FINDING_VERDICT='confirmed disputed'
 	VOCAB_BOUND='8'
 	VOCAB_BOUNDS='test-tier=32 accept-test=32'
 	VOCAB_RULES='command-shaped=yes => action!=apply'

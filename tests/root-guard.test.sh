@@ -618,6 +618,10 @@ hook_markers=$(sed -n "s/^agent_markers='\(.*\)'$/\1/p" "$PRECOMMIT_SRC")
 [ -n "$hook_markers" ] && [ "$hook_markers" = "$T_AGENT_MARKERS" ] &&
 	pass "tests/lib.sh's T_AGENT_MARKERS is the hook's agent_markers list" ||
 	fail "the hook's markers ($hook_markers) differ from tests/lib.sh's ($T_AGENT_MARKERS)"
+guard_markers=$(sed -n "s/^agent_markers='\(.*\)'$/\1/p" "$GUARD_SRC")
+[ "$guard_markers" = "$T_AGENT_MARKERS" ] &&
+	pass "and the root guard's agent_markers list is the same, for the trip marker (runtime/R103)" ||
+	fail "the root guard's markers ($guard_markers) differ from tests/lib.sh's ($T_AGENT_MARKERS)"
 for m in $T_AGENT_MARKERS; do
 	assert_file_has "$KIT/adapters/claude-code/README.md" "\`$m\`" "the adapter README names every marker the guard reads"
 done
@@ -679,5 +683,94 @@ for f in "$GUARD_SRC" "$PRECOMMIT_SRC"; do
 		pass "${f#"$KIT"/} names no kit-only file"
 	fi
 done
+
+# ---------------------------------------------------------------------------
+banner "9. The kill switch's trip marker: an agent cannot reset it (runtime/R103)"
+# ---------------------------------------------------------------------------
+# The trip marker is `risk-switch-tripped` in the clone's git common directory
+# (scripts/risk.sh); anyone may create it, and resetting it is the operator's.
+# So an agent's tool call that deletes, moves or overwrites it is refused,
+# from the root or a worktree, and creating it is not.
+MARKER="$FIX/.git/risk-switch-tripped"
+
+# switch_refused <label> — the blocking status, and a message naming the kill
+# switch and whose reset it is.
+switch_refused() {
+	expect_status 2 "runtime/R103: $1 is refused"
+	case $T_ERR in
+	*'kill switch'*operator*) pass "and stderr names the kill switch and leaves the reset to the operator" ;;
+	*) fail "$1: stderr does not name the kill switch and the operator: $T_ERR" ;;
+	esac
+	expect_out_is "" "and stdout stays empty"
+}
+
+trip() { rm -f "$MARKER"; printf 'tripped\n' >"$MARKER"; }
+
+# The guard tells an agent's call from the operator's by the agent-harness
+# markers the commit hook reads: an agent's calls below carry one.
+CLAUDECODE=1 && export CLAUDECODE
+
+trip
+guard_on "$(payload Bash command 'rm .git/risk-switch-tripped')"
+switch_refused "an rm of the marker from the root"
+guard_on "$(payload Bash command "rm -f -- $MARKER" "$WT")"
+switch_refused "an rm -f of the marker by absolute path from a worktree"
+guard_on "$(payload Bash command 'cd ../.. && rm .git/risk-switch-tripped' "$WT")"
+switch_refused "an rm of the marker after a cd out of a worktree"
+guard_on "$(payload Bash command 'git status; unlink .git/risk-switch-tripped')"
+switch_refused "an unlink of the marker"
+guard_on "$(payload Bash command 'rm -rf .git' "$FIX")"
+switch_refused "an rm of the directory that holds the marker"
+guard_on "$(payload Bash command "mv $MARKER $OUTSIDE/kept" "$WT")"
+switch_refused "a mv of the marker away"
+guard_on "$(payload Bash command 'printf on > .git/risk-switch-tripped')"
+switch_refused "a redirect that overwrites the marker"
+guard_on "$(payload Bash command "cp /dev/null $MARKER" "$WT")"
+switch_refused "a cp over the marker"
+guard_on "$(payload Bash command "mv $OUTSIDE/x $MARKER" "$WT")"
+switch_refused "a mv onto the marker"
+guard_on "$(payload Write file_path "$MARKER" "$WT")"
+switch_refused "a Write over the marker"
+guard_on "$(payload Edit file_path "$MARKER" "$WT")"
+switch_refused "an Edit of the marker"
+
+# A marker that is a link (the risk rule reads one as tripped) is the link,
+# never its target: removing the link resets the switch.
+rm -f "$MARKER" && ln -s "$OUTSIDE/target" "$MARKER"
+guard_on "$(payload Bash command 'rm .git/risk-switch-tripped')"
+switch_refused "an rm of a marker that is a dangling link"
+
+# What stays open: creating the marker trips the switch, which anyone may do;
+# a file beside it is no marker; and the operator's own shell has no hook
+# between it and the marker.
+trip
+guard_on "$(payload Bash command "rm $WT/scratch.txt" "$WT")"
+allowed "runtime/R103: an rm of a worktree file"
+guard_on "$(payload Bash command 'rm .git/risk-switch-tripped.bak')"
+allowed "runtime/R103: an rm of a file beside the marker"
+guard_on "$(payload Bash command 'cat .git/risk-switch-tripped')"
+allowed "runtime/R103: a read of the marker"
+rm -f "$MARKER"
+guard_on "$(payload Bash command "printf 'tripped\n' > $MARKER" "$WT")"
+allowed "runtime/R103: a redirect that creates the absent marker (tripping is anyone's)"
+guard_on "$(payload Bash command 'rm -f .git/risk-switch-tripped' "$WT")"
+allowed "runtime/R103: an rm of a marker path relative to a worktree, which is no marker"
+# The operator's: the same commands with no agent-harness marker set.
+trip
+_before=$failures
+(
+	t_as_human
+	guard_on "$(payload Bash command 'rm .git/risk-switch-tripped')"
+	allowed "runtime/R103: the operator's rm of the marker (no agent-harness marker set)"
+	guard_on "$(payload Bash command "mv $MARKER $OUTSIDE/kept" "$WT")"
+	allowed "runtime/R103: the operator's mv of the marker"
+	guard_on "$(payload Bash command 'printf on > .git/risk-switch-tripped')"
+	allowed "runtime/R103: the operator's overwriting redirect"
+	[ "$failures" = "$_before" ]
+) || fail "runtime/R103: an operator's call on the marker was refused"
+(cd "$FIX" && rm .git/risk-switch-tripped) && [ ! -e "$MARKER" ] &&
+	pass "runtime/R103: the operator's own rm, with no agent harness between, resets the switch" ||
+	fail "the operator's own rm did not remove the marker"
+assert_file_has "$KIT/adapters/claude-code/README.md" "risk-switch-tripped" "the README names the marker the guard keeps"
 
 t_done "root-guard"

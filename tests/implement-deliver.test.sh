@@ -1046,6 +1046,8 @@ once per head commit
 skill-verify/commit
 skill-verify/rung
 skill-verify/provider
+--staged \"<git dir>/skill-verify\"
+--pr-body
 --spawn-failed
 exit 6
 unavailable
@@ -1058,6 +1060,7 @@ every_word "$VERIFY_WORDS" "$VERIFY_FLAT" >/dev/null &&
 	fail "process/R200: the verifier section lacks '$(every_word "$VERIFY_WORDS" "$VERIFY_FLAT")'"
 weakened "process/R200: any head will do" 's/the same head commit/the latest head commit/g' "$VERIFY_FLAT" "$VERIFY_WORDS"
 weakened "process/R200: the condition dropped" 's/sh scripts\/agents.lib.sh reviewer cross-provider/the resolver/g' "$VERIFY_FLAT" "$VERIFY_WORDS"
+weakened "runtime/R212: the broker call passes no staged directory" 's/--staged "<git dir>\/skill-verify"//g' "$VERIFY_FLAT" "$VERIFY_WORDS"
 weakened "process/R200: the verifier counted as the review" 's/never the review/the review/g' "$VERIFY_FLAT" "$VERIFY_WORDS"
 
 # ---------------------------------------------------------------------------

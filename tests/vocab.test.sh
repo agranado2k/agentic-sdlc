@@ -1343,6 +1343,16 @@ vocab 'Scope: elsewhere'
 expect_status 2 "process/R41: scope is closed"
 
 # ---------------------------------------------------------------------------
+banner "finding-verdict — the verifier's word on a kit review finding (runtime/R220, #943)"
+# ---------------------------------------------------------------------------
+vocab fields
+expect_out_has "finding-verdict: confirmed disputed" "runtime/R220: the field listing prints finding-verdict with confirmed and disputed"
+vocab 'Finding-verdict: disputed'
+expect_resolved "" "runtime/R220: finding-verdict accepts its tokens"
+vocab 'Finding-verdict: agreed'
+expect_status 2 "runtime/R220: finding-verdict is closed — agreed is refused"
+
+# ---------------------------------------------------------------------------
 banner "A qualified or keyed field in the policy file is held at load"
 # ---------------------------------------------------------------------------
 # policy_refused <label> <expected stderr> <config text>

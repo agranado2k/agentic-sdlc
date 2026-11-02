@@ -31,6 +31,8 @@ slice (#906), the review at the head; R65 to R67 with its third (#907),
 the kill switch.
 The verifier's dispatch and its broker joined as R206, R208 to R211 and
 R227, from PRD-13 slice 1 (#941, ADR-0044).
+R103 joined from PRD-10 slice 4 (#919), keeping the PRD's number: the root
+guard keeps the trip marker from an agent.
 The earned record's verifier rows joined as R214 to R216, R223 and R228,
 from PRD-13 slice 4 (#945), which restated R46 and R48 to count the kit's
 own review apart from the verifier.
@@ -104,18 +106,26 @@ R66. The kill switch SHALL read tripped when the base branch's policy sets it so
 R67. The risk rule SHALL read the thresholds and the switch value only through the base-branch policy contract, never from the environment or the PR's own tree. [UC4 2a]
 R68. The risk rule SHALL exit 0 whatever risk it prints, and SHALL write nothing but its `risk.judge` event. [UC1 8]
 R69. The risk rule SHALL print and record only risk tokens, review area names from the lens-slice policy, `none`, the switch words, digits and commit shas, and no text from a ticket body, a PR body or a commit message.
+R103. The adapter's root guard SHALL refuse an agent's tool call that deletes, moves or overwrites the kill switch's trip marker. [UC4 5]
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
 R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]
 R206. WHEN the skill dispatcher runs the verifier on a pull request's head, it SHALL stage the verifier contract, the head commit's diff against its base, and the ticket body as files, and SHALL give the worker no network and no forge credential. [UC1 2]
+R207. WHEN the dispatcher runs the verifier on a PR whose body carries a check table, it SHALL also stage, for each `pass` row, the line of the head's living spec that carries the row's id, and the pinned test file as it stood at the pinned commit. [UC1 2]
 R208. IF the resolver prints no verifier, or the verifier's spawn still fails after one re-resolve with the failed model named unreachable, THEN the dispatcher SHALL record one `verify.verdict outcome=unavailable` on the PR with the reason, and nothing SHALL be posted. [UC1 1a, 2a]
 R209. The broker SHALL validate a verifier's report against the review worker's contract, and SHALL post it as one review (event COMMENT, findings inline) and one comment, each under a marker distinct from the kit review's markers. [UC1 3]
 R210. The broker's check for an earlier post SHALL read a verifier's markers and the kit review's markers apart, so a post of one never stops a post of the other. [UC1 3]
 R211. WHEN the broker posts a verifier's report, it SHALL record one `verify.verdict` on `pr:#<N>` carrying `data.reviewed`, `data.provider` and `data.disputed`, with outcome `blocked` when the report holds a CRITICAL or HIGH finding or a disputed row and `pass` otherwise, and SHALL raise each finding as `finding.raise` with its `V-` id and `data.agent=verifier`. [UC1 4, 3a]
+R212. IF a verifier's report lacks one pin line for each `pass` row the check-table reader returns, or a pin line carries a word other than `upheld` or `disputed`, THEN the broker SHALL exit 65, posting nothing and recording nothing. [UC1 3b]
 R214. WHEN the landing script records `merge.land`, it SHALL carry `data.verified`: the outcome of the latest `verify.verdict` on the PR stamped at or after the head commit's committed date, or `none` when there is none. [UC3 1, 1b]
 R215. No `verify.verdict` outcome SHALL change whether the landing script refuses, waits or merges. [UC3 1]
 R216. The record reader SHALL print, per review area, the verifier's findings held up, not held up and unlabelled, its precision, the mistakes it caught, and the count of landings whose `merge.land` carries `data.verified=blocked` while an Axis-1 `review.verdict` at the same head has outcome `pass`. [UC4 1, 2, 2a]
+R217. WHEN the dispatcher runs the verifier on a pull request's head, it SHALL also stage, as one data file, each finding the kit's own review raised on that PR at that head (any `data.agent` but `verifier`), with its id, severity, place and text, and SHALL stage an empty file when that review raised none. [UC1 2, 3d]
+R218. IF the kit's own Axis-1 `review.verdict` is not yet recorded at the head when the verifier is requested, THEN the dispatcher SHALL record one `verify.verdict outcome=unavailable` on the PR naming that reason, and nothing SHALL be posted. [UC1 0a]
+R219. The verifier contract SHALL ask for one finding verdict line per staged finding, carrying the finding's id, `confirmed` or `disputed`, and evidence: a `<path>:<line>` at the head commit and a span quoted from that line. [UC1 3]
+R220. IF a verifier's report lacks a finding verdict line for a staged finding, names an id that was not staged, carries a word the vocabulary's `finding-verdict` field does not hold, or quotes a span the broker does not find on the cited line of the cited file at the head commit, THEN the broker SHALL exit 65, posting nothing and recording nothing. [UC1 3c]
 R221. The trace SHALL accept the kind `finding.verify` with the outcomes `confirmed` and `disputed`, carrying a lens finding `data.id` and a `data.where` place, and SHALL refuse, exit 2, writing nothing, any other outcome, a `V-` id, or a missing `data.id` or `data.where`. [UC1 4]
+R222. WHEN the broker posts a verifier's report, it SHALL record one `finding.verify` on `pr:#<N>` per finding verdict line, with `data.agent=verifier` and the evidence place as `data.where`, SHALL show each verdict with its evidence in the posted comment, and SHALL set the `verify.verdict` outcome by runtime/R211 alone, unmoved by any finding verdict. [UC1 3, 4]
 R223. The record reader SHALL print, in each area's verifier row, the kit findings the verifier confirmed and those it disputed, each split into held up, not held up and unlabelled, and SHALL count no `finding.verify` toward a lens's counts or a finding's label. [UC4 3]
 R227. WHEN the broker records a `verify.verdict` of outcome `pass` or `blocked`, it SHALL carry `data.rung` as the rung the resolver named for that run, and SHALL exit 65, posting nothing and recording nothing, when the dispatcher passed no rung or a word other than `cross-provider` or `same-provider`. [UC1 4, 1b]
 R228. The record reader SHALL print each area's verifier row once per rung, from the `verify.verdict` events' `data.rung`, and SHALL count a verifier finding or finding verdict in the row of the rung its PR's verdict at that head names. [UC4 4]
