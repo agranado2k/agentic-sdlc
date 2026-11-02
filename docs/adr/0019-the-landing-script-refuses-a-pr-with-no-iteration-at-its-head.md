@@ -4,7 +4,7 @@
 - **Date**: 2026-10-08
 - **Deciders**: the implementer session for #630, on the operator's standing delegation of rulings (2026-10-08); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: ADR-0008 clause 7, in one respect — it names one more operator-run reader of the trace (clause 1 below)
-- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; amended 2026-10-10 for #723: the script's third read, `pr.open`, recorded and held by a check; amended 2026-10-14 for #775: a fourth read, `ticket.start` on the landed ticket, recorded on `merge.land` as `data.ticket_start=no` when absent; see the amendments below)
+- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; amended 2026-10-10 for #723: the script's third read, `pr.open`, recorded and held by a check; amended 2026-10-14 for #775: a fourth read, `ticket.start` on the landed ticket, recorded on `merge.land` as `data.ticket_start=no` when absent; amended 2026-11-02 for #945: a fifth read, `verify.verdict` at the head, recorded on `merge.land` as `data.verified` and never checked; see the amendments below)
 
 ## Context and problem statement
 
@@ -161,3 +161,26 @@ operator's yes.
    names none of them.
 3. The amendment above's clause 3 now names four kinds; `tests/land.test.sh`
    section 15 holds the list, and section 18 drives the read.
+
+## Amendment 2026-11-02 — the `verify.verdict` read (#945)
+
+PRD-13 (ADR-0044) adds a verifier: a reviewer from another provider whose
+`verify.verdict` the trace records beside the kit's own review. Its fourth
+slice measures what it adds, and the earned record can only count a landing
+the verifier blocked if the landing says what the verifier said. Decided by
+the implementer session for #945 (T-82) on the operator's standing
+delegation; the merge of its pull request is the operator's yes.
+
+1. **Clause 1 reads a fifth kind.** The script reads `show` for
+   `verify.verdict` on the PR it lands, at the head as the #673 amendment
+   reads a `review.verdict`: stamped at or after the head commit's
+   committed date. Still no skill gains a read.
+2. **What the read is for.** `merge.land` carries `data.verified`, the
+   outcome of the latest such verdict — `pass`, `blocked` or
+   `unavailable` — or `none` when there is none or the head is undated.
+   Like the `pr.open` and `ticket.start` reads it is no check: no outcome of
+   it refuses, waits or merges (runtime/R215), and no `verify.verdict` is
+   the review the #673 amendment's check requires (runtime/R213).
+   Unconfigured, nothing is read (clause 5). The key is the script's alone.
+3. The #723 amendment's clause 3 now names five kinds; `tests/land.test.sh`
+   section 15 holds the list, and section 22 drives the read.

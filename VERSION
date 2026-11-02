@@ -3870,7 +3870,23 @@
 # verdict lines, `finding.verify`, `data.disputed`), docs/specs/runtime.md
 # R207, R212, R217 to R220 and R222, and their suites.
 
-shared-layer: 0.111.0
+# 0.112.0 — the earned record shows what the verifier adds (ticket #945,
+# PRD-13 of D-02, factory T-82). No file joins or leaves. Two shared files
+# change content: scripts/trace.sh, whose record reader counts the kit's own
+# review apart from the verifier and prints one verifier row per rung after
+# each review area's row; and UPDATING.md, its entry and both worked
+# examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — QUESTIONS.md's question 2 reports the verifier rows
+# as printed.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
+# none.
+# Kit-only, never shipped: scripts/land.kit.sh (merge.land data.verified, the
+# latest verify.verdict at the head or none, never checked), ADR-0019's
+# amendment for that read, docs/specs/runtime.md R46 and R48 restated and
+# R214 to R216, R223 and R228, and their suites.
+
+shared-layer: 0.112.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

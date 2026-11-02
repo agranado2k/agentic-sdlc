@@ -3794,6 +3794,8 @@ _mk_adr=$(ls "$KIT"/docs/adr/0034-*.md 2>/dev/null | head -1)
 	fail "no docs/adr/0034-*.md naming ADR-0024 clause 1, data.severity and data.axis"
 
 # ---------------------------------------------------------------------------
+# vx_empty — the counts of a verifier row with nothing in it.
+vx_empty() { echo 'held up 0 of 0, not held up 0, unlabelled 0, precision n/a, caught 0, blocked where the review passed 0; kit findings confirmed: held up 0, not held up 0, unlabelled 0; disputed: held up 0, not held up 0, unlabelled 0'; }
 banner "42. merge.outcome is a kind, and the record reader prints each review area's earned record (runtime/R31, R43-R45, #875)"
 # ---------------------------------------------------------------------------
 # PRD-06 slice 1 (ADR-0036): the trace learns what happened to a landed PR
@@ -3877,6 +3879,12 @@ pattern: landings 1 of 20, in the fix window 1, mistakes 0, missed 0 of 1, miss 
 simplicity: landings 1 of 20, in the fix window 1, mistakes 0, missed 0 of 1, miss rate 0.00, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0
 reuse-dry: landings 0 of 20, in the fix window 0, mistakes 0, missed 0 of 0, miss rate n/a, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0
 test-hygiene: landings 1 of 20, in the fix window 1, mistakes 1, missed 1 of 1, miss rate 1.00, held up 0 of 0, not held up 0, unlabelled 0, precision n/a, labels from triage 0, human 0, outcome 0'
+# Each area's row is followed by its verifier row per rung (runtime/R216,
+# R228): no verifier finding here, so every count is 0 and the ratio n/a.
+_er_want=$(printf '%s\n' "$_er_want" | while IFS= read -r _er_l; do
+	printf '%s\n' "$_er_l"
+	for _er_r in cross-provider same-provider; do printf '%s verifier %s: %s\n' "${_er_l%%:*}" "$_er_r" "$(vx_empty)"; done
+done)
 [ "$T_OUT" = "$_er_want" ] &&
 	pass "runtime/R44, runtime/R45: one row per review area; #2 counts in both areas its first-parent diff touches, with its mistake; #3's base-side docs change is #3's alone; a stopped landing, one with no sha and one not in the repository count nowhere" ||
 	fail "runtime/R44, runtime/R45: record printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
@@ -4119,5 +4127,85 @@ _vv_adr=$(grep -l '^- \*\*Supersedes / amends\*\*: amends ADR-0024 clause' "$KIT
 for _vv_g in Verifier Provider; do
 	grep -q "^- \*\*$_vv_g\*\*" "$KIT/docs/domain-glossary.md" && pass "the glossary defines $_vv_g" || fail "the glossary has no $_vv_g entry"
 done
+
+banner "45. the earned record shows what the verifier adds, per rung, and the lenses' counts do not move (runtime/R46, R48, R216, R223, R228, #945)"
+# ---------------------------------------------------------------------------
+# PRD-13 slice 4: section 43's fixture, copied, gains a mistake the kit's
+# review missed and three kit findings (run A); then the verifier's findings,
+# triages, finding verdicts and verdicts on two rungs, and a re-recorded
+# landing the verifier blocked while the kit's Axis-1 passed (run B). Every
+# lens row of B is A's, byte for byte.
+VX_T="$SCRATCH/verifier-earned-trace"
+cp -R "$PR_T" "$VX_T"
+VX_ON=$(policy "$VX_T")
+VX_SHA=2222222222222222222222222222222222222222
+VX_232=$(git -C "$PR" log --format=%H --grep='^feat: pr 232$' -1)
+# vx_record — run the record reader over the copy.
+vx_record() { t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record' _ "$PR" "$VX_ON" "$ER_POL" "$TRACE"; }
+# vx_lens — the lens rows alone: every row but a verifier row.
+vx_lens() { printf '%s\n' "$T_OUT" | grep -v '^[a-z-]* verifier '; }
+vx_row() { printf '%s\n' "$T_OUT" | grep "^$1 verifier $2: "; }
+# Run A's additions: #232 (security, src/a.sh) reverted; the kit's H-1 names
+# src/a.sh but no triage rejected it, so the kit missed it; M-1 rejected on
+# another file; L-1 left unlabelled.
+pr_ev "$VX_T" 2026-01-07T00:00:00Z finding.raise 'pr:#232' raised "$PR_RA" '"id":"H-1","severity":"high","agent":"security","where":"src/a.sh:2","posted":"yes"'
+pr_ev "$VX_T" 2026-01-07T00:00:00Z finding.raise 'pr:#232' raised "$PR_RA" '"id":"M-1","severity":"medium","agent":"security","where":"src/b.sh:3","posted":"yes"'
+pr_ev "$VX_T" 2026-01-07T00:00:00Z finding.raise 'pr:#232' raised "$PR_RA" '"id":"L-1","severity":"low","agent":"security","where":"src/c.sh:1","posted":"no"'
+pr_triage "$VX_T" 2026-01-07T00:01:00Z 232 M-1 rejected
+pr_ev "$VX_T" 2026-01-09T00:00:00Z merge.outcome 'pr:#232' reverted "$PR_RB" "\"by_sha\":\"$PR_SHA\",\"files\":\"src/a.sh\""
+vx_record
+[ "$T_STATUS" = 0 ] && pass "record exits 0 over the verifier fixture, before the verifier" || fail "record exited $T_STATUS: $T_ERR"
+_vx_a=$(vx_lens)
+[ "$(printf '%s\n' "$_vx_a" | grep '^security: ')" = 'security: landings 1 of 20, in the fix window 1, mistakes 1, missed 1 of 1, miss rate 1.00, held up 1 of 2, not held up 1, unlabelled 1, precision 0.50, labels from triage 1, human 0, outcome 1' ] &&
+	pass "runtime/R46: before the verifier, #232's revert is the kit's miss" || fail "runtime/R46: run A's security row: $(printf '%s\n' "$_vx_a" | grep '^security: ')"
+# Run B's additions, cross-provider on #232: V-H-1 names the reverted file and
+# was rejected at triage (a bot's) — the verifier caught what the kit missed.
+vx_vraise() { pr_ev "$VX_T" "$1" finding.raise "pr:#$2" raised run-v "\"id\":\"$3\",\"severity\":\"high\",\"agent\":\"verifier\",\"where\":\"$4\",\"posted\":\"yes\""; }
+vx_vtriage() { pr_ev "$VX_T" "$1" finding.triage "pr:#$2" "$4" run-i "\"id\":\"$3\",\"source\":\"bot\""; }
+vx_fverify() { pr_ev "$VX_T" "$1" finding.verify "pr:#$2" "$4" run-v "\"id\":\"$3\",\"where\":\"$5\",\"agent\":\"verifier\""; }
+vx_verdict() { pr_ev "$VX_T" "$1" verify.verdict "pr:#$2" "$3" run-v "\"via\":\"broker\",\"reviewed\":\"$VX_SHA\",\"provider\":\"other\",\"rung\":\"$4\",\"disputed\":\"0\""; }
+vx_vraise 2026-01-07T00:30:00Z 232 V-H-1 src/a.sh:7
+vx_vraise 2026-01-07T00:30:00Z 232 V-M-1 src/d.sh:1
+vx_vraise 2026-01-07T00:30:00Z 232 V-L-1 src/e.sh:1
+vx_vraise 2026-01-07T00:30:00Z 232 V-M-2 src/f.sh:1
+vx_fverify 2026-01-07T00:31:00Z 232 H-1 confirmed src/a.sh:2
+vx_fverify 2026-01-07T00:31:00Z 232 M-1 disputed src/b.sh:3
+vx_fverify 2026-01-07T00:31:00Z 232 L-1 confirmed src/c.sh:1
+vx_verdict 2026-01-07T00:32:00Z 232 blocked cross-provider
+vx_vtriage 2026-01-07T01:00:00Z 232 V-H-1 rejected
+vx_vtriage 2026-01-07T01:00:00Z 232 V-M-1 accepted
+vx_vtriage 2026-01-07T01:00:00Z 232 V-M-2 rejected
+# #232 landed blocked by the verifier, beside the kit's Axis-1 pass.
+pr_ev "$VX_T" "$NOW" merge.land 'pr:#232' landed run-l "\"merge_sha\":\"$VX_232\",\"reviewed\":\"yes\",\"verified\":\"blocked\""
+# Same-provider on #231 (pattern): V-H-1 accepted, and a confirmed M-2 — the
+# finding verdict pairs with the latest raise of M-2 before it, accepted.
+vx_vraise 2026-01-05T00:00:30Z 231 V-H-1 docs/d.md:3
+vx_fverify 2026-01-05T00:02:00Z 231 M-2 confirmed docs/d.md:9
+vx_verdict 2026-01-05T00:03:00Z 231 pass same-provider
+vx_vtriage 2026-01-05T01:00:00Z 231 V-H-1 accepted
+( cd "$PR" && env TRACE_CONFIG="$VX_ON" sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the verifier fixture is a trace verify accepts" ||
+	fail "the verifier fixture does not verify — the reader would be judged over a damaged trace"
+vx_record
+[ "$T_STATUS" = 0 ] && pass "record exits 0 over the verifier fixture" || fail "record exited $T_STATUS: $T_ERR"
+[ "$(vx_lens)" = "$_vx_a" ] &&
+	pass "runtime/R46, runtime/R48, runtime/R223: every lens row is what it was before the verifier's findings and finding verdicts — #232 still missed by the kit's review" ||
+	fail "runtime/R46, R48, R223: the lens rows moved — before: $(printf '%s' "$_vx_a" | tr '\n' ';') after: $(vx_lens | tr '\n' ';')"
+[ "$(vx_row security cross-provider)" = 'security verifier cross-provider: held up 2 of 3, not held up 1, unlabelled 1, precision 0.67, caught 1, blocked where the review passed 1; kit findings confirmed: held up 1, not held up 0, unlabelled 1; disputed: held up 0, not held up 1, unlabelled 0' ] &&
+	pass "runtime/R216, runtime/R223: UC4 — the verifier caught #232's revert, its findings by label, one landing it blocked beside the kit's pass, and the kit findings it confirmed and disputed by label" ||
+	fail "runtime/R216, R223: the security cross-provider row read: $(vx_row security cross-provider)"
+[ "$(vx_row security same-provider)" = "security verifier same-provider: $(vx_empty)" ] &&
+	pass "runtime/R228: the same area's same-provider row counts none of the cross-provider rung's" ||
+	fail "runtime/R228: the security same-provider row read: $(vx_row security same-provider)"
+[ "$(vx_row pattern same-provider)" = 'pattern verifier same-provider: held up 1 of 1, not held up 0, unlabelled 0, precision 1.00, caught 0, blocked where the review passed 0; kit findings confirmed: held up 1, not held up 0, unlabelled 0; disputed: held up 0, not held up 0, unlabelled 0' ] &&
+	pass "runtime/R228, runtime/R46: #231's verdict names same-provider, so its finding and finding verdict count there; a qa-failed mistake is never caught" ||
+	fail "runtime/R228: the pattern same-provider row read: $(vx_row pattern same-provider)"
+[ "$(vx_row pattern cross-provider)" = "pattern verifier cross-provider: $(vx_empty)" ] &&
+	pass "runtime/R228: and its cross-provider row counts none of them" || fail "runtime/R228: the pattern cross-provider row read: $(vx_row pattern cross-provider)"
+[ "$(vx_row test-hygiene cross-provider)" = "test-hygiene verifier cross-provider: $(vx_empty)" ] &&
+	pass "runtime/R216, runtime/R50: an area with no verifier finding prints n/a for the verifier's precision" ||
+	fail "runtime/R216: the test-hygiene cross-provider row read: $(vx_row test-hygiene cross-provider)"
+t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record --settled' _ "$PR" "$VX_ON" "$ER_POL" "$TRACE"
+printf '%s\n' "$T_OUT" | grep -q verifier && fail "runtime/R55: the settled form gained a verifier row: $T_OUT" ||
+	pass "the settled form, the risk rule's, prints no verifier row"
 
 t_done "trace script"

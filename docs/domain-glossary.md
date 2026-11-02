@@ -524,7 +524,11 @@ Grouped by the seam each term belongs to. Entry shape:
   (accepted at triage, or a mistake against its PR names its file), not
   held up (rejected, or dismissed by a human, with no such mistake),
   unlabelled, the precision (held up over labelled, `n/a` over none) and
-  the labels' sources. `sh scripts/trace.sh record`
+  the labels' sources — the kit's own review alone. Where a **verifier**
+  reviews too, each area's row is followed by one verifier row per rung:
+  its findings by the same labels, its precision, the mistakes it caught,
+  the landings it blocked where the kit's review passed, and the kit
+  findings it confirmed and disputed, by label. `sh scripts/trace.sh record`
   prints it, one row per review area, for the operator and `/retro`'s
   question 2, and no chain skill reads it. It compares nothing to a
   threshold (ADR-0036); `record --settled`, the **risk rule**'s form, prints

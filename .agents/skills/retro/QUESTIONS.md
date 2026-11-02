@@ -67,7 +67,14 @@ reader, `merge.land` and `merge.outcome`.*
   the fix window (30 days, unless the trace's policy file sets
   `TRACE_FIX_WINDOW_DAYS`), how many carry a post-merge outcome, how many
   carry one no finding rejected at triage named a file of, and how the
-  findings raised on them held up. A ratio over nothing reads `n/a`. The record
+  findings raised on them held up. Where a verifier reviews beside the kit's
+  own review, each area's row is followed by one verifier row per rung,
+  `<area> verifier cross-provider:` and `<area> verifier same-provider:` —
+  its findings by the same labels, its precision, the mistakes it caught,
+  the landings it blocked where the kit's review passed, and the kit
+  findings it confirmed and disputed, each by label; put those rows in the
+  report as printed too, so the rungs can be compared. The area's own row is
+  the kit's review alone. A ratio over nothing reads `n/a`. The record
   is each area's last 20 landings as of now, not cut to the window. Reverts,
   fixes inside the fix window and, where the repository holds a `.factory/`
   folder, failed factory QA are recorded; a ticket id the recorder names on
