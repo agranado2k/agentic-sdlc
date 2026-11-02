@@ -5,7 +5,7 @@
 #
 #   sh scripts/forge-broker.kit.sh <PR> <report|-> [--dry-run] [--commit <sha>]
 #                                  [--model <id>] [--harness <name>]
-#                                  [--verifier --rung <rung> --provider <token>]
+#                                  [--verifier --rung <rung> --provider <token> --staged <dir>]
 #
 # WHY THIS EXISTS. When /implement reaches its review step with no review
 # workflow wired, this repo dispatches the reviewer tier to another vendor's
@@ -111,6 +111,21 @@
 # word other than `cross-provider` or `same-provider`, or no provider token,
 # the run is exit 65 before anything is read from the forge.
 #
+# WHAT A VERIFIER JUDGES BESIDES THE DIFF (#943; runtime/R212, R220, R222).
+# --staged names the directory the dispatcher staged the run in: its `pins`
+# file, one line per `pass` row of the PR's check table, and its `findings`
+# file, one line per finding the kit's own review raised at the head. The
+# report answers each pin with one `pin: <id> — upheld|disputed` line (the CI
+# review prompt's own shape) and each finding with one `finding: <id> —
+# <word> — <path>:<line> — <span>` line, the word one the vocabulary's
+# `finding-verdict` field holds and the span text found on that line of that
+# file at the reviewed commit, read with git from the checkout this runs in.
+# A missing or doubled line, an id that was not staged, another word, or a
+# span not found there is exit 65, nothing posted and nothing recorded. A
+# disputed pin counts in `data.disputed` and blocks the verdict; a finding
+# verdict is shown in the comment and recorded as one `finding.verify`, and
+# never moves the verdict.
+#
 # --dry-run performs the READS (head, commits, base, diff) and prints both payloads exactly
 # as they would be sent, and makes no mutating call and no trace emit.
 #
@@ -145,7 +160,7 @@ EX_CONFIG=78
 usage() {
 	cat >&2 <<'EOF'
 usage: sh scripts/forge-broker.kit.sh <PR> <report|-> [--dry-run] [--commit <sha>] [--model <id>] [--harness <name>]
-                                     [--verifier --rung cross-provider|same-provider --provider <token>]
+                                     [--verifier --rung cross-provider|same-provider --provider <token> --staged <dir>]
   <PR>       the pull request number the review lands on — the operator's, never the report's
   <report>   the dispatched reviewer's stdout, captured to a file; - reads standard input
   --dry-run  read the PR, print both payloads as they would be sent, post nothing
@@ -153,7 +168,8 @@ usage: sh scripts/forge-broker.kit.sh <PR> <report|-> [--dry-run] [--commit <sha
              Optional when REVIEWED is the PR head; REQUIRED when it is behind the head
   --model, --harness   recorded on the trace event, nothing else
   --verifier the report is a verifier's: its own markers, V- ids, one verify.verdict;
-             --rung and --provider are the resolver's answer for the run, required with it
+             --rung and --provider are the resolver's answer for the run, required with it;
+             --staged the directory the dispatcher staged the run's pins and findings in
 exit: 0 posted (or already posted) · 2 usage · 65 report fails the contract, or drifted without --commit · 69 no forge CLI · 75 reviewed commit no longer in the PR · 78 policy
 EOF
 	exit "$EX_USAGE"
@@ -177,7 +193,8 @@ HARNESS=
 VERIFIER=
 RUNG=
 PROVIDER=
-RUNG_SET= PROVIDER_SET=
+STAGED=
+RUNG_SET= PROVIDER_SET= STAGED_SET=
 while [ $# -gt 0 ]; do
 	case $1 in
 	--dry-run) DRY=1 ;;
@@ -207,6 +224,11 @@ while [ $# -gt 0 ]; do
 		PROVIDER=$2 PROVIDER_SET=1
 		shift
 		;;
+	--staged)
+		[ $# -ge 2 ] || usage
+		STAGED=$2 STAGED_SET=1
+		shift
+		;;
 	-h | --help) usage ;;
 	-) [ -n "$PR" ] && [ -z "$REPORT" ] || usage; REPORT=- ;;
 	-*) note "unknown option '$1'"; usage ;;
@@ -229,7 +251,7 @@ if [ "$REPORT" != - ]; then
 	[ -r "$REPORT" ] || { note "report '$REPORT' is not readable"; usage; }
 fi
 if [ -z "$VERIFIER" ]; then
-	[ -z "$RUNG_SET$PROVIDER_SET" ] || { note "--rung and --provider describe a verifier's run; they need --verifier"; usage; }
+	[ -z "$RUNG_SET$PROVIDER_SET$STAGED_SET" ] || { note "--rung, --provider and --staged describe a verifier's run; they need --verifier"; usage; }
 else
 	# runtime/R227: the rung the resolver named, passed on; nothing else.
 	case $RUNG in
@@ -242,6 +264,9 @@ else
 	*) PROVIDER= ;;
 	esac
 	[ -n "$PROVIDER" ] || die "$EX_DATAERR" "a verifier's report needs --provider, its model's provider as a token (a lowercase letter, then lowercase letters, digits, . _ or -) — nothing posted, nothing recorded"
+	# runtime/R212, R220: the report is held to what was staged for it.
+	[ -n "$STAGED" ] && [ -f "$STAGED/pins" ] && [ -r "$STAGED/pins" ] && [ -f "$STAGED/findings" ] && [ -r "$STAGED/findings" ] ||
+		die "$EX_DATAERR" "a verifier's report needs --staged <dir>, the directory its dispatch staged, holding a pins file and a findings file (either may be empty) — nothing posted, nothing recorded"
 fi
 if [ -n "$COMMIT" ]; then
 	case $COMMIT in *[!0-9a-fA-F]* | '' | ? | ?? | ??? | ???? | ????? | ??????) die "$EX_USAGE" "--commit '$COMMIT' is not a hex sha of at least seven characters" ;; esac
@@ -440,6 +465,81 @@ if [ -n "$COMMIT" ]; then
 	"$COMMIT"*) ;;
 	*) die "$EX_DATAERR" "the report says REVIEWED: $REVIEWED but the session recorded --commit $COMMIT; the two must agree — nothing posted" ;;
 	esac
+fi
+
+# --- 2b. a verifier's judgments (runtime/R212, R220; #943) -------------------------
+# Each staged pin and each staged finding is answered once, in its shape, with
+# a word of its closed list, and each finding verdict's span is found on the
+# line it cites at the reviewed commit — or nothing posts and nothing records.
+# Read before the forge is asked anything. The ids and the words reach the
+# trace; the span reaches only the posted comment, as the findings' text does.
+V_DISPUTED=0
+: >"$TMP/pins.got"
+: >"$TMP/judged"
+if [ -n "$VERIFIER" ]; then
+	: >"$TMP/verror"
+	cut -f1 "$STAGED/pins" | sed '/^$/d' >"$TMP/pins.want"
+	cut -f1 "$STAGED/findings" | sed '/^$/d' >"$TMP/finds.want"
+	V_WORDS=$(sh "$ROOT/scripts/vocab.sh" fields 2>/dev/null | sed -n 's/^finding-verdict: //p')
+	[ -n "$V_WORDS" ] || [ ! -s "$TMP/finds.want" ] ||
+		echo "the vocabulary declares no finding-verdict field, so no finding verdict can be read (scripts/vocab.config.sh)" >>"$TMP/verror"
+	LC_ALL=C awk -v out="$TMP" -v words=" $V_WORDS " '
+		function err(m) { print m >> (out "/verror") }
+		function trim(x) { sub(/^[ \t]+/, "", x); sub(/[ \t\r]+$/, "", x); return x }
+		# cut <x> — the text before the first " — ", and the rest in rest.
+		function cut(x,    k) { k = index(x, " — "); if (!k) { rest = ""; return "" } rest = substr(x, k + length(" — ")); return trim(substr(x, 1, k - 1)) }
+		BEGIN {
+			while ((getline l < (out "/pins.want")) > 0) { if (!(l in pwant)) porder[++np] = l; pwant[l] = 1 }
+			while ((getline l < (out "/finds.want")) > 0) { if (!(l in fwant)) forder[++nf] = l; fwant[l] = 1 }
+		}
+		/^[ \t]*([-*][ \t]+)?pin:/ {
+			x = $0; sub(/^[ \t]*([-*][ \t]+)?pin:[ \t]*/, "", x)
+			id = cut(x); w = trim(rest)
+			if (id == "" || w == "") { err("a pin line not in the shape pin: <id> — <upheld|disputed>: " substr($0, 1, 80)); next }
+			if (!(id in pwant)) { err("a pin line for " id ", which is no pass row staged for this run"); next }
+			if (w != "upheld" && w != "disputed") { err("the pin line for " id " says \"" substr(w, 1, 40) "\" — a pin is upheld or disputed, no third word"); next }
+			if (pgot[id]++) { err("two pin lines for " id " — one per pass row"); next }
+			print id "\t" w > (out "/pins.got")
+			next
+		}
+		/^[ \t]*([-*][ \t]+)?finding:/ {
+			x = $0; sub(/^[ \t]*([-*][ \t]+)?finding:[ \t]*/, "", x)
+			id = cut(x); x = rest; w = cut(x); x = rest; ev = cut(x); span = trim(rest)
+			if (id == "" || w == "" || ev == "" || span == "") { err("a finding verdict line not in the shape finding: <id> — <word> — <path>:<line> — <span>: " substr($0, 1, 80)); next }
+			if (!(id in fwant)) { err("a finding verdict for " id ", which is no kit finding staged for this run"); next }
+			if (index(words, " " w " ") == 0 || w !~ /^[a-z][a-z0-9-]*$/) { err("the finding verdict for " id " says \"" substr(w, 1, 40) "\" — the vocabulary'"'"'s finding-verdict field holds" words); next }
+			k = 0; for (i = length(ev); i > 0; i--) if (substr(ev, i, 1) == ":") { k = i; break }
+			path = k ? substr(ev, 1, k - 1) : ""; ln = k ? substr(ev, k + 1) : ""
+			if (path !~ /^[A-Za-z0-9._][A-Za-z0-9._\/-]*$/ || ln !~ /^[1-9][0-9]*$/) { err("the finding verdict for " id " cites no readable <path>:<line> in the plain set: " substr(ev, 1, 80)); next }
+			if (fgot[id]++) { err("two finding verdicts for " id " — one per staged finding"); next }
+			gsub(/\t/, " ", span)
+			print id "\t" w "\t" path "\t" ln "\t" span > (out "/judged")
+			next
+		}
+		END {
+			for (i = 1; i <= np; i++) if (!(porder[i] in pgot)) err("no pin line for " porder[i] ", a pass row staged for this run")
+			for (i = 1; i <= nf; i++) if (!(forder[i] in fgot)) err("no finding verdict for " forder[i] ", a kit finding staged for this run")
+		}
+	' "$TMP/report.md"
+	if [ -s "$TMP/judged" ]; then
+		if ! (unset GIT_DIR GIT_WORK_TREE && git cat-file -e "$REVIEWED^{commit}") 2>/dev/null; then
+			echo "the reviewed commit $REVIEWED is not in this checkout, so no finding verdict's span can be found — run the broker from the checkout that holds it" >>"$TMP/verror"
+		else
+			while IFS='	' read -r j_id j_word j_path j_line j_span; do
+				# Tabs read as spaces on both sides: the span's were folded
+				# when it was lifted, so the line's are folded here.
+				j_text=$( (unset GIT_DIR GIT_WORK_TREE && git show "$REVIEWED:$j_path") 2>/dev/null | sed -n "${j_line}p" | tr '\t' ' ')
+				J_TEXT=$j_text J_SPAN=$j_span awk 'BEGIN { exit !index(ENVIRON["J_TEXT"], ENVIRON["J_SPAN"]) }' ||
+					echo "the finding verdict for $j_id quotes a span not found on $j_path:$j_line at $REVIEWED" >>"$TMP/verror"
+			done <"$TMP/judged"
+		fi
+	fi
+	if [ -s "$TMP/verror" ]; then
+		note "the verifier's judgments fail the contract; nothing posted, nothing recorded:"
+		sed 's/^/forge-broker:   /' "$TMP/verror" >&2
+		exit "$EX_DATAERR"
+	fi
+	V_DISPUTED=$(awk -F'\t' '$2 == "disputed" { n++ } END { print n + 0 }' "$TMP/pins.got")
 fi
 
 # --- 3. the head, and the commit the review is anchored to -----------------------
@@ -671,6 +771,16 @@ printf '{"commit_id":"%s","event":"%s","body":"%s","comments":[%s]}\n' \
 	printf '%s\n' "$MARKER"
 	printf '## Axis 2 — Behavior (for a human)\n\n'
 	cat "$TMP/behavior"
+	if [ -s "$TMP/pins.got" ]; then
+		printf '\n### Check-table rows, judged\n\n'
+		while IFS='	' read -r p_id p_word; do printf -- '- `%s` — %s\n' "$p_id" "$p_word"; done <"$TMP/pins.got"
+	fi
+	if [ -s "$TMP/judged" ]; then
+		printf '\n### The kit review'"'"'s findings, judged\n\n'
+		while IFS='	' read -r j_id j_word j_path j_line j_span; do
+			printf -- '- **%s** — %s — `%s:%s` — quoting: %s\n' "$j_id" "$j_word" "$j_path" "$j_line" "$j_span"
+		done <"$TMP/judged"
+	fi
 	[ -z "$VERIFIER" ] || printf '\n---\n_The verifier is advisory: this is not the review a landing requires, and it decides nothing (ADR-0044)._\n'
 	printf '\n---\n_Behavior axis of the same dispatched review; a confirm-list for a human, never resolved by an agent (shared invariant §5)._\n'
 } >"$TMP/comment.md"
@@ -824,11 +934,17 @@ done <"$TMP/raises"
 # A verifier's verdict is its own kind and nothing else (runtime/R211,
 # R227, ADR-0044): no review.verdict, so no reader of the kit's review counts
 # it. Blocked on a CRITICAL or HIGH finding the report holds — posted or
-# withheld, it is the report's — or on the no-lens verdict; pass otherwise.
-# No pin line is read yet, so nothing is disputed.
+# withheld, it is the report's — on a disputed check-table row, or on the
+# no-lens verdict; pass otherwise. A finding verdict is one finding.verify
+# each (runtime/R222), and moves the verdict not at all.
 if [ -n "$VERIFIER" ]; then
+	while IFS='	' read -r j_id j_word j_path j_line j_span; do
+		trace quiet kind=finding.verify "subject=pr:#$PR" "outcome=$j_word" "data.id=$j_id" "data.where=$j_path:$j_line" \
+			data.agent=verifier data.via=broker "reason=the verifier's verdict on a finding of the kit's review, its evidence on the posted comment"
+	done <"$TMP/judged"
 	V_OUT=pass
 	[ -z "$NO_LENS" ] || V_OUT=blocked
+	[ "$V_DISPUTED" = 0 ] || V_OUT=blocked
 	i=1
 	while [ "$i" -le "$COUNT" ]; do
 		IFS='	' read -r f_id f_sev f_path f_line <"$TMP/findings/$i.meta"
@@ -838,7 +954,7 @@ if [ -n "$VERIFIER" ]; then
 	V_REASON=$VERDICT
 	[ -z "$NO_LENS" ] || V_REASON='no lens ran'
 	trace loud kind=verify.verdict "subject=pr:#$PR" "outcome=$V_OUT" "reason=$V_REASON" data.via=broker \
-		"data.reviewed=$REVIEWED" "data.provider=$PROVIDER" "data.rung=$RUNG" data.disputed=0 \
+		"data.reviewed=$REVIEWED" "data.provider=$PROVIDER" "data.rung=$RUNG" "data.disputed=$V_DISPUTED" \
 		"data.review=$REVIEW_URL" "data.comment=$COMMENT_URL" "data.dropped=$NDROPPED"
 	exit 0
 fi

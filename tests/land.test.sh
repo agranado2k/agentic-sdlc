@@ -953,7 +953,7 @@ banner "10. /merge-train's merge.land takes the landing script's fields (#634)"
 # data.no_iteration, data.reviewed and data.no_review answer a trace read
 # (ADR-0019) that no chain skill makes (ADR-0008 clause 7), so the train names
 # none of them.
-LAND_ONLY='iterated no_iteration reviewed no_review ticket_start'
+LAND_ONLY='iterated no_iteration reviewed no_review ticket_start verified'
 land_keys=$(env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$TRACE" export 2>/dev/null |
 	grep -F '"kind":"merge.land"' | grep -F '"outcome":"landed"' |
 	sed 's/.*"data":{//' | grep -oE '(^|,)"[a-z_]+":' | tr -d ',":' | sort -u)
@@ -1406,9 +1406,9 @@ land_reads_unnamed() {
 	done
 }
 _lr_read=$(land_read_kinds "$LAND" | tr '\n' ' ')
-[ "$_lr_read" = "pr.iterate pr.open review.verdict ticket.start " ] &&
-	pass "the script's reads are the four kinds: $_lr_read" ||
-	fail "the script's reads read as '$_lr_read', not pr.iterate, pr.open, review.verdict and ticket.start"
+[ "$_lr_read" = "pr.iterate pr.open review.verdict ticket.start verify.verdict " ] &&
+	pass "the script's reads are the five kinds: $_lr_read" ||
+	fail "the script's reads read as '$_lr_read', not pr.iterate, pr.open, review.verdict, ticket.start and verify.verdict"
 _lr_miss=$(land_reads_unnamed "$LAND" "$ADR19")
 [ -z "$_lr_miss" ] && pass "ADR-0019 names every kind the landing script reads" ||
 	fail "ADR-0019 does not name the landing script's read of: $(echo $_lr_miss)"
@@ -1916,5 +1916,46 @@ land 981
 landed_with 981 "process/R65: a PR the risk rule called low" '"outcome":"landed"'
 [ "$_rk_high" = "$(merges)" ] && pass "process/R65: both made the same merge call" || fail "process/R65: the high PR made $_rk_high merge calls, the low one $(merges)"
 grep -qE 'risk\.sh|risk\.judge' "$LAND" && fail "process/R65: the landing script reads the risk rule" || pass "process/R65: the landing script names neither the rule nor its event"
+
+banner "22. merge.land records what the verifier said at the head, and nothing waits on it (runtime/R214, R215, PRD-13 slice 4)"
+# ---------------------------------------------------------------------------
+# The landing records data.verified — the latest verify.verdict on the PR
+# stamped at or after the head commit's date, or none — and no outcome of it
+# changes whether the script refuses, waits or merges (runtime/R215).
+# vverdict <PR> <outcome> — a verifier's verdict, now, in the broker's shape.
+vverdict() {
+	_vv_data=
+	[ "$2" = unavailable ] || _vv_data="data.reviewed=$STUB_SHA data.provider=anthropic data.rung=cross-provider data.disputed=0"
+	# shellcheck disable=SC2086 # the verdict's keys split into words on purpose
+	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=verify.verdict \
+		"subject=pr:#$1" "outcome=$2" data.via=broker $_vv_data reason=seeded </dev/null >/dev/null 2>&1 ||
+		fail "could not seed a verify.verdict $2 on pr:#$1"
+}
+iterated 990 991 992 993
+vverdict 990 blocked
+land 990
+landed_with 990 "runtime/R214: a blocked verify.verdict at the head beside the kit's Axis-1 pass" '"verified":"blocked"' '"reviewed":"yes"'
+[ "$(merges)" = 1 ] && pass "runtime/R215: a blocked verifier still merges, one merge call" || fail "runtime/R215: a blocked verifier made $(merges) merge calls"
+vverdict 991 pass
+vverdict 991 unavailable
+land 991
+landed_with 991 "runtime/R214: the LATEST verdict at the head is the one recorded" '"verified":"unavailable"'
+land 992
+landed_with 992 "runtime/R214: no verify.verdict at all" '"verified":"none"'
+# A verdict stamped before the head commit's date is not at the head.
+vverdict 993 blocked
+land STUB_HEAD_DATE=2999-01-01T00:00:00Z 993 --no-iteration 'a later head' --no-review 'a later head'
+landed_with 993 "runtime/R214: a verify.verdict stamped before the head's date" '"verified":"none"'
+# A blocked verifier never refuses, and a pass never stands in for the review.
+seed pr.iterate green 994
+vverdict 994 pass
+land 994
+not_landed 994 "runtime/R215: a verifier pass with no Axis-1 review is refused as before"
+vverdict 995 blocked
+seed pr.iterate green 995
+seed review.verdict pass 995
+land STUB_MERGE_RC=1 995
+show 'pr:#995' --kind merge.land | grep -qF '"verified":"blocked"' && pass "runtime/R214: a stopped merge.land carries data.verified too" ||
+	fail "runtime/R214: the stopped merge.land lacks verified=blocked: $(show 'pr:#995' --kind merge.land)"
 
 t_done "land one PR by hand"

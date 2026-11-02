@@ -188,6 +188,7 @@ CASCADE_WT=''
 CASCADE_BASE=''
 RUNG_DONE=0
 VERIFY_PR=''
+VERIFY_BODY=''
 SPAWN_FAILED=''
 DELIVER=0
 RESTART=0
@@ -233,14 +234,20 @@ while [ "$_count" -gt 0 ]; do
 		esac
 		;;
 	--rung-done) RUNG_DONE=1 ;;
-	--pr | --spawn-failed)
-		# The verifier's own two (runtime/R206, R208): the PR its verdict is
-		# recorded on, and a model whose in-session spawn failed.
+	--pr | --spawn-failed | --pr-body)
+		# The verifier's own three (runtime/R206, R207, R208): the PR its
+		# verdict is recorded on, a model whose in-session spawn failed, and
+		# the PR's body as a file, read for its check table in place of the
+		# forge's.
 		[ "$_count" -gt 0 ] || die "$a needs a value"
 		case "$a" in
 		--pr)
 			VERIFY_PR=${1#\#}
 			case "$VERIFY_PR" in '' | 0* | *[!0-9]*) die "--pr takes a pull request number, got '$1'" ;; esac
+			;;
+		--pr-body)
+			VERIFY_BODY=$1
+			[ -f "$VERIFY_BODY" ] && [ -r "$VERIFY_BODY" ] || die "--pr-body is not a readable file: $1"
 			;;
 		*) SPAWN_FAILED=$1 ;;
 		esac
@@ -455,8 +462,8 @@ fi
 # resolver's, so the dry-run line below would name the wrong one.
 VERIFY=''
 [ "${SKILL#/}" != review-pr ] || [ "$TIER_ARGS" != 'reviewer cross-provider' ] || VERIFY=1
-[ -n "$VERIFY" ] || [ -z "$VERIFY_PR$SPAWN_FAILED" ] ||
-	die "--pr and --spawn-failed belong to a verifier dispatch: review-pr --tier reviewer --domain cross-provider"
+[ -n "$VERIFY" ] || [ -z "$VERIFY_PR$SPAWN_FAILED$VERIFY_BODY" ] ||
+	die "--pr, --pr-body and --spawn-failed belong to a verifier dispatch: review-pr --tier reviewer --domain cross-provider"
 for a in "$@"; do
 	[ -z "$VERIFY" ] || break
 	[ "$a" = --dry-run ] || continue
@@ -1189,7 +1196,7 @@ _review_handback_dispatch() {
 	exit 3
 }
 
-# --- the verifier (#941; PRD-13 runtime/R206, R208; ADR-0044) ----------------
+# --- the verifier (#941, #943; PRD-13 runtime/R206-R208, R217-R219; ADR-0044) -
 # WHY. The verifier is an advisory reviewer from another provider than the
 # diff's author (or, on the walk's second rung, another family), run on the
 # same head as the kit's own review. Its model is the kit wrapper's two-rung
@@ -1200,15 +1207,28 @@ _review_handback_dispatch() {
 # contract (the role below, then .agents/prompts/review-worker.md,
 # unchanged), the head's diff against its base, the ticket body (`spec`), and
 # the walk's answer — rung, provider, model, harness — that the broker is
-# passed. The worker gets no network (the agent harness's default sandbox, or
-# the reviewer agent type, which runs no command) and no forge credential:
-# the forge's token variables are unset before agent-dispatch runs.
+# passed. Two more (#943) are what the verifier judges besides the diff:
+# `pins`, one `<id>\t<path>\t<test>\t<commit>` line per `pass` row of the
+# PR body's check table (`-` for a field an https evidence cell leaves
+# empty), each with `pin/<n>.spec` (the head's living spec line carrying the
+# id) and `pin/<n>.test` (the pinned test file at its pinned commit); and
+# `findings`, one `<id>\t<severity>\t<where>\t<text>` line per finding the
+# kit's own review raised on the PR at the head — any `data.agent` but
+# `verifier`, its text the raise's reason. Both are always staged, empty
+# when there is nothing. The PR body is `--pr-body <file>`, or the forge's.
+# The broker is passed this directory, `--staged`, and holds the report to
+# one line per pin and per finding. The worker gets no network (the agent
+# harness's default sandbox, or the reviewer agent type, which runs no
+# command) and no forge credential: the forge's token variables are unset
+# before agent-dispatch runs.
 #
-# WHEN NO VERIFIER RUNS, that is a fact, never a skip: the walk prints
-# nothing, or a spawn fails and the one re-resolve past it (that model named
-# unreachable) fails too or finds nothing. Then one `verify.verdict
-# outcome=unavailable` is recorded on `pr:#<N>`, the staged files are
-# removed, and the exit is 6 — nothing for the broker. A dispatched spawn's
+# WHEN NO VERIFIER RUNS, that is a fact, never a skip: the kit's own Axis-1
+# `review.verdict` is not yet at the head — stamped at or after the head
+# commit's committer date, as the landing script reads "at the head" — the
+# walk prints nothing, or a spawn fails and the one re-resolve past it (that
+# model named unreachable) fails too or finds nothing. Then one
+# `verify.verdict outcome=unavailable` is recorded on `pr:#<N>`, the staged
+# files are removed, and the exit is 6 — nothing for the broker. A dispatched spawn's
 # failure is seen here; an in-session one is the session's to report, by
 # running the same call again with `--spawn-failed <model>`.
 #
@@ -1227,8 +1247,8 @@ _verifier_role() {
 You review this pull request head as the **verifier**: an advisory reviewer
 whose model comes from another provider than the model that wrote the diff
 (or, when none is reachable, another family of the same provider). The kit's
-own review of the same head runs apart from you; you do not see it, and you do
-not repeat or defer to it.
+own review of the same head runs apart from you; you do not see its report,
+and you do not repeat or defer to it — you judge the findings it raised, below.
 
 - **Your review is advisory.** It is never the review a landing requires, and
   it decides nothing. Judge the diff on its own merits, as hard as the
@@ -1240,10 +1260,157 @@ not repeat or defer to it.
   findings as it says (`H-1`, `M-1`, …): the broker that posts your report adds
   the verifier's `V-` prefix itself, and posts it under the verifier's own
   markers.
+- **Judge the check table's passing rows.** For each line of the pins file
+  named below — one per `pass` row of the PR's check table — read the
+  requirement line and the pinned test staged beside it, and write one line,
+  after your Axis 2 items, in this shape:
 
-The review worker's contract follows.
+      pin: <id> — <upheld|disputed>
+
+  `<id>` is the line's first field as written. Write `upheld` when the pinned
+  test exercises the behaviour the requirement line states, and `disputed`
+  otherwise — no third word, and a line for every pin, none for anything else.
+  A disputed row blocks your verdict; it never asks you to rewrite the row.
+- **Judge the kit review's findings.** For each line of the findings file
+  named below — a finding the kit's own review raised at this head: its id,
+  severity, place and text — write one line, after your pin lines, in this
+  shape:
+
+      finding: <id> — <confirmed|disputed> — <path>:<line> — <span>
+
+  `<id>` is the line's first field as written. Write `confirmed` when the
+  finding is real at this head, `disputed` when it is not. `<path>:<line>` is
+  your evidence, a line of a file at the commit you review, and `<span>` is
+  text copied exactly from that one line — the broker looks for it there and
+  refuses the whole report when it is not found. One line per finding, none
+  for an id the file does not hold. A finding verdict never moves your own
+  VERDICT line.
 
 VERIFIER_ROLE
+}
+# _verifier_files — the paragraph naming the two staged files, by path, then
+# the hand-off to the worker's contract.
+_verifier_files() {
+	printf '%s\n\n' "The pins file is $_v_state/pins, its spec lines and pinned tests under $_v_state/pin/ as <n>.spec and <n>.test, <n> its line number. The findings file is $_v_state/findings. An empty file means there is nothing of that kind to judge, and no line of that kind to write."
+	printf 'The review worker'"'"'s contract follows.\n\n'
+}
+# _verify_head_at — the pinned head's committer date in UTC, ISO 8601: the
+# landing script's "at the head" (ADR-0032), read from the commit itself.
+_verify_head_at() {
+	(cd "$_v_wt" && TZ=UTC git show -s --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ "$_rh_sha" 2>/dev/null)
+}
+# _verify_at_head <kind> — the <kind> events on pr:#<N> stamped at or after
+# the head's date, one per line; the subject and stamp read from the
+# envelope only, up to the data map, so a data key never reads as either.
+_verify_at_head() {
+	TRACE_QUIET=1 sh "$TRACE_SH" show "pr:#$VERIFY_PR" --kind "$1" 2>/dev/null |
+		awk -v s="\"subject\":\"pr:#$VERIFY_PR\"" -v h="$_v_head_at" '
+			{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) }
+			index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h'
+}
+# _verify_stage_findings — runtime/R217: the kit review's raises at the head,
+# the latest per id, the verifier's own left out. Fields are lifted by shape
+# from the trace's JSON; the text is the raise's reason, JSON escapes and all.
+_verify_stage_findings() {
+	_verify_at_head finding.raise | LC_ALL=C awk '
+		function field(src, key,    i, j, c, v) {
+			i = index(src, "\"" key "\":\"")
+			if (!i) return ""
+			v = ""; j = i + length(key) + 4
+			while (j <= length(src)) {
+				c = substr(src, j, 1)
+				if (c == "\\") { v = v substr(src, j + 1, 1); j += 2; continue }
+				if (c == "\"") break
+				v = v c; j++
+			}
+			return v
+		}
+		{
+			d = index($0, ",\"data\":{"); if (!d) next
+			env = substr($0, 1, d - 1); m = substr($0, d)
+			id = field(m, "id"); agent = field(m, "agent")
+			if (id !~ /^[CHML]-[0-9]+$/ || agent == "verifier") next
+			text = field(env, "reason"); gsub(/[\t\r\n]/, " ", text)
+			sev = field(m, "severity"); where = field(m, "where")
+			if (!(id in row)) order[++n] = id
+			row[id] = id "\t" (sev == "" ? "-" : sev) "\t" (where == "" ? "-" : where) "\t" (text == "" ? "-" : text)
+		}
+		END { for (i = 1; i <= n; i++) print row[order[i]] }
+	' >"$_v_state/findings"
+}
+# _verify_die <reason> — a caller error once the run is staged: nothing staged
+# is left behind for a broker to read.
+_verify_die() {
+	rm -rf "$_v_state"
+	die "$1"
+}
+# _verify_stage_pins — runtime/R207: each `pass` row of the PR body's check
+# table, once the check-table reader has held the table to its grammar (exit
+# 0 or 1; 2, a broken table, and 3, none, stage no pin). The rows are read
+# above the appendix marker and outside every fence, as the reader reads
+# them, with its own fence filter.
+_verify_stage_pins() {
+	: >"$_v_state/pins"
+	mkdir -p "$_v_state/pin" || _verify_die "cannot stage the verifier's pins under '$_v_state/pin'"
+	if [ -n "$VERIFY_BODY" ]; then
+		cp "$VERIFY_BODY" "$_v_tmp/body" || _verify_die "cannot read --pr-body '$VERIFY_BODY'"
+	else
+		gh pr view "$VERIFY_PR" --json body --jq .body >"$_v_tmp/body" 2>/dev/null ||
+			_verify_die "the forge did not return the body of PR #$VERIFY_PR, so its check table cannot be read — pass it as --pr-body <file>"
+	fi
+	[ -f "$ROOT/scripts/check-table.sh" ] && [ -f "$ROOT/scripts/requirement.lib.sh" ] ||
+		_verify_die "the verifier reads the check table through scripts/check-table.sh and scripts/requirement.lib.sh — restore them"
+	_vp_rc=0
+	sh "$ROOT/scripts/check-table.sh" "$_v_tmp/body" "$_v_state/spec" >/dev/null 2>&1 || _vp_rc=$?
+	case $_vp_rc in
+	0 | 1) ;;
+	3) return 0 ;;
+	*)
+		echo "skill-dispatch: the check-table reader refused PR #$VERIFY_PR's table (exit $_vp_rc) — no pin is staged; run it on the body to see why" >&2
+		return 0
+		;;
+	esac
+	# The grammar is requirement.lib.sh's, never spelled here: its fence
+	# filter, its bounded id and its requirement line.
+	(
+		. "$ROOT/scripts/requirement.lib.sh"
+		tr -d '\r' <"$_v_tmp/body" | fence_strip | awk -v idre="^($REQ_AREA_ERE/)?$REQ_PRD_ID_ERE\$" '
+		function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+		/^[ \t]*<!-- explain-diff-appendix -->[ \t]*$/ { exit }
+		state == 0 { if ($0 ~ /^[ \t]*<!-- check-table -->[ \t]*$/) state = 1; next }
+		state == 1 || state == 2 { state++; next }
+		state == 3 {
+			if (substr($0, 1, 1) != "|") exit
+			line = trim($0); line = substr(line, 2, length(line) - 2)
+			split(line, c, "|")
+			id = trim(c[1]); res = trim(c[3]); ev = trim(c[4])
+			if (res != "pass" || id !~ idre || seen[id]++) next
+			path = "-"; test = "-"; sha = "-"
+			if (ev ~ /^[A-Za-z0-9._\/-]+::[A-Za-z0-9._\/-]+@[0-9a-fA-F]+$/) {
+				path = ev; sub(/::.*/, "", path)
+				test = ev; sub(/^[^:]*::/, "", test); sub(/@.*/, "", test)
+				sha = ev; sub(/^.*@/, "", sha)
+			}
+			printf "%s\t%s\t%s\t%s\n", id, path, test, sha
+		}
+		'
+	) >"$_v_state/pins"
+	_vp_n=0
+	while IFS='	' read -r _vp_id _vp_path _vp_test _vp_sha; do
+		_vp_n=$((_vp_n + 1))
+		: >"$_v_state/pin/$_vp_n.spec"
+		: >"$_v_state/pin/$_vp_n.test"
+		case $_vp_id in
+		*/*)
+			(cd "$_v_wt" && git show "$_rh_sha:docs/specs/${_vp_id%%/*}.md" 2>/dev/null) | (
+				. "$ROOT/scripts/requirement.lib.sh"
+				req_spec_lines | awk -v id="${_vp_id#*/}." 'index($0, id) == 1 { print; exit }'
+			) >"$_v_state/pin/$_vp_n.spec"
+			;;
+		esac
+		[ "$_vp_path" = - ] ||
+			(cd "$_v_wt" && git show "$_vp_sha:$_vp_path" 2>/dev/null) >"$_v_state/pin/$_vp_n.test" || :
+	done <"$_v_state/pins"
 }
 _verify_unavailable() {
 	rm -rf "$_v_state"
@@ -1309,10 +1476,22 @@ _verify() {
 	# here: one prompt, rendered in one pass.
 	{
 		_verifier_role
+		_verifier_files
 		awk 'NR == 1 && $0 == "<!--" { h = 1; next } h { if ($0 == "-->") h = 0; next } { print }' "$_v_worker"
 	} >"$_v_tmp/contract"
 	_RH_SPEC=1 _RH_LEAD='The dispatcher ran git for you, and you hold no network.' _review_stage skill-verify "$_v_tmp/contract" "$@"
 	_v_state=$_rh_state
+	# runtime/R218: the verifier judges the kit review's findings, so it runs
+	# only once that review's Axis-1 verdict is recorded at this head.
+	_v_head_at=$(_verify_head_at)
+	case $_v_head_at in
+	[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) ;;
+	*) _verify_unavailable "the head $_rh_sha carries no committer date to read the kit's Axis-1 review.verdict against" ;;
+	esac
+	_verify_at_head review.verdict | grep -q '"data":{[^}]*"axis":"1"' ||
+		_verify_unavailable "the kit's own Axis-1 review.verdict is not yet recorded at the head $_rh_sha — run /review-pr first"
+	_verify_stage_findings
+	_verify_stage_pins
 	_verify_record_answer
 	[ -z "$_v_retried" ] || printf '%s\n' "$_v_retried" >"$_v_state/retried"
 	_without_markers _verify_dispatch "$@"
@@ -1332,12 +1511,12 @@ _verify_dispatch() {
 		case $_v_rc in
 		0)
 			printf '%s\n' "$_v_out"
-			echo "skill-dispatch: the verifier ran on the $_v_rung rung ('$_v_value', provider $_v_provider). Post its report with: sh scripts/forge-broker.kit.sh $VERIFY_PR <report file> --commit $_rh_sha --verifier --rung $_v_rung --provider $_v_provider" >&2
+			echo "skill-dispatch: the verifier ran on the $_v_rung rung ('$_v_value', provider $_v_provider). Post its report with: sh scripts/forge-broker.kit.sh $VERIFY_PR <report file> --commit $_rh_sha --verifier --rung $_v_rung --provider $_v_provider --staged $_v_state" >&2
 			exit 0
 			;;
 		3)
 			[ -z "$_v_out" ] || printf '%s\n' "$_v_out"
-			echo "skill-dispatch: the verifier is yours to spawn in-session — agent type 'reviewer', model '${_v_out:-none}', rung $_v_rung, its prompt verbatim from $_v_state/prompt (commit $_rh_sha; the diff and the ticket body beside it). Save its report to a file outside the working tree, then: sh scripts/forge-broker.kit.sh $VERIFY_PR <report file> --commit $_rh_sha --verifier --rung $_v_rung --provider $_v_provider. If the spawn fails, run this same call again with --spawn-failed '$_v_out'." >&2
+			echo "skill-dispatch: the verifier is yours to spawn in-session — agent type 'reviewer', model '${_v_out:-none}', rung $_v_rung, its prompt verbatim from $_v_state/prompt (commit $_rh_sha; the diff and the ticket body beside it). Save its report to a file outside the working tree, then: sh scripts/forge-broker.kit.sh $VERIFY_PR <report file> --commit $_rh_sha --verifier --rung $_v_rung --provider $_v_provider --staged $_v_state. If the spawn fails, run this same call again with --spawn-failed '$_v_out'." >&2
 			exit 3
 			;;
 		2)

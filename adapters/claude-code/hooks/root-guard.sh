@@ -28,6 +28,18 @@
 # variable or a glob it never expands, a `cd` inside a subshell — goes
 # through. ../README.md says so too.
 #
+# AND THE KILL SWITCH'S TRIP MARKER, wherever the session works. While the
+# marker — `risk-switch-tripped` in git's common directory, the file the risk
+# rule reads — exists, an agent's call that deletes, moves or overwrites it is
+# refused, from the root or from any worktree: an editing tool on it, and in
+# Bash `rm` or `unlink` of it or of a directory holding it, `mv` of it away or
+# onto it, and a redirect, `tee`, `sed -i` or `cp` onto it. Creating it trips
+# the switch, which anyone may do, so an absent marker is never guarded; and
+# resetting it is the operator's: a call made with none of the agent-harness
+# markers `.githooks/pre-commit` reads set is the operator's, let through. The path
+# is compared as written, its last component unresolved, so a marker that is a
+# link is the link. The same tripwire limits hold.
+#
 # THE ROOT IS FOUND FROM THIS FILE, never from the caller's cwd, through git's
 # common directory (hook.lib.sh's hook_root): a session started inside a
 # worktree runs the worktree's copy of this hook, and the tree it guards is
@@ -65,6 +77,11 @@ lib="$here/hook.lib.sh"
 root=$(hook_root) || exit 0
 root=$(cd "$root" 2>/dev/null && pwd -P) || exit 0
 [ -n "$root" ] || exit 0
+
+# The trip marker's path, its directory resolved; nothing when git does not
+# answer, which guards no marker (fail open, as everywhere here).
+marker=$(hook_common_dir "$root") && marker=$(cd "$marker" 2>/dev/null && pwd -P) &&
+	marker="$marker/risk-switch-tripped" || marker=
 
 json=$(cat 2>/dev/null) || exit 0
 
@@ -198,6 +215,41 @@ holds_tracked() {
 	)" ]
 }
 
+# The agent-harness markers, `.githooks/pre-commit`'s list word for word: a
+# call made with none set is the operator's.
+agent_markers='CLAUDECODE CLAUDE_CODE_SESSION_ID TRACE_SESSION GEMINI_CLI CODEX_SANDBOX CODEX_SANDBOX_NETWORK_DISABLED CODEX_THREAD_ID'
+
+# agent — status 0 when an agent-harness marker is set, non-empty.
+agent() {
+	for _am in $agent_markers; do
+		eval "_av=\${$_am:-}"
+		[ -n "$_av" ] && return 0
+	done
+	return 1
+}
+
+# tripped — status 0 while the trip marker exists, a link to nowhere included,
+# and an agent is the caller.
+tripped() {
+	[ -n "$marker" ] && { [ -e "$marker" ] || [ -L "$marker" ]; } && agent
+}
+
+# on_marker <path> <base> [holding] — status 0 when <path> names the trip
+# marker, and, with `holding`, also when it names a directory holding it.
+on_marker() {
+	_m=$(resolve1 "$1" "$2")
+	[ "$_m" = "$marker" ] && return 0
+	[ $# -gt 2 ] || return 1
+	case $marker in "${_m%/}"/*) return 0 ;; esac
+	return 1
+}
+
+refuse_switch() {
+	echo "x root-guard: $1 on the kill switch's trip marker (${marker#"$root"/}) — the switch is tripped, and resetting it is the operator's, never an agent's." >&2
+	echo "  Leave the marker in place; the operator deletes it from their own shell when the switch may reset." >&2
+	exit 2
+}
+
 refuse() {
 	echo "x root-guard: $1 on ${2#"$root"/} — the root checkout is not for in-progress work (hard rule 1, \"Worktree, always\")." >&2
 	echo "  Open a worktree and work there: git worktree add worktree/<slug> -b <type>/<slug>" >&2
@@ -213,6 +265,7 @@ Edit | Write | MultiEdit | NotebookEdit)
 	target=$(field file_path)
 	[ -n "$target" ] || target=$(field notebook_path)
 	[ -n "$target" ] || exit 0
+	tripped && on_marker "$target" "$cwd" && refuse_switch "$tool"
 	abs=$(resolve "$target" "$cwd")
 	guarded "$abs" && refuse "$tool" "$abs"
 	exit 0
@@ -265,6 +318,14 @@ function endseg(   i, j, k, c, s, inplace, last) {
 		last = 0
 		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) last = j
 		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) print (j == last ? "write " : "move ") words[j]
+	} else if (c == "rm" || c == "unlink") {
+		# What rm removes is gone; read only for the trip marker.
+		opts = 1
+		for (j = i + 1; j <= nw; j++) {
+			if (opts && words[j] == "--") { opts = 0; continue }
+			if (opts && words[j] ~ /^-/) continue
+			print "remove " words[j]
+		}
 	} else if (c == "cp") {
 		last = ""
 		for (j = i + 1; j <= nw; j++) if (words[j] !~ /^-/) last = words[j]
@@ -388,6 +449,7 @@ while IFS= read -r step; do
 	'write '*)
 		_t=${step#write }
 		case $_t in /dev/*) continue ;; esac
+		tripped && on_marker "$_t" "$here_cwd" && refuse_switch "Bash (an overwrite)"
 		abs=$(resolve "$_t" "$here_cwd")
 		if guarded "$abs" && tracked "$abs"; then
 			refuse "Bash" "$abs"
@@ -402,7 +464,11 @@ while IFS= read -r step; do
 			refuse "Bash" "$abs"
 		fi
 		;;
+	'remove '*)
+		tripped && on_marker "${step#remove }" "$here_cwd" holding && refuse_switch "Bash (a deletion)"
+		;;
 	'move '*)
+		tripped && on_marker "${step#move }" "$here_cwd" holding && refuse_switch "Bash (a move)"
 		abs=$(resolve "${step#move }" "$here_cwd")
 		if guarded "$abs" && holds_tracked "$abs"; then
 			refuse "Bash" "$abs"
