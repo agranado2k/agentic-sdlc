@@ -7,14 +7,56 @@
 // script lives in), which is how CI points it at a checkout and how the demo
 // points it at a throwaway project.
 
+import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import config from "./config.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { makeContext } from "./context.mjs";
 import { runAll } from "./runner.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = process.argv[2] ?? join(here, "..", "..");
+
+const CONFIG = "scripts/docs-conformance/config.mjs";
+const VOCABULARY = "scripts/docs-conformance/local-vocabulary.mjs";
+
+/**
+ * The gate config that judges. With POLICY_BASE unset, this tree's own
+ * config.mjs, as a local push reads it. With POLICY_BASE naming a ref (the
+ * kit's ADR-0039), the base's copy, read through the policy reader beside the
+ * harness (scripts/policy.sh): the config module and its local-vocabulary
+ * sibling are both copied to the reader's directory for that commit, so the
+ * copy's import of its sibling resolves there — and a vocabulary missing at the
+ * base is an empty one, as it is today. Any other answer the reader cannot
+ * give fails CLOSED: its `fail-closed <reason> <path>` line, no validator run,
+ * exit 1. The working tree's config is never a fallback.
+ */
+async function loadConfig() {
+  const base = process.env.POLICY_BASE;
+  if (!base) return (await import("./config.mjs")).default;
+
+  const reader = join(here, "..", "policy.sh");
+  const read = (path) => {
+    const r = spawnSync("sh", [reader, "read", path, "--base", base], { cwd: repoRoot, encoding: "utf8" });
+    return { status: r.status, out: (r.stdout ?? "").trim(), err: (r.stderr ?? "").trim() };
+  };
+  const failClosed = (answer, path) => {
+    if (answer.out.startsWith("fail-closed ")) console.error(answer.out);
+    else {
+      if (answer.err) console.error(answer.err);
+      console.error(`the policy reader gave no answer for ${path} at POLICY_BASE=${base} (exit ${answer.status}).`);
+    }
+    console.error(`FAIL  the gate config at POLICY_BASE=${base} cannot be read — failing closed, no validator ran.`);
+    process.exit(1);
+  };
+
+  const config = read(CONFIG);
+  if (config.status !== 0) failClosed(config, CONFIG);
+  const vocabulary = read(VOCABULARY);
+  if (vocabulary.status !== 0 && vocabulary.out !== `fail-closed missing ${VOCABULARY}`) failClosed(vocabulary, VOCABULARY);
+  return (await import(pathToFileURL(config.out).href)).default;
+}
+
+const config = await loadConfig();
 
 const ctx = makeContext({ repoRoot, config });
 const findings = runAll(ctx);

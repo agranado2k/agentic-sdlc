@@ -111,11 +111,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # Full history, so the PR's base commit is in reach: on a pull request
+      # the harness reads its config as the base has it (POLICY_BASE, the
+      # kit's ADR-0039). On a push to main the variable is empty, and the
+      # working tree's config judges.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Portability validator against the kit's own shared layer
+        env:
+          POLICY_BASE: ${{ github.event.pull_request.base.sha }}
         run: node scripts/docs-conformance/index.mjs .
 
   self-host:
@@ -140,7 +148,11 @@ jobs:
       # makes and the same one a consumer inherits. Node is present, so this is
       # the full harness; the suite below also runs it with DOCS_CHECK_NO_NODE=1
       # to cover the POSIX fallback a consumer without a runtime would get.
+      # POLICY_BASE: on a pull request the gate config is read at the base
+      # commit the full-depth checkout above already holds (ADR-0039).
       - name: Docs gate at the kit root
+        env:
+          POLICY_BASE: ${{ github.event.pull_request.base.sha }}
         run: sh scripts/check.sh
       # And the other half of self-hosting: bootstrap must still strip the kit's
       # own files, so a consumer's stamped project is byte-identical to what it
@@ -333,6 +345,18 @@ jobs:
           node-version: "20"
       - name: Advisory-visibility suite
         run: sh tests/docs-gate-advisory.test.sh
+
+  docs-gate-base:
+    name: The docs gate is judged by the base's config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Base-config suite
+        run: sh tests/docs-gate-base.test.sh
 
   design-brief:
     name: /design-brief contract
