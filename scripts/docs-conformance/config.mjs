@@ -427,13 +427,16 @@ const livingSpec = {
  * /pr-iterate's rose 500 bytes for the risk rule's step and report line
  * (PRD-09 slice 1, #905): it sat 3 bytes under 38000, and the step's whole
  * text already lives in its RISK.md.
+ * /to-tickets' rose 500 bytes for the risk stamp (PRD-09, T-48, #911): it
+ * sat 60 bytes under 35000; the rubric lives in its RISK.md, and what stays
+ * is rule 17's pointer, the quiz's check and line, and ticket.write's keys.
  *
  * KEEP IT LITERAL — one `"<repo-relative path>": <bytes>,` per line. The
  * gate's POSIX twin in scripts/check.sh reads this block by text.
  */
 const skillCeilings = {
   ".agents/skills/review-pr/SKILL.md": 40500,
-  ".agents/skills/to-tickets/SKILL.md": 35000,
+  ".agents/skills/to-tickets/SKILL.md": 35500,
   ".agents/skills/pr-iterate/SKILL.md": 38500,
   ".agents/skills/implement/SKILL.md": 27500,
 };

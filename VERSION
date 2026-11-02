@@ -3813,7 +3813,37 @@
 # marker, docs/specs/runtime.md R65 to R67, AGENTS.md's risk-rule row, and
 # tests/risk.test.sh section 12.
 
-shared-layer: 0.109.0
+# 0.110.0 — the planner's risk stamp (ticket #911, PRD-09 of D-02,
+# factory T-48). No file joins or leaves. One shared file changes content:
+# UPDATING.md, its entry and both worked examples re-pinned — the Part 2
+# transcript's skills listing gains to-tickets' RISK.md.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /to-tickets — RISK.md joins beside SKILL.md (the risk rubric:
+# the five planner reasons and the change each covers, `low` only when none
+# applies, the reserved reasons named as the risk rule's), and SKILL.md gains
+# rule 17 pointing at it; step 3 checks each ticket's `Risk:` and
+# `Risk-confidence:` lines with the vocabulary checker as the planner before
+# the quiz and shows them beside the tier; step 4 publishes both lines and
+# records `data.risk`, `data.risk_proposed` and `data.risk_confidence` on
+# each ticket.write; rule 15's "stamps no Risk: line" sentence goes.
+# /pr-iterate — SKILL.md and CHECK-TABLE.md's new section "The verifier on
+# the PR": each iteration requests the verifier at a new head beside the
+# review, triages its findings as a bot's, lists its disputed check-table
+# rows, its disputes of the kit's findings and its ⚠️ items at the top of
+# the report, and lets no verifier verdict hold back ✅ converged (#944,
+# factory T-81, landed after 0.109.0's tag).
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/docs-conformance/config.mjs (yours) — the kit raised
+# /to-tickets' skillCeilings entry from 35000 to 35500 bytes; raise yours
+# the same if your gate holds that skill to a ceiling.
+# Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/process.md R61 to R63 (and R201 to
+# R208, #944),
+# tests/spec-skills.test.sh's risk-stamp section and
+# tests/trace-skills.test.sh's ticket.write keys, and
+# tests/review-pr-output.test.sh's verifier section (#944).
+
+shared-layer: 0.110.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
