@@ -1374,7 +1374,7 @@ _verify_stage_pins() {
 	# filter, its bounded id and its requirement line.
 	(
 		. "$ROOT/scripts/requirement.lib.sh"
-		tr -d '\r' <"$_v_tmp/body" | fence_strip | awk -v idre="^($REQ_AREA_ERE/)?$REQ_PRD_ID_ERE\$" '
+		tr -d '\r' <"$_v_tmp/body" | fence_strip | LC_ALL=C awk -v idre="^($REQ_AREA_ERE/)?$REQ_PRD_ID_ERE\$" '
 		function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 		/^[ \t]*<!-- explain-diff-appendix -->[ \t]*$/ { exit }
 		state == 0 { if ($0 ~ /^[ \t]*<!-- check-table -->[ \t]*$/) state = 1; next }
@@ -1386,9 +1386,11 @@ _verify_stage_pins() {
 			id = trim(c[1]); res = trim(c[3]); ev = trim(c[4])
 			if (res != "pass" || id !~ idre || seen[id]++) next
 			path = "-"; test = "-"; sha = "-"
-			if (ev ~ /^[A-Za-z0-9._\/-]+::[A-Za-z0-9._\/-]+@[0-9a-fA-F]+$/) {
+			# A check-table pin: the test name any printable ASCII, spaces
+			# included (process/R46), the sha after the last `@`.
+			if (ev ~ /^[A-Za-z0-9._\/-]+::[ -~]+@[0-9a-fA-F]+$/) {
 				path = ev; sub(/::.*/, "", path)
-				test = ev; sub(/^[^:]*::/, "", test); sub(/@.*/, "", test)
+				test = ev; sub(/^[^:]*::/, "", test); sub(/@[0-9a-fA-F]+$/, "", test)
 				sha = ev; sub(/^.*@/, "", sha)
 			}
 			printf "%s\t%s\t%s\t%s\n", id, path, test, sha

@@ -44,6 +44,9 @@ R28. WHEN the first commit holds the approved tests, `/implement` SHALL run each
 R29. WHILE building a ticket with approved tests, `/implement` SHALL NOT edit, move or delete an approved test file. [UC2 4]
 R30. IF an approved test cannot pass without a change to it, THEN `/implement` SHALL stop, leave the file unchanged, and report the test and the change it would need for the operator to approve again. [UC2 4a]
 R31. `/implement` SHALL NOT open the pull request of a ticket with approved tests until every approved test passes at the head and the full suite passes. [UC2 5]
+R32. WHEN `/review-pr` reviews a pull request in a factory project, its coordinator SHALL run the acceptance guard's `check` from the review's base to the head with `POLICY_BASE` set to that base, and hand the output to Agent 7. [UC4 1]
+R33. Agent 7 SHALL list each `changed:` line as a ❌ MISSING item naming the requirement id and `approved test changed`. [UC4 2]
+R34. IF the acceptance guard exits 3 during a review, THEN Agent 7 SHALL list every id on the ticket's `Accept-test:` lines as ❌ MISSING, and the report's summary SHALL print the fail-closed line. [UC4 1a]
 R35. IF a ticket's front matter `created` is missing or not a date, THEN the adoption date SHALL NOT exempt it.
 R36. The shipped TDD pairing workflow, and the kit's own guards workflow, SHALL run the acceptance guard's script as it is at the base commit, read from git's objects, and never the copy in the pull request's head. [UC3 1]
 R37. WHEN asked for `held --base <ref>`, the acceptance guard SHALL print one line `<ticket> <path>` per file a held ticket's `Accept-test:` lines name, and exit 0.

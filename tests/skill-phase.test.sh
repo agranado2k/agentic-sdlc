@@ -749,7 +749,7 @@ cat >"$SCRATCH/v-body.md" <<VBODY
 <!-- check-table -->
 | Requirement | Test tier | Result | Evidence |
 | --- | --- | --- | --- |
-| runtime/R1 | suite | pass | tests/pin.test.sh::runtime/R1@$V_PIN |
+| runtime/R1 | suite | pass | tests/pin.test.sh::runtime R1 holds@$V_PIN |
 | runtime/R2 | suite | fail | tests/pin.test.sh::runtime/R2@$V_PIN |
 | runtime/R3 | manual | skipped | - |
 | runtime/R4 | suite | pass | https://ci.invalid/runs/4 |
@@ -939,6 +939,9 @@ unset V_BODY
 [ "$(cat "$V_STATE/pin/1.test" 2>/dev/null)" = 'the pinned test, as it stood at the pinned commit' ] &&
 	pass "runtime/R207: …and the pinned test file as it stood at the pinned commit, not at the head" ||
 	fail "runtime/R207: the staged test file is '$(cat "$V_STATE/pin/1.test" 2>/dev/null)'"
+[ "$(sed -n 1p "$V_STATE/pins")" = "$(printf 'runtime/R1\ttests/pin.test.sh\truntime R1 holds\t%s' "$V_PIN")" ] &&
+	pass "runtime/R207: a pin whose test name holds spaces stages its path, its whole name and its commit (process/R46)" ||
+	fail "runtime/R207: the spaced pin staged '$(sed -n 1p "$V_STATE/pins")'"
 [ "$(sed -n 2p "$V_STATE/pins")" = "$(printf 'runtime/R4\t-\t-\t-')" ] &&
 	[ "$(cat "$V_STATE/pin/2.spec" 2>/dev/null)" = 'R4. The fourth, checked in CI.' ] && [ -f "$V_STATE/pin/2.test" ] && [ ! -s "$V_STATE/pin/2.test" ] &&
 	pass "runtime/R207: a pass row whose evidence is a URL stages its spec line and no test file, its pin fields '-'" ||

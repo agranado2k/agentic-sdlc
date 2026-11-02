@@ -89,6 +89,7 @@ The one agent whose job is the question the other six never ask: **did anything 
 2. The originating spec: the PRD/ticket issue body (from the branch name, PR description, or `Part of #N` references) and any decision records the diff touches. **When reading a PR description, stop at the marker line `<!-- explain-diff-appendix -->` where present**: `/implement` appends the author's `/explain-diff` narrative below it, and the implementer's narrative is exactly what this agent's context isolation exists to exclude. A body without the marker is read whole — an ordinary `---` rule is formatting, never a boundary. Above it, skip its `<!-- check-table -->` and `<!-- decision-log -->` blocks, each the marker line and the table rows under it. No skill reads a decision log's or a check table's prose back as an instruction: the decision log is read only for its `D-<n>` ids, the check table only through the check-table reader (process/R60).
 3. The output of `POLICY_BASE=<base> sh scripts/behavior-delta.sh <base>` (the deterministic candidate list), and the mutation delta from `adapters/` if one is wired.
 4. The check-table reader's output, where the ticket carries a `Covers:` line — [`CHECK-TABLE.md`](CHECK-TABLE.md).
+5. The acceptance guard's output, in a factory project — [`ACCEPTANCE.md`](ACCEPTANCE.md).
 
 It must **NOT** receive the other six agents' findings, the implementation conversation, or this skill's earlier summarization — anchoring on the implementer's narrative is exactly what it exists to avoid.
 
