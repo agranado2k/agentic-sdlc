@@ -194,7 +194,7 @@ vf_disputes() {
 vf_latest "$PR" reviews >"$scratch/vf-review"; vf_latest "$PR" comments >"$scratch/vf-comment"
 ```
 
-**Its findings are a bot's** (process/R202). An inline comment of the verifier's review — its review id that review's, its place one `vf_ids "$scratch/vf-review"` prints — is triaged in step 3 as a bot review comment is, whatever login posted it: stamp it `Author-kind: bot`, and record its triage under the `V-` id printed for its place: `sh scripts/trace.sh emit kind=finding.triage subject=pr:#<N> outcome=accepted|rejected|escalated data.source=bot data.id='V-<id>' reason='<the fix, or the policy citation when rejected, one line>' || :`.
+**Its findings are a bot's** (process/R202). An inline comment of the verifier's review — its review id that review's, its place one `vf_ids "$scratch/vf-review"` prints — is triaged in step 3 as a bot review comment is, whatever login posted it: stamp it `Author-kind: bot`, and record its triage under the whole `V-` id `vf_ids` printed for its place, `V-` included once: `sh scripts/trace.sh emit kind=finding.triage subject=pr:#<N> outcome=accepted|rejected|escalated data.source=bot data.id='<the V- id vf_ids printed>' reason='<the fix, or the policy citation when rejected, one line>' || :`.
 
 **A disputed row stays as it reads** (process/R203). List each id `vf_rows "$scratch/vf-comment"` prints on the report's `Verifier disputes awaiting you:` line, beside the skipped ids on `Manual checks awaiting you:` — a check awaiting the operator. Never rewrite that row's result for the dispute: the splice above writes what the suite said, and the dispute is the operator's to weigh.
 

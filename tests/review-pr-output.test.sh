@@ -2271,7 +2271,7 @@ iter_vf_missing() {
 	has "$_vc" 'request the verifier at that head too' || printf '%s\n' 'request at new head'
 	has "$_vc" 'once per head commit, and never at a head this loop did not push' || printf '%s\n' 'once per head'
 	has "$_vc" "\`/implement\`'s call" || printf '%s\n' 'implement call'
-	has "$_vc" "data.source=bot data.id='V-<id>'" || printf '%s\n' 'bot triage'
+	has "$_vc" "data.source=bot data.id='<the V- id vf_ids printed>'" || printf '%s\n' 'bot triage'
 	has "$_vc" 'whatever login posted it' || printf '%s\n' 'bot whatever login'
 	has "$_vc" "Never rewrite that row's result for the dispute" || printf '%s\n' 'row unchanged'
 	has "$_vc" 'beside the skipped ids' || printf '%s\n' 'beside skipped'
@@ -2293,7 +2293,7 @@ for b in \
 	'request at new head|2|s/request the verifier at that head too/leave the verifier to the operator/' \
 	'once per head|2|s/once per head commit, and never at a head this loop did not push/at every iteration/' \
 	'implement call|2|s/`\/implement`.s call/a call of your own/' \
-	'bot triage|2|s/data.source=bot data.id=.V-<id>./data.source=human data.id='"'"'<id>'"'"'/' \
+	'bot triage|2|s/data.source=bot data.id=.<the V- id vf_ids printed>./data.source=human data.id='"'"'V-<id>'"'"'/' \
 	'bot whatever login|2|s/whatever login posted it/as a human comment/' \
 	'row unchanged|2|s/Never rewrite that row.s result for the dispute/Rewrite that row as `fail` for the dispute/' \
 	'beside skipped|2|s/beside the skipped ids/under Next/' \
@@ -2371,8 +2371,10 @@ if [ -s "$VFD/fns.sh" ] && . "$VFD/fns.sh"; then
 	[ "$(vf_disputes "$VFD/comment" | tr '\n' ';')" = 'M-2 scripts/stamp.sh:12;' ] &&
 		pass "process/R208 (UC2 1a): vf_disputes prints the disputed kit finding with its evidence place — not a confirmed one, not a V- id, not a place in another shape" ||
 		fail "process/R208 (UC2 1a): vf_disputes printed '$(vf_disputes "$VFD/comment" | tr '\n' ';')'"
+	# The id is the token vf_ids printed, copied whole: V-H-1, never V-V-H-1.
+	vid=$(vf_ids "$VFD/review" | head -n 1 | cut -d' ' -f1)
 	tl=$(unwrap "$ICT_ABS" | grep -o "sh scripts/trace.sh emit kind=finding.triage subject=pr:#<N> outcome=accepted|rejected|escalated data.source=bot[^|]*|| :" | head -1 |
-		sed -e 's/pr:#<N>/pr:#971/' -e 's/accepted|rejected|escalated/accepted/' -e "s/'V-<id>'/V-H-1/" -e "s/reason='[^']*'/reason='fixed'/")
+		sed -e 's/pr:#<N>/pr:#971/' -e 's/accepted|rejected|escalated/accepted/' -e "s/'<the V- id vf_ids printed>'/$vid/" -e "s/reason='[^']*'/reason='fixed'/")
 	TR="$VFD/tr" && mkdir -p "$TR"
 	if [ -n "$tl" ] && (TRACE_DIR="$TR" TRACE_QUIET=1 sh -c "$tl") >/dev/null 2>&1; then
 		n=$(find "$TR" -name "*.jsonl" -exec cat {} + 2>/dev/null | grep '"kind":"finding.triage"' | grep '"source":"bot"' | grep -c '"id":"V-H-1"')
