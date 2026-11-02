@@ -3886,7 +3886,24 @@
 # amendment for that read, docs/specs/runtime.md R46 and R48 restated and
 # R214 to R216, R223 and R228, and their suites.
 
-shared-layer: 0.112.0
+# 0.113.0 — the pairing guard is judged by the base's guards policy (ticket
+# #908, PRD-08 of D-02, factory T-45). No file joins or leaves. Four shared
+# files change content: scripts/guards.lib.sh gains guards_load_policy, which
+# with POLICY_BASE naming a ref reads the guards policy at that ref through
+# scripts/policy.sh (an override naming a judging file at the base, one
+# outside the judging set as given) and fails closed when it cannot;
+# scripts/tdd-pairing-guard.sh calls it and exits 3 on a fail-closed answer
+# instead of warning and passing; scripts/tdd-pairing-guard-ci.sh documents
+# that exit; and UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none.
+# Templates (9c): templates/workflows/tdd-pairing.yml — the guard's step sets
+# POLICY_BASE to the pull request's base commit; a consumer's own
+# .github/workflows/tdd-pairing.yml adds that one env line by hand.
+# Config (9d): none. Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/policy.md R16 to R21, and their suites.
+
+shared-layer: 0.113.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
