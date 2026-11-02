@@ -35,7 +35,8 @@
 # Bash `rm` or `unlink` of it or of a directory holding it, `mv` of it away or
 # onto it, and a redirect, `tee`, `sed -i` or `cp` onto it. Creating it trips
 # the switch, which anyone may do, so an absent marker is never guarded; and
-# resetting it is the operator's, in a shell no agent harness hooks. The path
+# resetting it is the operator's: a call made with none of the agent-harness
+# markers `.githooks/pre-commit` reads set is the operator's, let through. The path
 # is compared as written, its last component unresolved, so a marker that is a
 # link is the link. The same tripwire limits hold.
 #
@@ -214,9 +215,23 @@ holds_tracked() {
 	)" ]
 }
 
-# tripped — status 0 while the trip marker exists, a link to nowhere included.
+# The agent-harness markers, `.githooks/pre-commit`'s list word for word: a
+# call made with none set is the operator's.
+agent_markers='CLAUDECODE CLAUDE_CODE_SESSION_ID TRACE_SESSION GEMINI_CLI CODEX_SANDBOX CODEX_SANDBOX_NETWORK_DISABLED CODEX_THREAD_ID'
+
+# agent — status 0 when an agent-harness marker is set, non-empty.
+agent() {
+	for _am in $agent_markers; do
+		eval "_av=\${$_am:-}"
+		[ -n "$_av" ] && return 0
+	done
+	return 1
+}
+
+# tripped — status 0 while the trip marker exists, a link to nowhere included,
+# and an agent is the caller.
 tripped() {
-	[ -n "$marker" ] && { [ -e "$marker" ] || [ -L "$marker" ]; }
+	[ -n "$marker" ] && { [ -e "$marker" ] || [ -L "$marker" ]; } && agent
 }
 
 # on_marker <path> <base> [holding] — status 0 when <path> names the trip

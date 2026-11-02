@@ -842,8 +842,11 @@ deletes, moves or overwrites it is refused from the root and from every
 worktree alike: an Edit, Write, MultiEdit or notebook edit on it, and in Bash
 an `rm` or `unlink` of it or of a directory holding it, a `mv` of it away or
 onto it, and a redirect, `tee`, `sed -i` or `cp` onto it. The refusal names
-the kill switch and leaves the reset to the operator, who deletes the marker
-from their own shell, which no agent harness hooks. Creating the marker is
+the kill switch and leaves the reset to the operator. The guard tells the
+operator's call from an agent's the way the commit hook does: a call made with
+none of the agent-harness markers in the table below set is the operator's,
+and goes through, and so does anything typed in a shell no agent harness
+hooks. Creating the marker is
 let through — tripping the switch is anyone's — so an absent marker is never
 guarded. A marker that is a link is the link, never its target. The Bash
 reading is the same tripwire as below, with the same gaps.
