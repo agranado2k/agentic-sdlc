@@ -34,7 +34,17 @@
 # areas a path belongs to (the trace's record reader counts a landing toward
 # each, #875). Same policy, same refusals, nothing written; it reads no git.
 #
-# Exit: 0 sliced; 2 caller error (arguments, base, policy) — nothing written.
+# POLICY_BASE (the kit's ADR-0039): set to a ref, the slice form reads the
+# lens-slice policy as that ref has it, through scripts/policy.sh, so a pull
+# request cannot narrow the lens that reads it — the policy file of the
+# slicer's own repository, or a LENS_SLICE_CONFIG naming a judging file there;
+# an override outside the judging set is read as given. A policy the base
+# cannot give FAILS CLOSED: every lens gets the whole diff, the reader's
+# `fail-closed <reason> <path>` line is printed after the slices, and the exit
+# is 3. Unset, the working tree's policy is read. --areas never reads a base.
+#
+# Exit: 0 sliced; 2 caller error (arguments, base, policy) — nothing written;
+# 3 failed closed — every lens's slice is the whole diff.
 #
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
 # policy goes in scripts/lens-slice.config.sh.
@@ -63,15 +73,65 @@ case ${1:-} in
 esac
 
 here=$(dirname "$0")
-if [ -n "${LENS_SLICE_CONFIG:-}" ]; then
-	[ -f "$LENS_SLICE_CONFIG" ] || die "LENS_SLICE_CONFIG=$LENS_SLICE_CONFIG does not exist"
-	# A bare name would be searched on PATH by `.`: anchor it to the cwd.
-	case $LENS_SLICE_CONFIG in
-	*/*) . "$LENS_SLICE_CONFIG" ;;
-	*) . "./$LENS_SLICE_CONFIG" ;;
+# load_given — the policy as the working tree has it, or as an override names it.
+load_given() {
+	if [ -n "${LENS_SLICE_CONFIG:-}" ]; then
+		[ -f "$LENS_SLICE_CONFIG" ] || die "LENS_SLICE_CONFIG=$LENS_SLICE_CONFIG does not exist"
+		# A bare name would be searched on PATH by `.`: anchor it to the cwd.
+		case $LENS_SLICE_CONFIG in
+		*/*) . "$LENS_SLICE_CONFIG" ;;
+		*) . "./$LENS_SLICE_CONFIG" ;;
+		esac
+	elif [ -f "$here/lens-slice.config.sh" ]; then
+		. "$here/lens-slice.config.sh"
+	fi
+}
+
+# load_at_base — the policy as POLICY_BASE has it (policy_at_base in
+# guards.lib.sh beside this script). Sets `failed` to the reader's
+# fail-closed line, or to `-` when the base could not be read and the reader
+# gave none (its account is on stderr), and leaves the rules empty.
+failed=
+load_at_base() {
+	[ -f "$here/guards.lib.sh" ] || {
+		echo "lens-slice: POLICY_BASE is set but guards.lib.sh, the base read, is missing beside the slicer." >&2
+		failed=-
+		return
+	}
+	# shellcheck source=./guards.lib.sh
+	. "$here/guards.lib.sh"
+	_lb_top=$(git rev-parse --show-toplevel 2>/dev/null) && _lb_top=$(cd "$_lb_top" && pwd -P) ||
+		die "POLICY_BASE is set but this is not a git working tree"
+	if [ -z "${LENS_SLICE_CONFIG:-}" ]; then
+		# The cwd repository's base is this slicer's policy only when the
+		# slicer is that repository's own; crossing is LENS_SLICE_CONFIG's job.
+		_lb_own=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$here" rev-parse --show-toplevel) 2>/dev/null) &&
+			_lb_own=$(cd "$_lb_own" && pwd -P) || _lb_own=
+		if [ "$_lb_top" != "$_lb_own" ]; then
+			echo "lens-slice: refusing to read $_lb_top's lens-slice policy at $POLICY_BASE — it is not the slicer's own repository (${_lb_own:-unknown}). Set LENS_SLICE_CONFIG to cross repositories on purpose." >&2
+			failed=-
+			return
+		fi
+	fi
+	_lb_rc=0
+	policy_at_base "$here" "$_lb_top" "${LENS_SLICE_CONFIG:-}" scripts/lens-slice.config.sh || _lb_rc=$?
+	case $_lb_rc in
+	0) LENS_SLICE_RULES=$(policy_value "$POLICY_COPY" LENS_SLICE_RULES) ;;
+	1) load_given ;;
+	*) failed=${POLICY_FAIL:--} ;;
 	esac
-elif [ -f "$here/lens-slice.config.sh" ]; then
-	. "$here/lens-slice.config.sh"
+}
+
+if [ "$mode" = slice ] && [ -n "${POLICY_BASE:-}" ]; then
+	load_at_base
+else
+	load_given
+fi
+if [ -n "$failed" ]; then
+	# Failed closed: no rule is trusted, so no lens is narrowed — the
+	# strictest slice is the whole diff, for every lens.
+	LENS_SLICE_RULES=
+	echo "lens-slice: the lens-slice policy at POLICY_BASE=$POLICY_BASE cannot be read — failing closed, every lens gets the whole diff" >&2
 fi
 rules=${LENS_SLICE_RULES:-}
 
@@ -83,7 +143,7 @@ if [ -n "$rules" ]; then
 	[ -z "$bad" ] || die "LENS_SLICE_RULES names a lens not on the roster ($ROSTER): $(printf '%s' "$bad" | tr '\n' ' ')"
 	long=$(printf '%s\n' "$rules" | awk 'NF > 3 { print $1 }')
 	[ -z "$long" ] || die "LENS_SLICE_RULES has a record of more than three fields (lens include exclude): $(printf '%s' "$long" | tr '\n' ' ')"
-else
+elif [ -z "$failed" ]; then
 	echo "lens-slice: no rules in LENS_SLICE_RULES — every lens gets the whole diff" >&2
 fi
 
@@ -146,3 +206,8 @@ for lens in $ROSTER; do
 	write "$lens" "$(printf '%s\n' "$changed" | lens_paths "$lens")"
 done
 write behavior "$changed"
+
+if [ -n "$failed" ]; then
+	[ "$failed" = - ] || printf '%s\n' "$failed"
+	exit 3
+fi
