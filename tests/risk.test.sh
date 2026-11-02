@@ -533,7 +533,6 @@ t_write "$R" scripts/foo.sh "the pull request
 t_commit "$R" "feat: a pull request that trips the switch in its tree" >/dev/null
 git -C "$R" checkout -q main
 UNTRIP_HEAD=$(git -C "$R" rev-parse untrip)
-TREETRIP_HEAD=$(git -C "$R" rev-parse treetrip)
 WANT_FIVE_LOW="effective: low
 planner: low
 rule: low
@@ -602,7 +601,6 @@ judges "$T_EARNED" | grep -F '"pr:#1203"' | grep -F "\"head\":\"$UNTRIP_HEAD\"" 
 rule "$P_EARNED" main treetrip --pr 1204 --ticket-file "$f"
 [ "$T_OUT" = "$WANT_FIVE_LOW" ] && pass "runtime/R67: a switch tripped only in the PR's tree is not read — the base's on stands" ||
 	fail "runtime/R67: main..treetrip printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
-: "$TREETRIP_HEAD"
 
 # UC4 2b: a value that cannot be read at the base reads tripped.
 for base in unsetswitch badswitch nopolicy badpolicy; do
