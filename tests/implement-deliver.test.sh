@@ -1017,6 +1017,50 @@ t_text_has "$(tr '\n' ' ' <"$CHECKT_ABS")" "\`sh scripts/stamp.sh T-<digits>\` p
 	"process/R239: /implement's own table check takes a factory ticket's side from the stamp reader" "CHECK-TABLE.md"
 
 # ---------------------------------------------------------------------------
+banner "4j. The verifier, requested on the review's head commit (process/R200)"
+# ---------------------------------------------------------------------------
+# PRD-13 (ADR-0044): WHERE the reviewer tier in the cross-provider domain
+# names a model, /implement requests the verifier on the same head commit the
+# independent review pinned — once, and never as the review. The branch is
+# DISPATCHED-REVIEW.md's last section (a new sidecar would move the shipped
+# skill set, a release); step 9 opens it once the review has been requested.
+_vsec=$(t_line_of "$DISPATCH_ABS" "## The verifier")
+[ -n "$_vsec" ] && pass "process/R200: DISPATCHED-REVIEW.md carries the verifier's section" ||
+	fail "process/R200: DISPATCHED-REVIEW.md has no verifier section — no branch requests the verifier"
+_ptr "9. **Request an independent review" DISPATCHED-REVIEW.md "step 9, for the verifier"
+step9=$(grep -F -- "9. **Request an independent review" "$SKILL_ABS")
+t_text_has "$step9" "reviewer cross-provider" "process/R200: step 9 names the condition, the cross-provider reviewer" "step 9"
+t_text_has "$step9" "same head commit" "process/R200: step 9 asks for the verifier on the review's head" "step 9"
+VERIFY_FLAT=$(sed -n "${_vsec:-99999},\$p" "$DISPATCH_ABS" | tr '\n' ' ')
+VERIFY_WORDS="sh scripts/agents.lib.sh reviewer cross-provider
+prints nothing
+AGENT_SESSION_MODEL
+after the review's verdict is recorded
+the same head commit
+the commit the review pinned
+once per head commit
+--pr <PR#>
+--set BRANCH=<that commit>
+--verifier --rung
+--provider
+skill-verify/commit
+skill-verify/rung
+skill-verify/provider
+--spawn-failed
+exit 6
+unavailable
+never the review
+never waits on it
+one shell invocation
+save its report unread"
+every_word "$VERIFY_WORDS" "$VERIFY_FLAT" >/dev/null &&
+	pass "process/R200: the verifier section carries the condition, the head, the call, its exits and the advisory rule" ||
+	fail "process/R200: the verifier section lacks '$(every_word "$VERIFY_WORDS" "$VERIFY_FLAT")'"
+weakened "process/R200: any head will do" 's/the same head commit/the latest head commit/g' "$VERIFY_FLAT" "$VERIFY_WORDS"
+weakened "process/R200: the condition dropped" 's/sh scripts\/agents.lib.sh reviewer cross-provider/the resolver/g' "$VERIFY_FLAT" "$VERIFY_WORDS"
+weakened "process/R200: the verifier counted as the review" 's/never the review/the review/g' "$VERIFY_FLAT" "$VERIFY_WORDS"
+
+# ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "/pr-iterate"
