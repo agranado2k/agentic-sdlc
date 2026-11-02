@@ -340,6 +340,19 @@ run
 expect_out_is "tier-differs: process/R46
 not-approved: process/R46
 skipped: process/R46" "process/R47: not-approved: sits after tier-differs: and before the result's word"
+# The pin's `<path>::<test>` is bounded at 200 characters, a space-holding
+# name included: 200 is evidence, 201 a broken row.
+p200="tests/x.sh::$(printf 'a b%0185d' 0)"
+p201="${p200}c"
+ticket "$STD_TICKET"
+body "$ROW45" "$ROW46" "| process/R47 | manual | pass | $p200@3f9c2e1 |"
+run
+expect_resolved "" "process/R46: a pin whose <path>::<test> is exactly 200 characters is evidence"
+body "$ROW45" "$ROW46" "| process/R47 | manual | pass | $p201@3f9c2e1 |"
+run
+expect_status 2 "process/R46: a pin whose <path>::<test> is 201 characters is a broken row"
+expect_err_has "row 3" "process/R46: … stderr names row 3"
+ticket "$ACC_TICKET"
 # An id with no Accept-test: lines keeps any evidence.
 body "$ROW45" "| process/R46 | suite | pass | $A1@3f9c2e1 |" "| process/R47 | manual | pass | $A2@3f9c2e1 |"
 run
