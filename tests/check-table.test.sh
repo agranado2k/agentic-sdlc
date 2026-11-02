@@ -340,13 +340,13 @@ t_commit "$CREPO" "chore: base" >/dev/null
 git -C "$CREPO" checkout -q -b pr
 ticket "$STD_TICKET"
 body "| process/R45 | unit | pass | $PIN |" "| process/R46 | suite | pass | $PIN |" "| process/R47 | manual | pass | $PIN |"
-t_exec env POLICY_BASE=main sh "$CREPO/scripts/check-table.sh" "$SCRATCH/pr" "$SCRATCH/ticket"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh scripts/check-table.sh "$2" "$3"' _ "$CREPO" "$SCRATCH/pr" "$SCRATCH/ticket"
 expect_resolved "" "policy/R30: at a base holding the vocabulary, a passing table still passes"
 git -C "$CREPO" checkout -q main
 git -C "$CREPO" rm -q scripts/vocab.config.sh
 git -C "$CREPO" commit -q -m "chore: drop the vocabulary policy"
 git -C "$CREPO" checkout -q pr
-t_exec env POLICY_BASE=main sh "$CREPO/scripts/check-table.sh" "$SCRATCH/pr" "$SCRATCH/ticket"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh scripts/check-table.sh "$2" "$3"' _ "$CREPO" "$SCRATCH/pr" "$SCRATCH/ticket"
 expect_status 2 "policy/R31: a vocabulary policy missing at the base is a refusal (exit 2)"
 expect_out_is "fail-closed missing scripts/vocab.config.sh" "policy/R31: the fail-closed line, and only it, on stdout"
 t_exec sh "$CREPO/scripts/check-table.sh" "$SCRATCH/pr" "$SCRATCH/ticket"

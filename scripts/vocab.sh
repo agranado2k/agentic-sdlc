@@ -112,9 +112,10 @@
 # naming a judging file in this file's repository; an override outside the
 # judging set is read as given. A policy the base cannot give FAILS CLOSED:
 # the reader's `fail-closed <reason> <path>` line on stdout, and exit 3 —
-# never the working tree's file, never the shipped defaults below. A checker
-# outside any git repository (extracted from a commit) reads the policy beside
-# it, failing closed when there is none.
+# never the working tree's file, never the shipped defaults below. The ref is
+# the caller's repository's: a checker of another repository reads its own
+# policy as discovery finds it, and one outside any git repository (extracted
+# from a commit) reads the policy beside it, failing closed when there is none.
 #
 # Shared layer (see VERSION): this file is copied verbatim; the vocabularies
 # in scripts/vocab.config.sh are yours, never overwritten by an update.
@@ -220,6 +221,17 @@ vocab_load_at_base() {
 		. "$_vocab_here/vocab.config.sh"
 		return 0
 	}
+	# POLICY_BASE names a ref of the repository the caller stands in — the
+	# one being judged. A checker of another repository (a kit's scripts run
+	# on a fixture) is not judged by that pull request: its own policy is read
+	# as discovery finds it. An override is a path in the caller's repository.
+	_vb_cwd=$(git rev-parse --show-toplevel 2>/dev/null) && _vb_cwd=$(cd "$_vb_cwd" && pwd -P) || _vb_cwd=
+	if [ -n "${VOCAB_CONFIG:-}" ]; then
+		[ -n "$_vb_cwd" ] || return 1
+		_vb_root=$_vb_cwd
+	elif [ "$_vb_cwd" != "$_vb_root" ]; then
+		return 1
+	fi
 	[ -f "$_vocab_here/guards.lib.sh" ] || {
 		vocab_refuse "POLICY_BASE is set but guards.lib.sh, the base read, is missing beside this checker."
 		vocab_fail_closed

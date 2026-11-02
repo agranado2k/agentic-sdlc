@@ -1466,12 +1466,12 @@ git -C "$VREPO" checkout -q -b pr
 printf "VOCAB_TIER='planner implementer mechanical reviewer wizard'\n" >>"$VREPO/scripts/vocab.config.sh"
 t_commit "$VREPO" "feat: widen the tiers" >/dev/null
 
-# own_vocab [env…] -- <args…> — the fixture's own checker, run from /.
+# own_vocab [env…] -- <args…> — the fixture's own checker, run in the fixture.
 own_vocab() {
 	_ov_env=
 	while [ "$1" != -- ]; do _ov_env="$_ov_env $1"; shift; done
 	shift
-	t_exec env $_ov_env sh "$VREPO/scripts/vocab.sh" "$@"
+	t_exec env $_ov_env sh -c 'cd "$1" && shift && sh scripts/vocab.sh "$@"' _ "$VREPO" "$@"
 }
 own_vocab -- 'Tier: wizard'
 expect_status 0 "policy/R16: with POLICY_BASE unset the working tree's (widened) policy is read"
@@ -1497,6 +1497,16 @@ own_vocab POLICY_BASE=main -- fields
 expect_status 3 "fields fails closed the same way"
 own_vocab POLICY_BASE=no-such-ref -- 'Tier: implementer'
 expect_out_is "fail-closed no-base scripts/vocab.config.sh" "a POLICY_BASE naming no commit fails closed"
+
+# POLICY_BASE names a ref of the repository being judged — the one the caller
+# stands in. A checker of ANOTHER repository (a kit's scripts run on a
+# fixture) is not judged by that pull request: it reads its own policy as
+# discovery finds it, never a ref of a repository that is not its own.
+t_repo
+OTHER=$REPO
+t_commit "$OTHER" "chore: another repository, whose main is not the checker's" >/dev/null
+t_exec sh -c 'cd "$1" && POLICY_BASE=$(git rev-parse HEAD) sh "$2" "Tier: wizard"' _ "$OTHER" "$VREPO/scripts/vocab.sh"
+expect_status 0 "a checker standing in another repository reads its own (widened) working-tree policy"
 
 # A checker outside any git repository has no working tree a pull request
 # could edit: it is a copy extracted from a commit (the acceptance step runs
