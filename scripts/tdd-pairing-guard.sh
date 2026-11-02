@@ -19,7 +19,15 @@
 #            name their own escape hatch, which differs per gate.
 #
 # Exit codes:  0 paired, nothing to judge, or unconfigured · 1 unpaired source
-#              change · 2 usage error / the range cannot be diffed.
+#              change · 2 usage error / the range cannot be diffed · 3 POLICY_BASE
+#              is set and the guards policy cannot be read there (failed closed).
+#
+# POLICY_BASE (the kit's ADR-0039): set to a ref, the guards policy is read as that ref
+# has it, through scripts/policy.sh, so a pull request cannot loosen the rule
+# that judges it — and a policy missing or broken there fails the check rather
+# than taking the unconfigured warn-and-pass path. Unset, the working tree's
+# policy is read, as a local push reads it. guards.lib.sh's guards_load_policy
+# owns which file that is.
 #
 # WHAT COUNTS AS SOURCE AND TEST lives in scripts/guards.config.sh, not here.
 # This script holds no knowledge of your repo's layout. With no SOURCE patterns
@@ -79,7 +87,13 @@ done
 here=$(dirname "$0")
 # shellcheck source=./guards.lib.sh
 . "$here/guards.lib.sh"
-guards_load_config "$here" || true
+guards_load_policy "$here" || {
+	_lp=$?
+	if [ "$_lp" -eq 3 ]; then
+		echo "x $label: the guards policy at POLICY_BASE=$POLICY_BASE cannot be read — failing closed, never passing." >&2
+		exit 3
+	fi
+}
 
 source_re=${GUARD_SOURCE_RE:-}
 source_exclude_re=${GUARD_SOURCE_EXCLUDE_RE:-}

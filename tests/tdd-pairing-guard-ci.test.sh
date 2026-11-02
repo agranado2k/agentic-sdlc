@@ -209,4 +209,34 @@ expect_exit 0 "an unconfigured guard does not fail anybody's CI either" -- run_c
 	BASE_SHA="$BASE" HEAD_SHA="$HEAD"
 expect_said "INACTIVE"
 
+# ---------------------------------------------------------------------------
+banner "Judged by the base's policy — the workflow sets POLICY_BASE (policy/R21)"
+# ---------------------------------------------------------------------------
+TPL="$KIT/templates/workflows/tdd-pairing.yml"
+# The step that runs the guard carries POLICY_BASE from the PR's base commit.
+_ob='$'; _ob="$_ob{{"
+step=$(awk '/- name: Source changes carry test changes/ { on = 1 } on { print } on && /run: sh scripts\/tdd-pairing-guard-ci.sh/ { exit }' "$TPL")
+case $step in
+*"POLICY_BASE: $_ob github.event.pull_request.base.sha }}"*) pass "policy/R21: the guard's step sets POLICY_BASE to the pull request's base commit" ;;
+*) fail "policy/R21: the guard's step in $TPL does not set POLICY_BASE from github.event.pull_request.base.sha" ;;
+esac
+
+# What that variable buys: a PR that empties the policy on its branch is still
+# judged by main's. pr_repo's PR branch carries no policy; give main one and
+# let the PR empty it.
+pr_repo "src/report.ts"
+git -C "$repo" add -A && git -C "$repo" commit -q -m "chore: main configures the guard"
+BASE=$(git -C "$repo" rev-parse HEAD)
+git -C "$repo" checkout -q pr
+git -C "$repo" merge -q --no-edit main
+t_guards_config "$repo" "GUARD_SOURCE_RE=''"
+git -C "$repo" add -A && git -C "$repo" commit -q -m "chore: the PR unconfigures the guard"
+HEAD=$(git -C "$repo" rev-parse HEAD)
+expect_exit 1 "with POLICY_BASE the CI guard judges the PR by main's policy" -- run_ci "$repo" \
+	BASE_SHA="$BASE" HEAD_SHA="$HEAD" POLICY_BASE="$BASE" GUARDS_CONFIG=scripts/guards.config.sh
+expect_said "src/report.ts"
+expect_exit 0 "…and without it, by the branch's own (a local run)" -- run_ci "$repo" \
+	BASE_SHA="$BASE" HEAD_SHA="$HEAD" GUARDS_CONFIG=scripts/guards.config.sh
+expect_said "INACTIVE"
+
 t_done "tdd-pairing-guard-ci.sh"

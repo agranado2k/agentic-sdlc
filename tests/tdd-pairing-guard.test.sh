@@ -376,4 +376,148 @@ grep -q "^GUARD_SOURCE_RE=''" "$KIT/scripts/guards.config.sh" &&
 	pass "the SHIPPED scripts/guards.config.sh still has no source pattern" ||
 	fail "the shipped policy file carries a pattern — it would become every consumer's"
 
+# ---------------------------------------------------------------------------
+banner "Judged by the base's policy — POLICY_BASE (ADR-0039, PRD-08 slice 2)"
+# ---------------------------------------------------------------------------
+# A pull request must not loosen the guard that judges it. With POLICY_BASE
+# naming a ref, the guards policy is read through the policy reader at that
+# ref; unset, the working tree's copy is read exactly as before (a local push).
+
+# base_repo <base policy or -> — `main` carries <base policy> as
+# scripts/guards.config.sh (none when "-"); the branch `pr` loosens it to a
+# pattern that matches nothing and adds src/parse.ts with no test. Sets `repo`,
+# `BASE` and `head`; leaves `pr` checked out.
+base_repo() {
+	t_repo
+	repo=$REPO
+	t_write "$repo" "README.md" "base
+"
+	[ "$1" = - ] || t_guards_config "$repo" "$1"
+	BASE=$(t_commit "$repo" "chore: base")
+	git -C "$repo" checkout -q -b pr
+	t_guards_config "$repo" "GUARD_SOURCE_RE='^nothing-matches/'
+GUARD_TEST_RE='(\.|_)(test|spec)\.(ts|tsx|mjs)$'"
+	t_write "$repo" "src/parse.ts" "export const parse = 1;
+"
+	head=$(t_commit "$repo" "feat: loosen the guard and add unpaired source")
+}
+
+# at_base <repo> <POLICY_BASE or -> <GUARDS_CONFIG or -> <base> <head> — the
+# kit's guard, run from <repo> as CI runs it; "-" leaves a variable unset.
+at_base() {
+	_ab_env=""
+	[ "$2" = - ] || _ab_env="POLICY_BASE='$2'"
+	[ "$3" = - ] || _ab_env="$_ab_env GUARDS_CONFIG='$3'"
+	sh -c "cd '$1' && unset POLICY_BASE GUARDS_CONFIG; env $_ab_env sh '$GUARD' '$4' '$5'"
+}
+
+# UC2: the branch's own policy would pass it; main's fails it.
+base_repo "$CONFIG_STD"
+expect_exit 1 "policy/R18: POLICY_BASE=main judges the PR by main's source pattern — its loosening does not count" -- at_base "$repo" main scripts/guards.config.sh "$BASE" "$head"
+expect_said "src/parse.ts"
+expect_exit 0 "policy/R16: with POLICY_BASE unset the working tree's (loosened) policy is read, as a local push reads it" -- at_base "$repo" - scripts/guards.config.sh "$BASE" "$head"
+expect_exit 1 "an absolute override inside the repository is the same judging file, read at the base" -- at_base "$repo" main "$repo/scripts/guards.config.sh" "$BASE" "$head"
+expect_exit 1 "a base named by commit works as a base named by branch" -- at_base "$repo" "$BASE" scripts/guards.config.sh "$BASE" "$head"
+expect_exit 1 "a './'-led override is the same judging file" -- at_base "$repo" main ./scripts/guards.config.sh "$BASE" "$head"
+
+# Same-repository discovery with no override reads the base too: a fixture
+# carrying its own guard, its loader and the reader, committed on main.
+t_repo
+repo=$REPO
+mkdir -p "$repo/scripts"
+cp "$GUARD" "$KIT/scripts/guards.lib.sh" "$KIT/scripts/policy.sh" "$repo/scripts/"
+t_guards_config "$repo" "$CONFIG_STD"
+BASE=$(t_commit "$repo" "chore: base with its own guard")
+git -C "$repo" checkout -q -b pr
+t_guards_config "$repo" "GUARD_SOURCE_RE=''"
+t_write "$repo" "src/parse.ts" "export const parse = 1;
+"
+head=$(t_commit "$repo" "feat: unconfigure the guard and add unpaired source")
+expect_exit 1 "discovery in the guard's own repository reads the base's policy, not the emptied one" -- sh -c "cd '$repo' && unset GUARDS_CONFIG; POLICY_BASE=main sh scripts/tdd-pairing-guard.sh '$BASE' '$head'"
+expect_unsaid "INACTIVE"
+expect_exit 0 "…and unset, the emptied working-tree policy warns and passes, as before" -- sh -c "cd '$repo' && unset GUARDS_CONFIG POLICY_BASE; sh scripts/tdd-pairing-guard.sh '$BASE' '$head'"
+expect_said "INACTIVE"
+
+# UC2 2a: no guards policy at the base fails closed — never the warn-and-pass path.
+base_repo -
+expect_exit 3 "policy/R19: main with no guards policy fails closed" -- at_base "$repo" main scripts/guards.config.sh "$BASE" "$head"
+expect_said "fail-closed missing scripts/guards.config.sh"
+expect_unsaid "INACTIVE"
+expect_exit 3 "a base ref that names no commit fails closed" -- at_base "$repo" no-such-ref scripts/guards.config.sh "$BASE" "$head"
+expect_said "fail-closed no-base scripts/guards.config.sh"
+git -C "$repo" checkout -q main
+t_write "$repo" "scripts/guards.config.sh" "GUARD_SOURCE_RE='(unclosed"
+printf 'if then\n' >>"$repo/scripts/guards.config.sh"
+git -C "$repo" add -A && git -C "$repo" commit -q -m "chore: break the policy"
+git -C "$repo" checkout -q pr
+expect_exit 3 "a base policy that is not valid shell fails closed" -- at_base "$repo" main scripts/guards.config.sh "$BASE" "$head"
+expect_said "fail-closed invalid scripts/guards.config.sh"
+
+# The guard's reader is beside it; a guard copied without one cannot read the
+# base, and that is the strictest path too.
+BARE2="$SCRATCH/bare-guard-no-reader"
+mkdir -p "$BARE2"
+cp "$GUARD" "$BARE2/tdd-pairing-guard.sh"
+cp "$KIT/scripts/guards.lib.sh" "$BARE2/guards.lib.sh"
+base_repo "$CONFIG_STD"
+expect_exit 3 "with no policy reader beside the guard, a POLICY_BASE run fails, never passes" -- sh -c "cd '$repo' && POLICY_BASE=main GUARDS_CONFIG=scripts/guards.config.sh sh '$BARE2/tdd-pairing-guard.sh' '$BASE' '$head'"
+expect_unsaid "INACTIVE"
+
+# UC2 2b: a base policy present but unconfigured warns once and passes.
+base_repo "GUARD_SOURCE_RE=''"
+t_guards_config "$repo" "$CONFIG_STD"
+git -C "$repo" add -A && git -C "$repo" commit -q -m "chore: the branch configures the guard"
+head=$(git -C "$repo" rev-parse HEAD)
+expect_exit 0 "policy/R20: main's unconfigured policy warns and passes, whatever the branch configured" -- at_base "$repo" main scripts/guards.config.sh "$BASE" "$head"
+[ "$(printf '%s\n' "$T_ERR" | grep -c 'INACTIVE')" = 1 ] &&
+	pass "it warns exactly once" || fail "the INACTIVE warning should appear once, got: $T_ERR"
+
+# policy/R17: an override naming a judging file is read at the base; one naming
+# a path outside the judging set is read as given.
+t_repo
+repo=$REPO
+t_write "$repo" "scripts/guards.kit.config.sh" "$CONFIG_STD
+"
+# The reader answers "not judged" for a path outside its fixed set only once
+# it has read the base's risk policy (its extra list) — so the base carries one.
+mkdir -p "$repo/scripts" && cp "$KIT/scripts/risk.config.sh" "$repo/scripts/risk.config.sh"
+BASE=$(t_commit "$repo" "chore: the kit twin and the risk policy on main")
+git -C "$repo" checkout -q -b pr
+t_write "$repo" "scripts/guards.kit.config.sh" "GUARD_SOURCE_RE=''
+"
+t_write "$repo" "src/parse.ts" "export const parse = 1;
+"
+head=$(t_commit "$repo" "feat: empty the twin and add unpaired source")
+expect_exit 1 "policy/R17: the kit's guards twin, named by override, is read at the base" -- at_base "$repo" main scripts/guards.kit.config.sh "$BASE" "$head"
+expect_unsaid "INACTIVE"
+
+t_write "$repo" "ci/guards.config.sh" "$CONFIG_STD
+"
+expect_exit 1 "policy/R17: an override outside the judging set is read as given (here: only in the working tree)" -- at_base "$repo" main ci/guards.config.sh "$BASE" "$head"
+expect_unsaid "fail-closed"
+printf '%s\n' "$CONFIG_STD" >"$SCRATCH/outside.config.sh"
+expect_exit 1 "an override outside the repository is read as given" -- at_base "$repo" main "$SCRATCH/outside.config.sh" "$BASE" "$head"
+: >"$SCRATCH/empty-outside.config.sh"
+expect_exit 0 "…an empty one outside the repository warns and passes, as given" -- at_base "$repo" main "$SCRATCH/empty-outside.config.sh" "$BASE" "$head"
+expect_said "INACTIVE"
+
+# Without the base's risk policy the reader cannot say an in-repository path is
+# not judged — so it fails closed rather than reading the working tree.
+t_repo
+repo=$REPO
+BASE=$(t_commit "$repo" "chore: a base with no risk policy")
+t_write "$repo" "ci/guards.config.sh" "$CONFIG_STD
+"
+t_write "$repo" "src/parse.ts" "export const parse = 1;
+"
+head=$(t_commit "$repo" "feat: unpaired source")
+expect_exit 3 "an in-repository override the reader cannot place fails closed, never reads as given" -- at_base "$repo" main ci/guards.config.sh "$BASE" "$head"
+expect_said "fail-closed missing scripts/risk.config.sh"
+
+# The base's policy is evaluated in a child: what it does beyond setting the
+# three patterns never reaches the guard.
+base_repo "$CONFIG_STD
+exit 0"
+expect_exit 1 "a base policy that ends in 'exit 0' cannot end the guard early" -- at_base "$repo" main scripts/guards.config.sh "$BASE" "$head"
+
 t_done "tdd-pairing-guard.sh"
