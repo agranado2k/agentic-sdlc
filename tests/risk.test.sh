@@ -503,4 +503,133 @@ rule "$P_EARNED" main uc1 --pr 1112 --ticket-file "$f"
 [ "$(judges "$T_EARNED" | grep -cF '"pr:#1112"')" = 2 ] && pass "runtime/R64: a review that changes the rule's risk at the same head is a judgment of its own" ||
 	fail "runtime/R64: #1112 recorded $(judges "$T_EARNED" | grep -cF '"pr:#1112"') judgments"
 
+# ---------------------------------------------------------------------------
+banner "12. The kill switch: the trip marker, the base's value, never the tree or the environment (runtime/R65, R66, R67)"
+# ---------------------------------------------------------------------------
+# The bases: one that trips the switch, one that leaves it unset, one that
+# sets it out of shape. A pull request off the tripping base resets the switch
+# in its own tree; one off main trips it in its tree.
+# on_base <branch> <from> <sed expression> — a base whose risk policy the
+# expression rewrote.
+on_base() {
+	git -C "$R" checkout -q -b "$1" "$2"
+	sed "$3" "$R/scripts/risk.config.sh" >"$R/scripts/risk.config.sh.new" && mv "$R/scripts/risk.config.sh.new" "$R/scripts/risk.config.sh"
+	t_commit "$R" "chore: the kill switch, $1" >/dev/null
+	git -C "$R" checkout -q main
+}
+grep -qx 'RISK_KILL_SWITCH=on' "$R/scripts/risk.config.sh" && pass "runtime/R66: the shipped risk policy sets the kill switch on" || fail "runtime/R66: the shipped risk policy carries no RISK_KILL_SWITCH=on line"
+on_base tripbase main 's/^RISK_KILL_SWITCH=.*/RISK_KILL_SWITCH=tripped/'
+on_base unsetswitch main '/^RISK_KILL_SWITCH=/d'
+on_base badswitch main 's/^RISK_KILL_SWITCH=.*/RISK_KILL_SWITCH=maybe/'
+git -C "$R" checkout -q -b untrip tripbase
+sed 's/^RISK_KILL_SWITCH=.*/RISK_KILL_SWITCH=on/' "$R/scripts/risk.config.sh" >"$R/scripts/risk.config.sh.new" && mv "$R/scripts/risk.config.sh.new" "$R/scripts/risk.config.sh"
+t_write "$R" scripts/foo.sh "the pull request
+"
+t_commit "$R" "feat: a pull request that resets the switch in its tree" >/dev/null
+git -C "$R" checkout -q -b treetrip main
+sed 's/^RISK_KILL_SWITCH=.*/RISK_KILL_SWITCH=tripped/' "$R/scripts/risk.config.sh" >"$R/scripts/risk.config.sh.new" && mv "$R/scripts/risk.config.sh.new" "$R/scripts/risk.config.sh"
+t_write "$R" scripts/foo.sh "the pull request
+"
+t_commit "$R" "feat: a pull request that trips the switch in its tree" >/dev/null
+git -C "$R" checkout -q main
+UNTRIP_HEAD=$(git -C "$R" rev-parse untrip)
+WANT_FIVE_LOW="effective: low
+planner: low
+rule: low
+area: security earned
+area: api-crud earned
+area: pattern earned
+area: simplicity earned
+area: reuse-dry earned
+switch: on"
+WANT_FIVE_TRIP="effective: high unlearned
+planner: low
+rule: high unlearned
+area: security earned
+area: api-crud earned
+area: pattern earned
+area: simplicity earned
+area: reuse-dry earned
+switch: tripped"
+WANT_TRIP="effective: high unlearned
+planner: low
+rule: high unlearned
+$(areas_all earned)
+switch: tripped"
+
+# UC4 1-3: the operator creates the trip marker in the clone's git directory.
+MARKER="$(git -C "$R" rev-parse --path-format=absolute --git-common-dir)/risk-switch-tripped"
+# A time at or after the new heads' commits: their verdicts are at the head.
+AT2=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+for _pr in 1200 1201 1202 1203 1204 1205 1206 1207; do verdict "$T_EARNED" "$AT2" "$_pr" 2 0; done
+: >"$MARKER"
+rule "$P_EARNED" main uc1 --pr 1200 --ticket-file "$f"
+expect_status 0 "runtime/R68: a tripped switch still exits 0"
+[ "$T_OUT" = "$WANT_TRIP" ] && pass "runtime/R65, runtime/R66: the trip marker turns an all-earned rule: low into rule: high unlearned and switch: tripped" ||
+	fail "runtime/R65: the marker printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+J=$(judges "$T_EARNED" | grep -F '"pr:#1200"')
+for tok in '"switch":"tripped"' '"rule":"high unlearned"' '"effective":"high unlearned"' '"outcome":"disagreed"'; do
+	printf '%s\n' "$J" | grep -qF "$tok" && pass "runtime/R65: the tripped event carries $tok" || fail "runtime/R65: #1200 recorded $J, missing $tok"
+done
+printf '%s\n' "$J" | grep -qF '"unlearned"' && fail "runtime/R65: a tripped switch named earned areas unlearned in the event" || pass "runtime/R65: the event names no area unlearned that earned its record"
+git -C "$R" status --porcelain | grep -q . && fail "the trip marker shows in version control" || pass "runtime/R66: the trip marker is outside version control"
+# The worktree of a clone reads the same marker.
+git -C "$R" worktree add -q "$SCRATCH/wt-switch" uc1 2>/dev/null
+t_exec sh -c 'cd "$1" || exit 99; env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" TRACE_QUIET=1 sh "$4" main uc1 --pr 1201 --ticket-file "$5" 2>/dev/null' _ "$SCRATCH/wt-switch" "$P_EARNED" "$LENS" "$RULE" "$f"
+[ "$(printf '%s\n' "$T_OUT" | tail -1)" = 'switch: tripped' ] && pass "runtime/R66: a worktree of the clone reads the clone's trip marker" ||
+	fail "runtime/R66: a worktree printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+git -C "$R" worktree remove --force "$SCRATCH/wt-switch" 2>/dev/null
+# Deleting the marker resets it.
+rm -f "$MARKER"
+rule "$P_EARNED" main uc1 --pr 1200 --ticket-file "$f"
+[ "$T_OUT" = "$WANT_LOW" ] && pass "runtime/R66: deleting the trip marker brings back rule: low and switch: on" ||
+	fail "runtime/R66: after the marker printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+judges "$T_EARNED" | grep -F '"pr:#1200"' | grep -qF '"switch":"on"' && pass "runtime/R64: the reset is a judgment of its own, data.switch=on" || fail "runtime/R64: #1200 recorded $(judges "$T_EARNED" | grep -F '"pr:#1200"')"
+# A rule already high keeps its own reason under a tripped switch.
+: >"$MARKER"
+verdict "$T_EARNED" "$AT2" 1202 2 1
+rule "$P_EARNED" main uc1 --pr 1202 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && [ "$(printf '%s\n' "$T_OUT" | tail -1)" = 'switch: tripped' ] &&
+	pass "runtime/R65: a tripped switch replaces only a low; high outward stands" || fail "runtime/R65: outward under the marker printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+rm -f "$MARKER"
+
+# UC4 1a, 2a: the base's value trips it; the pull request's tree does not reset it.
+rule "$P_EARNED" tripbase untrip --pr 1203 --ticket-file "$f"
+[ "$T_OUT" = "$WANT_FIVE_TRIP" ] && pass "runtime/R66, runtime/R67: a tripped base with the switch reset in the PR's tree reads tripped" ||
+	fail "runtime/R67: tripbase..untrip printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+judges "$T_EARNED" | grep -F '"pr:#1203"' | grep -F "\"head\":\"$UNTRIP_HEAD\"" | grep -qF '"switch":"tripped"' && pass "runtime/R65: and records data.switch=tripped" || fail "runtime/R65: #1203 recorded $(judges "$T_EARNED" | grep -F '"pr:#1203"')"
+rule "$P_EARNED" main treetrip --pr 1204 --ticket-file "$f"
+[ "$T_OUT" = "$WANT_FIVE_LOW" ] && pass "runtime/R67: a switch tripped only in the PR's tree is not read — the base's on stands" ||
+	fail "runtime/R67: main..treetrip printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+
+# UC4 2b: a value that cannot be read at the base reads tripped.
+for base in unsetswitch badswitch nopolicy badpolicy; do
+	rule "$P_EARNED" "$base" uc1 --pr 1205 --ticket-file "$f"
+	[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | tail -1)" = 'switch: tripped' ] && [ "$(rule_line)" = 'rule: high unlearned' ] &&
+		pass "runtime/R66: a switch value the base cannot give ($base) reads tripped, exit 0" ||
+		fail "runtime/R66: base $base exited $T_STATUS and printed: $(printf '%s' "$T_OUT" | tr '\n' ';') $T_ERR"
+done
+rule "$P_EARNED" unsetswitch uc1 --pr 1205 --ticket-file "$f"
+printf '%s\n' "$T_ERR" | grep -q 'kill switch' && pass "runtime/R66: the cause is said on stderr" || fail "runtime/R66: no cause on stderr: $T_ERR"
+
+# R67: no environment variable resets the switch or moves a threshold.
+export RISK_KILL_SWITCH=on
+rule "$P_EARNED" tripbase untrip --pr 1206 --ticket-file "$f"
+[ "$(printf '%s\n' "$T_OUT" | tail -1)" = 'switch: tripped' ] && pass "runtime/R67: an exported RISK_KILL_SWITCH=on does not reset a tripped base" ||
+	fail "runtime/R67: RISK_KILL_SWITCH=on printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+rule "$P_EARNED" unsetswitch uc1 --pr 1206 --ticket-file "$f"
+[ "$(printf '%s\n' "$T_OUT" | tail -1)" = 'switch: tripped' ] && pass "runtime/R67: an exported RISK_KILL_SWITCH=on does not stand in for a base that lacks it" ||
+	fail "runtime/R67: unset base with the env printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+unset RISK_KILL_SWITCH
+export RISK_MISS_RATE_BELOW=100 RISK_PRECISION_FLOOR=0
+rule "$P_SEC" main uc1 --pr 1207 --ticket-file "$f"
+printf '%s\n' "$T_OUT" | grep -qx 'area: security unlearned' && pass "runtime/R67: exported thresholds do not move the ones the rule reads" ||
+	fail "runtime/R67: exported thresholds printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
+unset RISK_MISS_RATE_BELOW RISK_PRECISION_FLOOR
+
+# The decision and the vocabulary.
+grep -qF -- '- **Kill switch**' "$KIT/docs/domain-glossary.md" && pass "the glossary defines Kill switch" || fail "the glossary has no entry for Kill switch"
+[ -n "$_adr" ] && grep -qF 'risk-switch-tripped' "$_adr" && grep -qF 'RISK_KILL_SWITCH' "$_adr" && pass "the risk rule's decision record names the trip marker and the switch's home" ||
+	fail "the risk rule's decision record names neither the trip marker nor RISK_KILL_SWITCH"
+
 t_done "the risk rule"

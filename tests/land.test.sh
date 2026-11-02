@@ -1280,6 +1280,31 @@ verdict 616 blocked data.axis=1 data.lenses=0 data.roster=6 'reason=no lens ran'
 land 616 --no-review 'no lens ran; read by hand'
 landed_with 616 "a blocked verdict alone, with --no-review" '"reviewed":"no"' '"no_review":"no lens ran; read by hand"'
 
+# runtime/R213 (PRD-13, ADR-0044): the verifier is advisory, never the review.
+# A verify.verdict outcome=pass at the head, in the shape the broker records
+# it — even beside an Axis-1-looking data key — counts as no review: refused,
+# exit 2, nothing recorded.
+seed pr.iterate green 617
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=verify.verdict \
+	'subject=pr:#617' outcome=pass data.via=broker "data.reviewed=$STUB_SHA" data.provider=anthropic \
+	data.rung=same-provider data.disputed=0 data.axis=1 reason=seeded </dev/null >/dev/null 2>&1 ||
+	fail "runtime/R213: could not seed a verify.verdict on pr:#617"
+[ "$(events 617 verify.verdict)" = 1 ] && pass "runtime/R213: the seeded verify.verdict pass is in the trace" ||
+	fail "runtime/R213: no verify.verdict seeded on pr:#617 — the refusal below would prove nothing"
+land 617
+no_rev "runtime/R213: a verify.verdict pass alone at the head" 617
+
+# …and the other way round: a blocked verifier beside the kit's Axis-1 pass is
+# not refused for review — the verifier decides nothing at the landing.
+seed pr.iterate green 618
+verdict 618 pass data.axis=1 data.lenses=6 data.roster=6 reason=seeded
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=verify.verdict \
+	'subject=pr:#618' outcome=blocked data.via=broker "data.reviewed=$STUB_SHA" data.provider=anthropic \
+	data.rung=same-provider data.disputed=0 reason=seeded </dev/null >/dev/null 2>&1 ||
+	fail "runtime/R213: could not seed a verify.verdict on pr:#618"
+land 618
+landed_with 618 "runtime/R213: a blocked verify.verdict beside an Axis-1 pass" '"reviewed":"yes"'
+
 seed pr.iterate green 607
 land 607 --no-review 'the review degraded; read by hand'
 landed_with 607 "no review.verdict, with --no-review" '"reviewed":"no"' '"no_review":"the review degraded; read by hand"' '"iterated":"yes"'

@@ -545,7 +545,7 @@ Grouped by the seam each term belongs to. Entry shape:
     the area is dangerous).
 - **Risk rule** — `scripts/risk.sh`: given a PR's base, head, number and
   ticket, prints the **effective risk**, the planner's, its own, one line per
-  review area the diff touches and the kill switch's state, as closed tokens
+  review area the diff touches and the **kill switch**'s state, as closed tokens
   only, and records one `risk.judge` event, `agreed` or `disagreed`. Its own
   risk is `high unlearned` when any touched area is **unlearned**, else `low`.
   Every unknown fails closed, toward high. The one route by which a chain
@@ -557,6 +557,20 @@ Grouped by the seam each term belongs to. Entry shape:
   on high it carries the rule's reason when the rule says high, the
   planner's otherwise. The one risk a later lane reads, never recomputes.
   - _Avoid_: "final risk", "overall risk".
+- **Kill switch** — the operator's stop on the **risk rule** calling any PR
+  low: while it is tripped, a rule's `low` becomes `high unlearned`, the rule
+  prints `switch: tripped` and records `data.switch=tripped`. Tripped when the
+  risk policy at the base sets `RISK_KILL_SWITCH=tripped`, when that value
+  cannot be read there, or when the **trip marker** exists; `on` otherwise.
+  Anyone may trip it, since it only makes PRs high; resetting is the
+  operator's (ADR-0045, PRD-09 runtime/R65 to R67).
+  - _Avoid_: "risk override", "lane switch" (the switch only stops; the lane
+    opens by its own name, PRD-10).
+- **Trip marker** — the file `risk-switch-tripped` in the clone's git
+  directory (`git rev-parse --git-common-dir`), outside version control: one
+  act trips the **kill switch** in every worktree of that clone, and no PR
+  can delete it. Deleting it is the operator's reset.
+  - _Avoid_: "lock file", "flag file".
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a

@@ -27,7 +27,8 @@ the PRD's numbers past PRD-08 to PRD-13's drafts. R241 to R245 joined from
 PRD-15 slice 4 (#966), the landing script's factory ticket. R52 to R58,
 R61 to R64, R68 and R69 joined from PRD-09 slice 1 (#905, ADR-0045), the
 risk rule, keeping the PRD's numbers; R59 and R60 joined with its second
-slice (#906), the review at the head; R65 to R67 are its later slices'.
+slice (#906), the review at the head; R65 to R67 with its third (#907),
+the kill switch.
 The verifier's dispatch and its broker joined as R206, R208 to R211 and
 R227, from PRD-13 slice 1 (#941, ADR-0044).
 
@@ -95,6 +96,9 @@ R61. The effective risk SHALL be `high` when either the planner's or the rule's 
 R62. The risk rule SHALL check every `Risk` value it prints with the vocabulary checker, declaring itself the risk rule, and SHALL print nothing and exit 2 if the checker refuses one.
 R63. WHEN the risk rule judges a PR, it SHALL record one `risk.judge` event with subject `pr:#<N>`, the ticket in `related` when there is one, outcome `disagreed` when the planner's level differs from the rule's and `agreed` otherwise, and in `data` the head commit, the planner's, rule's and effective risks, the unlearned areas and the switch state. [UC1 7, 7b]
 R64. IF the trace already holds a `risk.judge` for the same PR and head commit with the same risks and switch state, THEN the risk rule SHALL record nothing. [UC1 7a]
+R65. WHILE the kill switch is tripped, the risk rule SHALL replace a rule's risk of `low` with `high unlearned`, print `switch: tripped`, and record `data.switch=tripped`. [UC4 2]
+R66. The kill switch SHALL read tripped when the base branch's policy sets it so, when that value cannot be read, or when the trip marker exists in the clone's git directory, and on otherwise. [UC4 1, 3, 1a, 2b]
+R67. The risk rule SHALL read the thresholds and the switch value only through the base-branch policy contract, never from the environment or the PR's own tree. [UC4 2a]
 R68. The risk rule SHALL exit 0 whatever risk it prints, and SHALL write nothing but its `risk.judge` event. [UC1 8]
 R69. The risk rule SHALL print and record only risk tokens, review area names from the lens-slice policy, `none`, the switch words, digits and commit shas, and no text from a ticket body, a PR body or a commit message.
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]

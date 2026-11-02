@@ -61,8 +61,17 @@
 # carries the rule's reason when the rule says high, the planner's otherwise
 # (runtime/R61). The two DISAGREE when their levels differ.
 #
-# THE KILL SWITCH is `on` in this slice: the switch line and `data.switch`
-# are printed and recorded, and the slice that adds the switch trips them.
+# THE KILL SWITCH is TRIPPED when the risk policy at <base> sets
+# `RISK_KILL_SWITCH=tripped`, when that value cannot be read there (the policy
+# reader's `read` fails closed, or the value is unset or neither `on` nor
+# `tripped`), or when the TRIP MARKER, a file named `risk-switch-tripped` in
+# the clone's git directory (`git rev-parse --git-common-dir`, so every
+# worktree of the clone shares it), exists; it is `on` otherwise (runtime/R66).
+# While it is tripped, a rule's `low` becomes `high unlearned`; a rule already
+# high keeps its reason (runtime/R65). The value is read only from the base's
+# copy of the policy, evaluated in a child process with the name unset — never
+# the environment, never the pull request's tree (runtime/R67). Anyone may
+# trip it; resetting is the operator's: delete the marker, or land the value.
 #
 # THE EVENT. One `risk.judge`, subject `pr:#<N>`, `related` the ticket when a
 # `--ticket` names one, outcome `agreed` or `disagreed`, and in data the head
@@ -232,15 +241,34 @@ if [ -n "$record" ]; then
 			END { if (o != "") print o }')
 fi
 
+# --- the kill switch ----------------------------------------------------------------
+# The base's value, read through the policy reader and evaluated in a child
+# process that starts with the name unset, so neither the environment nor the
+# pull request's tree can stand in for it; then the trip marker.
+switch=tripped
+_sw=
+_copy=$(sh "$_here/policy.sh" read scripts/risk.config.sh --base "$base" 2>/dev/null) && [ -f "$_copy" ] &&
+	_sw=$(sh -c 'unset RISK_KILL_SWITCH; . "$1" >/dev/null 2>&1 </dev/null; command printf "%s\n" "${RISK_KILL_SWITCH-}"' _ "$_copy" 2>/dev/null)
+case $_sw in
+on) switch=on ;;
+tripped) ;;
+*) say "the kill switch's value cannot be read at the base — the switch reads tripped" ;;
+esac
+_gd=$(git rev-parse --git-common-dir 2>/dev/null) || _gd=
+if [ -z "$_gd" ] || [ -e "$_gd/risk-switch-tripped" ] || [ -L "$_gd/risk-switch-tripped" ]; then
+	switch=tripped
+fi
+
 # --- the verdict ------------------------------------------------------------------
 # The rule's reason, in order: outward, then unlearned, then unclear.
-switch=on
 rule=low
 case $outward in
 '' | -) rule='high unclear' ;;
 esac
 [ -z "$unlearned" ] || rule='high unlearned'
 case $outward in '' | - | 0) ;; *) rule='high outward' ;; esac
+# A tripped switch lets the rule call nothing low (runtime/R65).
+[ "$switch" = on ] || [ "$rule" != low ] || rule='high unlearned'
 plevel=${planner%% *}
 rlevel=${rule%% *}
 if [ "$rlevel" = high ]; then
