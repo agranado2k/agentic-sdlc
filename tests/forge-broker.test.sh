@@ -1961,7 +1961,7 @@ git -C "$VREPO" init -q -b main
 git -C "$VREPO" config user.name "Broker Fixture"
 git -C "$VREPO" config user.email "fixture@example.invalid"
 git -C "$VREPO" config commit.gpgsign false
-printf '%s\n' '#!/bin/sh' 'set -eu' 'rm -rf "$target"' 'echo done' >"$VREPO/src/app.sh"
+printf '%s\n' '#!/bin/sh' 'set -eu' 'rm -rf "$target"' 'echo done' "$(printf 'col1\tcol2')" >"$VREPO/src/app.sh"
 git -C "$VREPO" add -A
 git -C "$VREPO" commit -q -m 'feat: the head'
 VSHA=$(git -C "$VREPO" rev-parse HEAD)
@@ -2024,6 +2024,13 @@ for f in missing unstaged agreed offline nofile; do
 	assert_mutating 0 "runtime/R220: …and posts nothing"
 done
 v_none 59 "runtime/R220: …and nothing is recorded"
+# A span copied exactly from a line holding a tab is found there: the report
+# and the cited line read tabs alike.
+STUB_PR=61
+export STUB_PR
+v_judged "$SCRATCH/v-judged-tab.md" "$H1_OK" "$(printf 'finding: M-2 — disputed — src/app.sh:5 — col1\tcol2')"
+broker 61 "$SCRATCH/v-judged-tab.md" --verifier --rung cross-provider --provider openai --staged "$V_FIND"
+expect_status 0 "runtime/R220: a span holding a tab, copied exactly from its line, is found there"
 cd "$KIT" || exit 1
 STUB_HEAD=$HEAD_SHA
 STUB_PR=12

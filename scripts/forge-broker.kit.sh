@@ -526,7 +526,9 @@ if [ -n "$VERIFIER" ]; then
 			echo "the reviewed commit $REVIEWED is not in this checkout, so no finding verdict's span can be found — run the broker from the checkout that holds it" >>"$TMP/verror"
 		else
 			while IFS='	' read -r j_id j_word j_path j_line j_span; do
-				j_text=$( (unset GIT_DIR GIT_WORK_TREE && git show "$REVIEWED:$j_path") 2>/dev/null | sed -n "${j_line}p")
+				# Tabs read as spaces on both sides: the span's were folded
+				# when it was lifted, so the line's are folded here.
+				j_text=$( (unset GIT_DIR GIT_WORK_TREE && git show "$REVIEWED:$j_path") 2>/dev/null | sed -n "${j_line}p" | tr '\t' ' ')
 				J_TEXT=$j_text J_SPAN=$j_span awk 'BEGIN { exit !index(ENVIRON["J_TEXT"], ENVIRON["J_SPAN"]) }' ||
 					echo "the finding verdict for $j_id quotes a span not found on $j_path:$j_line at $REVIEWED" >>"$TMP/verror"
 			done <"$TMP/judged"
