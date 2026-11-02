@@ -19,6 +19,9 @@ SLICER="$KIT/scripts/lens-slice.sh"
 # shellcheck source=./lib.sh
 . "$KIT/tests/lib.sh"
 t_init
+# A judge reads its policy at POLICY_BASE when set (ADR-0039): a run that
+# inherited one would judge every fixture by a ref it does not hold.
+unset POLICY_BASE LENS_SLICE_CONFIG
 
 SKILL_DIR="$KIT/.agents/skills/review-pr"
 # The six standards lenses, read from the skill's own roster — never a copy:
@@ -249,6 +252,88 @@ areas LENS_SLICE_CONFIG="$SCRATCH/typo.sh"
 [ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && pass "--areas refuses a policy the slicer refuses, printing nothing" || fail "--areas over a typo policy: exit $T_STATUS, out $T_OUT"
 t_exec sh "$SLICER" --areas extra
 [ "$T_STATUS" = 2 ] && pass "--areas takes no argument (exit 2)" || fail "--areas with an argument: exit $T_STATUS"
+
+# ---------------------------------------------------------------------------
+banner "Judged by the base's lens-slice policy — POLICY_BASE (ADR-0039, PRD-08 slice 4)"
+# ---------------------------------------------------------------------------
+# A pull request must not narrow the lens that reads it. With POLICY_BASE
+# naming a ref, the slicer reads the lens-slice policy through the policy
+# reader at that ref; unset, the working tree's copy, as before.
+
+# own_repo — a fixture carrying its own slicer, its loader, the reader and the
+# shipped policy on main; the branch `pr` narrows security to exclude scripts/
+# and changes scripts/land.kit.sh. Sets REPO; leaves `pr` checked out.
+own_repo() {
+	t_repo
+	mkdir -p "$REPO/scripts"
+	cp "$SLICER" "$KIT/scripts/guards.lib.sh" "$KIT/scripts/policy.sh" "$KIT/scripts/lens-slice.config.sh" "$REPO/scripts/"
+	t_write "$REPO" scripts/land.kit.sh 'echo land
+'
+	t_commit "$REPO" "chore: base" >/dev/null
+	git -C "$REPO" checkout -q -b pr
+	t_write "$REPO" scripts/lens-slice.config.sh "LENS_SLICE_RULES='security ^nothing/'
+"
+	t_write "$REPO" scripts/land.kit.sh 'echo landed
+'
+	t_commit "$REPO" "feat: narrow security and change a script" >/dev/null
+}
+
+# own_slice <out> [env…] — the fixture's own slicer, run in it against main.
+own_slice() {
+	_os_out=$1
+	shift
+	t_exec env "$@" sh -c 'cd "$1" && sh scripts/lens-slice.sh main "$2"' _ "$REPO" "$_os_out"
+}
+
+own_repo
+own_slice "$SCRATCH/pb1" POLICY_BASE=main
+[ "$T_STATUS" = 0 ] && pass "policy/R26: the slicer exits 0 reading main's policy" || fail "POLICY_BASE=main slice: exit $T_STATUS, err $T_ERR"
+case " $(files_in "$SCRATCH/pb1/security.diff") " in
+*" scripts/land.kit.sh "*) pass "policy/R26: the security slice holds scripts/land.kit.sh — main's rule, not the branch's" ;;
+*) fail "policy/R26: the security slice lacks scripts/land.kit.sh: [$(files_in "$SCRATCH/pb1/security.diff")]" ;;
+esac
+own_slice "$SCRATCH/pb2"
+case " $(files_in "$SCRATCH/pb2/security.diff") " in
+*" scripts/land.kit.sh "*) fail "policy/R16: unset, the branch's narrowed policy should hide the script from security" ;;
+*) pass "policy/R16: with POLICY_BASE unset the working tree's (narrowed) policy is read" ;;
+esac
+own_slice "$SCRATCH/pb3" POLICY_BASE=main LENS_SLICE_CONFIG=scripts/lens-slice.config.sh
+case " $(files_in "$SCRATCH/pb3/security.diff") " in
+*" scripts/land.kit.sh "*) pass "policy/R17: an override naming the judging file is read at the base" ;;
+*) fail "policy/R17: the override was read from the working tree" ;;
+esac
+own_slice "$SCRATCH/pb4" POLICY_BASE=main LENS_SLICE_CONFIG="$SCRATCH/typo.sh"
+[ "$T_STATUS" = 2 ] && pass "policy/R17: an override outside the repository is read as given (here: refused, a typo policy)" ||
+	fail "an outside override under POLICY_BASE: exit $T_STATUS"
+
+# UC4 2a: no lens-slice policy at main — every lens gets the whole diff, exit 3.
+git -C "$REPO" checkout -q main
+git -C "$REPO" rm -q scripts/lens-slice.config.sh
+git -C "$REPO" commit -q -m "chore: drop the policy"
+git -C "$REPO" checkout -q pr
+own_slice "$SCRATCH/pb5" POLICY_BASE=main
+[ "$T_STATUS" = 3 ] && pass "policy/R27: main with no lens-slice policy exits 3" || fail "policy/R27: exit $T_STATUS, err $T_ERR"
+printf '%s\n' "$T_OUT" | grep -qx 'fail-closed missing scripts/lens-slice.config.sh' &&
+	pass "policy/R27: it prints the fail-closed line" || fail "policy/R27: no fail-closed line on stdout: $T_OUT"
+whole=$(files_in "$SCRATCH/pb5/behavior.diff")
+[ -n "$whole" ] || fail "policy/R27: the behavior slice is empty"
+_r27=ok
+for l in $LENSES; do
+	[ "$(files_in "$SCRATCH/pb5/$l.diff")" = "$whole" ] || _r27="$l"
+done
+[ "$_r27" = ok ] && pass "policy/R27: every lens's slice is the whole diff [$whole]" || fail "policy/R27: the $_r27 slice is not the whole diff"
+own_slice "$SCRATCH/pb6" POLICY_BASE=no-such-ref
+[ "$T_STATUS" = 3 ] && printf '%s\n' "$T_OUT" | grep -qx 'fail-closed no-base scripts/lens-slice.config.sh' &&
+	pass "a POLICY_BASE that names no commit fails closed (exit 3)" || fail "POLICY_BASE=no-such-ref: exit $T_STATUS, out $T_OUT"
+
+# Standing in a repository that is not the slicer's own, no override, is the
+# strictest path too: the base of a foreign repository is not this slicer's policy.
+own_repo
+slice "$REPO" "$SCRATCH/pb7" POLICY_BASE=main
+[ "$T_STATUS" = 3 ] && pass "a foreign repository's base, no override, fails closed (exit 3)" || fail "foreign base: exit $T_STATUS, err $T_ERR"
+
+areas POLICY_BASE=no-such-ref
+[ "$T_STATUS" = 0 ] && pass "--areas ignores POLICY_BASE: it reads the working tree, unchanged" || fail "--areas under POLICY_BASE: exit $T_STATUS"
 
 banner "/review-pr hands each lens its slice (spend/R10), the behavior axis the whole diff (spend/R11)"
 for l in $LENSES; do

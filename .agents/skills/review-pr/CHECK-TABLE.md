@@ -11,11 +11,11 @@ Opened from `/review-pr` §3, Agent 7's inputs, when the PR's ticket carries a `
 ```sh
 gh pr view <N> --json body -q .body >"$d/pr-body"
 gh issue view <T> --json body -q .body >"$d/ticket-body"
-sh scripts/check-table.sh "$d/pr-body" "$d/ticket-body" >"$d/check-table" 2>/dev/null; echo "exit: $?" >>"$d/check-table"
+POLICY_BASE=<base> sh scripts/check-table.sh "$d/pr-body" "$d/ticket-body" >"$d/check-table" 2>/dev/null; echo "exit: $?" >>"$d/check-table"
 ```
 
 **A factory ticket fetches no issue**: it has none. Its side is the stamp reader's checked `Covers:` and `Test-tier:` lines, so the second line becomes `sh scripts/stamp.sh T-<digits> >"$d/ticket-body"`, and the other two run as written.
 
-Then hand `$d/check-table` to Agent 7 as a file, beside `scripts/behavior-delta.sh`'s output. It holds the reader's stdout — on exit 1 one `<word>: <id>` line per gap, the word one of `missing-row`, `extra-row`, `tier-differs`, `not-approved` (a row citing none of its id's approved `Accept-test:` lines), `fail` or `skipped` — and a last `exit: <n>` line. Exit 0 is a complete, passing table: nothing for Agent 7 to list from it. Exit 2 is a table, or a ticket stamp, the reader refused, and exit 3 a body that carries no table: Agent 7 lists every covered id, the word `refused` or `missing-row`, so a table nobody can read never passes as one with no gaps. Agent 7 lists them as its section says; the coordinator lists none and judges none.
+Then hand `$d/check-table` to Agent 7 as a file, beside `scripts/behavior-delta.sh`'s output. It holds the reader's stdout — on exit 1 one `<word>: <id>` line per gap, the word one of `missing-row`, `extra-row`, `tier-differs`, `not-approved` (a row citing none of its id's approved `Accept-test:` lines), `fail` or `skipped` — and a last `exit: <n>` line. Exit 0 is a complete, passing table: nothing for Agent 7 to list from it. Exit 2 is a table, or a ticket stamp, the reader refused — or, under its one `fail-closed` line, a vocabulary policy the base `<base>` (§0) cannot give — and exit 3 a body that carries no table: Agent 7 lists every covered id, the word `refused` or `missing-row`, so a table nobody can read never passes as one with no gaps. Agent 7 lists them as its section says; the coordinator lists none and judges none.
 
 **A dispatched review.** An offline worker has no forge to fetch from, so the session dispatching `/review-pr` runs the three lines above itself, before the dispatch, and appends `$d/check-table`, under a `Check-table reader:` line, to the spec file it hands the worker. The worker's contract lists that block in Agent 7's words.

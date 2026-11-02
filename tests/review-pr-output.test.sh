@@ -2389,7 +2389,30 @@ fi
 rm -rf "$VFD"
 
 # ---------------------------------------------------------------------------
-banner "28. The review reads the diff against the approved tests (acceptance/R32 R33 R34)"
+banner "28. The review reads its policy at the base it reviews against (policy/R32, policy/R33)"
+# ---------------------------------------------------------------------------
+# PRD-08 slice 4, the kit's ADR-0039: a pull request must not loosen the rules
+# its own review is cut by. /review-pr runs the slicer, the behavior-delta
+# lister and the check-table reader with POLICY_BASE set to the base step 0
+# locked, and a slicer that fails closed (exit 3) sends every lens the whole
+# diff and puts its fail-closed line in the summary.
+RCT28="$ROOT/.agents/skills/review-pr/CHECK-TABLE.md"
+for want in 'POLICY_BASE=<base> sh scripts/lens-slice.sh <base>' 'POLICY_BASE=<base> sh scripts/behavior-delta.sh <base>'; do
+	grep -qF "$want" "$SKILL_ABS" && pass "policy/R32: SKILL.md runs \`$want\`" || fail "policy/R32: SKILL.md does not run \`$want\`"
+done
+grep -qF 'POLICY_BASE=<base> sh scripts/check-table.sh' "$RCT28" &&
+	pass "policy/R32: CHECK-TABLE.md runs the check-table reader at the base" ||
+	fail "policy/R32: CHECK-TABLE.md does not set POLICY_BASE for the check-table reader"
+slicer_para=$(grep -F 'sh scripts/lens-slice.sh <base>' "$SKILL_ABS")
+for want in 'Exit 3 is its policy failing closed at the base' 'every lens runs on its whole-diff slice' 'its `fail-closed` line goes in the summary'; do
+	case $slicer_para in
+	*"$want"*) pass "policy/R33: the slicer paragraph says \"$want\"" ;;
+	*) fail "policy/R33: the slicer paragraph does not say \"$want\"" ;;
+	esac
+done
+
+# ---------------------------------------------------------------------------
+banner "29. The review reads the diff against the approved tests (acceptance/R32 R33 R34)"
 # ---------------------------------------------------------------------------
 # PRD-14 slice 4, UC4. In a factory project the coordinator runs the
 # acceptance guard from the review's base, judged at that base, and hands its

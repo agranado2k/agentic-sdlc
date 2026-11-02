@@ -1086,6 +1086,137 @@ weakened "runtime/R212: the broker call passes no staged directory" 's/--staged 
 weakened "process/R200: the verifier counted as the review" 's/never the review/the review/g' "$VERIFY_FLAT" "$VERIFY_WORDS"
 
 # ---------------------------------------------------------------------------
+banner "4k. Tests-first mode: a ticket with approved tests (acceptance/R24 to R31)"
+# ---------------------------------------------------------------------------
+# PRD-14 slice 3 (#971, factory T-93). In a factory project the session asks
+# the acceptance guard for the ticket's tests at the base before its first
+# edit, stops on `owed` and on exit 3, commits the approved files alone and
+# unchanged as the build's first commit, runs them red before any other code,
+# never edits one, and opens no PR until they and the suite pass. The mode is
+# STAMP.md's last section (a new sidecar would move the shipped skill set, a
+# release); step 2 opens it.
+tsec=$(awk '/^## Tests-first mode/ { on = 1 } on' "$STAMP_ABS")
+TF_FLAT=$(printf '%s\n' "$tsec" | tr '\n' ' ' | tr -s ' ')
+[ -n "$tsec" ] && pass "acceptance/R24: STAMP.md carries the tests-first section" ||
+	fail "acceptance/R24: STAMP.md has no '## Tests-first mode' section"
+step2=$(grep -F -- "2. **Check the ground**" "$SKILL_ABS")
+t_text_has "$step2" "tests-first" "acceptance/R24: step 2 opens the tests-first section" "step 2"
+t_text_has "$step2" "before any edit" "acceptance/R24: …before any edit" "step 2"
+tb() { t_text_has "$(grep -F -- "$1" "$STAMP_ABS")" "$2" "$3" "the bullet $1"; }
+tb "**Ask the acceptance guard, before your first edit.**" "\`T-<digits>\`" "acceptance/R24: the factory ticket id it is handed"
+tb "**Ask the acceptance guard, before your first edit.**" "\`GitHub issue:\` line names it" "acceptance/R24: an issue number, only through the mirror's line"
+tb "**Ask the acceptance guard, before your first edit.**" "only where the project mirrors its factory tickets as forge issues" "acceptance/R24: …only where the project mirrors"
+t_text_has "$TF_FLAT" "\`git cat-file -e <base>:.factory/project.yaml\`" "acceptance/R24: a factory project, read at the base" "the tests-first section"
+t_text_has "$TF_FLAT" "in any other project, ask nothing and build as today" "acceptance/R24: no factory project, no ask (UC2 1d)" "the tests-first section"
+tb "**\`owed\`, exit 4: stop before your first commit**" "acceptance tests are owed" "acceptance/R25: the owed stop names what is owed"
+tb "**\`owed\`, exit 4: stop before your first commit**" "no stage move, no commit" "acceptance/R25: …before any commit, the stage move's included"
+tb "**Exit 3: stop before your first commit**" "the fail-closed line as the guard printed it" "acceptance/R26: the fail-closed line, reported"
+tb "**Exit 0, \`no-tests" "build as today" "acceptance/R24: an exempt ticket builds as today (UC2 1b)"
+tb "**Exit 0, \`approved <commit>\`: tests-first mode.**" "commit those files alone, unchanged" "acceptance/R27: the approved files alone, unchanged"
+tb "**Exit 0, \`approved <commit>\`: tests-first mode.**" "the build's first commit" "acceptance/R27: …as the build's first commit"
+tb "**Run each approved test before writing any other code**" "green before the build: stop" "acceptance/R28: one already green stops the build"
+tb "**Run each approved test before writing any other code**" "it does not test the change" "acceptance/R28: …and says why"
+tb "**Never edit, move or delete an approved test file**" "Your own tests from step 4 go in other files" "acceptance/R29: the session's own tests live elsewhere"
+tb "**Never edit, move or delete an approved test file**" "leave the file unchanged" "acceptance/R30: a test that cannot pass unchanged is left so"
+tb "**Never edit, move or delete an approved test file**" "the change it would need, for the operator to approve again" "acceptance/R30: …and its change reported for re-approval"
+tb "**The done rule:" "every approved test passes at the head and the full suite passes" "acceptance/R31: the PR waits for both"
+tb "**The done rule:" "\`POLICY_BASE=\"\$base\" sh scripts/acceptance-guard.sh check \"\$base\" HEAD\` prints nothing" "acceptance/R31: …and the guard CI runs agrees"
+TF_WORDS='before your first edit
+stop before your first commit
+the fail-closed line as the guard printed it
+commit those files alone, unchanged
+green before the build: stop
+Never edit, move or delete an approved test file
+leave the file unchanged
+every approved test passes at the head and the full suite passes'
+weakened "acceptance/R24: the ask moved after the first edit" 's/before your first edit/after your first edit/g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R25: owed read as a warning" 's/stop before your first commit/note it and carry on/g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R27: the approved files may ride with code" 's/commit those files alone, unchanged/commit those files/g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R28: a green approved test let through" 's/green before the build: stop/green before the build: note it/g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R29: an approved file may be edited" 's/Never edit, move or delete/Rarely edit/g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R31: the PR on a green suite alone" 's/every approved test passes at the head and //g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R26: the fail-closed line paraphrased" 's/the fail-closed line as the guard printed it/a summary/g' "$TF_FLAT" "$TF_WORDS"
+weakened "acceptance/R30: the approved file may be changed" 's/leave the file unchanged/change the file/g' "$TF_FLAT" "$TF_WORDS"
+
+# The fixture run (slice 3's Accept): the section's own fenced commands, lifted
+# verbatim and run on UC2's repository — main holds the guards policy, the
+# manifest and T-90 approved at a commit off main; the session's branch is
+# `work`. The first commit's files must be the approved files alone, byte-equal
+# to the approval commit's. Only the guard's path is rewritten, to the kit's.
+ask=$(t_fence "$STAMP_ABS" holds "acceptance-guard.sh tests")
+bring=$(t_fence "$STAMP_ABS" holds "xargs git checkout")
+[ -n "$ask" ] && pass "acceptance/R24: the section carries the ask as a fenced block" ||
+	fail "acceptance/R24: no fenced block holds 'acceptance-guard.sh tests'"
+[ -n "$bring" ] && pass "acceptance/R27: the section carries the first commit as a fenced block" ||
+	fail "acceptance/R27: no fenced block holds 'xargs git checkout'"
+ask=$(printf '%s\n' "$ask" | sed "s#sh scripts/acceptance-guard.sh#sh '$ROOT/scripts/acceptance-guard.sh'#")
+TF=tests/report.test.sh
+tf_ticket() {
+	printf -- '---\nid: %s\ntype: ticket\nstage: ready\ncreated: %s\n' "$1" "$2"
+	[ "$3" = - ] || printf 'tests:\n  commit: "%s"\n  by: "operator"\n  at: 2026-11-02\n' "$3"
+	printf -- '---\n\n# %s\n\nCovers: report/R3, report/R4\nTest-tier: report/R3 suite\nTest-tier: report/R4 manual\n' "$1"
+	[ "$3" = - ] || printf 'Accept-test: report/R3 tests/report.test.sh::totals by area\nAccept-test: report/R3 tests/report.test.sh::empty window prints zero\n'
+}
+t_repo
+R=$REPO
+t_write "$R" scripts/guards.config.sh "GUARD_SOURCE_RE='^src/'
+"
+t_write "$R" .factory/project.yaml 'id: fixture
+acceptance_tests_since: 2026-11-01
+'
+t_write "$R" src/keep.sh 'kept
+'
+t_commit "$R" "chore: a factory project" >/dev/null
+git -C "$R" checkout -q -b t90-tests
+t_write "$R" "$TF" 'test "totals by area"
+test "empty window prints zero"
+'
+APPROVAL=$(t_commit "$R" "test: T-90's acceptance tests")
+git -C "$R" checkout -q main
+t_write "$R" .factory/items/T-90/ticket.md "$(tf_ticket T-90 2026-11-02 "$APPROVAL")"
+t_write "$R" .factory/items/T-91/ticket.md "$(tf_ticket T-91 2026-11-05 -)"
+t_commit "$R" "chore: approve T-90's tests" >/dev/null
+# T-92's approval names a commit no clone holds; it sits on its own base, so
+# the guard's check on `work` (whose base is main) never meets it.
+git -C "$R" checkout -q -b t92-base
+t_write "$R" .factory/items/T-92/ticket.md "$(tf_ticket T-92 2026-11-02 0123456789abcdef0123456789abcdef01234567)"
+t_commit "$R" "chore: approve T-92 at an unknown commit" >/dev/null
+git -C "$R" checkout -q main
+git -C "$R" checkout -q -b work
+# run_ask <ticket> [<base>] — the section's ask, in the fixture; sets RC and OUT.
+run_ask() {
+	OUT=$(cd "$R" && t=$1 base=${2:-main} && eval "$ask" && printf '%s\n' "$rc" && cat "$out")
+	RC=$(printf '%s\n' "$OUT" | head -1)
+	OUT=$(printf '%s\n' "$OUT" | sed 1d)
+}
+run_ask T-91
+[ "$RC" = 4 ] && [ "$OUT" = "owed T-91" ] && pass "acceptance/R25: an owed ticket — exit 4, 'owed T-91', the stop's cue" ||
+	fail "acceptance/R25: the ask on an owed ticket gave exit '$RC' and '$OUT'"
+run_ask T-92 t92-base
+[ "$RC" = 3 ] && [ "$OUT" = "fail-closed invalid .factory/items/T-92/ticket.md" ] &&
+	pass "acceptance/R26: an approval commit this clone lacks — exit 3, the fail-closed line" ||
+	fail "acceptance/R26: the ask on an unknown approval commit gave exit '$RC' and '$OUT'"
+run_ask T-90
+[ "$RC" = 0 ] && [ "$(printf '%s\n' "$OUT" | head -1)" = "approved $APPROVAL" ] &&
+	pass "acceptance/R27: an approved ticket — exit 0, 'approved <commit>' first" ||
+	fail "acceptance/R27: the ask on T-90 gave exit '$RC' and '$OUT'"
+said=$(cd "$R" && t=T-90 base=main && eval "$ask" && eval "$bring" 2>&1)
+[ "$said" = unchanged ] && pass "acceptance/R27: the section's own check says 'unchanged'" ||
+	fail "acceptance/R27: the first-commit block printed '$said'"
+[ "$(git -C "$R" diff-tree --no-commit-id --name-only -r HEAD)" = "$TF" ] &&
+	pass "acceptance/R27: the first commit holds the approved file alone" ||
+	fail "acceptance/R27: the first commit holds '$(git -C "$R" diff-tree --no-commit-id --name-only -r HEAD | tr '\n' ' ')'"
+[ "$(git -C "$R" rev-parse HEAD~1)" = "$(git -C "$R" rev-parse main)" ] &&
+	pass "acceptance/R27: …and it is the branch's first commit" ||
+	fail "acceptance/R27: the approved files' commit is not the first on the branch"
+[ "$(git -C "$R" rev-parse "HEAD:$TF")" = "$(git -C "$R" rev-parse "$APPROVAL:$TF")" ] &&
+	pass "acceptance/R27: the file is byte-equal to the approval commit's" ||
+	fail "acceptance/R27: the committed file differs from the approval commit's"
+gchk=$(cd "$R" && POLICY_BASE=main sh "$ROOT/scripts/acceptance-guard.sh" check main HEAD)
+[ $? = 0 ] && [ -z "$gchk" ] && pass "acceptance/R31: the guard's check, read as CI reads it, passes the first commit" ||
+	fail "acceptance/R31: the guard's check refused the first commit: $gchk"
+
+# ---------------------------------------------------------------------------
 banner "5. It composes with /pr-iterate instead of duplicating it"
 # ---------------------------------------------------------------------------
 assert_file_has "$SKILL" "/pr-iterate"

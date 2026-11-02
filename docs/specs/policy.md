@@ -37,3 +37,11 @@ R22. WHERE `POLICY_BASE` names a ref, the docs gate SHALL load its config module
 R23. IF `POLICY_BASE` names a ref and the policy reader fails closed on the docs gate's config module, THEN the docs gate SHALL print the fail-closed line, run no validator, and exit 1.
 R24. IF the local-vocabulary module is missing at `POLICY_BASE`, THEN the docs gate SHALL read an empty local vocabulary.
 R25. The shipped docs gate workflow, and each job of the kit's own CI that runs the docs gate on a pull request, SHALL set `POLICY_BASE` to the pull request's base commit, with that commit fetched.
+R26. WHERE `POLICY_BASE` names a ref, the lens slicer SHALL read the lens-slice policy through the policy reader at that ref.
+R27. IF `POLICY_BASE` names a ref and the policy reader fails closed on the lens-slice policy, THEN the lens slicer SHALL write the whole diff into every lens's slice, print the fail-closed line, and exit 3.
+R28. WHERE `POLICY_BASE` names a ref, the behavior-delta lister SHALL read the guards policy through the policy reader at that ref.
+R29. IF `POLICY_BASE` names a ref and the policy reader fails closed on the guards policy, THEN the behavior-delta lister SHALL print the fail-closed line first and list every path the diff changes as a candidate.
+R30. WHERE `POLICY_BASE` names a ref, the vocabulary checker SHALL read the vocabulary policy through the policy reader at that ref.
+R31. IF `POLICY_BASE` names a ref and the policy reader fails closed on the vocabulary policy, THEN the check-table reader SHALL print the fail-closed line and exit 2.
+R32. `/review-pr` SHALL run the lens slicer, the behavior-delta lister and the check-table reader with `POLICY_BASE` set to the base ref it reviews against.
+R33. WHEN the lens slicer exits 3, `/review-pr` SHALL run every standards lens on its whole-diff slice and print the fail-closed line in its report's summary.

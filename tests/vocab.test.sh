@@ -1451,4 +1451,80 @@ t_exec env VOCAB_CONFIG="$SCRATCH/nobound.config.sh" sh "$VOCAB" fields
 expect_status 0 "a policy with no bound loads"
 expect_out_lacks "bound" "…and prints no bound line"
 
+# ---------------------------------------------------------------------------
+banner "Judged by the base's vocabulary policy — POLICY_BASE (ADR-0039, PRD-08 slice 4)"
+# ---------------------------------------------------------------------------
+# A pull request must not widen the words that judge its own decision lines.
+# With POLICY_BASE naming a ref, the checker reads the vocabulary policy of
+# its own repository through the policy reader at that ref; unset, the
+# working tree's, as before. The fixture carries its own checker, the reader
+# beside it, and the shipped policy on main; the branch adds a tier.
+unset VOCAB_CONFIG POLICY_BASE
+t_repo
+VREPO=$REPO
+mkdir -p "$VREPO/scripts"
+cp "$VOCAB" "$KIT/scripts/policy.sh" "$KIT/scripts/guards.lib.sh" "$KIT/scripts/requirement.lib.sh" "$KIT/scripts/vocab.config.sh" "$VREPO/scripts/"
+t_commit "$VREPO" "chore: base" >/dev/null
+git -C "$VREPO" checkout -q -b pr
+printf "VOCAB_TIER='planner implementer mechanical reviewer wizard'\n" >>"$VREPO/scripts/vocab.config.sh"
+t_commit "$VREPO" "feat: widen the tiers" >/dev/null
+
+# own_vocab [env…] -- <args…> — the fixture's own checker, run in the fixture.
+own_vocab() {
+	_ov_env=
+	while [ "$1" != -- ]; do _ov_env="$_ov_env $1"; shift; done
+	shift
+	t_exec env $_ov_env sh -c 'cd "$1" && shift && sh scripts/vocab.sh "$@"' _ "$VREPO" "$@"
+}
+own_vocab -- 'Tier: wizard'
+expect_status 0 "policy/R16: with POLICY_BASE unset the working tree's (widened) policy is read"
+own_vocab POLICY_BASE=main -- 'Tier: wizard'
+expect_status 2 "policy/R30: under POLICY_BASE=main the checker refuses the word main's policy lacks"
+expect_err_has "tier: 'wizard' is not one of planner implementer mechanical reviewer"
+own_vocab POLICY_BASE=main -- 'Tier: implementer'
+expect_resolved "" "policy/R30: a word main's policy holds is accepted at the base"
+own_vocab POLICY_BASE=main "VOCAB_CONFIG=$VREPO/scripts/vocab.config.sh" -- 'Tier: wizard'
+expect_status 2 "policy/R17: an override naming the judging file is read at the base"
+printf "VOCAB_FIELDS='tier'\nVOCAB_TIER='wizard'\n" >"$SCRATCH/outside-vocab.config.sh"
+own_vocab POLICY_BASE=main "VOCAB_CONFIG=$SCRATCH/outside-vocab.config.sh" -- 'Tier: wizard'
+expect_status 0 "policy/R17: an override outside the repository is read as given"
+
+git -C "$VREPO" checkout -q main
+git -C "$VREPO" rm -q scripts/vocab.config.sh
+git -C "$VREPO" commit -q -m "chore: drop the vocabulary policy"
+git -C "$VREPO" checkout -q pr
+own_vocab POLICY_BASE=main -- 'Tier: implementer'
+expect_status 3 "a vocabulary policy missing at the base fails closed (exit 3) — never the shipped defaults"
+expect_out_is "fail-closed missing scripts/vocab.config.sh" "…printing the fail-closed line, and only it, on stdout"
+own_vocab POLICY_BASE=main -- fields
+expect_status 3 "fields fails closed the same way"
+own_vocab POLICY_BASE=no-such-ref -- 'Tier: implementer'
+expect_out_is "fail-closed no-base scripts/vocab.config.sh" "a POLICY_BASE naming no commit fails closed"
+
+# POLICY_BASE names a ref of the repository being judged — the one the caller
+# stands in. A checker of ANOTHER repository (a kit's scripts run on a
+# fixture) is not judged by that pull request: it reads its own policy as
+# discovery finds it, never a ref of a repository that is not its own.
+t_repo
+OTHER=$REPO
+t_commit "$OTHER" "chore: another repository, whose main is not the checker's" >/dev/null
+t_exec sh -c 'cd "$1" && POLICY_BASE=$(git rev-parse HEAD) sh "$2" "Tier: wizard"' _ "$OTHER" "$VREPO/scripts/vocab.sh"
+expect_status 0 "a checker standing in another repository reads its own (widened) working-tree policy"
+
+# A checker outside any git repository has no working tree a pull request
+# could edit: it is a copy extracted from a commit (the acceptance step runs
+# the base's scripts so, from `git archive`). It reads the policy beside it —
+# that commit's — and, with none there, fails closed rather than fall back to
+# the shipped defaults.
+XDIR="$SCRATCH/extracted/scripts"
+mkdir -p "$XDIR"
+cp "$VOCAB" "$KIT/scripts/policy.sh" "$KIT/scripts/guards.lib.sh" "$KIT/scripts/requirement.lib.sh" "$KIT/scripts/vocab.config.sh" "$XDIR/"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh "$2" "Tier: implementer"' _ "$VREPO" "$XDIR/vocab.sh"
+expect_resolved "" "an extracted checker under POLICY_BASE reads the policy beside it"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh "$2" "Tier: wizard"' _ "$VREPO" "$XDIR/vocab.sh"
+expect_status 2 "…and holds a line to it"
+rm "$XDIR/vocab.config.sh"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh "$2" "Tier: implementer"' _ "$VREPO" "$XDIR/vocab.sh"
+expect_status 3 "an extracted checker with no policy beside it fails closed — never the shipped defaults"
+
 t_done "vocab"

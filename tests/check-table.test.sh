@@ -370,4 +370,32 @@ printf '%s\n' "$ALL_OUT" | grep -E '^(missing-row|extra-row|tier-differs|not-app
 [ ! -s "$SCRATCH/odd" ] && pass "process/R47: every verdict line is a word and a requirement id, nothing else" ||
 	fail "process/R47: a verdict line carried more than a word and an id: $(head -1 "$SCRATCH/odd")"
 
+# ---------------------------------------------------------------------------
+banner "Judged by the base's vocabulary policy — POLICY_BASE (ADR-0039, PRD-08 slice 4)"
+# ---------------------------------------------------------------------------
+# The reader holds tiers and results to the vocabulary policy. With POLICY_BASE
+# naming a ref it is read at that ref, and a policy the base cannot give is a
+# refusal: the fail-closed line and exit 2, so the review lists every covered
+# id as missing (policy/R31). The fixture carries its own reader and checker.
+unset POLICY_BASE VOCAB_CONFIG
+t_repo
+CREPO=$REPO
+mkdir -p "$CREPO/scripts"
+cp "$READER" "$KIT/scripts/vocab.sh" "$KIT/scripts/requirement.lib.sh" "$KIT/scripts/policy.sh" "$KIT/scripts/guards.lib.sh" "$KIT/scripts/vocab.config.sh" "$CREPO/scripts/"
+t_commit "$CREPO" "chore: base" >/dev/null
+git -C "$CREPO" checkout -q -b pr
+ticket "$STD_TICKET"
+body "| process/R45 | unit | pass | $PIN |" "| process/R46 | suite | pass | $PIN |" "| process/R47 | manual | pass | $PIN |"
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh scripts/check-table.sh "$2" "$3"' _ "$CREPO" "$SCRATCH/pr" "$SCRATCH/ticket"
+expect_resolved "" "policy/R30: at a base holding the vocabulary, a passing table still passes"
+git -C "$CREPO" checkout -q main
+git -C "$CREPO" rm -q scripts/vocab.config.sh
+git -C "$CREPO" commit -q -m "chore: drop the vocabulary policy"
+git -C "$CREPO" checkout -q pr
+t_exec sh -c 'cd "$1" && POLICY_BASE=main sh scripts/check-table.sh "$2" "$3"' _ "$CREPO" "$SCRATCH/pr" "$SCRATCH/ticket"
+expect_status 2 "policy/R31: a vocabulary policy missing at the base is a refusal (exit 2)"
+expect_out_is "fail-closed missing scripts/vocab.config.sh" "policy/R31: the fail-closed line, and only it, on stdout"
+t_exec sh "$CREPO/scripts/check-table.sh" "$SCRATCH/pr" "$SCRATCH/ticket"
+expect_resolved "" "policy/R16: unset, the working tree's policy is read, as before"
+
 t_done "the check-table reader"
