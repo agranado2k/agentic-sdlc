@@ -3799,6 +3799,10 @@
 # raised it, its reason and its review area, leaves a `data.switch=tripped`
 # verdict out and counts it apart, and reads the risk stamp per
 # Risk-confidence (#912, factory T-49, landed after 0.108.0's tag).
+# /implement — SKILL.md step 9 and DISPATCHED-REVIEW.md's last section:
+# once the review is requested, where `reviewer cross-provider` resolves to
+# a model, request the verifier on the same head commit (#942, factory
+# T-79, landed after 0.108.0's tag).
 # Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/risk.config.sh gains `RISK_KILL_SWITCH=on` and its
 # comment — add the line to your copy and land it on your base branch, or

@@ -244,10 +244,11 @@ To trip it in one clone at once: `: >"$(git rev-parse --git-common-dir)/risk-swi
 to reset, delete that file. To trip it everywhere, CI included, land
 `RISK_KILL_SWITCH=tripped`; to reset, land `on`. No environment variable
 sets or resets it, and a pull request that changes the value in its own tree
-is judged by the base's. **Two skills move (9a): `/pr-iterate`** —
-`RISK.md` names the switch — **and `/retro`**, whose question 8 now counts the
-rule's agreements and disagreements and leaves tripped verdicts out of them;
-take both. No wiring, template or adapter moves.
+is judged by the base's. **Three skills move (9a): `/pr-iterate`** —
+`RISK.md` names the switch — **`/retro`**, whose question 8 now counts the
+rule's agreements and disagreements and leaves tripped verdicts out of them,
+**and `/implement`**, whose step 9 requests the verifier on the review's head
+commit (`DISPATCHED-REVIEW.md`'s last section); take all three. No wiring, template or adapter moves.
 
 **Arriving from 0.107.0 or older, the risk rule reads the review at the
 head.** No file joins or leaves at 0.108.0; `scripts/risk.sh` changes
@@ -1982,10 +1983,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3693 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3694 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3847 insertions(+), 1 deletion(-)
+ 3 files changed, 3848 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
