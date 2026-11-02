@@ -96,8 +96,14 @@ R222. WHEN `/implement` is handed a temporary factory id, `T-~` followed by hex,
 R223. IF the repository's git top level holds the project manifest and the factory skill for the planning skill's item is not installed, THEN `/to-prd` or `/to-tickets` SHALL run its forge flow as today and SHALL say once, at its start, that `factory install-skill` would add that factory skill. [UC1 2e, UC2 2c]
 R224. `/to-prd` and `/to-tickets` SHALL decide the deferral without running any `factory` subcommand, so that a factory project without the `factory` binary runs them as R123 or R223 says.
 R225. A factory skill SHALL count as installed when its `SKILL.md` exists under the user's `~/.claude/skills/<name>/` or the project's `.claude/skills/<name>/`, and under no other path.
+R201. WHEN `/pr-iterate` requests a review at a new head, it SHALL also request the verifier at that head, and neither skill SHALL request the verifier more than once for one head commit. [UC2 3]
+R202. `/pr-iterate` SHALL triage each verifier finding as it triages a bot's finding, and SHALL record its `finding.triage` with the finding's `V-` id. [UC2 1]
+R203. IF the verifier marks a check-table row `disputed`, THEN `/pr-iterate` SHALL list that id at the top of its report as a check awaiting the operator, beside the skipped rows, and SHALL NOT rewrite that row's result for the dispute. [UC2 2]
+R204. `/pr-iterate` SHALL NOT decide, amend or log a verifier's ⚠️ UNSPECIFIED item, whatever scope it carries, and SHALL list each one verbatim at the top of its report for the operator. [UC2 4]
+R205. No `verify.verdict` outcome SHALL stop `/pr-iterate` from reporting a PR converged. [UC2 5]
 R206. The shipped CI review prompt SHALL ask for `scope: inside` or `scope: outward` as the first words after the tag on each ⚠️ UNSPECIFIED item. [UC5 1]
 R207. The shipped CI review prompt SHALL ask for one line per `pass` row of the PR's check table, naming the row's id and `upheld` or `disputed`. [UC5 2]
+R208. IF the verifier disputes a finding of the kit's review, THEN `/pr-iterate` SHALL list that finding's id with the verifier's evidence at the top of its report, beside the disputed rows, and SHALL NOT reject the finding on the verifier's verdict alone. [UC2 1a]
 R220. `/to-tickets`' rule against file paths in ticket bodies SHALL except `Accept-test:` lines, as it excepts a mechanical ticket's oracle line, because the approval commit pins each path and the acceptance guard catches a path that drifts.
 R221. WHERE a ticket draft carries `Accept-test:` lines, `/to-tickets` SHALL check each with the vocabulary checker before the quiz and show them at the quiz beside the ticket's `Test-tier:` lines.
 R240. WHEN `/pr-iterate` or `/merge-train` records a verdict or a landing for a PR whose landing line names a factory ticket id, it SHALL write `ticket:T-<digits>` where it writes `ticket:#<N>` for an issue. [UC2 2b]

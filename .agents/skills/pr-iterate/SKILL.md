@@ -350,6 +350,7 @@ Stop iterating and report when ANY of:
 - The only reds left are release-bound (step 3) → 🛑 stopped at the first release-bound red: record it — `sh scripts/trace.sh emit kind=pr.iterate subject=pr:#<N> outcome=stopped data.iteration=<i> data.check='<the check by name>' reason='release-bound — <the check by name>' || :`, in place of the iteration's line below — report the check to the operator by name with the line its output carried, and end with `Next: stop — release-bound: <the check by name>` — ending a `/loop` is the operator's, and no later iteration fixes or re-runs the red
 - The review recorded Axis 1 `blocked` with the reason `no lens ran` → 🟡 escalate, never ✅ converged: open [`NO-LENS.md`](NO-LENS.md) beside this file
 - The check-table reader prints `fail:`, `missing-row:`, `extra-row:` or `tier-differs:` → never ✅ converged — [`CHECK-TABLE.md`](CHECK-TABLE.md)
+- The verifier — triage its findings as a bot's, list its disputes and ⚠️ items at the top; no verdict of its holds ✅ converged — [`CHECK-TABLE.md`](CHECK-TABLE.md)
 - 5 iterations completed without convergence (likely stuck) → 🟡 escalate with diagnosis
 - A bot suggestion conflicts with a binding record and you can't reply confidently → 🟡 escalate
 - Branch protection blocks a legitimate operation → 🟡 escalate
@@ -368,9 +369,10 @@ PR #<N> — "<title>" — iteration <i>
 Risk: <the effective line> (reported only)
 
 ⚠️ For you (behavior confirm-list, human-only):
-  <verbatim outward ⚠️ UNSPECIFIED / 🔀 MIXED COMMIT lines, or "none">
+  <verbatim outward ⚠️ UNSPECIFIED / 🔀 MIXED COMMIT lines and the verifier's ⚠️ items, or "none">
 
 Manual checks awaiting you: <the reader's skipped: ids, or "none">
+Verifier disputes awaiting you: <its disputed row ids, and kit findings with evidence, or "none">
 
 Status:
   Checks:        <green>/<total> green · <failing> failing · <pending> pending
