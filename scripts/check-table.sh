@@ -15,7 +15,9 @@
 # `none (<reason>)`, covers nothing; two, or a value that is not a list of
 # bounded ids, is refused) and its bare `Test-tier: <id> <tier>` lines, held
 # by scripts/vocab.sh to the vocabulary policy — one tier per id — and to the
-# policy's published bound. Of the PR body, the part ABOVE the
+# policy's published bound; and its bare `Accept-test: <id> <path>::<test>`
+# lines, the APPROVED TESTS, held by the same checker to the test-pin grammar
+# and to that field's bound. Of the PR body, the part ABOVE the
 # `<!-- explain-diff-appendix -->` marker line (below it is the author's
 # narrative), outside every fence: the one `<!-- check-table -->` marker line,
 # then, on the next lines, the exact header
@@ -25,8 +27,10 @@
 #   Requirement  a bounded requirement id (scripts/requirement.lib.sh);
 #   Test tier    a token of the policy's `test-tier` field;
 #   Result       a token of the policy's `result` field;
-#   Evidence     `<path>::<test>@<sha>` — path and test in the plain set
-#                (letters, digits, `.`, `/`, `_`, `-`), the sha 7 to 40 hex
+#   Evidence     `<path>::<test>@<sha>` — the path in the plain set
+#                (letters, digits, `.`, `/`, `_`, `-`), the test name any
+#                printable ASCII, spaces included, `<path>::<test>` at most
+#                200 characters, the sha (after the last `@`) 7 to 40 hex
 #                digits; or an `https://` URL in the plain set plus `:`, `#`,
 #                `?`, `=`, `&` and `%`, at most 200 characters; or `-`, only
 #                on a `skipped` row.
@@ -37,18 +41,21 @@
 #
 # EXIT STATUS, one outcome each:
 #   0  every covered id has exactly one row, its result `pass` and its tier
-#      the ticket's stamp (any tier, for an id the ticket stamps none for):
-#      NOTHING printed;
+#      the ticket's stamp (any tier, for an id the ticket stamps none for),
+#      and, for an id with approved tests, its evidence a pin whose
+#      `<path>::<test>` is one of them: NOTHING printed;
 #   1  a gap, one `<word>: <id>` line each: per covered id in the `Covers:`
 #      order, `missing-row:` (no row), `tier-differs:` (its row's tier is not
-#      the stamp), `fail:` or `skipped:` (its row's result), and `extra-row:`
+#      the stamp), `not-approved:` (an id with approved tests whose row cites
+#      none of them — a URL or `-` included), `fail:` or `skipped:` (its
+#      row's result), and `extra-row:`
 #      (a second row for it); then `extra-row:` per id the ticket does not
 #      cover, in the table's order, each once;
 #   2  a row that breaks the grammar or a table past 64 rows — stderr names
 #      the row number (`row <n>`, counted from the first row under the
 #      separator), or the header or the separator row; a body with two
-#      check-table markers; a ticket whose `Covers:` or `Test-tier:` lines are
-#      refused; a usage error or an unreadable file. NOTHING on stdout;
+#      check-table markers; a ticket whose `Covers:`, `Test-tier:` or
+#      `Accept-test:` lines are refused; a usage error or an unreadable file. NOTHING on stdout;
 #   3  the PR body carries no check table: stderr says so, stdout empty.
 #
 # THE GRAMMAR is not spelled here twice: the id, the Covers: value and the
@@ -148,6 +155,25 @@ if [ -n "$stamps" ]; then
 	stamps=$(printf '%s\n' "$stamps" | awk '{ print $2, $3 }')
 fi
 
+# The approved tests: `<id><TAB><path>::<test>` per Accept-test: line, the
+# lines held by scripts/vocab.sh to the test-pin grammar and to its bound.
+approved=$(printf '%s\n' "$tbody" | grep '^Accept-test:')
+if [ -n "$approved" ]; then
+	n=$(printf '%s\n' "$approved" | grep -c '')
+	abound=$(printf '%s\n' "$fields" | sed -n 's/^bound accept-test: //p')
+	[ -n "$abound" ] || abound=$bound
+	[ "$n" -le "$abound" ] || {
+		ct_say "the ticket carries $n Accept-test: lines — the policy's bound is $abound"
+		exit 2
+	}
+	printf '%s\n' "$approved" | sh "$vocab" check >/dev/null 2>&1 || {
+		ct_say "the ticket's Accept-test: lines are refused by scripts/vocab.sh — run it on them to see why"
+		exit 2
+	}
+	approved=$(printf '%s\n' "$approved" | sed 's/^Accept-test:[[:space:]]*//; s/[[:space:]]*$//' |
+		awk '{ id = $1; sub(/^[^ \t]+[ \t]+/, ""); print id "\t" $0 }')
+fi
+
 # --- the table --------------------------------------------------------------
 # Outside every fence, above the appendix marker.
 above=$(tr -d '\r' <"$pr" | fence_strip | awk '/^[ \t]*<!-- explain-diff-appendix -->[ \t]*$/ { exit } { print }')
@@ -162,7 +188,9 @@ m=$(printf '%s\n' "$above" | grep -c "$marker")
 	exit 2
 }
 
-# The parse: `ok <id> <tier> <result>` per row, or one `bad <what>` line.
+# The parse: `ok<TAB><id><TAB><tier><TAB><result><TAB><pin>` per row, the pin
+# the evidence's `<path>::<test>` or `-` for a URL or none; or one `bad <what>`
+# line.
 rows=$(printf '%s\n' "$above" | awk -v marker="$marker" -v tiers=" $tiers " -v results=" $results " \
 	-v area="$REQ_AREA_ERE" -v num="$REQ_PRD_ID_ERE" -v amax="$REQ_ID_AREA_MAX" -v nmax="$REQ_ID_NUM_MAX" '
 	function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
@@ -172,13 +200,17 @@ rows=$(printf '%s\n' "$above" | awk -v marker="$marker" -v tiers=" $tiers " -v r
 		num = s; sub(/^.*R/, "", num)
 		return length(a) <= amax && length(num) <= nmax
 	}
-	function evok(s, result,    sha) {
+	function evok(s, result,    sha, key) {
 		if (s == "-") return result == "skipped"
-		if (s ~ pin) { sha = s; sub(/^.*@/, "", sha); return length(sha) >= 7 && length(sha) <= 40 }
+		if (s ~ pin) {
+			sha = s; sub(/^.*@/, "", sha)
+			key = substr(s, 1, length(s) - length(sha) - 1)
+			return length(sha) >= 7 && length(sha) <= 40 && length(key) <= 200
+		}
 		return s ~ url && length(s) <= 200
 	}
 	BEGIN {
-		pin = "^[A-Za-z0-9._/-]+::[A-Za-z0-9._/-]+@[0-9a-fA-F]+$"
+		pin = "^[A-Za-z0-9._/-]+::[ -~]+@[0-9a-fA-F]+$"
 		url = "^https://[A-Za-z0-9._/:#?=&%-]+$"
 		head = "| Requirement | Test tier | Result | Evidence |"
 		idre = "^(" area "/)?" num "$"
@@ -202,7 +234,9 @@ rows=$(printf '%s\n' "$above" | awk -v marker="$marker" -v tiers=" $tiers " -v r
 			index(results, " " res " ") == 0 || res == "" || !evok(ev, res)) {
 			print "bad row " r; exit
 		}
-		print "ok", id, tier, res
+		key = "-"
+		if (ev ~ pin) { key = ev; sub(/@[0-9a-fA-F]+$/, "", key) }
+		print "ok\t" id "\t" tier "\t" res "\t" key
 	}
 	END { if (state == 1) print "bad the header row"; else if (state == 2) print "bad the separator row" }
 ')
@@ -219,19 +253,27 @@ esac
 gap=0
 say() { printf '%s: %s\n' "$1" "$2"; gap=1; }
 for id in $covered; do
-	mine=$(printf '%s\n' "$rows" | awk -v id="$id" '$1 == "ok" && $2 == id')
+	mine=$(printf '%s\n' "$rows" | awk -F '\t' -v id="$id" '$1 == "ok" && $2 == id')
 	k=$(printf '%s' "$mine" | grep -c '')
 	[ "$k" -gt 0 ] || { say missing-row "$id"; continue; }
-	set -- $(printf '%s\n' "$mine" | head -n 1)
+	first=$(printf '%s\n' "$mine" | head -n 1)
+	tier=$(printf '%s\n' "$first" | cut -f 3)
+	res=$(printf '%s\n' "$first" | cut -f 4)
 	want=$(printf '%s\n' "$stamps" | awk -v id="$id" '$1 == id { print $2; exit }')
-	[ -z "$want" ] || [ "$want" = "$3" ] || say tier-differs "$id"
-	case $4 in
+	[ -z "$want" ] || [ "$want" = "$tier" ] || say tier-differs "$id"
+	# An id with approved tests takes one of them as its pin (process/R46).
+	# ENVIRON, not -v: awk would read a backslash in the pin as an escape.
+	if printf '%s\n' "$approved" | awk -F '\t' -v id="$id" '$1 == id { f = 1 } END { exit !f }'; then
+		printf '%s\n' "$approved" | CT_KEY=$(printf '%s\n' "$first" | cut -f 5) awk -F '\t' -v id="$id" '
+			$1 == id && $2 == ENVIRON["CT_KEY"] { f = 1 } END { exit !f }' || say not-approved "$id"
+	fi
+	case $res in
 	fail) say fail "$id" ;;
 	skipped) say skipped "$id" ;;
 	esac
 	[ "$k" -eq 1 ] || say extra-row "$id"
 done
-for id in $(printf '%s\n' "$rows" | awk '$1 == "ok" && !seen[$2]++ { print $2 }'); do
+for id in $(printf '%s\n' "$rows" | awk -F '\t' '$1 == "ok" && !seen[$2]++ { print $2 }'); do
 	printf '%s\n' "$covered" | grep -Fqx -- "$id" || say extra-row "$id"
 done
 exit "$gap"

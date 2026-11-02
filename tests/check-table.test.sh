@@ -177,7 +177,7 @@ bad_row "| process/R47 | manual | pass | tests/x.sh::t@3f9c2e |" "a pin with a s
 bad_row "| process/R47 | manual | pass | tests/x.sh::t@3f9c2e1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |" "a pin with a 41-hex sha"
 bad_row "| process/R47 | manual | pass | tests/x.sh::t@3f9c2g1 |" "a pin whose sha is not hex"
 bad_row "| process/R47 | manual | pass | tests/x y.sh::t@3f9c2e1 |" "a pin whose path leaves the plain set"
-bad_row "| process/R47 | manual | pass | tests/x.sh::\$(id)@3f9c2e1 |" "a pin whose test name leaves the plain set"
+bad_row "| process/R47 | manual | pass | tests/x.sh::$(printf 't\303\251')@3f9c2e1 |" "a pin whose test name holds a byte outside printable ASCII"
 bad_row "| process/R47 | manual | pass | ::t@3f9c2e1 |" "a pin with no path"
 bad_row "| process/R47 | manual | pass | tests/x.sh@3f9c2e1 |" "a pin with no test"
 bad_row "| process/R47 | manual | pass | http://example.com/x |" "an http:// URL"
@@ -310,7 +310,53 @@ t_exec sh "$SCRATCH/lone/check-table.sh" "$SCRATCH/pr" "$SCRATCH/ticket"
 expect_status 2 "process/R47: with no scripts/requirement.lib.sh beside it, the reader refuses (exit 2)"
 
 # ---------------------------------------------------------------------------
-banner "8. No line of either body reaches either stream (process/R47)"
+banner "8. Approved tests: an id with Accept-test: lines cites one of them (process/R46 process/R47)"
+# ---------------------------------------------------------------------------
+# A factory ticket names, per requirement, the acceptance tests the operator
+# approved. The row for such an id cites one of them as its pin, its test
+# name free to hold spaces; any other evidence is `not-approved:`.
+A1='tests/report.test.sh::totals by area'
+A2='tests/report.test.sh::empty window prints zero'
+ACC_TICKET="Covers: process/R45, process/R46, process/R47\nTest-tier: process/R45 unit\nTest-tier: process/R46 suite\nTest-tier: process/R47 manual\nAccept-test: process/R46 $A1\nAccept-test: process/R46 $A2\n"
+ticket "$ACC_TICKET"
+body "$ROW45" "| process/R46 | suite | pass | $A1@3f9c2e1 |" "$ROW47"
+run
+expect_resolved "" "process/R46: a row citing an approved test, its name holding spaces, passes"
+body "$ROW45" "| process/R46 | suite | pass | $A2@3f9c2e1aa |" "$ROW47"
+run
+expect_resolved "" "process/R46: …and so does one citing the id's other approved test"
+body "$ROW45" "| process/R46 | suite | pass | tests/report.test.sh::totals $CANARY@3f9c2e1 |" "$ROW47"
+run
+expect_status 1 "process/R47: a row citing a test off the id's Accept-test: lines exits 1"
+expect_out_is "not-approved: process/R46" "process/R47: not-approved: names the id, never the test"
+body "$ROW45" "| process/R46 | suite | pass | tests/other.test.sh::totals by area@3f9c2e1 |" "$ROW47"
+run
+expect_out_is "not-approved: process/R46" "process/R47: an approved test name in another file is not-approved:"
+body "$ROW45" "| process/R46 | suite | pass | https://ci.invalid/runs/9 |" "$ROW47"
+run
+expect_out_is "not-approved: process/R46" "process/R46: a URL is no evidence for an id with approved tests"
+body "$ROW45" "| process/R46 | unit | skipped | - |" "$ROW47"
+run
+expect_out_is "tier-differs: process/R46
+not-approved: process/R46
+skipped: process/R46" "process/R47: not-approved: sits after tier-differs: and before the result's word"
+# An id with no Accept-test: lines keeps any evidence.
+body "$ROW45" "| process/R46 | suite | pass | $A1@3f9c2e1 |" "| process/R47 | manual | pass | $A2@3f9c2e1 |"
+run
+expect_resolved "" "process/R46: an id with no Accept-test: lines is held to no approved test"
+# The ticket's Accept-test: lines go through the vocabulary checker.
+ticket "Covers: process/R46\nAccept-test: process/R46 tests/report test.sh::totals\n"
+body "| process/R46 | suite | pass | $A1@3f9c2e1 |"
+run
+expect_status 2 "process/R47: a ticket Accept-test: line the checker refuses is exit 2"
+expect_out_is "" "process/R47: … nothing on stdout"
+many=$(awk 'BEGIN { for (i = 1; i <= 33; i++) printf "Accept-test: process/R46 tests/r.test.sh::t%d\\n", i }')
+ticket "Covers: process/R46\n$many"
+run
+expect_status 2 "process/R47: a ticket past the policy's bound of Accept-test: lines is exit 2"
+
+# ---------------------------------------------------------------------------
+banner "9. No line of either body reaches either stream (process/R47)"
 # ---------------------------------------------------------------------------
 case $ALL_OUT in
 *"$CANARY"*) fail "process/R47: the canary reached an output stream — a body line leaked" ;;
@@ -319,8 +365,8 @@ esac
 # Every stdout line of every run is one word and one bounded id, the id
 # shape read from the grammar's one home.
 . "$KIT/scripts/requirement.lib.sh"
-printf '%s\n' "$ALL_OUT" | grep -E '^(missing-row|extra-row|tier-differs|fail|skipped): ' |
-	grep -Evx "(missing-row|extra-row|tier-differs|fail|skipped): $REQ_BOUNDED_ID_ERE" >"$SCRATCH/odd"
+printf '%s\n' "$ALL_OUT" | grep -E '^(missing-row|extra-row|tier-differs|not-approved|fail|skipped): ' |
+	grep -Evx "(missing-row|extra-row|tier-differs|not-approved|fail|skipped): $REQ_BOUNDED_ID_ERE" >"$SCRATCH/odd"
 [ ! -s "$SCRATCH/odd" ] && pass "process/R47: every verdict line is a word and a requirement id, nothing else" ||
 	fail "process/R47: a verdict line carried more than a word and an id: $(head -1 "$SCRATCH/odd")"
 
