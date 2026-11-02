@@ -31,7 +31,19 @@
 #                        can add to it for the next one, never shorten it for
 #                        itself. Each entry is a plain relative path: no
 #                        leading `/`, no `.` or `..` segment, no space.
+# RISK_KILL_SWITCH       `on` or `tripped`. The KILL SWITCH's value: while it
+#                        is `tripped` the risk rule calls no pull request low.
+#                        Read at the base like the rest, so a pull request can
+#                        neither reset it for itself nor trip it for itself;
+#                        unset or any other value reads tripped. Its other
+#                        trip is the TRIP MARKER, a file named
+#                        `risk-switch-tripped` in the clone's git directory
+#                        (`git rev-parse --git-common-dir`), outside version
+#                        control: create it to trip the switch in this clone
+#                        at once, delete it to reset. No environment variable
+#                        reaches either.
 
 RISK_MISS_RATE_BELOW=5
 RISK_PRECISION_FLOOR=80
 RISK_JUDGING_EXTRA=''
+RISK_KILL_SWITCH=on
