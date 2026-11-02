@@ -3925,7 +3925,28 @@
 # portability and self-host jobs setting POLICY_BASE, and
 # tests/docs-gate-base.test.sh with its job.
 
-shared-layer: 0.114.0
+# 0.115.0 — the acceptance guard holds an approved test file at the base
+# (ticket #970, PRD-14 slice 2 of D-02, factory T-94). One file joins:
+# scripts/acceptance-guard.sh, whose `check`, `tests` and `held` read every
+# factory ticket at the base through scripts/policy.sh and fail closed. Two
+# shared files change content: scripts/policy.sh counts each factory ticket
+# file in its judging set and reports one in `touched` only when its `tests:`
+# approval record changes; and UPDATING.md, its entry and both worked examples
+# re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none.
+# Templates (9c): templates/workflows/tdd-pairing.yml — a step "Approved
+# acceptance tests unchanged" runs the base commit's copy of the guard with
+# POLICY_BASE set to the pull request's base; a consumer's own
+# .github/workflows/tdd-pairing.yml copies the step by hand.
+# Config (9d): none — a factory project sets acceptance_tests_since in its
+# .factory/project.yaml, the factory's file. Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/acceptance.md R8 to R23 and R35 to R37,
+# docs/specs/policy.md R9 and R10 as modified, the kit's ADR-0046, the kit's
+# acceptance_tests_since, the kit-guards acceptance job, and
+# tests/acceptance-guard.test.sh with its job.
+
+shared-layer: 0.115.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -3961,6 +3982,7 @@ files:
   scripts/behavior-delta.sh
   scripts/lens-slice.sh
   scripts/policy.sh
+  scripts/acceptance-guard.sh
   scripts/risk.sh
   scripts/check.sh
   scripts/docs-conformance/index.mjs

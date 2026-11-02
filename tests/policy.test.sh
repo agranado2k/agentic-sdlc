@@ -242,8 +242,80 @@ t_commit "$FM" "chore: move the date" >/dev/null
 pol "$FM" touched main HEAD
 expect_status 1 "touched exits 1 when the manifest changed"
 expect_out_is ".factory/project.yaml" "policy/R9: touched reports the manifest, and no other .factory/ file"
-pol "$FM" read .factory/items/T-01/ticket.md --base main
-expect_status 2 "policy/R9: a factory item is not in the judging set"
+
+banner "R9, R10. A factory ticket file: judged at the base, touched only by its approval record"
+# ---------------------------------------------------------------------------
+# A factory ticket is `.factory/items/<id>/ticket.md`; the acceptance guard
+# reads it at the base (acceptance/R11), so it is a judging file. `touched`
+# reports one only when its front matter's `tests:` approval record differs:
+# the factory moves a ticket's stage on every build branch.
+TK=.factory/items/T-01/ticket.md
+ticket_text() { # <stage> [<tests block>]
+	printf -- '---\nid: T-01\nstage: %s\ncreated: 2026-11-01\n%s---\n\nbody\n' "$1" "${2:-}"
+}
+APPROVAL='tests:
+  commit: "abc1234"
+  by: "operator"
+  at: 2026-11-02
+'
+base_repo
+FT=$REPO
+git -C "$FT" checkout -q main
+t_write "$FT" .factory/project.yaml 'id: f
+'
+t_write "$FT" .factory/items/T-01/notes.md 'x
+'
+t_write "$FT" .factory/items/T-02/ticket.md '---
+stage: ready
+---
+'
+t_write "$FT" "$TK" "$(ticket_text build "$APPROVAL")"
+t_commit "$FT" "chore: a factory project, T-01 approved" >/dev/null
+git -C "$FT" checkout -q work && git -C "$FT" merge -q --ff-only main
+pol "$FT" read "$TK" --base main
+expect_status 0 "policy/R9: a factory ticket file is in the judging set"
+for p in .factory/items/T-01/notes.md .factory/items/ticket.md .factory/items/T-01/sub/ticket.md other/.factory/items/T-01/ticket.md .factory/ticket.md; do
+	pol "$FT" read "$p" --base main
+	[ "$T_STATUS" = 2 ] && [ -z "$T_OUT" ] && pass "policy/R9: $p is not in the judging set (exit 2)" ||
+		fail "policy/R9: $p — expected exit 2 and no stdout, got $T_STATUS [$T_OUT]"
+done
+t_write "$FT" "$TK" "$(ticket_text review "$APPROVAL")"
+t_write "$FT" .factory/items/T-02/ticket.md '---
+stage: build
+---
+'
+t_commit "$FT" "chore: move the stages" >/dev/null
+pol "$FT" touched main HEAD
+expect_resolved '' "policy/R10: a stage move on a ticket file is not reported (exit 0, nothing printed)"
+t_write "$FT" "$TK" "$(ticket_text review 'tests:
+  commit: "def5678"
+  by: "operator"
+  at: 2026-11-02
+')"
+t_commit "$FT" "chore: rewrite the approval" >/dev/null
+pol "$FT" touched main HEAD
+expect_status 1 "policy/R10: a changed approval record is reported (exit 1)"
+expect_out_is "$TK" "policy/R10: touched prints the ticket file whose approval record changed"
+t_write "$FT" "$TK" "$(ticket_text review)"
+t_commit "$FT" "chore: drop the approval" >/dev/null
+pol "$FT" touched main HEAD
+expect_out_is "$TK" "policy/R10: a removed approval record is reported"
+t_write "$FT" .factory/items/T-02/ticket.md '---
+stage: build
+tests:
+  commit: "abc1234"
+  by: "agent"
+  at: 2026-11-02
+---
+'
+t_commit "$FT" "chore: approve T-02 on the branch" >/dev/null
+pol "$FT" touched main HEAD
+expect_out_is "$TK
+.factory/items/T-02/ticket.md" "policy/R10: an added approval record is reported, sorted with the rest"
+git -C "$FT" rm -q -r .factory/items/T-01
+t_commit "$FT" "chore: delete T-01" >/dev/null
+pol "$FT" touched main HEAD
+expect_out_has "$TK" "policy/R10: deleting a ticket file that carries an approval record is reported"
 
 banner "R5, R2. Missing at the base: fail closed, no copy, the branch's copy unread"
 # ---------------------------------------------------------------------------
