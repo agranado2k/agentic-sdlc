@@ -40,6 +40,18 @@
 # is compared as written, its last component unresolved, so a marker that is a
 # link is the link. The same tripwire limits hold.
 #
+# AND AN APPROVED ACCEPTANCE TEST, in any checkout of the repository. In a
+# factory project an editing tool's call on a file the acceptance guard lists
+# as held — `scripts/acceptance-guard.sh held --base <the default branch>`,
+# the guard run as the default branch holds it, read from git's objects — is
+# refused with the guard's line, `held: <ticket> <path>` (PRD-14 acceptance/
+# R38). It is a TRIPWIRE for an honest build, never the judge: Bash writes the
+# file unasked, and CI's `check` is what keeps a changed approved test off the
+# default branch. It fails open when the default branch holds no guard, or the
+# guard errors or fails closed — CI fails closed behind it. A path no
+# `Accept-test:` line at the default branch names is let through without
+# running the guard, so an ordinary edit pays one `git grep`.
+#
 # THE ROOT IS FOUND FROM THIS FILE, never from the caller's cwd, through git's
 # common directory (hook.lib.sh's hook_root): a session started inside a
 # worktree runs the worktree's copy of this hook, and the tree it guards is
@@ -256,6 +268,49 @@ refuse() {
 	exit 2
 }
 
+# default_base <dir> — the default branch as the checkout at <dir> last saw
+# it: `origin/HEAD`, else `origin/main`, else `main`; status 1 when none is a
+# commit.
+default_base() {
+	for _db in refs/remotes/origin/HEAD refs/remotes/origin/main refs/heads/main; do
+		(unset GIT_DIR GIT_WORK_TREE && git -C "$1" rev-parse -q --verify "$_db^{commit}") >/dev/null 2>&1 &&
+			{ printf '%s' "$_db"; return 0; }
+	done
+	return 1
+}
+
+# held_ticket <absolute path> — prints the guard's `<ticket> <path>` line, status 0,
+# when the acceptance guard at the default branch lists it as held; status 1
+# for a path it does not list, and whenever the guard cannot answer (fail
+# open). Only a checkout of this repository is asked.
+held_ticket() {
+	_d=$1
+	while [ ! -d "$_d" ]; do _d=${_d%/*}; done
+	_cd=$(hook_common_dir "$_d") && _cd=$(cd "$_cd" 2>/dev/null && pwd -P) || return 1
+	[ "${_cd%/*}" = "$root" ] || return 1
+	_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_d" rev-parse --show-toplevel) 2>/dev/null) || return 1
+	_top=$(cd "$_top" 2>/dev/null && pwd -P) || return 1
+	case $1 in "$_top"/*) _rel=${1#"$_top"/} ;; *) return 1 ;; esac
+	_base=$(default_base "$_top") || return 1
+	(
+		unset GIT_DIR GIT_WORK_TREE POLICY_BASE
+		cd "$_top" || exit 1
+		git grep -q -F -e " $_rel::" "$_base" -- '.factory/items/*/ticket.md' 2>/dev/null || exit 1
+		git cat-file -e "$_base:scripts/acceptance-guard.sh" 2>/dev/null || exit 1
+		_judge=$(mktemp -d 2>/dev/null) || exit 1
+		trap 'rm -rf "$_judge"' EXIT
+		git archive "$_base" scripts 2>/dev/null | tar -x -C "$_judge" 2>/dev/null || exit 1
+		_held=$(sh "$_judge/scripts/acceptance-guard.sh" held --base "$_base" 2>/dev/null) || exit 1
+		printf '%s\n' "$_held" | awk -v p="$_rel" '{ l = $0; sub(/^[^ ]* /, ""); if ($0 == p) { print l; f = 1; exit } } END { exit !f }'
+	)
+}
+
+refuse_held() {
+	echo "x root-guard: $1 refused — held: $2" >&2
+	echo "  An approved acceptance test is the ticket's done, never edited while it is built. One that cannot pass unchanged is a stop: leave it, and report the change it would need for the operator to approve again." >&2
+	exit 2
+}
+
 tool=$(field tool_name)
 cwd=$(field cwd)
 [ -n "$cwd" ] || cwd=$root
@@ -268,6 +323,7 @@ Edit | Write | MultiEdit | NotebookEdit)
 	tripped && on_marker "$target" "$cwd" && refuse_switch "$tool"
 	abs=$(resolve "$target" "$cwd")
 	guarded "$abs" && refuse "$tool" "$abs"
+	held=$(held_ticket "$abs") && refuse_held "$tool" "$held"
 	exit 0
 	;;
 Bash) ;;

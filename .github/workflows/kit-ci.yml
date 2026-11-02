@@ -553,6 +553,15 @@ jobs:
       - name: Acceptance guard suite
         run: sh tests/acceptance-guard.test.sh
 
+  acceptance-tripwires:
+    name: An agent's edit or commit of an approved test is refused, failing open
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Acceptance tripwires suite
+        run: sh tests/acceptance-tripwires.test.sh
+
   risk:
     name: The risk rule judges a PR from its review areas' earned records
     runs-on: ubuntu-latest

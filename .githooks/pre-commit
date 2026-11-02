@@ -4,7 +4,7 @@
 # Wired by the same `git config core.hooksPath .githooks` that wires pre-push,
 # so a clone that set it once has both.
 #
-# One check: the manual's hard rule 1, "Worktree, always", held against an
+# Two checks. The first: the manual's hard rule 1, "Worktree, always", held against an
 # AGENT's commit. A commit is refused when an agent-harness marker (below) is
 # in the environment and it comes
 #   - from the MAIN working copy (git's own directory is its common directory:
@@ -18,6 +18,21 @@
 # and it is also what refuses the ways around this hook (`--no-verify`,
 # `core.hooksPath`). This hook is a guard a cooperative agent meets, not a
 # wall: git lets any committer skip it.
+#
+# AND AN APPROVED ACCEPTANCE TEST (PRD-14 acceptance/R39). In a factory
+# project, an agent's commit, from any checkout, that stages a file the
+# acceptance guard lists as held — `scripts/acceptance-guard.sh held --base
+# <the default branch>`, the guard run as the default branch holds it, read
+# from git's objects — at content other than its approval commit's (a
+# deletion included) is refused with the guard's line, `held: <ticket>
+# <path>`. The build's first commit, the approved files brought in unchanged,
+# passes. It is a TRIPWIRE for an honest build, never the judge: a skipped
+# hook commits anything, and CI's `check` is what keeps a changed approved
+# test off the default branch. It fails open when the default branch holds no
+# guard, or the guard errors or fails closed — CI fails closed behind it. A
+# commit staging no path an `Accept-test:` line at the default branch names
+# pays one `git grep` and never runs the guard. The worktree bypass below does
+# not reach it.
 #
 # THE AGENT MARKERS: a variable set to a non-empty value means an agent
 # harness is running the commit.
@@ -45,12 +60,7 @@
 
 agent_markers='CLAUDECODE CLAUDE_CODE_SESSION_ID TRACE_SESSION GEMINI_CLI CODEX_SANDBOX CODEX_SANDBOX_NETWORK_DISABLED CODEX_THREAD_ID'
 
-if [ "${COMMIT_WITHOUT_WORKTREE:-}" = "1" ]; then
-	echo "WARNING  COMMIT_WITHOUT_WORKTREE=1 — worktree rule BYPASSED for this commit." >&2
-	exit 0
-fi
-
-# No marker: a human, let through.
+# The marker an agent harness set, or nothing for a human.
 marker=
 for m in $agent_markers; do
 	eval "v=\${$m:-}"
@@ -59,6 +69,61 @@ for m in $agent_markers; do
 		break
 	fi
 done
+
+# default_base — the default branch as this clone last saw it: `origin/HEAD`,
+# else `origin/main`, else `main`; status 1 when none is a commit.
+default_base() {
+	for _db in refs/remotes/origin/HEAD refs/remotes/origin/main refs/heads/main; do
+		git rev-parse -q --verify "$_db^{commit}" >/dev/null 2>&1 && { printf '%s' "$_db"; return 0; }
+	done
+	return 1
+}
+
+# held_staged — one `<ticket> <path>` line per staged held file whose staged
+# content is not its approval commit's; nothing, whenever the guard cannot
+# answer (fail open).
+held_staged() {
+	_base=$(default_base) || return 0
+	_staged=$(git diff --cached --name-only --no-renames 2>/dev/null) || return 0
+	[ -n "$_staged" ] || return 0
+	printf '%s\n' "$_staged" | sed 's/^/ /; s/$/::/' |
+		git grep -q -F -f - "$_base" -- '.factory/items/*/ticket.md' 2>/dev/null || return 0
+	git cat-file -e "$_base:scripts/acceptance-guard.sh" 2>/dev/null || return 0
+	(
+		unset POLICY_BASE
+		cd "$(git rev-parse --show-toplevel)" || exit 0
+		_judge=$(mktemp -d 2>/dev/null) || exit 0
+		trap 'rm -rf "$_judge"' EXIT
+		git archive "$_base" scripts 2>/dev/null | tar -x -C "$_judge" 2>/dev/null || exit 0
+		_g="$_judge/scripts/acceptance-guard.sh"
+		_held=$(sh "$_g" held --base "$_base" 2>/dev/null) || exit 0
+		printf '%s\n' "$_held" | while read -r _t _p; do
+			[ -n "$_p" ] || continue
+			printf '%s\n' "$_staged" | grep -qxF -- "$_p" || continue
+			_c=$(sh "$_g" tests "$_t" --base "$_base" 2>/dev/null | sed -n '1s/^approved //p') || continue
+			[ -n "$_c" ] || continue
+			_want=$(git rev-parse -q --verify "$_c:$_p" 2>/dev/null) || _want=
+			_have=$(git rev-parse -q --verify ":$_p" 2>/dev/null) || _have=
+			[ -n "$_want" ] && [ "$_want" = "$_have" ] || printf '%s %s\n' "$_t" "$_p"
+		done
+	)
+}
+
+if [ -n "$marker" ]; then
+	held=$(held_staged)
+	if [ -n "$held" ]; then
+		printf '%s\n' "$held" | sed 's/^/x pre-commit: refused — held: /' >&2
+		echo "  An approved acceptance test is the ticket's done: commit it only at its approved content. One that cannot pass unchanged is a stop — leave it, and report the change it would need for the operator to approve again." >&2
+		exit 1
+	fi
+fi
+
+if [ "${COMMIT_WITHOUT_WORKTREE:-}" = "1" ]; then
+	echo "WARNING  COMMIT_WITHOUT_WORKTREE=1 — worktree rule BYPASSED for this commit." >&2
+	exit 0
+fi
+
+# No marker: a human, let through.
 [ -n "$marker" ] || exit 0
 
 # No HEAD yet: the root commit.

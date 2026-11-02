@@ -902,6 +902,39 @@ to an untracked file. The commit hook is what an agent meets next — a change
 this let through is still refused at the commit from the root, for an agent
 that keeps its marker and its hooks.
 
+## Refusing an edit of an approved acceptance test
+
+In a factory project the operator approves a ticket's acceptance tests before
+it is built, and those files, unchanged, are the build's done
+(the kit's ADR-0046). The same two hooks stop an honest build that reaches for one, long
+before CI — PRD-14's acceptance/R38 and R39:
+
+- **`hooks/root-guard.sh` refuses the edit.** An Edit, Write, MultiEdit or
+  notebook edit, in any checkout of the repository, whose path the acceptance
+  guard lists as held — `scripts/acceptance-guard.sh held --base <the default
+  branch>` — is refused with exit 2 and the guard's own line,
+  `held: <ticket> <path>`, on stderr. No new wiring: it is the root guard's
+  `PreToolUse` entry above.
+- **`.githooks/pre-commit` refuses the commit.** An agent's commit (one of the
+  markers below set) that stages a held file at content other than its
+  approval commit's, a deletion included, is refused with the same line. The
+  build's first commit, the approved files brought in unchanged, passes, and
+  so does a human's commit. `COMMIT_WITHOUT_WORKTREE=1` does not reach it.
+
+The default branch is `origin/HEAD`, else `origin/main`, else `main`, as the
+clone last fetched it; the guard run is the one that branch holds, extracted
+from git's objects as CI runs it, never the copy in the working tree. A path
+no `Accept-test:` line there names costs one `git grep` and never runs the
+guard.
+
+Both are **tripwires for an honest build, never the judge**. A shell writes
+the file without asking the pre-tool hook, and a skipped commit hook commits
+anything; the guarantee is CI's `check`, required by the default branch's
+ruleset, which keeps a changed approved test off it. So each **fails open** —
+a default branch with no guard, a guard that errors or fails closed, a
+checkout git cannot answer for: the call goes through, because CI fails
+closed behind it.
+
 ## What this adapter deliberately does NOT contain
 
 - **No model identifiers.** Not here either. This directory is reference prose
