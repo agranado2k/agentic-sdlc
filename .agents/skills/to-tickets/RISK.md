@@ -18,7 +18,7 @@ Stamp `Risk: low` only when none applies. `low` is a finding, not a default: a t
 
 Two reasons the policy declares are never the planner's: `unlearned` and `outward` are written by the risk rule alone, from the review areas' earned records and a review's unspecified outward items. A planner who writes one has guessed at evidence it does not hold.
 
-**The check, before the quiz.** Each ticket's two lines go to the vocabulary checker as the planner — `sh scripts/vocab.sh --writer planner 'Risk: <level>' 'Risk-confidence: <token>'`, with the stamp's values — in step 3, with the other stamps. A line it refuses (exit 2, one `x vocab:` line naming the field and the value) is repaired and checked again, never shown: a reserved reason is replaced by the planner reason the change touches, or by `unclear`.
+**The check, before the quiz.** Each ticket's two lines go to the vocabulary checker as the planner — `sh scripts/vocab.sh 'Risk: <level>' 'Risk-confidence: <token>'`, with the stamp's values — in step 3, with the other stamps. The checker's default writer is the planner; this skill never passes `--writer risk-rule`. A line it refuses (exit 2, one `x vocab:` line naming the field and the value) is repaired and checked again, never shown: a reserved reason is replaced by the planner reason the change touches, or by `unclear`.
 
 <!-- good --> `Risk: high shared-layer` passes, and <!-- refused --> `Risk: high unlearned` is refused to the planner.
 

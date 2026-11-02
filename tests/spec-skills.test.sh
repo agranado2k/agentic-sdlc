@@ -1136,9 +1136,10 @@ else
 fi
 # process/R61: the checker, as the planner, before the quiz; a refused line
 # repaired and checked again, never shown.
-t_text_has "$quiz" "sh scripts/vocab.sh --writer planner 'Risk: <level>' 'Risk-confidence: <token>'" "process/R61: each ticket's risk goes to the checker as the planner"
+t_text_has "$quiz" "sh scripts/vocab.sh 'Risk: <level>' 'Risk-confidence: <token>'\` for each risk, as the planner" "process/R61: each ticket's risk goes to the checker as the planner"
 in_order "$quiz" "process/R61: the risk is checked, and a refusal fixed, before the list is presented" \
-	"--writer planner 'Risk: <level>'" "fix what it refuses" "present the draft"
+	"'Risk: <level>' 'Risk-confidence: <token>'" "fix what it refuses" "present the draft"
+t_text_has "$risk" "default writer is the planner; this skill never passes \`--writer risk-rule\`" "process/R61: the check runs as the planner, the checker's default" "the risk rubric"
 t_text_has "$risk" "repaired and checked again, never shown" "process/R61: a refused risk line is repaired and rechecked" "the risk rubric"
 for kind in good refused; do
 	ex=$(printf '%s\n' "$risk" | grep -o "<!-- $kind --> \`[^\`]*\`" | sed 's/.*`\(.*\)`/\1/')
