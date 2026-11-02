@@ -241,7 +241,8 @@ passes the broker the directory the skill dispatcher staged
 (`--staged "<git dir>/skill-verify"`) and names `--pr-body <file>`. A
 project whose root manual names no verifier call dispatches none, and the
 step is inert there. **Adapter (9e), Claude Code only:** take
-`adapters/claude-code/hooks/root-guard.sh` and its README — while the risk
+the adapter's root guard, `root-guard.sh` in its hooks directory, and its
+`README.md` — while the risk
 rule's trip marker (`risk-switch-tripped`) exists in git's common directory,
 the root guard refuses an agent's tool call that deletes, moves or
 overwrites it. No wiring or template moves.
@@ -2020,10 +2021,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3732 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3733 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 3886 insertions(+), 1 deletion(-)
+ 3 files changed, 3887 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
