@@ -571,6 +571,15 @@ jobs:
       - name: Risk rule suite
         run: sh tests/risk.test.sh
 
+  ruling:
+    name: The ruling recorder records the operator's keep or change on an outward item
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ruling recorder suite
+        run: sh tests/ruling.test.sh
+
   factory-config:
     name: A value the factory defines is read from its manifest, at the base too
     runs-on: ubuntu-latest

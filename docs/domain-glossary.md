@@ -388,6 +388,15 @@ Grouped by the seam each term belongs to. Entry shape:
   the head commit it was made at and who made it — `operator`, `session` or
   `default`. Ref: ADR-0048.
   - _Avoid_: "approval" — a ruling decides one item, never the PR.
+- **Ruling recorder** — `scripts/ruling.sh`, the command that records a
+  ruling: given a PR, an item and `keep` or `change`, it takes the surface
+  from the latest Axis-2 verdict at the head and the head itself, reads who
+  rules from the environment — `session` under an agent-harness marker,
+  `operator` otherwise, never an argument — and records once per PR, item,
+  head, maker and outcome. `--unruled` lists the outward items not **ruled**
+  `keep` at the head — ruled meaning the latest operator or default ruling
+  there reads `keep` — each with its two commands. Ref: ADR-0048.
+  - _Avoid_: "approver" — it records one item's ruling, never the PR's.
 - **Decision log** — the block in a PR body where `/pr-iterate` records each
   ⚠️ UNSPECIFIED item marked `scope: inside` that it decided itself, kept or
   amended. It opens with a `<!-- decision-log -->` marker and the header
