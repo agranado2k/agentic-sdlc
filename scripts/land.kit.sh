@@ -4,6 +4,7 @@
 # with tests/land.test.sh).
 #
 #   sh scripts/land.kit.sh <PR#> [--ticket <N|T-NN>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
+#   sh scripts/land.kit.sh <PR#> --lane [--ticket <N|T-NN>]
 #
 # WHY THIS EXISTS. /merge-train records every landing it makes — a merge.land
 # with the merge sha, then the operator's verdict as a feedback event — and
@@ -91,6 +92,28 @@
 #   data.via=train, and step 5 is skipped: the train asks the verdict after
 #   the merge and records who answered (data.by), which this run cannot.
 #   --train with --unasked is a usage error — the train records the verdict.
+#   With --lane, /pr-iterate is the caller and no operator is at it: the
+#   LOW-RISK LANE (ADR-0047, PRD-10). Every refusal above is made first, with
+#   the same exit and effect (runtime/R80); --lane with --no-iteration,
+#   --no-review, --unasked or --train is a usage error, exit 2, nothing merged
+#   or recorded (runtime/R81). Then the lane's own checks, between steps 1c and
+#   1d, the first that applies HOLDING the PR: `closed` when the lane policy
+#   (scripts/lane.kit.config.sh, read at origin's base through the policy
+#   reader, scripts/policy.sh) names no operator or cannot be read
+#   (runtime/R83); then the risk rule (scripts/risk.sh) at the PR's head with
+#   the PR and its ticket, of whose lines only `effective:` and `switch:` are
+#   read: `switch` when it prints `switch: tripped`, `risk` on any effective
+#   risk but `low` — a missing line too (runtime/R88). A hold prints
+#   `lane: held <token>`, merges nothing, exits 4 and records one merge.land
+#   `skipped` with data.via=lane, data.hold and data.head — none when the trace
+#   holds that PR, head and token already (runtime/R91). Past every check the
+#   merge pins the head the rule judged (`--match-head-commit`), so a head that
+#   moved is the forge's refusal, exit 1 as today (runtime/R89); merge.land
+#   carries data.via=lane and data.decisions, the decision-log ids in the PR
+#   body, the feedback is `unasked` with data.by=lane, and the last line is
+#   `lane: landed` (runtime/R90). What the lane prints and records is closed
+#   tokens, numbers, shas and digits only: no title, branch or reason text, and
+#   the forge's own chatter goes nowhere (runtime/R102).
 #   A failed post-merge workflow still records both events — the PR did land —
 #   and then exits 1: escalate, as the train's hard rule 6 says. So does a
 #   merge commit the forge never names (data.workflows=unknown, no sha), and
@@ -118,7 +141,7 @@
 # scripts/trace.kit.sh runs; a caller's TRACE_CONFIG still wins (the broker's
 # arrangement).
 #
-# exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
+# exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 4 the lane held it · 69 no forge CLI
 #
 # tests/land.test.sh drives this file against a stub `gh` on PATH, and a stub
 # `git` that answers the release questions and passes everything else through.
@@ -134,13 +157,15 @@ POLL_SECONDS=${LAND_POLL_SECONDS:-10}
 usage() {
 	cat >&2 <<'EOF'
 usage: sh scripts/land.kit.sh <PR#> [--ticket <N|T-NN>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
+       sh scripts/land.kit.sh <PR#> --lane [--ticket <N|T-NN>]
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none: an issue number or a factory ticket id (T-07)
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
   --no-iteration  land with no /pr-iterate iteration at the head commit, for this reason (recorded)
   --no-review     land with no /review-pr verdict at the head commit, for this reason (recorded)
   --train     /merge-train is landing it: merge.land says via=train, and the verdict is left to the train
-exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 69 no forge CLI
+  --lane      the low-risk lane, /pr-iterate's: land it only when the lane is open and its risk low, else hold it; takes none of the flags above but --ticket
+exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 4 the lane held it · 69 no forge CLI
 EOF
 	exit 2
 }
@@ -167,6 +192,8 @@ UNASKED=
 NO_ITERATION=
 NO_REVIEW=
 VIA=land
+LANE=
+TRAIN=
 while [ $# -gt 0 ]; do
 	case $1 in
 	--ticket)
@@ -187,7 +214,8 @@ while [ $# -gt 0 ]; do
 		if [ "$1" = --no-review ]; then NO_REVIEW=$2; else NO_ITERATION=$2; fi
 		shift
 		;;
-	--train) VIA=train ;;
+	--train) TRAIN=1 VIA=train ;;
+	--lane) LANE=1 ;;
 	-h | --help) usage ;;
 	-*) note "unknown option '$1'"; usage ;;
 	*) [ -z "$PR" ] || usage; PR=$1 ;;
@@ -196,8 +224,18 @@ while [ $# -gt 0 ]; do
 done
 case $PR in '' | *[!0-9]*) [ -z "$PR" ] || note "'$PR' is not a pull request number"; usage ;; esac
 [ "$VIA" = land ] || [ -z "$UNASKED" ] || { note "--train leaves the verdict to the train; drop --unasked"; usage; }
+# The lane takes no override: each one is an operator's call, and no operator
+# is at a lane run (runtime/R81).
+if [ -n "$LANE" ]; then
+	[ -z "$NO_ITERATION$NO_REVIEW$UNASKED$TRAIN" ] || { note "--lane takes no --no-iteration, --no-review, --unasked or --train"; usage; }
+	VIA=lane
+fi
 case $TICKET in *[!0-9]*) factory_id "$TICKET" || { note "--ticket '$TICKET' is neither a ticket number nor a factory ticket id (T-07)"; usage; } ;; esac
 command -v gh >/dev/null 2>&1 || { note "no forge CLI (gh) on PATH"; exit 69; }
+# Descriptor 3 carries the forge's own chatter — a merge naming the PR's title,
+# a watch naming its jobs: stderr for the operator, nowhere in the lane, whose
+# caller reads only what runtime/R102 allows.
+if [ -n "$LANE" ]; then exec 3>/dev/null; else exec 3>&2; fi
 
 # trace loud|quiet <field>=<value> … — `quiet` silences the unconfigured
 # note, so an unconfigured run says it once. The switch rides the external
@@ -421,6 +459,59 @@ fi
 [ "$REVIEWED" != no ] || set -- "$@" "data.no_review=$NO_REVIEW"
 [ -z "$VERIFIED" ] || set -- "$@" "data.verified=$VERIFIED"
 
+# --- 1L. the low-risk lane: hold, or go on to the merge (ADR-0047) -------------
+# Only with --lane, and only once every refusal above has passed (runtime/R80).
+# Each check below holds on the first that applies, in ADR-0047 clause 4's
+# order; PRD-10's later slices add theirs between `closed` and `switch`. What
+# leaves this block is closed tokens, the PR and ticket numbers and the head
+# commit — never a line the policy, the risk rule or the forge wrote.
+DECISIONS=
+if [ -n "$LANE" ]; then
+	# hold <token> — print it, record it once per PR, head and token, exit 4.
+	hold() {
+		if ! trace_read show "pr:#$PR" --kind merge.land | grep -F "\"subject\":\"pr:#$PR\"" |
+			grep -F '"outcome":"skipped"' | grep -F '"via":"lane"' | grep -F "\"hold\":\"$1\"" |
+			grep -qF "\"head\":\"$HEAD_OID\""; then
+			trace quiet kind=merge.land "subject=pr:#$PR" ${TICKET:+"related=ticket:$TREF"} outcome=skipped \
+				data.via=lane "data.hold=$1" "data.head=$HEAD_OID"
+		fi
+		printf 'lane: held %s\n' "$1"
+		exit 4
+	}
+	_lane_base="refs/remotes/origin/$BASE"
+	# closed: the lane policy at the base names a forge login, or the lane is
+	# closed (runtime/R83). The kit's twin is read, as this script reads the
+	# kit's trace policy; the base's copy is evaluated in a child process that
+	# starts with the name unset, so neither the environment nor the PR's tree
+	# stands in for it.
+	_lane_op=
+	_lane_copy=$(cd "$ROOT" && sh scripts/policy.sh read scripts/lane.kit.config.sh --base "$_lane_base" 2>/dev/null) &&
+		[ -f "$_lane_copy" ] &&
+		_lane_op=$(sh -c 'unset LANE_OPERATOR; . "$1" >/dev/null 2>&1 </dev/null; command printf "%s\n" "${LANE_OPERATOR-}"' _ "$_lane_copy" 2>/dev/null)
+	case $_lane_op in
+	'' | -* | *- | *--* | *[!A-Za-z0-9-]*) hold closed ;;
+	esac
+	# A forge login is 1 to 39 letters, digits and single inner hyphens.
+	[ "${#_lane_op}" -le 39 ] || hold closed
+	# switch, risk: the risk rule at the head, with the PR and its ticket, read
+	# for two lines only (runtime/R88). Anything but `switch: on` and
+	# `effective: low` holds — a rule that printed neither included.
+	_lane_rule=$(cd "$ROOT" && TRACE_CONFIG="$TRACE_POLICY" sh scripts/risk.sh "$_lane_base" "$HEAD_OID" --pr "$PR" \
+		${TICKET:+--ticket "$TICKET"} </dev/null 2>/dev/null) || _lane_rule=
+	_lane_sw=$(printf '%s\n' "$_lane_rule" | sed -n 's/^switch: //p' | head -n 1)
+	_lane_eff=$(printf '%s\n' "$_lane_rule" | sed -n 's/^effective: //p' | head -n 1)
+	[ "$_lane_sw" != tripped ] || hold switch
+	[ "$_lane_sw" = on ] && [ "$_lane_eff" = low ] || hold risk
+	# The decision-log ids in the PR body, struck rows counted and a fenced log
+	# no log (the kit's ADR-0038): a count, never a cell.
+	. "$ROOT/scripts/requirement.lib.sh"
+	DECISIONS=$(gh pr view "$PR" --json body --jq '.body // ""' 2>/dev/null | tr -d '\r' | fence_strip |
+		awk -F'|' '/^<!-- decision-log -->$/ { t = 1; next } t && !/^\|/ { t = 0 }
+			t { id = $2; gsub(/[ ~]/, "", id); if (id ~ /^D-[0-9]+$/) n++ } END { print n + 0 }')
+	case $DECISIONS in '' | *[!0-9]*) DECISIONS=0 ;; esac
+	set -- "$@" "data.decisions=$DECISIONS"
+fi
+
 # --- 1d. a PR the trace never saw opened (#638) --------------------------------
 # A PR opened outside /implement left no pr.open, and /retro joins a ticket to
 # its PR through that event's related field. When the trace holds none on
@@ -432,10 +523,14 @@ if [ -n "$(trace_read dir)" ] &&
 	_po_rel=
 	[ -z "$TICKET" ] || _po_rel="ticket:$TREF"
 	_po_branch=$(field headRefName | sed -n '/^[A-Za-z0-9][A-Za-z0-9._\/-]\{0,99\}$/p')
+	# The lane records no forge text (runtime/R102): no branch, no title.
+	[ -z "$LANE" ] || _po_branch=
 	[ -z "$_po_branch" ] || _po_rel="${_po_rel:+$_po_rel }branch:$_po_branch"
 	# The landing's own arguments sit in "$@" for step 2: the optional field
 	# is spelled as an argument only when it is there, never by `set --`.
-	trace quiet kind=pr.open "subject=pr:#$PR" ${_po_rel:+"related=$_po_rel"} outcome=opened data.via=land "reason=$TITLE"
+	_po_why="reason=$TITLE"
+	[ -z "$LANE" ] || _po_why=
+	trace quiet kind=pr.open "subject=pr:#$PR" ${_po_rel:+"related=$_po_rel"} outcome=opened data.via=land ${_po_why:+"$_po_why"}
 fi
 
 # --- 1e. a ticket the trace never saw started (#775) ---------------------------
@@ -449,10 +544,16 @@ if [ -n "$TICKET" ] && [ -n "$(trace_read dir)" ] &&
 fi
 
 # --- 2. the merge -------------------------------------------------------------
-if ! gh pr merge "$PR" --merge >&2; then
+# The lane merges the head the risk rule judged, and no other: a head that
+# moved since is the forge's refusal (runtime/R89).
+_pin=
+[ -z "$LANE" ] || _pin=$HEAD_OID
+_stop_why="reason=the forge rejected the merge"
+[ -z "$LANE" ] || _stop_why=
+if ! gh pr merge "$PR" --merge ${_pin:+--match-head-commit "$_pin"} >&3 2>&3; then
 	note "the forge rejected the merge of PR #$PR — re-read its state; nothing else was done"
 	trace loud kind=merge.land "subject=pr:#$PR" "$@" outcome=stopped data.method=merge "data.via=$VIA" \
-		"reason=the forge rejected the merge"
+		${_stop_why:+"$_stop_why"}
 	exit 1
 fi
 # The forge can name the merge commit a moment after the merge: asked again,
@@ -582,7 +683,7 @@ watch_run() {
 					return 1
 				fi
 				note "run $1's job '$_wr_name' (job $_wr_job) is stuck in progress after it ended — re-running that job, once"
-				gh run rerun --job "$_wr_job" >&2 || {
+				gh run rerun --job "$_wr_job" >&3 2>&3 || {
 					note "the forge refused to re-run job '$_wr_name' of run $1 — judged a failure"
 					return 1
 				}
@@ -596,7 +697,7 @@ watch_run() {
 		[ "$POLL_SECONDS" -gt 0 ] && sleep "$POLL_SECONDS"
 	done
 	# Completed with no job stuck: the watch returns at once with the verdict.
-	gh run watch "$1" --exit-status >&2
+	gh run watch "$1" --exit-status >&3 2>&3
 }
 
 # bounded_watch <run id> — the forge's watch, given the wait's bound: checked
@@ -607,7 +708,7 @@ watch_run() {
 bounded_watch() {
 	_bw_dir=$(mktemp -d "${TMPDIR:-/tmp}/land-watch.XXXXXX") || return 2
 	(
-		gh run watch "$1" --exit-status >&2 &
+		gh run watch "$1" --exit-status >&3 2>&3 &
 		echo $! >"$_bw_dir/pid"
 		wait $!
 		echo $? >"$_bw_dir/rc"
@@ -718,7 +819,7 @@ if [ "$TAGGED" = yes ] && [ -n "$FAILED" ] && [ -z "$STALLED" ]; then
 		# The forge's answer reaches stderr as before, and is kept to be read.
 		_said=$(gh run rerun "$id" --failed 2>&1)
 		_rc=$?
-		[ -z "$_said" ] || printf '%s\n' "$_said" >&2
+		[ -z "$_said" ] || printf '%s\n' "$_said" >&3
 		if [ "$_rc" -ne 0 ]; then
 			case $_said in
 			*"already running"*)
@@ -747,8 +848,10 @@ WAITED=$(($(date +%s) - START))
 
 # --- 4. the landing ---------------------------------------------------------------
 # Whether /implement opened the PR is read in step 1c's landing line, above.
-set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAITED" "data.workflows=$WORKFLOWS" "data.via=$VIA" "reason=$TITLE" \
-	"data.implement=$IMPLEMENT"
+_land_why="reason=$TITLE"
+[ -z "$LANE" ] || _land_why=
+set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAITED" "data.workflows=$WORKFLOWS" "data.via=$VIA" \
+	${_land_why:+"$_land_why"} "data.implement=$IMPLEMENT"
 [ -z "$IMPL_TIER" ] || set -- "$@" "data.implement_tier=$IMPL_TIER"
 [ -z "$SHA" ] || set -- "$@" "data.merge_sha=$SHA"
 [ -z "$RELEASE" ] || set -- "$@" "data.release=$RELEASE" "data.tagged=$TAGGED" "data.reruns=$RERUNS"
@@ -759,6 +862,12 @@ trace loud kind=merge.land "$@"
 # who answered, so this run writes no feedback a second one would join.
 if [ "$VIA" = train ]; then
 	VERDICT="left to the train"
+elif [ -n "$LANE" ]; then
+	# Nobody was asked, and the lane says it was the one landing it.
+	VERDICT=unasked
+	set -- "subject=$FB_SUBJECT" outcome=unasked data.by=lane
+	[ -z "$TICKET" ] || set -- "$@" "related=pr:#$PR"
+	trace quiet kind=feedback "$@"
 else
 	VERDICT=unasked
 	WHY=$UNASKED
@@ -834,6 +943,7 @@ no) TAGNOTE=" · $RELEASE NOT tagged" ;;
 esac
 printf 'landed #%s %s (merge) · workflows %s · waited %ss%s\n' "$PR" "${SHA:-<merge commit unknown>}" "$WORKFLOWS" "$WAITED" "$TAGNOTE"
 printf 'feedback: %s\n' "$VERDICT"
+[ -z "$LANE" ] || echo 'lane: landed'
 case $WORKFLOWS in
 failure)
 	note "a post-merge workflow failed on $BASE at $SHA — escalate with the run log; land nothing else"

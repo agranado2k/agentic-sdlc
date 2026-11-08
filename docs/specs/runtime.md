@@ -31,6 +31,8 @@ slice (#906), the review at the head; R65 to R67 with its third (#907),
 the kill switch.
 The verifier's dispatch and its broker joined as R206, R208 to R211 and
 R227, from PRD-13 slice 1 (#941, ADR-0044).
+R80, R81, R83, R88 to R91 and R102 joined from PRD-10 slice 2 (#914,
+ADR-0047), keeping the PRD's numbers: the landing script's lane mode.
 R103 joined from PRD-10 slice 4 (#919), keeping the PRD's number: the root
 guard keeps the trip marker from an agent.
 The earned record's verifier rows joined as R214 to R216, R223 and R228,
@@ -106,6 +108,14 @@ R66. The kill switch SHALL read tripped when the base branch's policy sets it so
 R67. The risk rule SHALL read the thresholds and the switch value only through the base-branch policy contract, never from the environment or the PR's own tree. [UC4 2a]
 R68. The risk rule SHALL exit 0 whatever risk it prints, and SHALL write nothing but its `risk.judge` event. [UC1 8]
 R69. The risk rule SHALL print and record only risk tokens, review area names from the lens-slice policy, `none`, the switch words, digits and commit shas, and no text from a ticket body, a PR body or a commit message.
+R80. WHEN the landing script runs with `--lane`, it SHALL make every refusal it makes without `--lane`, with the same exit code and the same effect. [UC1 4, 4a]
+R81. IF `--lane` is given with `--no-iteration`, `--no-review`, `--unasked` or `--train`, THEN the landing script SHALL exit 2, merging and recording nothing. [UC1 4]
+R83. The lane SHALL read as closed, holding with `closed`, when the lane policy names no operator or cannot be read under the base-branch policy contract. [UC1 5a, UC4 6]
+R88. A lane run SHALL run the risk rule at the PR's head commit with the PR and its ticket, SHALL read only its `effective:` and `switch:` lines, and SHALL hold with `switch` when it prints `switch: tripped` and with `risk` when it prints any effective risk but `low`. [UC1 5, 5d, UC4 4]
+R89. WHEN a lane run passes every check, the landing script SHALL merge the head commit the risk rule judged, and SHALL let the forge refuse a merge whose head has moved. [UC1 6, 5e]
+R90. WHEN the lane lands a PR, the landing script SHALL record `merge.land outcome=landed data.via=lane` with the count of decision-log ids in the PR body, and `feedback outcome=unasked data.by=lane`, and SHALL print `lane: landed`. [UC1 6]
+R91. WHEN a lane run holds a PR, the landing script SHALL record one `merge.land outcome=skipped data.via=lane` with the hold token and the head commit, and SHALL record nothing when the trace already holds one for the same PR, head and token. [UC1 6b]
+R102. The landing script's lane output, its lane events and its notices SHALL carry only closed tokens, review area names, PR and ticket numbers, commit shas, run ids and digits, and no text from a ticket body, a PR body, a commit message or a log.
 R103. The adapter's root guard SHALL refuse an agent's tool call that deletes, moves or overwrites the kill switch's trip marker. [UC4 5]
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
