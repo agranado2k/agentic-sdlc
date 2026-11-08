@@ -4046,7 +4046,40 @@
 # job and bootstrap.sh's KIT_ONLY entry, docs/specs/acceptance.md R38 and
 # R39, and the AGENTS.md and README.md lines.
 
-shared-layer: 0.119.0
+# 0.120.0 — the lane handles a lane landing's escape once, and the trace
+# gains the kind `lane.escape` (ticket #917, PRD-10 slice 3 of D-02, factory
+# T-54). No file joins or leaves. Two shared files change content:
+# scripts/trace.sh, whose kind table gains `lane.escape` (outcomes `revert`,
+# `fix` and `notified`, its subject the escaped pull request, its outcome
+# required; any other outcome refused, exit 2, writing nothing), and whose
+# `show` takes `--kind <kind>` with no subject — every event of that kind; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): from #923 (factory T-60, PR #1011, landed after 0.119.0's
+# tag), /retro's before-and-after section judges each loop ticket against
+# noise — three repeats a side, a drop beyond the pooled SD,
+# `drop`/`within noise`/`no drop`/`inconclusive`/`pending` rows ending
+# `landed: lane|operator`, a count line, a closed note on a drop, and the
+# median priced tokens and agent wall-clock per wave; a small project's rows
+# read `inconclusive` for a while; ADR-0048 is kit-only.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/lane.config.sh (yours), from #915 (factory T-52, PR
+# #1012, landed after 0.119.0's tag): it gains LANE_HOLD_PATTERNS, shipped
+# empty — the paths no lane run lands whatever their risk; a consumer's lane
+# stays closed, so take the new line as shipped. Adapter (9e): none.
+# Kit-only, never shipped: scripts/land.kit.sh's escape handling — past
+# `closed` and `drift`, a lane run runs the outcome recorder and handles each
+# failed QA against a lane landing once: a revert of its merge commit in a
+# throwaway worktree under the git directory, one revert pull request, one
+# notice issue assigned to the lane's operator, one `lane.escape
+# outcome=revert` and `lane: escape pr:#<N> revert pr:#<M>`; a failure
+# records nothing and holds with `escape`, as does a pull request a
+# `lane.escape` names — and from #915 its holds `drift`, `path`, `base-red`,
+# `check-table` and `verifier`; the kit's ADR-0049 and its index row,
+# docs/specs/runtime.md R82 restated and R92 to R94 and R97 to R99, the
+# AGENTS.md rows, and tests/land.test.sh sections 15 and 25.
+
+shared-layer: 0.120.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
