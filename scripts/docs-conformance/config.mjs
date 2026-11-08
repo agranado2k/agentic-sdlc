@@ -430,16 +430,12 @@ const livingSpec = {
  * /to-tickets' rose 500 bytes for the risk stamp (PRD-09, T-48, #911): it
  * sat 60 bytes under 35000; the rubric lives in its RISK.md, and what stays
  * is rule 17's pointer, the quiz's check and line, and ticket.write's keys.
- * /review-pr's rose 500 bytes for the outward item's surface (PRD-11 slice
- * 3, #926): it sat 227 bytes under 40500, and what it gained is Agent 7's
- * surface rule and the Axis-2 verdict's data.outward_items, both read by
- * every review.
  *
  * KEEP IT LITERAL — one `"<repo-relative path>": <bytes>,` per line. The
  * gate's POSIX twin in scripts/check.sh reads this block by text.
  */
 const skillCeilings = {
-  ".agents/skills/review-pr/SKILL.md": 41000,
+  ".agents/skills/review-pr/SKILL.md": 40500,
   ".agents/skills/to-tickets/SKILL.md": 35500,
   ".agents/skills/pr-iterate/SKILL.md": 38500,
   ".agents/skills/implement/SKILL.md": 27500,

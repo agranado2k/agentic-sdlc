@@ -245,8 +245,7 @@ checker's built-in defaults declare `surface`. **Config (9d):** a
 `VOCAB_SURFACE='output-format flag exit-code agent-rule other'`; `sh
 scripts/vocab.sh fields` then prints `surface: output-format flag exit-code
 agent-rule other`. Without it the trace refuses every `ruling` and every
-outward list. The docs gate's `scripts/docs-conformance/config.mjs` raises
-`/review-pr`'s skill ceiling to 41000 bytes; raise yours with it. **Skills (9a):** take `/review-pr`'s `SKILL.md` — Agent 7
+outward list. **Skills (9a):** take `/review-pr`'s `SKILL.md` — Agent 7
 writes `surface: <token>` right after `scope: outward`, every reader reads a
 missing or unknown surface as `other`, and §5b's Axis-2 verdict records
 `data.outward_items` — and `.agents/prompts/review-worker.md`, the
@@ -2252,10 +2251,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3968 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3967 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 4122 insertions(+), 1 deletion(-)
+ 3 files changed, 4121 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

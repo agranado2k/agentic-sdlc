@@ -619,12 +619,16 @@ trace_check_ruling() {
 	fi
 	[ -f "$_trace_here/vocab.sh" ] || return 0
 	for _ru_w in $_ru_surf; do
-		_ru_why=$(sh "$_trace_here/vocab.sh" "Surface: $_ru_w" 2>&1 >/dev/null) && continue
+		_ru_why=$(trace_surface_refusal "$_ru_w") && continue
 		TRACE_SHAPE_WHY="$1: surface — ${_ru_why#x vocab: }"
 		return 1
 	done
 	return 0
 }
+
+# trace_surface_refusal <value> — trace_severity_refusal's twin for one
+# surface word, already held to one token by its shape row.
+trace_surface_refusal() { sh "$_trace_here/vocab.sh" "Surface: $1" 2>&1 >/dev/null; }
 
 # trace_severity_words — the words verify holds a written raise's severity to:
 # the checker's `fields` line for severity, space-padded, or nothing when no
