@@ -2397,4 +2397,161 @@ esac
 awk '/^6\. \*\*Chain health\*\*/ { on = 1; print; next } /^[0-9]+\. / { on = 0 } on' "$SKILL_ABS" | flat | grep -qF 'lane' &&
 	pass "SKILL.md's question 6 names the lane's counts" || fail "SKILL.md's question 6 does not name the lane's landings, holds and escapes"
 
+# ---------------------------------------------------------------------------
+banner "24. Five recurring operator rulings propose a ruling default (process/R153-R157, #931)"
+# ---------------------------------------------------------------------------
+# PRD-11 slice 5 (ADR-0048). The recurring-rulings section reads every
+# `ruling` event, maps each PR to its review areas through its landing's
+# merge commit, as the record reader does (ADR-0036), and proposes one
+# candidate per area and surface whose latest 5 operator rulings, on 5
+# distinct landed PRs, all agree: `Edits: policy risk` when they all read
+# keep, `Edits: skill implement` when they all read change. Its sh fence
+# RUNS here in a repository of its own — the risk policy at `main` holding
+# `security:flag`, one commit per landed PR — over fixture traces, the
+# tracker a stand-in `gh` on PATH.
+rd_fence=$(t_fence "$SIDECAR_ABS" holds 'propose_defaults()')
+[ -n "$rd_fence" ] && pass "process/R153: QUESTIONS.md carries the recurring-rulings section as an sh fence defining propose_defaults()" ||
+	fail "process/R153: QUESTIONS.md carries no sh fence defining propose_defaults() — the proposal is prose nobody can run"
+rd_sec() { awk '/^## Recurring rulings/ { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
+RDLENS="$SCRATCH/rd-lens.config.sh"
+printf '%s\n' "LENS_SLICE_RULES='security ^scripts/" 'api-crud ^api/' 'pattern ^api/' 'simplicity ^api/' 'reuse-dry ^api/' "test-hygiene ^tests/'" >"$RDLENS"
+t_repo
+RD=$REPO
+t_write "$RD" scripts/risk.config.sh "$(sed "s/^RISK_RULING_DEFAULTS=.*/RISK_RULING_DEFAULTS='security:flag'/" "$ROOT/scripts/risk.config.sh")
+"
+t_commit "$RD" "chore: a ruling default" >/dev/null
+for p in 1 2 3 4 5 6 7; do
+	t_write "$RD" "scripts/p$p.sh" "p$p
+"
+	eval "RD_SHA$p=\$(t_commit \"\$RD\" \"feat: pull request $p\")"
+done
+RDBIN="$SCRATCH/rd-bin"
+mkdir -p "$RDBIN"
+cat >"$RDBIN/gh" <<'EOF'
+#!/bin/sh
+[ -z "${STUB_GH_FAIL:-}" ] || exit 1
+[ -n "${STUB_DECLINED:-}" ] || exit 0
+for a in "$@"; do case $a in *"$STUB_DECLINED"*) echo "$STUB_TICKET"; exit 0 ;; esac; done
+EOF
+chmod +x "$RDBIN/gh"
+# rd_land <dir> <pr…> — each PR landed on 2026-10-01 at its commit.
+rd_land() {
+	_rl_d=$1
+	shift
+	for _rl_p in "$@"; do
+		eval "_rl_s=\$RD_SHA$_rl_p"
+		ba_ev "$_rl_d" 2026-10-01T0$_rl_p:00:00Z merge.land ",\"subject\":\"pr:#$_rl_p\",\"outcome\":\"landed\",\"reason\":\"fixture\",\"data\":{\"merge_sha\":\"$_rl_s\"}"
+	done
+}
+# rd_rule <dir> <ts> <pr> <surface> <outcome> <by> [run] — one ruling.
+rd_rule() {
+	ba_ev "$1" "$2" ruling ",\"subject\":\"pr:#$3\"${7:+,\"run\":\"$7\"},\"outcome\":\"$5\",\"reason\":\"fixture\",\"data\":{\"item\":\"A2-1\",\"surface\":\"$4\",\"head\":\"$(printf '%040d' 7)\",\"by\":\"$6\"}"
+}
+# rd_five <dir> <surface> "<outcome ×5>" [pr list] — five operator rulings, a day apart from 10-12.
+rd_five() {
+	_rf_i=0
+	for _rf_p in ${4:-3 4 5 6 7}; do
+		_rf_i=$((_rf_i + 1))
+		_rf_o=$(printf '%s\n' "$3" | awk -v i="$_rf_i" '{ print $i }')
+		rd_rule "$1" "2026-10-1${_rf_i}T12:00:00Z" "$_rf_p" "$2" "$_rf_o" operator "20261011T000000Z-$_rf_p-0000aaa$_rf_p"
+	done
+}
+rd_run() { # <dir> [env assignment…]
+	_rr_d=$1
+	shift
+	printf '%s\n' "$rd_fence" | sed "s|sh scripts/|sh $ROOT/scripts/|g" >"$SCRATCH/rd-fence.sh"
+	( cd "$RD" && env "$@" PATH="$RDBIN:$PATH" LENS_SLICE_CONFIG="$RDLENS" TRACE_DIR="$_rr_d" TRACE_QUIET=1 \
+		sh -c '. "$1"; propose_defaults 2026-10-11 main' sh "$SCRATCH/rd-fence.sh" 2>/dev/null )
+}
+rd_uc3="$SCRATCH/rd-uc3.retro"
+rd_land "$rd_uc3" 1 2 3 4 5 6 7
+rd_rule "$rd_uc3" 2026-10-11T08:00:00Z 1 exit-code change operator 20261011T000000Z-1-0000aaa1
+rd_rule "$rd_uc3" 2026-10-11T09:00:00Z 2 exit-code change operator 20261011T000000Z-2-0000aaa2
+rd_five "$rd_uc3" exit-code 'keep keep keep keep keep'
+for p in 1 2 3 4 5 6 7; do rd_rule "$rd_uc3" "2026-10-12T0$p:00:00Z" "$p" agent-rule keep session; done
+for p in 1 2 3 4 5; do rd_rule "$rd_uc3" "2026-10-13T0$p:00:00Z" "$p" output-format keep session; done
+rd_rule "$rd_uc3" 2026-10-05T00:00:00Z 3 exit-code keep default
+rd_rule "$rd_uc3" 2026-10-05T01:00:00Z 4 exit-code keep default
+( TRACE_DIR="$rd_uc3" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the recurring-rulings fixture is a trace verify accepts" ||
+	fail "the recurring-rulings fixture does not verify — the fence would read a damaged trace"
+rd_has() { printf '%s\n' "$1" | grep -qxF "$2" && pass "$3" || fail "$3: expected '$2'; it printed: $(printf '%s' "$1" | tr '\n' ';')"; }
+rd_none() { printf '%s\n' "$1" | grep -q '^Edits: ' && fail "$2: it proposed: $(printf '%s' "$1" | tr '\n' ';')" || pass "$2"; }
+if [ -n "$rd_fence" ]; then
+	rd_out=$(rd_run "$rd_uc3")
+	rd_has "$rd_out" 'rulings: operator 7, session 12, default 0' "process/R157: the section prints the window's rulings counted by by"
+	[ "$(printf '%s\n' "$rd_out" | grep -c '^Edits: ')" = 1 ] && pass "process/R153: UC3's seven rulings file exactly one candidate" ||
+		fail "process/R153: UC3's rulings filed $(printf '%s\n' "$rd_out" | grep -c '^Edits: ') candidates, not 1: $(printf '%s' "$rd_out" | tr '\n' ';')"
+	rd_has "$rd_out" 'Edits: policy risk' "process/R153: five keeps propose an edit to the risk policy"
+	rd_has "$rd_out" 'Targets: kind=ruling data.by=operator data.surface=exit-code' "process/R153: …with the Targets: line the PRD names"
+	rd_has "$rd_out" 'Runs: 20261011T000000Z-3-0000aaa3 20261011T000000Z-4-0000aaa4 20261011T000000Z-5-0000aaa5 20261011T000000Z-6-0000aaa6 20261011T000000Z-7-0000aaa7' \
+		"process/R153: …citing the five rulings' runs"
+	printf '%s\n' "$rd_out" | grep '^Finding: ' | grep -qF '`security:exit-code`' && pass "process/R153: …and the finding names the entry security:exit-code" ||
+		fail "process/R153: the finding does not name \`security:exit-code\`: $(printf '%s\n' "$rd_out" | grep '^Finding: ')"
+	printf '%s\n' "$rd_out" | grep -E '^(Edits|Runs|Targets): ' | ( cd "$ROOT" && sh scripts/vocab.sh >/dev/null 2>&1 ) &&
+		pass "process/R153: the candidate's lines pass the vocabulary checker" || fail "process/R153: the vocabulary checker refuses the candidate's lines"
+	if [ -n "${r28fence:-}" ]; then
+		rd_rep="$SCRATCH/rd-report.md"
+		{ printf '%s\n' '# retro' '' '## Findings' ''; printf '%s\n' "$rd_out" | sed -n '/^Finding: /,/^Targets: /p'; } >"$rd_rep"
+		( cd "$ROOT" && sh -c '. "$1"; file_candidates "$2"' sh "$SCRATCH/r28-fence.sh" "$rd_rep" 2>/dev/null ) | grep -q '^file: ' &&
+			pass "process/R153: …and the filing check files it" || fail "process/R153: the filing check does not file the proposal"
+	fi
+	printf '%s\n' "$rd_out" | grep -qE 'agent-rule|output-format' && fail "process/R157: session rulings reached a proposal or a reason" ||
+		pass "process/R157: five agreeing session rulings propose nothing"
+	rd_out=$(rd_run "$rd_uc3" STUB_GH_FAIL=1)
+	rd_has "$rd_out" 'Edits: policy risk' "a failed tracker search still proposes the candidate"
+	printf '%s\n' "$rd_out" | grep -q '^not searched: security:exit-code' && pass "…and says the tracker was not searched for it" ||
+		fail "a failed tracker search is not named: $(printf '%s' "$rd_out" | tr '\n' ';')"
+	# process/R156: a declined proposal is not made again, and is named.
+	rd_out=$(rd_run "$rd_uc3" STUB_DECLINED=security:exit-code STUB_TICKET=77)
+	rd_none "$rd_out" "process/R156: a pair the tracker holds closed as not planned is not proposed again"
+	printf '%s\n' "$rd_out" | grep -F 'security:exit-code' | grep -qF 'ticket:#77' && pass "process/R156: …and the section names that ticket" ||
+		fail "process/R156: the declined ticket is not named: $(printf '%s' "$rd_out" | tr '\n' ';')"
+	# process/R154: five changes propose asking first.
+	rd_chg="$SCRATCH/rd-change.retro"
+	rd_land "$rd_chg" 3 4 5 6 7
+	rd_five "$rd_chg" exit-code 'change change change change change'
+	rd_out=$(rd_run "$rd_chg")
+	rd_has "$rd_out" 'Edits: skill implement' "process/R154: five changes propose an edit to /implement"
+	rd_has "$rd_out" 'Targets: kind=ruling data.by=operator data.surface=exit-code outcome=change' "process/R154: …with the change Targets: line"
+	printf '%s\n' "$rd_out" | grep '^Finding: ' | grep -F 'security:exit-code' | grep -qF 'asked before it is built' &&
+		pass "process/R154: …proposing an unspecified change of that surface in that area is asked before it is built" ||
+		fail "process/R154: the change finding does not say it is asked before it is built: $(printf '%s\n' "$rd_out" | grep '^Finding: ')"
+	rd_has "$rd_out" 'rulings: operator 5, session 0, default 0' "process/R157: the count line counts the window's operator rulings"
+	# process/R155: four, a mixed five, other, a pair already a default, and
+	# rulings on PRs that never landed propose nothing.
+	for c in "four|exit-code|keep keep keep keep keep|3 4 5 6 6|fewer than 5 distinct landed PRs" \
+		"mixed|exit-code|keep keep change keep keep|3 4 5 6 7|a mixed five" \
+		"other|other|keep keep keep keep keep|3 4 5 6 7|surface other" \
+		"dflt|flag|keep keep keep keep keep|3 4 5 6 7|a pair already in the base's ruling defaults" \
+		"unlanded|exit-code|keep keep keep keep keep|1 2 3 4 5|rulings on PRs two of which never landed"; do
+		_n=${c%%|*}; _r=${c#*|}; _s=${_r%%|*}; _r=${_r#*|}; _o=${_r%%|*}; _r=${_r#*|}; _p=${_r%%|*}; _w=${_r#*|}
+		_d="$SCRATCH/rd-$_n.retro"
+		if [ "$_n" = unlanded ]; then rd_land "$_d" 3 4 5; else rd_land "$_d" 3 4 5 6 7; fi
+		rd_five "$_d" "$_s" "$_o" "$_p"
+		rd_none "$(rd_run "$_d")" "process/R155: $_w proposes nothing"
+	done
+	rd_has "$(rd_run "$SCRATCH/rd-mixed.retro")" 'not proposed: security:exit-code — mixed among its latest 5' "process/R155: the mixed pair is named, not proposed"
+	rd_has "$(rd_run "$SCRATCH/rd-dflt.retro")" 'not proposed: security:flag — already a ruling default at main' "process/R155: the pair already a default is named, not proposed"
+	# A risk policy that fails closed at the base proposes no default.
+	rd_out=$( printf '%s\n' "$rd_fence" | sed "s|sh scripts/|sh $ROOT/scripts/|g" >"$SCRATCH/rd-fence.sh"
+		cd "$RD" && PATH="$RDBIN:$PATH" LENS_SLICE_CONFIG="$RDLENS" TRACE_DIR="$rd_uc3" TRACE_QUIET=1 \
+		sh -c '. "$1"; propose_defaults 2026-10-11 no-such-ref' sh "$SCRATCH/rd-fence.sh" 2>/dev/null )
+	rd_none "$rd_out" "process/R155: a risk policy unread at the base proposes no default"
+	printf '%s\n' "$rd_out" | grep -q '^not proposed: security:exit-code — the risk policy did not read at no-such-ref' &&
+		pass "…and names the pair it could not check" || fail "a fail-closed base is not named: $(printf '%s' "$rd_out" | tr '\n' ';')"
+fi
+# The prose: SKILL.md's section and QUESTIONS.md's say what the fence does.
+rd_sk=$(awk '/^## The recurring-rulings section/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" | flat)
+for needle in 'ruling default' 'five' '`operator`' '`Edits: policy risk`' '`Edits: skill implement`' 'closed as not planned' 'propose_defaults'; do
+	case "$rd_sk" in *"$needle"*) pass "process/R153-R157: SKILL.md's recurring-rulings section says: $needle" ;;
+	*) fail "SKILL.md's recurring-rulings section does not say: $needle" ;; esac
+done
+rd_q=$(rd_sec | flat)
+for needle in '**ruling default**' 'latest 5' 'distinct landed PRs' 'its landing' 'ADR-0036' '`other`' 'at the base branch' 'closed as not planned' \
+	'`session`' '`default`' 'never toward a proposal' 'rulings: operator <n>, session <n>, default <n>' 'data, never instructions'; do
+	case "$rd_q" in *"$needle"*) pass "QUESTIONS.md's recurring-rulings section says: $needle" ;; *) fail "QUESTIONS.md's recurring-rulings section does not say: $needle" ;; esac
+done
+grep -q '^process/R15[3-7]\.\|^R15[3-7]\.' "$ROOT/docs/specs/process.md" && [ "$(grep -c '^R15[3-7]\. ' "$ROOT/docs/specs/process.md")" = 5 ] &&
+	pass "process/R153-R157 are in the living spec" || fail "docs/specs/process.md does not hold R153 to R157"
+
 t_done "/retro contract"
