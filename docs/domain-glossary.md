@@ -395,8 +395,16 @@ Grouped by the seam each term belongs to. Entry shape:
   `operator` otherwise, never an argument — and records once per PR, item,
   head, maker and outcome. `--unruled` lists the outward items not **ruled**
   `keep` at the head — ruled meaning the latest operator or default ruling
-  there reads `keep` — each with its two commands. Ref: ADR-0048.
+  there reads `keep` — each with its two commands. `--defaults` applies the
+  **ruling defaults**. Ref: ADR-0048.
   - _Avoid_: "approver" — it records one item's ruling, never the PR's.
+- **Ruling default** — an entry `<review area>:<surface>` in the risk
+  policy's `RISK_RULING_DEFAULTS`, read at the base: the operator's answer
+  given in advance. The ruling recorder's `--defaults` rules an outward item
+  of that surface `keep` by `default` when every review area the PR's diff
+  touches is paired with it; an operator ruling at the same head wins. Ships
+  empty. Ref: ADR-0048.
+  - _Avoid_: "auto-approve" — a default rules one item, never the PR.
 - **Decision log** — the block in a PR body where `/pr-iterate` records each
   ⚠️ UNSPECIFIED item marked `scope: inside` that it decided itself, kept or
   amended. It opens with a `<!-- decision-log -->` marker and the header
