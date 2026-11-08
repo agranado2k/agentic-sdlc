@@ -1958,4 +1958,35 @@ land STUB_MERGE_RC=1 995
 show 'pr:#995' --kind merge.land | grep -qF '"verified":"blocked"' && pass "runtime/R214: a stopped merge.land carries data.verified too" ||
 	fail "runtime/R214: the stopped merge.land lacks verified=blocked: $(show 'pr:#995' --kind merge.land)"
 
+banner "23. The low-risk lane's decision is recorded, and shared invariant §7 names its one exception (PRD-10 slice 1, #913)"
+# The lane is the landing script's own mode, so its record is held here. §7
+# ships verbatim, so its exception is worded portably: it names no lane, no
+# script and no record, only the conditions a project's own decision must meet.
+_s7=$(sed -n '/^## 7\./,/^## 8\./p' "$KIT/constitution/shared-invariants.md")
+for _s7_w in 'judged low risk' 'measured post-merge outcomes' 'standing authorization' 'names that human' \
+	'stop at once' 'escaped mistakes return to that human' 'recorded decision' 'as it reads above'; do
+	printf '%s\n' "$_s7" | tr '\n' ' ' | grep -qF "$_s7_w" && pass "§7's exception says: $_s7_w" || fail "§7 lacks the exception's words: $_s7_w"
+done
+printf '%s\n' "$_s7" | grep -qiwE 'lane|landing script|ADR|pr-iterate|trace' &&
+	fail "§7 names kit vocabulary: $(printf '%s\n' "$_s7" | grep -iwE 'lane|landing script|ADR|pr-iterate|trace')" ||
+	pass "§7's exception names none of the kit's vocabulary"
+_lane_adr=$(grep -l '^- \*\*Supersedes / amends\*\*: supersedes shared invariant §7 for the low-risk lane only' "$KIT"/docs/adr/[0-9]*.md 2>/dev/null | head -1)
+if [ -n "$_lane_adr" ]; then
+	pass "a record supersedes shared invariant §7 for the low-risk lane only"
+	for _la_w in 'amends ADR-0024 clause 7' 'ADR-0036' '§5 keeps its text' 'standing authorization' 'lane policy' 'closed' \
+		'closed until the lane policy names an operator' 'a hold is exit 4 and an event; a refusal stays exit 2 and silent' \
+		'held by path, whatever the risk' 'only a failed QA gets a revert pull request' 'a red base branch holds the lane'; do
+		tr '\n' ' ' <"$_lane_adr" | sed 's/  */ /g' | grep -qiF "$_la_w" && pass "…and it says: $_la_w" || fail "the lane record lacks: $_la_w"
+	done
+	_la_row=$(grep -F "($(basename "$_lane_adr"))" "$KIT/docs/adr/INDEX.md")
+	printf '%s\n' "$_la_row" | grep -qF 'supersedes shared invariant §7 for the low-risk lane only' &&
+		printf '%s\n' "$_la_row" | grep -qF 'amends ADR-0024 clause 7' && printf '%s\n' "$_la_row" | grep -qF 'ADR-0036' &&
+		pass "…and its index row names what it supersedes and amends" || fail "the index row for $(basename "$_lane_adr") does not name §7, ADR-0024 clause 7 and ADR-0036: $_la_row"
+else
+	fail "no record supersedes shared invariant §7 for the low-risk lane only"
+fi
+for _la_g in 'Low-risk lane' 'Lane policy' 'Hold' 'Escape' 'Notice'; do
+	grep -q "^- \*\*$_la_g\*\* —" "$KIT/docs/domain-glossary.md" && pass "the glossary defines $_la_g" || fail "the glossary has no $_la_g entry"
+done
+
 t_done "land one PR by hand"

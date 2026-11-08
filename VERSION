@@ -4003,7 +4003,25 @@
 # and the broker's `data.approved_changed` count (scripts/forge-broker.kit.sh),
 # and the AGENTS.md quick-reference row's `not-approved:`.
 
-shared-layer: 0.117.0
+# 0.118.0 — shared invariant §7 gains the low-risk lane's one exception
+# (ticket #913, PRD-10 slice 1 of D-02, factory T-50). No file joins or
+# leaves. One shared file changes content: constitution/shared-invariants.md,
+# whose §7 gains one portable paragraph — a change judged low risk from
+# measured post-merge outcomes may land with no per-change human act, under a
+# standing authorization that names that human, which a human can stop at
+# once, and whose escaped mistakes return to that human, and only by the
+# project's recorded decision; a project that records none keeps §7 as it
+# read. And UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none. Wiring (9b): none. Templates (9c): none. Config (9d):
+# none. Adapter (9e): none.
+# Kit-only, never shipped: the kit's ADR-0047 (supersedes §7 for the low-risk
+# lane only; amends ADR-0024 clause 7 and ADR-0036 clause 5), its index row,
+# the glossary's low-risk lane, lane policy, hold, escape and notice, the
+# AGENTS.md hard rule 7 pointer, bootstrap.sh's KIT_OWN entry for the record,
+# and tests/land.test.sh section 23.
+
+shared-layer: 0.118.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

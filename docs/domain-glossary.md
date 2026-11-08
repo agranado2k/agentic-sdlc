@@ -196,6 +196,15 @@ Grouped by the seam each term belongs to. Entry shape:
   percents) and the extra list of judging paths. Ships filled, no twin (the
   ADR-0003 amendment), and is always read at a base. Ref: ADR-0039,
   `policy/R15`.
+- **Lane policy** — the policy file naming the **low-risk lane**'s operator (a
+  forge login, its standing authorization), the landing command
+  `/pr-iterate` runs, and the hold patterns. A file of its own under
+  `scripts/`, its name ending `.config.sh`, so it is read at the base like any
+  judging file: ships empty, so a consumer's lane is closed, with a kit-only
+  twin holding the kit's values. The lane is **open** only when it names an
+  operator and can be read. Ref: ADR-0047, PRD-10.
+  - _Avoid_: "risk policy" (that one ships filled, no twin), "lane switch"
+    (the name opens; the **kill switch** stops).
 
 ## Process — how work moves
 
@@ -604,6 +613,33 @@ Grouped by the seam each term belongs to. Entry shape:
   act trips the **kill switch** in every worktree of that clone, and no PR
   can delete it. Deleting it is the operator's reset.
   - _Avoid_: "lock file", "flag file".
+- **Low-risk lane** — the landing script run with `--lane` by `/pr-iterate`,
+  with no operator act, once a PR is green and the **risk rule** printed
+  `effective: low` at its head: it makes every refusal the landing script
+  makes, then lands that head or **holds** the PR, one PR per run. Closed until
+  the **lane policy** names the operator; the **kill switch** stops it at once.
+  The one exception to shared invariant §7 (ADR-0047, PRD-10).
+  - _Avoid_: "auto-merge", "fast lane" (it lands only what was measured low,
+    and holds the rest).
+- **Hold** — the **low-risk lane**'s own refusal, after every ordinary refusal
+  passed: exit 4, one `lane: held <token>` line, one `merge.land
+  outcome=skipped data.via=lane` event. Tokens in checked order: `closed`,
+  `drift`, `escape`, `path`, `base-red`, `check-table`, `verifier`, `switch`,
+  `risk`. A refusal stays exit 2 and silent (ADR-0047).
+  - _Avoid_: "block", "reject"; not a **held ticket** (an acceptance test's
+    hold, ADR-0046).
+- **Escape** — a **post-merge outcome** against a PR the **low-risk lane**
+  landed: a mistake the lane let through. Handled once: a **notice**, and a
+  revert PR (or a fix ticket where the revert conflicts) where nothing has
+  undone it yet. Its area's demotion is the **risk rule**'s, read from the
+  **earned record**, not a state the lane keeps (ADR-0047, PRD-10).
+  - _Avoid_: "incident", "regression" (an escape is defined by the outcome
+    record, not by severity).
+- **Notice** — one forge issue assigned to the **lane policy**'s operator per
+  **escape**, and one per failed post-merge workflow after a lane landing,
+  carrying only closed tokens, PR and ticket numbers, review area names and a
+  run id (ADR-0047, PRD-10).
+  - _Avoid_: "alert", "ping".
 - **Subject** — what an event is about, written `<type>:<reference>`:
   `prd:#12`, `ticket:#34`, `pr:#56`, `branch:feat/x`, `session:<id>`,
   `run:<id>`, `worktree:<slug>`. The type set is open; the shape is not, so a
