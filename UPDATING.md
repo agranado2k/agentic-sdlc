@@ -227,6 +227,28 @@ step each one names, so you do not carry them there by hand: step 8 ends by
 printing **your path** — every note from your release up, oldest first, under
 the step 9 sub-step that needs it.
 
+**Arriving from 0.125.0 or older, the ruling recorder applies ruling
+defaults.** No file joins or leaves at 0.126.0; `scripts/ruling.sh` and this
+file change content. `sh scripts/ruling.sh <PR> --defaults --base <ref>
+[--head <commit>]` reads `RISK_RULING_DEFAULTS` — `<review area>:<surface>`
+entries — from your risk policy as `<ref>` has it, through `scripts/policy.sh
+read`, and records one `ruling outcome=keep data.by=default` for each outward
+item at the latest Axis-2 verdict at the head whose surface is paired with
+every review area the diff from the merge base touches; none for surface
+`other`, and none over an item the operator ruled at that head. A policy read
+that fails closed records nothing and says its `fail-closed` line on stderr; an
+entry whose area is no review area, or whose surface is not in the vocabulary
+or is `other`, is named on stderr and not applied. It prints one `ruling: keep
+… default <entry>…` line per item so ruled. Take `scripts/ruling.sh` verbatim.
+**Config (9d):** your `scripts/risk.config.sh` is yours: add
+`RISK_RULING_DEFAULTS=''`, with its comment if you like. Empty — or absent —
+nothing changes; an entry there is your answer given in advance, so add one
+only for a ruling you would make every time. **Skills (9a):** take
+`/pr-iterate`'s `RISK.md`, which runs the recorder's `--defaults` before the
+risk rule when a review recorded an Axis-2 verdict at a new head, and its
+`SKILL.md`, whose report lists each item ruled `keep` by default under the
+`Risk:` line. No wiring, template or adapter moves.
+
 **Arriving from 0.124.0 or older, the risk rule lets a keep ruling lift
 `high outward`.** No file joins or leaves at 0.125.0; `scripts/risk.sh` and
 this file change content. The rule's risk is `high outward` only while the
