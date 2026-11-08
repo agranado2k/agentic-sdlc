@@ -2199,7 +2199,7 @@ export STUB_BASE_TREE STUB_DEFAULT_ISSUE STUB_DEFAULT_BODY
 # lane_lines_closed <label> — every stdout line of the last run is of a shape
 # the lane may print: closed tokens, numbers, shas and digits (runtime/R102).
 lane_lines_closed() {
-	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|escape pr:#[0-9]+ (revert pr:#[0-9]+|fix ticket:#[0-9]+|notified)|held (closed|drift|escape|path|base-red|check-table|verifier (disputed|blocked|unavailable|none)|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
+	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|base-red notice issue:#[0-9]+|escape pr:#[0-9]+ (revert pr:#[0-9]+|fix ticket:#[0-9]+|notified)|held (closed|drift|escape|path|base-red|check-table|verifier (disputed|blocked|unavailable|none)|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
 	[ -z "$_llc_bad" ] && pass "runtime/R102: $1: every line the lane printed is a closed token, a number or a sha" ||
 		fail "runtime/R102: $1: the lane printed a line outside its closed set: $_llc_bad"
 }
@@ -2831,6 +2831,84 @@ done
 # --- the lane escape kind joins the kit's own vocabulary ------------------------------
 grep -q '`lane.escape`' "$KIT/docs/adr/INDEX.md" && pass "runtime/R93: the decision index names the lane.escape kind" ||
 	fail "runtime/R93: no decision index row names lane.escape"
+
+# ---------------------------------------------------------------------------
+banner "26. A base-branch workflow failing after a lane landing exits 1 and sends one notice (PRD-10 slice 4, #920)"
+# ---------------------------------------------------------------------------
+# The lane's merge happened, so the run exits 1 as any landing does when a
+# post-merge workflow fails — and the lane's operator gets one notice: a
+# forge issue assigned to the lane policy's login, naming the landed PR, its
+# merge commit and each failed run in closed tokens and digits only
+# (runtime/R100, R102). The next lane run holds with base-red (runtime/R86).
+# The escape section left one unhandled escape; a sweep takes it first, so
+# every count below is this section's.
+land STUB_REVERT_PR=9314 STUB_NOTICE=9414 --escapes >/dev/null
+iterated 9190 9191 9192 9193 9194 9195
+for _lv in 9190 9191 9192 9193 9194 9195; do vverdict "$_lv" pass; done
+# base_red_body — the notice bodies the forge was sent, its marker lines dropped.
+base_red_body() { awk '/^--- /{ n = ($0 == "--- issue"); next } n' "$STUB_LOG.bodies"; }
+
+: >"$STUB_LOG.bodies"
+land STUB_PR_FILES=scripts/feature.sh STUB_WATCH_RC=1 STUB_NOTICE=9421 STUB_TITLE='feat(x): BAIT-TITLE' STUB_BRANCH=feat/BAIT-BRANCH 9190 --lane
+expect_status 1 "runtime/R100: a workflow failing after a lane landing exits 1, as a landing does today"
+[ "$(merges)" = 1 ] && pass "runtime/R100: the lane did merge the PR" || fail "runtime/R100: the lane merged $(merges) times, want 1"
+[ "$(creates issue)" = 1 ] && pass "runtime/R100: one notice filed" || fail "runtime/R100: $(creates issue) notices filed, want 1: $(grep 'issue create' "$STUB_LOG")"
+grep '^ARGV: issue create' "$STUB_LOG" | grep -q -- '--assignee octocat' && pass "runtime/R100: the notice is assigned to the lane policy's operator" ||
+	fail "runtime/R100: the notice is not assigned to octocat: $(grep '^ARGV: issue create' "$STUB_LOG")"
+[ "$(line_of 'ARGV: run watch')" -lt "$(line_of 'ARGV: issue create')" ] && pass "runtime/R100: the notice follows the failed run's watch" ||
+	fail "runtime/R100: the notice was filed before the run was judged: $(cat "$STUB_LOG")"
+_brb=$(base_red_body)
+[ "$_brb" = "lane-base-red: failure
+landed: pr:#9190
+merge: $STUB_SHA
+run: 901" ] && pass "runtime/R100: the notice names the landed PR, its merge commit and the failed run" ||
+	fail "runtime/R100: the notice body is not the one expected: $_brb"
+grep '^ARGV: issue create' "$STUB_LOG" | grep -q -- '--title lane base red: PR #9190 ' &&
+	pass "runtime/R102: the notice's title is the landed PR's number and closed words" ||
+	fail "runtime/R102: the notice's title is not the one expected: $(grep '^ARGV: issue create' "$STUB_LOG")"
+_brl=$(show 'pr:#9190' --kind merge.land | grep -F '"outcome":"landed"')
+printf '%s\n' "$_brl" | grep -qF '"workflows":"failure"' && printf '%s\n' "$_brl" | grep -qF '"notice":"9421"' &&
+	pass "runtime/R100: merge.land records the failure and the notice's number" ||
+	fail "runtime/R100: merge.land lacks the failure or the notice: $_brl"
+expect_out_has 'lane: base-red notice issue:#9421' "runtime/R100: the lane prints the notice's number"
+lane_lines_closed "a red base branch after a lane landing"
+grep -q BAIT "$STUB_LOG.bodies" && fail "runtime/R102: the notice carries text from a title, a body or a branch: $(cat "$STUB_LOG.bodies")" ||
+	pass "runtime/R102: the notice carries no text from a title, a body, a branch or a log"
+no_bait "a red base branch after a lane landing" 'pr:#9190'
+
+# Two failed runs: still one notice, each run named.
+: >"$STUB_LOG.bodies"
+land STUB_PR_FILES=scripts/feature.sh STUB_RUNS='901 902' STUB_WATCH_RC=1 STUB_NOTICE=9422 9191 --lane
+expect_status 1 "runtime/R100: two failed runs after a lane landing exit 1"
+[ "$(creates issue)" = 1 ] && base_red_body | grep -qx 'run: 901' && base_red_body | grep -qx 'run: 902' &&
+	pass "runtime/R100: two failed runs make one notice naming both" ||
+	fail "runtime/R100: want one notice naming runs 901 and 902: $(creates issue) notices; $(cat "$STUB_LOG.bodies")"
+
+# Green workflows: no notice.
+land STUB_PR_FILES=scripts/feature.sh 9192 --lane
+expect_status 0 "runtime/R100: a lane landing whose workflows pass exits 0"
+[ "$(creates issue)" = 0 ] && pass "runtime/R100: and files no notice" || fail "runtime/R100: a green lane landing filed a notice"
+
+# A landing that was not the lane's: exit 1 as today, no notice.
+land STUB_WATCH_RC=1 9193
+expect_status 1 "runtime/R100: a failed workflow after a landing outside the lane exits 1"
+[ "$(creates issue)" = 0 ] && pass "runtime/R100: and files no notice — the notice is the lane's" ||
+	fail "runtime/R100: a landing outside the lane filed a notice"
+
+# A notice the forge would not file: still exit 1, the PR still recorded landed.
+: >"$STUB_LOG.bodies"
+land STUB_PR_FILES=scripts/feature.sh STUB_WATCH_RC=1 STUB_ISSUE_CREATE_RC=1 9194 --lane
+expect_status 1 "runtime/R100: a notice the forge would not file still exits 1"
+expect_err_has 'notice' "runtime/R100: the notice's failure is named on standard error"
+_brl=$(show 'pr:#9194' --kind merge.land | grep -F '"outcome":"landed"')
+[ -n "$_brl" ] && ! printf '%s\n' "$_brl" | grep -qF '"notice"' &&
+	pass "runtime/R100: the landing is recorded, with no notice number" || fail "runtime/R100: the landing's event is not the one expected: $_brl"
+printf '%s\n' "$T_OUT" | grep -q '^lane: base-red' && fail "runtime/R100: the lane printed a notice the forge never filed" ||
+	pass "runtime/R100: and prints no notice line"
+
+# The next lane run holds with base-red while the base branch's latest run is red.
+land STUB_PR_FILES=scripts/feature.sh STUB_BASE_RUNS='failure success' 9195 --lane
+lane_held 9195 base-red "runtime/R86: the lane run after a red base branch"
 LAND=$_land_kit
 rm -f "$STUB_LOG.bodies"
 
