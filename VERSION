@@ -4141,7 +4141,10 @@
 # so a consumer adds the four lines. Adapter (9e): none.
 # Kit-only, never shipped: docs/specs/process.md R28 restated and R143 to
 # R145, and tests/vocab.test.sh, tests/vocab-policy.test.sh,
-# tests/retro-skill.test.sh and tests/spec-skills.test.sh.
+# tests/retro-skill.test.sh and tests/spec-skills.test.sh; and from PR #1018
+# (factory T-57, landed after 0.121.0's tag) scripts/land.kit.sh's notice to
+# the lane's operator when the base turns red after a lane landing, with
+# docs/specs/runtime.md, the AGENTS.md row and tests/land.test.sh beside it.
 
 shared-layer: 0.122.0
 
