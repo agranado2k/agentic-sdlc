@@ -42,6 +42,8 @@ guard keeps the trip marker from an agent.
 R95, R96 and R101 joined from PRD-10's escape cases (#918), keeping the
 PRD's numbers: an escape already undone only notifies, a conflicting revert
 files a fix ticket, and `--escapes` sweeps with no PR.
+R100 joined from PRD-10 slice 4's notice (#920), keeping the PRD's number:
+a base-branch workflow failing after a lane landing sends one notice.
 The earned record's verifier rows joined as R214 to R216, R223 and R228,
 from PRD-13 slice 4 (#945), which restated R46 and R48 to count the kit's
 own review apart from the verifier.
@@ -135,6 +137,7 @@ R96. WHEN an escape's outcome is `reverted` or `fixed`, the landing script SHALL
 R97. WHEN the landing script records a `lane.escape`, it SHALL send the lane's operator one notice naming the outcome, the escaped PR, its review areas and the revert PR or fix ticket when there is one. [UC3 4]
 R98. IF opening the revert, filing the ticket or sending the notice fails, THEN the landing script SHALL record no `lane.escape` for that escape, name the cause on standard error, and hold the PR it was judging with `escape`. [UC3 3b]
 R99. A lane run SHALL hold with `escape` a PR that a `lane.escape` event names in `related`, or whose ticket one names. [UC3 7]
+R100. WHEN a base-branch workflow fails after a lane landing, the landing script SHALL exit 1 as it does today and send the lane's operator one notice naming the landed PR and the failed run. [UC1 6a]
 R101. WHEN the landing script runs with `--escapes` and no PR, it SHALL record outcomes and handle every unhandled escape as a lane run does, merge nothing, and exit 0. [UC3 7a]
 R102. The landing script's lane output, its lane events and its notices SHALL carry only closed tokens, review area names, PR and ticket numbers, commit shas, run ids and digits, and no text from a ticket body, a PR body, a commit message or a log.
 R103. The adapter's root guard SHALL refuse an agent's tool call that deletes, moves or overwrites the kill switch's trip marker. [UC4 5]
