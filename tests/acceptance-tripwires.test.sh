@@ -117,6 +117,14 @@ refused "a MultiEdit of $TF, the path relative to the session's directory" 2
 hook_on "$(payload Write "$WT/tests/other.test.sh")"
 expect_status 0 "a Write of a file no held ticket names goes through"
 expect_err_lacks "held:" "and says nothing"
+printf '{"session_id":"s-1","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"NotebookEdit","tool_input":{"notebook_path":"%s"},"tool_use_id":"toolu_1"}' "$WT" "$WT/$TF" >"$SCRATCH/payload.json"
+t_exec sh "$GUARD" <"$SCRATCH/payload.json"
+refused "a notebook edit of $TF" 2
+# A path under a directory that does not exist at the filesystem's root: the
+# walk up to an existing directory must end, and the hook fail open (#1009 M-1).
+printf '%s' "$(payload Write /t91-no-such-dir/x.sh)" >"$SCRATCH/payload.json"
+t_exec timeout 20 sh "$GUARD" <"$SCRATCH/payload.json"
+expect_status 0 "a Write under a missing top-level directory goes through, and the hook ends"
 
 # ---------------------------------------------------------------------------
 banner "acceptance/R39: the commit hook refuses an agent's commit staging a held file"

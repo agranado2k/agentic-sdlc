@@ -285,7 +285,7 @@ default_base() {
 # open). Only a checkout of this repository is asked.
 held_ticket() {
 	_d=$1
-	while [ ! -d "$_d" ]; do _d=${_d%/*}; done
+	while [ ! -d "$_d" ]; do _d=${_d%/*}; [ -n "$_d" ] || return 1; done
 	_cd=$(hook_common_dir "$_d") && _cd=$(cd "$_cd" 2>/dev/null && pwd -P) || return 1
 	[ "${_cd%/*}" = "$root" ] || return 1
 	_top=$( (unset GIT_DIR GIT_WORK_TREE && git -C "$_d" rev-parse --show-toplevel) 2>/dev/null) || return 1
