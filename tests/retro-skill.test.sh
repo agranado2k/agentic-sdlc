@@ -119,7 +119,7 @@ banner "0. The files under test"
 # ---------------------------------------------------------------------------
 [ -f "$SKILL_ABS" ] && pass "$SKILL exists" || {
 	fail "$SKILL is missing — nothing else in this suite means anything"
-t_done "/retro contract"
+	t_done "/retro contract"
 }
 [ -f "$SIDECAR_ABS" ] && pass "$SIDECAR exists — the questions in full live beside the order" ||
 	fail "$SIDECAR is missing"
