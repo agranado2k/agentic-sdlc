@@ -142,8 +142,12 @@
 #   nothing, records no landing or hold, and exits 0 (4 with `lane: held
 #   <token>` when a check or an escape stopped it). It takes no other flag.
 #   A failed post-merge workflow still records both events — the PR did land —
-#   and then exits 1: escalate, as the train's hard rule 6 says. So does a
-#   merge commit the forge never names (data.workflows=unknown, no sha), and
+#   and then exits 1: escalate, as the train's hard rule 6 says. (After a lane
+#   landing it also files one notice issue, assigned to the lane's operator,
+#   naming the landed PR, its merge commit and each failed run; merge.land
+#   carries its number as data.notice and stdout ends `lane: base-red notice
+#   issue:#<N>` — runtime/R100; the next lane run holds with `base-red`.)
+#   So does a merge commit the forge never names (data.workflows=unknown, no sha), and
 #   one no run appeared for within the wait while the base branch's workflows
 #   declare a push trigger, or could not be read (data.workflows=unknown,
 #   #688: exit 1, never 2, so a train stops; `none` is only a base whose
@@ -1148,6 +1152,28 @@ if [ "$TAGGED" = yes ] && [ -n "$FAILED" ] && [ -z "$STALLED" ]; then
 fi
 WAITED=$(($(date +%s) - START))
 
+# --- 3L. a red base branch after a lane landing: one notice (runtime/R100) ----
+# The lane merged and a base-branch workflow failed: the exit stays 1, as
+# below, and the lane's operator gets one notice — a forge issue assigned to
+# the login the lane policy named, its body the landed PR, its merge commit
+# and each failed run, closed tokens and digits only (runtime/R102). Its
+# number rides merge.land as data.notice; a notice the forge would not file
+# is named on stderr, and the landing is recorded without one.
+NOTICE=
+if [ -n "$LANE" ] && [ "$WORKFLOWS" = failure ]; then
+	_brn_runs=
+	for id in $FAILED; do
+		case $id in *[!0-9]*) ;; *) _brn_runs="$_brn_runs
+run: $id" ;; esac
+	done
+	NOTICE=$(gh issue create --title "lane base red: PR #$PR" --assignee "$_lane_op" \
+		--body "lane-base-red: failure
+landed: pr:#$PR
+merge: $SHA$_brn_runs" </dev/null 2>/dev/null |
+		sed -n 's|.*/issues/\([0-9][0-9]*\)$|\1|p' | tail -n 1)
+	[ -n "$NOTICE" ] || note "the forge did not file the base-red notice for PR #$PR — tell $_lane_op by hand"
+fi
+
 # --- 4. the landing ---------------------------------------------------------------
 # Whether /implement opened the PR is read in step 1c's landing line, above.
 _land_why="reason=$TITLE"
@@ -1156,6 +1182,7 @@ set -- "subject=pr:#$PR" "$@" outcome=landed data.method=merge "data.waited=$WAI
 	${_land_why:+"$_land_why"} "data.implement=$IMPLEMENT"
 [ -z "$IMPL_TIER" ] || set -- "$@" "data.implement_tier=$IMPL_TIER"
 [ -z "$SHA" ] || set -- "$@" "data.merge_sha=$SHA"
+[ -z "$NOTICE" ] || set -- "$@" "data.notice=$NOTICE"
 [ -z "$RELEASE" ] || set -- "$@" "data.release=$RELEASE" "data.tagged=$TAGGED" "data.reruns=$RERUNS"
 trace loud kind=merge.land "$@"
 
@@ -1246,6 +1273,7 @@ esac
 printf 'landed #%s %s (merge) · workflows %s · waited %ss%s\n' "$PR" "${SHA:-<merge commit unknown>}" "$WORKFLOWS" "$WAITED" "$TAGNOTE"
 printf 'feedback: %s\n' "$VERDICT"
 [ -z "$LANE" ] || echo 'lane: landed'
+[ -z "$NOTICE" ] || printf 'lane: base-red notice issue:#%s\n' "$NOTICE"
 case $WORKFLOWS in
 failure)
 	note "a post-merge workflow failed on $BASE at $SHA — escalate with the run log; land nothing else"
