@@ -2683,9 +2683,9 @@ PIR="$KIT/.agents/skills/pr-iterate/RISK.md"
 [ -f "$PL" ] && pass "process/R80: /pr-iterate carries the lane step's branch file" || fail "process/R80: no .agents/skills/pr-iterate/LANE.md"
 pl_flat=$(tr '\n' ' ' <"$PL" 2>/dev/null | tr -s ' ')
 pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
-t_text_has "$pi_flat" 'not yours to end). First, a `green` iteration opens [`LANE.md`](LANE.md).' "process/R80: step 6 opens the lane step after the green record, before the run ends"
+t_text_has "$pi_flat" 'not yours to end). A `green` iteration opens [`LANE.md`](LANE.md) before that `end`.' "process/R80: step 6 opens the lane step after the green record, before the run ends"
 _pl_green=$(t_line_of "$PI" 'kind=pr.iterate subject=pr:#<N> outcome=green|red|stopped data.iteration=<i> data.applied')
-_pl_open=$(t_line_of "$PI" 'First, a `green` iteration opens [`LANE.md`](LANE.md)')
+_pl_open=$(t_line_of "$PI" 'A `green` iteration opens [`LANE.md`](LANE.md) before that `end`')
 [ -n "$_pl_green" ] && [ -n "$_pl_open" ] && [ "$_pl_open" -ge "$_pl_green" ] &&
 	pass "process/R80: the lane step comes after the iteration's record" || fail "process/R80: the lane step (line $_pl_open) precedes the iteration's record (line $_pl_green)"
 # R80: its three conditions, the invocation, and the three answers it reports.
