@@ -4080,7 +4080,39 @@
 # docs/specs/runtime.md R82 restated and R92 to R94 and R97 to R99, the
 # AGENTS.md rows, and tests/land.test.sh sections 15 and 25.
 
-shared-layer: 0.120.0
+# 0.121.0 — /pr-iterate runs the low-risk lane's landing command on a green,
+# low-risk head (ticket #916, PRD-10 slice 2 of D-02, factory T-53). No file
+# joins or leaves. One shared file changes content: UPDATING.md, its entry
+# and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate gains the lane step, a new sidecar
+# .agents/skills/pr-iterate/LANE.md: once an iteration records green, the
+# risk rule prints `effective: low` at that head and the lane policy names a
+# landing command, it runs that command once with `--lane`, the PR and its
+# ticket, and reports `lane: landed` with the PR's decision-log ids, the hold
+# line, or the refusal; it never starts /merge-train. Its hard rule 2 names
+# the lane exception, and .agents/skills/pr-iterate/RISK.md names the lane
+# step and lane mode as the one exception to acting the same whatever the
+# risk rule prints (.agents/skills/pr-iterate/SKILL.md, RISK.md, LANE.md);
+# /merge-train's cross-reference line follows
+# (.agents/skills/merge-train/SKILL.md). With no landing command named, the
+# step runs nothing and the report is today's.
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/lane.config.sh (yours) gains LANE_LAND_COMMAND,
+# shipped empty — the landing command /pr-iterate's lane step runs; a
+# consumer's stays empty, so its /pr-iterate stays inert: take the new line
+# as shipped. Adapter (9e): none.
+# Kit-only, never shipped: scripts/lane.kit.config.sh names the landing
+# script as the kit's landing command, AGENTS.md hard rule 10 sends the lane
+# step to that twin, docs/specs/process.md R80 to R82 and R85 added and R65
+# modified, the glossary's risk rule entry, and tests/land.test.sh section
+# 25 and tests/risk.test.sh section 9; and from PR #1017 (factory T-55,
+# landed after 0.120.0's tag) scripts/land.kit.sh's escape notices — an
+# undone escape notified, a conflicting revert ticketed, a sweep with
+# --escapes — with docs/specs/runtime.md, the AGENTS.md row and
+# tests/land.test.sh beside it.
+
+shared-layer: 0.121.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

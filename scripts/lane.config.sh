@@ -38,6 +38,14 @@
 #                your lane must never land is yours to name. The files your
 #                shared-layer manifest lists and the policy files read at the
 #                base branch are held whatever you name here.
+# LANE_LAND_COMMAND  the landing command /pr-iterate runs, with `--lane`, the
+#                pull request and its ticket, once an iteration records green
+#                and the risk rule prints `effective: low` at that head (its
+#                LANE.md): plain words of letters, digits, `.`, `_`, `/` and
+#                `-`, single spaces between; any other value reads as none.
+#                Ships empty: with no command named, /pr-iterate runs none and
+#                reports as it always has, whoever LANE_OPERATOR names.
 
 LANE_OPERATOR=''
 LANE_HOLD_PATTERNS=''
+LANE_LAND_COMMAND=''

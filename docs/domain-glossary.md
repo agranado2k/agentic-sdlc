@@ -592,7 +592,8 @@ Grouped by the seam each term belongs to. Entry shape:
   risk is `high unlearned` when any touched area is **unlearned**, else `low`.
   Every unknown fails closed, toward high. The one route by which a chain
   skill sees anything derived from the trace: `/pr-iterate` reports it, and
-  nothing acts on it yet (ADR-0045, PRD-09).
+  only its lane step acts on it, running the lane policy's landing command on
+  a green head the rule calls `low` (ADR-0045, PRD-09; ADR-0047, PRD-10).
   - _Avoid_: "risk score", "risk model" (it is a rule over counts).
 - **Effective risk** — the higher of the planner's `Risk:` stamp (`high
   unclear` when there is none) and the **risk rule**'s, `high` above `low`;
