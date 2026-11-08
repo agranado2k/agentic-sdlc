@@ -4279,6 +4279,7 @@ ru_refused "runtime/R140: a ruling item B1-2" -- kind=ruling subject='pr:#7' out
 ru_refused "runtime/R140: a ruling with a 39-digit head" -- kind=ruling subject='pr:#7' outcome=keep data.item=A2-4 data.surface=exit-code data.head=${RU_SHA%?} data.by=operator
 ru_refused "runtime/R140: a ruling by=agent" -- kind=ruling subject='pr:#7' outcome=keep data.item=A2-4 data.surface=exit-code data.head=$RU_SHA data.by=agent
 ru_refused "runtime/R140: a ruling whose surface is no word of the vocabulary's surface field" -- kind=ruling subject='pr:#7' outcome=keep data.item=A2-4 data.surface=colour data.head=$RU_SHA data.by=operator
+case $T_ERR in *"surface"*"'colour'"*"output-format flag exit-code agent-rule other"*) pass "runtime/R140: and the refusal is the checker's own, naming the word and the surface field's words" ;; *) fail "runtime/R140: the surface refusal did not carry the checker's words: $T_ERR" ;; esac
 ru_refused "runtime/R140: a ruling on a ticket, not a PR" -- kind=ruling subject='ticket:#7' outcome=keep data.item=A2-4 data.surface=flag data.head=$RU_SHA data.by=operator
 ru_refused "runtime/R140: a ruling with no subject" -- kind=ruling outcome=keep data.item=A2-4 data.surface=flag data.head=$RU_SHA data.by=operator
 ru_refused "runtime/R140: a ruling with no outcome" -- kind=ruling subject='pr:#7' data.item=A2-4 data.surface=flag data.head=$RU_SHA data.by=operator
