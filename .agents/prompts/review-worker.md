@@ -254,6 +254,15 @@ become table cells.
     report reads an item with no scope, or a word the vocabulary's `scope`
     field does not hold, as `outward`.
 
+    **Every item marked `scope: outward` also carries a surface**,
+    `surface: <token>` right after `scope: outward`, on the item's own
+    line — `⚠️ UNSPECIFIED  scope: outward surface: exit-code — …` —
+    naming what the outward effect touches: `output-format`, `flag`,
+    `exit-code`, `agent-rule` or `other`, the vocabulary's `surface` field.
+    The session that lands this report reads an outward item with no
+    surface, or a word the vocabulary's `surface` field does not hold, as
+    `other`.
+
     **Where the spec carries requirement ids** — `R<n>` lines in a PRD's
     Requirements section, `<area>/R<n>` for a living spec's, and a ticket's
     `Covers:` line naming the ones it delivers — a ✅ SPECIFIED item cites

@@ -248,8 +248,8 @@ TRACE_EVENT_CAP=4000
 # on every kind but those TRACE_REQUIRED names (below, #832). The kind
 # list after it stays a literal line, because the skill suites read it as
 # one; the trace suite holds the two to the same kinds, row for row.
-TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed lane.escape=revert|fix|notified risk.judge=agreed|disagreed verify.verdict=pass|blocked|unavailable finding.verify=confirmed|disputed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome lane.escape risk.judge verify.verdict finding.verify hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
+TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed lane.escape=revert|fix|notified risk.judge=agreed|disagreed verify.verdict=pass|blocked|unavailable finding.verify=confirmed|disputed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked ruling=keep|change note=*'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome lane.escape risk.judge verify.verdict finding.verify hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback ruling note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567,
 # 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins
@@ -280,10 +280,15 @@ TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.sta
 # (the kit's ADR-0044, #939).
 # A risk rule's verdict names the head it judged, a commit sha, and the
 # kill switch's state, on or tripped (PRD-09 slice 1).
+# A ruling on one outward confirm-list item names the item, A2-N, the head
+# it was made at, a commit sha, and who made it: the operator, a session or a
+# default; and an Axis-2 verdict's outward items are a comma-separated list
+# of A2-N:<surface> entries (the kit's ADR-0048 clause 7, #926). A
+# surface's WORD is the vocabulary checker's, asked by trace_check_ruling.
 # `verify` advises on a raise and on a lens count
 # written before its row (TRACE_AWK_RAISE and TRACE_AWK_LENS read the rows
 # from here).
-TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2 merge.outcome=by_sha:[0-9a-f]{40} merge.outcome=days:[0-9]+ merge.outcome/outcome~reverted|fixed=by_sha!:[0-9a-f]{40} merge.outcome/outcome~qa-failed=ticket!:[A-Za-z0-9._-]+ verify.verdict=reviewed:[0-9a-f]{40} verify.verdict=provider:[a-z][a-z0-9._-]* verify.verdict/outcome~pass|blocked=reviewed!:[0-9a-f]{40} verify.verdict/outcome~pass|blocked=provider!:[a-z][a-z0-9._-]* finding.verify=id:[CHML]-[0-9]+ finding.verify=where:.+:[0-9]+ risk.judge=head:[0-9a-f]{40} risk.judge=switch:on|tripped'
+TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[A-Za-z0-9._#-]+ finding.triage=source:check|bot|human|local finding.triage/data.source~local=id:[CHML]-[0-9]+|A2-[0-9]+ finding.triage/data.id~[CHML]-[0-9]+|A2-[0-9]+=source:local pr.iterate=iteration:[0-9]+ pr.iterate=applied:[0-9]+ pr.iterate=rejected:[0-9]+ pr.iterate=escalated:[0-9]+ pr.iterate=cause:conflict|pending-stuck pr.iterate/outcome~green|red=applied!:[0-9]+ pr.iterate/outcome~green|red=rejected!:[0-9]+ pr.iterate/outcome~green|red=escalated!:[0-9]+ review.verdict=lenses:[0-9]+ review.verdict=roster:[0-9]+ review.verdict=axis:1|2 merge.outcome=by_sha:[0-9a-f]{40} merge.outcome=days:[0-9]+ merge.outcome/outcome~reverted|fixed=by_sha!:[0-9a-f]{40} merge.outcome/outcome~qa-failed=ticket!:[A-Za-z0-9._-]+ verify.verdict=reviewed:[0-9a-f]{40} verify.verdict=provider:[a-z][a-z0-9._-]* verify.verdict/outcome~pass|blocked=reviewed!:[0-9a-f]{40} verify.verdict/outcome~pass|blocked=provider!:[a-z][a-z0-9._-]* finding.verify=id:[CHML]-[0-9]+ finding.verify=where:.+:[0-9]+ risk.judge=head:[0-9a-f]{40} risk.judge=switch:on|tripped ruling=item:A2-[0-9]+ ruling=head:[0-9a-f]{40} ruling=by:operator|session|default ruling=surface:[a-z][a-z0-9-]* review.verdict=outward_items:A2-[0-9]+:[a-z][a-z0-9-]*(,A2-[0-9]+:[a-z][a-z0-9-]*)*'
 # THE REQUIRED KEYS (the kit's ADR-0034, amending the kit's ADR-0024 clause 1, #832):
 # a field or data key every line of a kind must carry, whatever its outcome.
 # Each entry is `<kind>=outcome` or `<kind>=data.<key>`. A raise names its
@@ -294,11 +299,12 @@ TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[
 # verifier's verdict names its outcome, and its verdict on one finding its
 # outcome, the finding's id and the evidence's place (the kit's ADR-0044,
 # #939); and a risk rule's verdict names whether it agreed with the
-# planner (PRD-09 slice 1). An empty
+# planner (PRD-09 slice 1); and a ruling names its outcome, item,
+# surface, head and maker (the kit's ADR-0048 clause 7, #926). An empty
 # value is no value. The VALUE stays the shape row's, the outcome table's, and for a raise's severity the
 # vocabulary checker's (trace_check_severity). `verify` advises on a line
 # already written without one (TRACE_AWK_REQUIRED reads this table).
-TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome lane.escape=outcome verify.verdict=outcome finding.verify=outcome finding.verify=data.id finding.verify=data.where risk.judge=outcome'
+TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome lane.escape=outcome verify.verdict=outcome finding.verify=outcome finding.verify=data.id finding.verify=data.where risk.judge=outcome ruling=outcome ruling=data.item ruling=data.surface ruling=data.head ruling=data.by'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -577,6 +583,52 @@ EOF
 # stdout. The positional form the checker's audit exempts (#337): one
 # argument, one line, a value the emit already held to one word.
 trace_severity_refusal() { sh "$_trace_here/vocab.sh" "Severity: $1" 2>&1 >/dev/null; }
+
+# trace_check_ruling <kind> <subject> <key=value lines> — the checks a
+# shape row cannot hold (the kit's ADR-0048 clause 7, runtime/R140-R141).
+# A ruling's subject is the PR it rules on, pr:#<N>, and its data.surface a
+# word of the vocabulary's surface field. An Axis-2 verdict's
+# data.outward_items holds one entry per item data.outward counts, each
+# surface a word of that field; the list sits on an Axis-2 verdict only. A
+# verdict with no list is history-shaped and passes. The surface words are
+# the checker's, asked as `Surface: <word>`; no checker beside the script,
+# and only the shape rows hold. Returns 1 with TRACE_SHAPE_WHY set.
+trace_check_ruling() {
+	_ru_lines=$3
+	if [ "$1" = ruling ]; then
+		trace_matches "$2" 'pr:#[0-9]+' || {
+			TRACE_SHAPE_WHY="ruling: subject '$2' is not pr:#<N> — a ruling names the PR it rules on"
+			return 1
+		}
+		_ru_surf=$(printf '%s\n' "$_ru_lines" | sed -n 's/^surface=//p')
+	else
+		_ru_list=$(printf '%s\n' "$_ru_lines" | sed -n 's/^outward_items=//p' | sed -n '$p')
+		[ -n "$_ru_list" ] || return 0
+		_ru_axis=$(printf '%s\n' "$_ru_lines" | sed -n 's/^axis=//p' | sed -n '$p')
+		[ "$_ru_axis" = 2 ] || {
+			TRACE_SHAPE_WHY="review.verdict: data.outward_items sits on an Axis-2 verdict only, not data.axis '$_ru_axis'"
+			return 1
+		}
+		_ru_out=$(printf '%s\n' "$_ru_lines" | sed -n 's/^outward=//p' | sed -n '$p')
+		_ru_n=$(printf '%s\n' "$_ru_list" | tr ',' '\n' | grep -c .)
+		[ "$_ru_n" = "$_ru_out" ] || {
+			TRACE_SHAPE_WHY="review.verdict: data.outward_items holds $_ru_n entries, data.outward is '$_ru_out' — one entry per outward item"
+			return 1
+		}
+		_ru_surf=$(printf '%s\n' "$_ru_list" | tr ',' '\n' | sed 's/^[^:]*://')
+	fi
+	[ -f "$_trace_here/vocab.sh" ] || return 0
+	for _ru_w in $_ru_surf; do
+		_ru_why=$(trace_surface_refusal "$_ru_w") && continue
+		TRACE_SHAPE_WHY="$1: surface — ${_ru_why#x vocab: }"
+		return 1
+	done
+	return 0
+}
+
+# trace_surface_refusal <value> — trace_severity_refusal's twin for one
+# surface word, already held to one token by its shape row.
+trace_surface_refusal() { sh "$_trace_here/vocab.sh" "Surface: $1" 2>&1 >/dev/null; }
 
 # trace_severity_words — the words verify holds a written raise's severity to:
 # the checker's `fields` line for severity, space-padded, or nothing when no
@@ -1135,6 +1187,7 @@ trace_emit() {
 	_em_dlines=
 	_em_blob_src=
 	_em_outcome=
+	_em_subject=
 	_em_model=
 	_em_tier=
 	_em_on=0
@@ -1196,6 +1249,7 @@ trace_emit() {
 					eval "_em_v_$_em_key=\$_em_esc"
 					[ "$_em_key" = outcome ] && _em_outcome=$_em_val
 					[ "$_em_key" = model ] && _em_model=$_em_val
+					[ "$_em_key" = subject ] && _em_subject=$_em_val
 					[ "$_em_key" = tier ] && _em_tier=$_em_val
 					;;
 				*)
@@ -1224,6 +1278,10 @@ trace_emit() {
 	if [ "$_em_kind" = finding.raise ]; then
 		trace_check_severity "$_em_dlines" || die "$TRACE_SHAPE_WHY"
 	fi
+	case $_em_kind in ruling | review.verdict)
+		trace_check_ruling "$_em_kind" "$_em_subject" "$_em_dlines" || die "$TRACE_SHAPE_WHY"
+		;;
+	esac
 	if [ "$_em_kind" = spawn ] && [ -n "$_em_model" ]; then
 		trace_check_spawn_model "$_em_model" || die "$TRACE_MODEL_WHY"
 	fi

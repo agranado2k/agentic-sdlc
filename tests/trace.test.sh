@@ -1404,6 +1404,7 @@ housekeeping.finding ticket deepening brief deletion none
 worktree.prune removed kept
 grill.decision accepted overridden
 feedback hit adjusted missed unasked
+ruling keep change
 note *
 '
 OV="$SCRATCH/outcome-vocab"; OVON=$(policy "$OV")
@@ -1453,10 +1454,17 @@ ov_held() {
 		severity) echo data.severity=low ;;
 		axis) echo data.axis=1 ;;
 		where) echo data.where=scripts/a.sh:12 ;;
+		item) echo data.item=A2-1 ;;
+		surface) echo data.surface=other ;;
+		head) echo data.head=0123456789abcdef0123456789abcdef01234567 ;;
+		by) echo data.by=operator ;;
 		*) echo "data.$_oh_k=no-fixture-value-for-a-required-key" ;;
 		esac
 	done
 }
+# ov_subject <kind> — the subject a kind requires, beside its data: a ruling
+# names the PR it rules on (runtime/R140).
+ov_subject() { [ "$1" != ruling ] || echo 'subject=pr:#1'; }
 ov_outcome_required() { sed -n "s/^TRACE_REQUIRED='\(.*\)'\$/\1/p" "$TRACE" | tr ' ' '\n' | grep -qx "$1=outcome"; }
 _ov_bad=
 _ov_rows=$(printf '%s\n' "$OV_TABLE" | sed '/^$/d')
@@ -1472,9 +1480,9 @@ for _ov_row in $_ov_rows; do
 	shift
 	# shellcheck disable=SC2046 # one data argument per line
 	if ov_outcome_required "$_ov_k"; then
-		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" $(ov_held "$_ov_k") >/dev/null 2>&1 && _ov_bad="$_ov_bad [$_ov_k requires an outcome, none accepted]"
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" $(ov_subject "$_ov_k") $(ov_held "$_ov_k") >/dev/null 2>&1 && _ov_bad="$_ov_bad [$_ov_k requires an outcome, none accepted]"
 	else
-		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k with no outcome refused]"
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" $(ov_subject "$_ov_k") $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k with no outcome refused]"
 	fi
 	case $1 in
 	-)
@@ -1487,7 +1495,7 @@ for _ov_row in $_ov_rows; do
 	*)
 		for _ov_w in "$@"; do
 			# shellcheck disable=SC2046 # one data argument per line
-			env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k $_ov_w refused]"
+			env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" $(ov_subject "$_ov_k") $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_bad="$_ov_bad [$_ov_k $_ov_w refused]"
 		done
 		# `landed` belongs to merge.land, `opened` to pr.open — a word no other
 		# row declares, so its refusal is the per-kind check and not a global one.
@@ -1581,7 +1589,7 @@ for _ov_p in $_ov_pairs; do
 	_ov_k=${_ov_p%% *}
 	for _ov_w in $(printf '%s' "${_ov_p#* }" | tr '|' ' '); do
 		# shellcheck disable=SC2046 # one data argument per line
-		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_emit_bad="$_ov_emit_bad [$_ov_k $_ov_w]"
+		env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind="$_ov_k" outcome="$_ov_w" $(ov_subject "$_ov_k") $(ov_held "$_ov_k") >/dev/null 2>&1 || _ov_emit_bad="$_ov_emit_bad [$_ov_k $_ov_w]"
 	done
 	IFS='
 '
@@ -4236,5 +4244,66 @@ vx_record
 t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" record --settled' _ "$PR" "$VX_ON" "$ER_POL" "$TRACE"
 printf '%s\n' "$T_OUT" | grep -q verifier && fail "runtime/R55: the settled form gained a verifier row: $T_OUT" ||
 	pass "the settled form, the risk rule's, prints no verifier row"
+
+banner "46. a ruling is a kind, and an Axis-2 verdict names each outward item's surface (runtime/R140-R142, #926)"
+# PRD-11 slice 3, ADR-0048 clause 7: an operator's (or a session's, or a
+# default's) ruling on one outward confirm-list item is the kind `ruling`,
+# keep or change, on the PR, naming the item, its surface, the head it was
+# made at and who made it; and the Axis-2 verdict lists the outward items with
+# their surfaces, one `A2-<n>:<surface>` entry per item counted in
+# data.outward. Nothing writes a ruling yet; the recorder is the next ticket.
+RU_T="$SCRATCH/ruling-trace"; RUON=$(policy "$RU_T")
+RU_SHA=0123456789abcdef0123456789abcdef01234567
+ru_lines() { cat "$RU_T"/events/*.jsonl 2>/dev/null | wc -l | tr -d ' '; }
+ru_refused() {
+	_ru_l=$1; shift 2
+	_ru_n=$(ru_lines)
+	t_exec env TRACE_CONFIG="$RUON" sh "$TRACE" emit "$@"
+	[ "$T_STATUS" = 2 ] && [ "$(ru_lines)" = "$_ru_n" ] && pass "$_ru_l: exit 2, nothing written" ||
+		fail "$_ru_l: exited $T_STATUS, lines $_ru_n -> $(ru_lines): $T_ERR"
+}
+ru_written() {
+	_ru_l=$1; shift 2
+	_ru_n=$(ru_lines)
+	t_exec env TRACE_CONFIG="$RUON" sh "$TRACE" emit "$@"
+	[ "$T_STATUS" = 0 ] && [ "$(ru_lines)" = $((_ru_n + 1)) ] && pass "$_ru_l: written" ||
+		fail "$_ru_l: exited $T_STATUS, lines $_ru_n -> $(ru_lines): $T_ERR"
+}
+for _ru_o in keep change; do
+	for _ru_by in operator session default; do
+		ru_written "runtime/R140: a ruling outcome=$_ru_o by=$_ru_by" -- kind=ruling subject='pr:#7' outcome=$_ru_o data.item=A2-4 data.surface=exit-code data.head=$RU_SHA data.by=$_ru_by
+	done
+done
+ru_refused "runtime/R140: a ruling outcome=maybe" -- kind=ruling subject='pr:#7' outcome=maybe data.item=A2-4 data.surface=exit-code data.head=$RU_SHA data.by=operator
+ru_refused "runtime/R140: a ruling item B1-2" -- kind=ruling subject='pr:#7' outcome=keep data.item=B1-2 data.surface=exit-code data.head=$RU_SHA data.by=operator
+ru_refused "runtime/R140: a ruling with a 39-digit head" -- kind=ruling subject='pr:#7' outcome=keep data.item=A2-4 data.surface=exit-code data.head=${RU_SHA%?} data.by=operator
+ru_refused "runtime/R140: a ruling by=agent" -- kind=ruling subject='pr:#7' outcome=keep data.item=A2-4 data.surface=exit-code data.head=$RU_SHA data.by=agent
+ru_refused "runtime/R140: a ruling whose surface is no word of the vocabulary's surface field" -- kind=ruling subject='pr:#7' outcome=keep data.item=A2-4 data.surface=colour data.head=$RU_SHA data.by=operator
+case $T_ERR in *"surface"*"'colour'"*"output-format flag exit-code agent-rule other"*) pass "runtime/R140: and the refusal is the checker's own, naming the word and the surface field's words" ;; *) fail "runtime/R140: the surface refusal did not carry the checker's words: $T_ERR" ;; esac
+ru_refused "runtime/R140: a ruling on a ticket, not a PR" -- kind=ruling subject='ticket:#7' outcome=keep data.item=A2-4 data.surface=flag data.head=$RU_SHA data.by=operator
+ru_refused "runtime/R140: a ruling with no subject" -- kind=ruling outcome=keep data.item=A2-4 data.surface=flag data.head=$RU_SHA data.by=operator
+ru_refused "runtime/R140: a ruling with no outcome" -- kind=ruling subject='pr:#7' data.item=A2-4 data.surface=flag data.head=$RU_SHA data.by=operator
+for _ru_k in item surface head by; do
+	set -- data.item=A2-4 data.surface=flag data.head=$RU_SHA data.by=operator
+	_ru_args=
+	for _ru_a in "$@"; do case $_ru_a in "data.$_ru_k="*) ;; *) _ru_args="$_ru_args $_ru_a" ;; esac; done
+	# shellcheck disable=SC2086 # one data argument per word, on purpose
+	ru_refused "runtime/R140: a ruling missing data.$_ru_k" -- kind=ruling subject='pr:#7' outcome=keep $_ru_args
+done
+grep -q '"kind":"ruling".*"by":"operator"' "$RU_T"/events/*.jsonl 2>/dev/null && pass "runtime/R140: the written ruling carries its fields" || fail "runtime/R140: no written ruling carries data.by"
+
+# runtime/R141: the Axis-2 verdict's outward items, counted against data.outward.
+ru_written "runtime/R141: an Axis-2 verdict with two outward items and their surfaces" -- kind=review.verdict subject='pr:#7' outcome=confirm data.axis=2 data.outward=2 data.outward_items=A2-4:exit-code,A2-6:other
+ru_written "runtime/R141: an Axis-2 verdict with no outward item and no list" -- kind=review.verdict subject='pr:#7' outcome=pass data.axis=2 data.outward=0
+ru_refused "runtime/R141: data.outward=2 with one outward_items entry" -- kind=review.verdict subject='pr:#7' outcome=confirm data.axis=2 data.outward=2 data.outward_items=A2-4:exit-code
+ru_refused "runtime/R141: data.outward=1 with two outward_items entries" -- kind=review.verdict subject='pr:#7' outcome=confirm data.axis=2 data.outward=1 data.outward_items=A2-4:exit-code,A2-6:flag
+ru_refused "runtime/R141: an entry that reads 'A2-4 exit-code'" -- kind=review.verdict subject='pr:#7' outcome=confirm data.axis=2 data.outward=1 'data.outward_items=A2-4 exit-code'
+ru_refused "runtime/R141: an entry whose surface is no vocabulary word" -- kind=review.verdict subject='pr:#7' outcome=confirm data.axis=2 data.outward=1 data.outward_items=A2-4:colour
+ru_refused "runtime/R141: an outward_items list with no data.outward beside it" -- kind=review.verdict subject='pr:#7' outcome=confirm data.axis=2 data.outward_items=A2-4:flag
+ru_refused "runtime/R141: a list on an Axis-1 verdict" -- kind=review.verdict subject='pr:#7' outcome=pass data.axis=1 data.outward=1 data.outward_items=A2-4:flag
+# The release tells a consumer how to take it: the trace's new kind and the
+# verdict's new field, the vocabulary's surface field, and /review-pr's text.
+_ru_upd=$(awk '/^\*\*Arriving from 0\.122\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$KIT/UPDATING.md" | tr '\n' ' ')
+case $_ru_upd in *'`ruling`'*'`data.outward_items`'*'VOCAB_SURFACE='*'/review-pr'*) pass "UPDATING.md's 0.123.0 entry names the ruling kind, data.outward_items, VOCAB_SURFACE and /review-pr" ;; *) fail "UPDATING.md has no 'Arriving from 0.122.0 or older' entry naming ruling, data.outward_items, VOCAB_SURFACE and /review-pr" ;; esac
 
 t_done "trace script"

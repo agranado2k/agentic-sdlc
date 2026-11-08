@@ -979,13 +979,39 @@ N_APPROVED=$(LC_ALL=C grep -c '^[^A-Za-z0-9]*MISSING.*— approved test changed[
 # The ⚠️ items read as outward (process/R54–R55, ADR-0038): every one but an
 # item whose tag is followed by `scope: inside`, a word the vocabulary's scope
 # field holds; a missing or unknown scope fails closed to the operator.
-N_INSIDE=0
-sh "$ROOT/scripts/vocab.sh" fields 2>/dev/null | grep -qE '^scope:( .*)? inside( |$)' &&
-	N_INSIDE=$(LC_ALL=C grep -cE '^[^A-Za-z0-9]*UNSPECIFIED[[:blank:]]*scope:[[:blank:]]*inside([^a-z-]|$)' "$TMP/behavior" || :)
-N_OUTWARD=$((N_UNSPEC - N_INSIDE))
+# Each outward item is listed as A2-<n>:<surface> (runtime/R142, ADR-0048
+# clause 7), n its place in the confirm-list counted from 1 — every tagged
+# line the report kept — and the surface the token written right after its
+# scope when the vocabulary's surface field holds it, else `other`
+# (process/R148). The count is the list's, so the two never disagree.
+VOCAB_FIELDS_OUT=$(sh "$ROOT/scripts/vocab.sh" fields 2>/dev/null || :)
+HAS_INSIDE=0
+printf '%s\n' "$VOCAB_FIELDS_OUT" | grep -qE '^scope:( .*)? inside( |$)' && HAS_INSIDE=1
+SURFACES=$(printf '%s\n' "$VOCAB_FIELDS_OUT" | sed -n 's/^surface: //p')
+OUTWARD_ITEMS=$(LC_ALL=C awk -v inside="$HAS_INSIDE" -v words=" $SURFACES " '
+	{ n++ }
+	/^[^A-Za-z0-9]*UNSPECIFIED/ {
+		rest = $0
+		sub(/^[^A-Za-z0-9]*UNSPECIFIED[ \t]*/, "", rest)
+		scope = ""
+		if (match(rest, /^scope:[ \t]*[a-z-]*/)) {
+			scope = substr(rest, RSTART, RLENGTH); sub(/^scope:[ \t]*/, "", scope)
+			rest = substr(rest, RLENGTH + 1); sub(/^[ \t]*/, "", rest)
+		}
+		if (inside && scope == "inside") next
+		s = "other"
+		if (match(rest, /^surface:[ \t]*[a-z0-9-]*/)) {
+			w = substr(rest, RSTART, RLENGTH); sub(/^surface:[ \t]*/, "", w)
+			if (w != "" && index(words, " " w " ")) s = w
+		}
+		out = out (out == "" ? "" : ",") "A2-" n ":" s
+	}
+	END { print out }' "$TMP/behavior")
+N_OUTWARD=0
+[ -z "$OUTWARD_ITEMS" ] || N_OUTWARD=$(printf '%s\n' "$OUTWARD_ITEMS" | tr ',' '\n' | grep -c .)
 AX2=pass
 [ $((N_UNSPEC + N_MIXED + N_MISSING)) = 0 ] || AX2=confirm
 trace quiet kind=review.verdict "subject=pr:#$PR" "outcome=$AX2" data.axis=2 data.via=broker \
-	"data.unspecified=$N_UNSPEC" "data.outward=$N_OUTWARD" "data.mixed=$N_MIXED" "data.missing=$N_MISSING" "data.approved_changed=$N_APPROVED" \
+	"data.unspecified=$N_UNSPEC" "data.outward=$N_OUTWARD" ${OUTWARD_ITEMS:+"data.outward_items=$OUTWARD_ITEMS"} "data.mixed=$N_MIXED" "data.missing=$N_MISSING" "data.approved_changed=$N_APPROVED" \
 	"reason=the confirm-list counted by tag; the items are on the PR comment"
 exit 0

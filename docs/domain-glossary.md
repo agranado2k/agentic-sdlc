@@ -375,6 +375,19 @@ Grouped by the seam each term belongs to. Entry shape:
   items as `data.outward`. Ref: ADR-0038.
   - _Avoid_: "severity" or "impact" — the scope says who may decide an item,
     never how bad it is.
+- **Surface** — what an outward ⚠️ UNSPECIFIED item touches, written by Agent 7
+  as `surface: <token>` right after `scope: outward`: `output-format`, `flag`,
+  `exit-code`, `agent-rule` or `other`, the vocabulary's `surface` field. A
+  missing surface, or a word the field does not hold, is read as `other`. The
+  Axis-2 verdict lists each outward item with its surface as
+  `data.outward_items`, `A2-<n>:<surface>` entries in confirm-list order.
+  Ref: ADR-0048.
+  - _Avoid_: "category" or "area" — a review area is the lens slicer's word.
+- **Ruling** — the trace kind for a decision on one outward confirm-list item:
+  `keep` or `change`, on `pr:#<N>`, naming the item (`A2-<n>`), its surface,
+  the head commit it was made at and who made it — `operator`, `session` or
+  `default`. Ref: ADR-0048.
+  - _Avoid_: "approval" — a ruling decides one item, never the PR.
 - **Decision log** — the block in a PR body where `/pr-iterate` records each
   ⚠️ UNSPECIFIED item marked `scope: inside` that it decided itself, kept or
   amended. It opens with a `<!-- decision-log -->` marker and the header
