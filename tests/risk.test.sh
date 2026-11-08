@@ -398,6 +398,8 @@ _pi_warn=$(t_line_of "$PI" '⚠️ For you (behavior confirm-list, human-only):'
 [ -n "$_pi_risk" ] && [ "$_pi_risk" -eq $((_pi_title + 1)) ] && [ "$_pi_warn" -gt "$_pi_risk" ] &&
 	pass "process/R64: the risk line is the report's first line under its title" || fail "process/R64: the risk line is not at the top of the report (title $_pi_title, risk $_pi_risk, confirm-list $_pi_warn)"
 t_text_has "$pi_flat" 'takes the same actions whatever the rule prints' "process/R65: /pr-iterate acts the same whatever the rule prints"
+# PRD-10 modified process/R65: the lane step and the lane mode are its one exception.
+t_text_has "$pi_flat" 'whatever the rule prints, save its one exception: the lane step ([`LANE.md`](LANE.md)) and the landing script'"'"'s lane mode it runs' "process/R65: the passage names the lane step and the lane mode as its one exception"
 LAND="$KIT/scripts/land.kit.sh"
 # Its lane mode (PRD-10, ADR-0047) is the one exception: the rule is run in
 # the lane's block, between 1L and 1d, and its helpers before step 1 (0L,

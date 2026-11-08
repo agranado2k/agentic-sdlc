@@ -14,4 +14,4 @@ The rule reads the ticket's `Risk:` line through the stamp reader, each review a
 
 **Report it.** Its `effective:` value goes at the top of the report, under the title, as `Risk: <the effective line> (reported only)`, with the areas its `area:` lines call `unlearned` beside it. When `rc` is not 0 — a caller error, or a value the checker refused, and nothing printed — report `Risk: not judged (reported only)`; the iteration goes on either way.
 
-**Never act on it.** This skill takes the same actions whatever the rule prints: no fix, reply, push, stop condition or `Next:` line moves with it, and the landing reads nothing of it either. The lane that acts on a PR's risk is a later one.
+**Never act on it, save the lane.** This skill takes the same actions whatever the rule prints, save its one exception: the lane step ([`LANE.md`](LANE.md)) and the landing script's lane mode it runs. Outside them no fix, reply, push, stop condition or `Next:` line moves with it, and the landing reads nothing of it either.

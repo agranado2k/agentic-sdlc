@@ -25,6 +25,10 @@
 #                would make the record self-certifying, and a lens edit waits
 #                for the operator (ADR-0048, PRD-11's process/R146).
 #                A `*` crosses a `/`; scripts/lane.config.sh says the shape.
+# LANE_LAND_COMMAND  the landing script; /pr-iterate's lane step runs it with --lane,
+#                the pull request and its ticket (PRD-10, process/R80). A
+#                closed lane still holds every run it makes with `closed`.
 
 LANE_OPERATOR=''
+LANE_LAND_COMMAND='sh scripts/land.kit.sh'
 LANE_HOLD_PATTERNS='scripts/land.kit.sh scripts/risk.sh scripts/risk.kit.sh .githooks/* adapters/claude-code/* .claude/settings.json .github/workflows/* .agents/skills/review-pr/* .claude/skills/review-pr'
