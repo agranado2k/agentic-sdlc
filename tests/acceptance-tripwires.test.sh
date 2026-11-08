@@ -160,8 +160,31 @@ t_exec as_human git -C "$WT" commit -q -m "test: the operator re-approves"
 expect_status 0 "a human's commit (no agent-harness marker) is the operator's, let through"
 
 # ---------------------------------------------------------------------------
-banner "Both fail open when the guard at the default branch is missing"
+banner "Both fail open when the guard at the default branch errors, fails closed, or is missing"
 # ---------------------------------------------------------------------------
+# main_guard <body> — main's acceptance guard replaced by a stub, committed.
+main_guard() {
+	git -C "$FIX" checkout -q main
+	t_write "$FIX" scripts/acceptance-guard.sh "$1"
+	as_agent git -C "$FIX" commit -q --no-verify -am "chore: a stub guard" >/dev/null
+}
+GOOD_GUARD=$(git -C "$FIX" show main:scripts/acceptance-guard.sh)
+# Each stub prints the answer a working guard would, then exits non-zero: a
+# hook that read the answer and not the status would refuse.
+for stub in "fails closed|3" "errors|1"; do
+	what=${stub%%|*}
+	main_guard "case \$1 in held) echo 'T-90 $TF' ;; tests) echo 'approved $APPROVAL' ;; esac
+exit ${stub#*|}
+"
+	hook_on "$(payload Edit "$WT/$TF")"
+	expect_status 0 "a guard at main that $what: the pre-tool hook lets the edit through"
+	printf 'test "totals by area"\n%s\n' "$what" >"$WT/$TF"
+	git -C "$WT" add "$TF"
+	commit_in_wt "test: with a guard that $what"
+	expect_status 0 "a guard at main that $what: the commit hook lets the commit through"
+done
+main_guard "$GOOD_GUARD
+"
 git -C "$FIX" rm -q scripts/acceptance-guard.sh
 as_agent git -C "$FIX" commit -q --no-verify -m "chore: no guard" >/dev/null
 hook_on "$(payload Edit "$WT/$TF")"
