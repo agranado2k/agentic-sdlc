@@ -1356,6 +1356,66 @@ vocab 'Finding-verdict: agreed'
 expect_status 2 "runtime/R220: finding-verdict is closed — agreed is refused"
 
 # ---------------------------------------------------------------------------
+banner "Edits: and Runs: — a retro candidate's edit and its evidence (process/R143, #924)"
+# ---------------------------------------------------------------------------
+# A NAMED field: one of its tokens, then one name token. A RUN-ID field: one
+# or more run ids, each the shape the trace mints (trace.sh id --check).
+vocab fields
+expect_out_has "edits (named): lens skill check policy" "process/R143: fields prints edits as a named field and its four kinds, in order"
+expect_out_has "runs (run ids):" "process/R143: fields prints runs as a run-id field, with no tokens"
+for line in 'Edits: check self-host' 'Edits: policy risk' 'Edits: lens security' 'Edits: skill retro'; do
+	vocab "$line"
+	expect_resolved "" "process/R143: '$line' is accepted"
+done
+vocab 'Runs: 20261011T000000Z-2-0000dead 20261012T000000Z-31-0000beef'
+expect_resolved "" "process/R143: a Runs: line of two minted run ids is accepted"
+r143_minted=$(sh "$KIT/scripts/trace.sh" id)
+vocab "Runs: $r143_minted"
+expect_resolved "" "process/R143: a run id trace.sh id just minted is accepted"
+vocab 'Edits: prose x'
+expect_status 2 "process/R143: 'Edits: prose x' — a kind nobody declared — is refused"
+expect_err_has "edits: 'prose' is not one of lens skill check policy"
+vocab 'Edits: check'
+expect_status 2 "process/R143: 'Edits: check' with no name is refused"
+expect_err_has "edits: 'check' takes exactly one name"
+vocab 'Edits: check self-host gate'
+expect_status 2 "process/R143: an edit naming two things is refused"
+expect_err_has "edits:"
+vocab 'Edits: check Self_Host'
+expect_status 2 "process/R143: a name outside the token shape is refused"
+expect_err_has "edits: 'Self_Host' is not a well-formed name"
+vocab 'Edits: check self-host' 'Edits: lens security'
+expect_status 2 "process/R143: two different edits in one block are refused — one value per field"
+expect_err_has "edits:"
+vocab 'Runs: 20261011T000000Z-2-dead'
+expect_status 2 "process/R143: a malformed run id is refused"
+expect_err_has "runs: '20261011T000000Z-2-dead' is not a run id"
+vocab 'Runs: 20261011T000000Z-2-0000dead x;id'
+expect_status 2 "process/R143: one malformed id among good ones refuses the line"
+expect_err_has "runs: 'x;id' is not a run id"
+vocab 'Runs:'
+expect_status 2 "process/R143: a Runs: line naming no run is refused"
+expect_err_has "runs:"
+vocab "Runs: $(i=0; while [ $i -lt 33 ]; do printf '20261011T000000Z-%d-0000dead ' $i; i=$((i + 1)); done)"
+expect_status 2 "process/R143: more than 32 run ids is refused — the list is bounded"
+expect_err_has "runs: more than 32 run ids"
+# The run id's one spelling is the trace's: without it the checker cannot
+# read a run id, and refuses rather than pass one unread.
+mkdir -p "$SCRATCH/notrace"
+cp "$VOCAB" "$KIT/scripts/requirement.lib.sh" "$SCRATCH/notrace/"
+t_exec sh "$SCRATCH/notrace/vocab.sh" 'Runs: 20261011T000000Z-2-0000dead'
+expect_status 2 "process/R143: with no trace.sh beside the checker, a Runs: line is refused"
+expect_err_has "trace.sh"
+policy_named_refused() {
+	t_write "$SCRATCH" named.config.sh "$2"
+	t_exec env VOCAB_CONFIG="$SCRATCH/named.config.sh" sh "$VOCAB" fields
+	expect_status 2 "process/R143: $1 is a policy error, exit 2"
+}
+policy_named_refused "a named field with no kinds" "$(printf '%s\n' "VOCAB_FIELDS='edits'" "VOCAB_NAMED='edits'")"
+policy_named_refused "a run-id field declaring tokens" "$(printf '%s\n' "VOCAB_FIELDS='runs'" "VOCAB_RUNID='runs'" "VOCAB_RUNS='a b'")"
+policy_named_refused "a rule on a named field" "$(printf '%s\n' "VOCAB_FIELDS='edits tier'" "VOCAB_NAMED='edits'" "VOCAB_EDITS='lens skill'" "VOCAB_TIER='planner'" "VOCAB_RULES='tier=planner => edits=lens'")"
+
+# ---------------------------------------------------------------------------
 banner "A qualified or keyed field in the policy file is held at load"
 # ---------------------------------------------------------------------------
 # policy_refused <label> <expected stderr> <config text>

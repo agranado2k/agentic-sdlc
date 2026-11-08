@@ -51,8 +51,16 @@
 #              than to tokens: `Accept-test: report/R3 tests/r.test.sh::totals`.
 #              It is in VOCAB_KEYED too and declares no tokens; the same key
 #              may name several pins, and the same line twice is one answer.
-# A rule reads one token, so no rule may name a query, qualified or keyed
-# field. The kit's ADR-0037 fixes the ticket contract these serve.
+#   NAMED      (VOCAB_NAMED) — one of the field's tokens, then exactly one
+#              NAME, held to the token shape and never to membership:
+#              `Edits: check self-host`. The kind is closed, the name is open.
+#   RUN-ID     (VOCAB_RUNID) — one to VOCAB_RUNID_MAX run ids, blank
+#              separated, each the shape the trace mints, asked of
+#              scripts/trace.sh beside this file (`id --check`, its one
+#              spelling of the shape; refused without it): `Runs:
+#              20261011T000000Z-2-0000dead`. It declares no tokens.
+# A rule reads one token, so no rule may name a query, qualified, keyed,
+# named or run-id field. The kit's ADR-0037 fixes the ticket contract these serve.
 #
 # LINE BOUNDS are policy too, PUBLISHED here for every reader of a stamp:
 # VOCAB_BOUND is how many lines of one stamp key a reader lifts, VOCAB_BOUNDS
@@ -73,6 +81,7 @@
 # filter held to a grammar, VOCAB_QUERY), a qualified one marked
 # `(qualified)` with its levels, the reasons and the reserved reasons, a
 # keyed one marked `(keyed)` with its tokens, a pin one `(keyed pin)` with
+# none, a named one `(named)` with its tokens, a run-id one `(run ids)` with
 # none, then a `bound:` line and a
 # `bound <field>:` line per exception, then one line per rule. Every reason is on
 # stderr, prefixed `x vocab:`, one line per violation naming the field, the
@@ -141,12 +150,14 @@ VOCAB_TOKEN_MAX=64
 # file: a file is the whole policy, never a layer over these — a rule it
 # does not carry is not enforced, a field it does not name is not a field.
 vocab_shipped_defaults() {
-	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope finding-verdict'
+	VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope finding-verdict edits runs'
 	VOCAB_OPEN='domain class'
 	VOCAB_QUERY='targets'
 	VOCAB_QUALIFIED='risk'
 	VOCAB_KEYED='test-tier accept-test'
 	VOCAB_PIN='accept-test'
+	VOCAB_NAMED='edits'
+	VOCAB_RUNID='runs'
 	VOCAB_TIER='planner implementer mechanical reviewer'
 	VOCAB_LABEL='ready-for-agent none'
 	VOCAB_DOMAIN='content code tests html-report self-implemented'
@@ -166,6 +177,7 @@ vocab_shipped_defaults() {
 	VOCAB_RESULT='pass fail skipped'
 	VOCAB_SCOPE='inside outward'
 	VOCAB_FINDING_VERDICT='confirmed disputed'
+	VOCAB_EDITS='lens skill check policy'
 	VOCAB_BOUND='8'
 	VOCAB_BOUNDS='test-tier=32 accept-test=32'
 	VOCAB_RULES='command-shaped=yes => action!=apply'
@@ -258,6 +270,8 @@ vocab_load_config() {
 	VOCAB_QUALIFIED=
 	VOCAB_KEYED=
 	VOCAB_PIN=
+	VOCAB_NAMED=
+	VOCAB_RUNID=
 	VOCAB_BOUND=
 	VOCAB_BOUNDS=
 	VOCAB_RULES=
@@ -322,6 +336,10 @@ vocab_is_qualified() { vocab_in_list "${VOCAB_QUALIFIED:-}" "$1"; }
 vocab_is_keyed() { vocab_in_list "${VOCAB_KEYED:-}" "$1"; }
 
 vocab_is_pin() { vocab_in_list "${VOCAB_PIN:-}" "$1"; }
+
+vocab_is_named() { vocab_in_list "${VOCAB_NAMED:-}" "$1"; }
+
+vocab_is_runid() { vocab_in_list "${VOCAB_RUNID:-}" "$1"; }
 
 # vocab_sub <field> <part> — a qualified field's own list: QUALIFIED,
 # REASONS or RESERVED, in VOCAB_<FIELD>_<PART>.
@@ -464,6 +482,69 @@ vocab_pin_ok() {
 	return 0
 }
 
+# vocab_check_named <field> <value> — one of the field's tokens, then
+# exactly one name of the token shape. Leaves the value with single blanks
+# in $_vocab_norm, for the repeat check.
+vocab_check_named() {
+	_cn_f=$1
+	_cn_tokens=$(vocab_tokens "$_cn_f")
+	set -f
+	# shellcheck disable=SC2086  # the split into kind and name is the point
+	set -- $2
+	set +f
+	if [ $# = 0 ]; then
+		vocab_refuse "$_cn_f: the value is empty; expected one of $_cn_tokens, then one name"
+		return 1
+	fi
+	if ! vocab_in_list "$_cn_tokens" "$1"; then
+		vocab_refuse "$_cn_f: '$1' is not one of $_cn_tokens"
+		return 1
+	fi
+	if [ $# != 2 ]; then
+		vocab_refuse "$_cn_f: '$1' takes exactly one name, a $VOCAB_TOKEN_SHAPE of at most $VOCAB_TOKEN_MAX bytes"
+		return 1
+	fi
+	if ! vocab_shape_ok "$2"; then
+		vocab_refuse "$_cn_f: '$2' is not a well-formed name — a name is a $VOCAB_TOKEN_SHAPE of at most $VOCAB_TOKEN_MAX bytes"
+		return 1
+	fi
+	_vocab_norm="$1 $2"
+	return 0
+}
+
+# vocab_check_runids <field> <value> — one to VOCAB_RUNID_MAX run ids, each
+# the shape scripts/trace.sh mints, asked of it with `id --check` so the
+# shape has one spelling (#744). Leaves the ids with single blanks in
+# $_vocab_norm. Mechanism, not policy — the bound is a literal.
+VOCAB_RUNID_MAX=32
+vocab_check_runids() {
+	_cr_f=$1
+	set -f
+	# shellcheck disable=SC2086  # the split into run ids is the point
+	set -- $2
+	set +f
+	if [ $# = 0 ]; then
+		vocab_refuse "$_cr_f: the value is empty; expected one or more run ids"
+		return 1
+	fi
+	if [ $# -gt "$VOCAB_RUNID_MAX" ]; then
+		vocab_refuse "$_cr_f: more than $VOCAB_RUNID_MAX run ids — the list is bounded"
+		return 1
+	fi
+	if [ ! -r "$_vocab_here/trace.sh" ]; then
+		vocab_refuse "$_cr_f: the trace $_vocab_here/trace.sh is missing beside the checker — no run id can be read"
+		return 1
+	fi
+	for _cr_id in "$@"; do
+		if ! sh "$_vocab_here/trace.sh" id --check "$_cr_id" </dev/null >/dev/null 2>&1; then
+			vocab_refuse "$_cr_f: '$_cr_id' is not a run id — the shape trace.sh mints, <UTC second>Z-<pid>-<8 hex digits>"
+			return 1
+		fi
+	done
+	_vocab_norm="$*"
+	return 0
+}
+
 # vocab_has_token <field> <value> — membership in the field's vocabulary: one
 # token, matched whole.
 vocab_has_token() { vocab_in_list "$(vocab_tokens "$1")" "$2"; }
@@ -561,8 +642,8 @@ vocab_rule_side_ok() {
 		vocab_refuse "policy: rule '$1' names '$2', a query field — a rule reads tokens, and a query has none"
 		return 1
 	fi
-	if vocab_is_qualified "$2" || vocab_is_keyed "$2"; then
-		vocab_refuse "policy: rule '$1' names '$2', a qualified or keyed field — a rule reads one token, and its value holds two"
+	if vocab_is_qualified "$2" || vocab_is_keyed "$2" || vocab_is_named "$2" || vocab_is_runid "$2"; then
+		vocab_refuse "policy: rule '$1' names '$2', a qualified, keyed, named or run-id field — a rule reads one token, and its value holds more"
 		return 1
 	fi
 	if vocab_is_open "$2"; then
@@ -698,7 +779,7 @@ vocab_validate_policy() {
 		# own variables share: a field named `fields` would make the field
 		# list its own vocabulary, silently.
 		case $_vp_f in
-		fields | open | rules | token-shape | config | qualified | keyed | pin | bound | bounds)
+		fields | open | rules | token-shape | config | qualified | keyed | pin | named | runid | bound | bounds)
 			vocab_refuse "policy: field name '$_vp_f' is reserved — $(vocab_var "$_vp_f") is the checker's own variable"
 			continue
 			;;
@@ -712,14 +793,18 @@ vocab_validate_policy() {
 			esac
 		done
 		_vp_kinds=0
-		for _vp_k in open query qualified keyed; do
+		for _vp_k in open query qualified keyed named runid; do
 			"vocab_is_$_vp_k" "$_vp_f" && _vp_kinds=$((_vp_kinds + 1))
 		done
 		[ "$_vp_kinds" -le 1 ] ||
-			vocab_refuse "policy: field '$_vp_f' is declared more than one of open, query, qualified and keyed — one kind per field"
+			vocab_refuse "policy: field '$_vp_f' is declared more than one of open, query, qualified, keyed, named and run-id — one kind per field"
 		_vp_tokens=$(vocab_tokens "$_vp_f")
 		if vocab_is_query "$_vp_f"; then
 			[ -z "$_vp_tokens" ] || vocab_refuse "policy: field '$_vp_f' is a query and declares tokens ($(vocab_var "$_vp_f")) — a query is held to its grammar, never to tokens"
+			continue
+		fi
+		if vocab_is_runid "$_vp_f"; then
+			[ -z "$_vp_tokens" ] || vocab_refuse "policy: field '$_vp_f' is a run-id field and declares tokens ($(vocab_var "$_vp_f")) — run ids are held to the trace's shape, never to tokens"
 			continue
 		fi
 		if vocab_is_pin "$_vp_f"; then
@@ -741,7 +826,7 @@ vocab_validate_policy() {
 		done
 		vocab_is_qualified "$_vp_f" && vocab_validate_qualified "$_vp_f"
 	done
-	for _vp_list in QUERY QUALIFIED KEYED PIN; do
+	for _vp_list in QUERY QUALIFIED KEYED PIN NAMED RUNID; do
 		for _vp_q in $(eval "printf '%s' \"\${VOCAB_$_vp_list:-}\""); do
 			vocab_is_field "$_vp_q" || vocab_refuse "policy: VOCAB_$_vp_list names '$_vp_q', which is not a declared field"
 		done
@@ -999,6 +1084,12 @@ vocab_check_line() {
 	if vocab_is_qualified "$_cl_key"; then
 		vocab_check_qualified "$_cl_key" "$_cl_value" || return 0
 		_cl_value=$_vocab_norm
+	elif vocab_is_named "$_cl_key"; then
+		vocab_check_named "$_cl_key" "$_cl_value" || return 0
+		_cl_value=$_vocab_norm
+	elif vocab_is_runid "$_cl_key"; then
+		vocab_check_runids "$_cl_key" "$_cl_value" || return 0
+		_cl_value=$_vocab_norm
 	else
 		vocab_check_value "$_cl_key" "$_cl_value" || return 0
 	fi
@@ -1075,6 +1166,10 @@ vocab_fields() {
 				"$(vocab_sub "$_vf_field" QUALIFIED)" "$(vocab_sub "$_vf_field" REASONS)"
 			[ -z "$(vocab_sub "$_vf_field" RESERVED)" ] || printf '; reserved: %s' "$(vocab_sub "$_vf_field" RESERVED)"
 			printf '\n'
+		elif vocab_is_named "$_vf_field"; then
+			printf '%s (named): %s\n' "$_vf_field" "$(vocab_tokens "$_vf_field")"
+		elif vocab_is_runid "$_vf_field"; then
+			printf '%s (run ids):\n' "$_vf_field"
 		elif vocab_is_pin "$_vf_field"; then
 			printf '%s (keyed pin):\n' "$_vf_field"
 		elif vocab_is_keyed "$_vf_field"; then

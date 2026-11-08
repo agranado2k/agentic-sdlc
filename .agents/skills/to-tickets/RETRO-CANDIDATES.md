@@ -1,6 +1,6 @@
 # /to-tickets — a retro's candidates
 
-Opened from `/to-tickets` when the input is a `/retro` report rather than a PRD: step 2 sends the draft through the check below before the quiz, and step 4 runs `merge_section` and `close_twin` from it. `SKILL.md` stays the entry point; this file is the branch.
+Opened from `/to-tickets` when the input is a `/retro` report rather than a PRD: step 2 sends the draft through the check below before the quiz, and step 4 runs `merge_section`, `close_twin` and `candidate_lines` from it. `SKILL.md` stays the entry point; this file is the branch.
 
 ## A retro's candidates
 
@@ -11,12 +11,27 @@ When the input is a `/retro` report rather than a PRD, another retro may already
 3. **Plan a merge, never a twin.** A candidate on the same finding as an open sibling ticket is not filed: it is planned as **a dated section** appended to that ticket's body — `## From retro-<stamp> (<YYYY-MM-DD>)`, the candidate's behaviour and evidence, and never a stamp line (`Tier:`, `Confidence:`, `Domain:`), which would give the ticket two — and the quiz shows it as a merge into that number. `merge_section` carries it out at step 4: the body passes through a scratch file from the tracker's CLI to its edit command, never into the session, and a read that fails or comes back blank is a stop, never an edit. A sibling ticket on the same finding that is already closed is shown at the quiz beside the candidate, and the human says whether to reopen it and merge or to file anew naming it.
 4. **Plan a twin's closure.** Where both siblings' tickets on one finding are open, the later-numbered one is the twin: the quiz shows it planned for closure as not planned, naming the original, after its body's sections, if any, are merged into the original as above. `close_twin` carries it out at step 4 with the tracker's CLI (`gh issue close` on GitHub), and refuses an earlier number. A ticket closed as a duplicate records no `feedback`: feedback is a verdict on a landed slice, and a twin is none. A merge records no `ticket.write` either: nothing was stamped.
 
+5. **Carry the candidate's lines, or publish nothing.** A candidate that edits something — its block carries an `Edits:` line, `/retro`'s filing check passed it — is judged once it lands by the query on its `Targets:` line, so its ticket carries that line as a stamp line, beside its `Retro:` line. `candidate_lines` prints the two, the block's `Edits:`, `Runs:` and `Targets:` lines checked by the vocabulary checker first, run from the project root: publish step 4 writes what it printed into the ticket's body, verbatim. **A candidate with an `Edits:` line and no `Targets:` line is not published** — `candidate_lines` exits 1, printing nothing, and the quiz shows the candidate as refused; a line the checker refuses, or a stamp not of a report's shape, is exit 2, the same stop. A candidate that edits nothing carries its `Retro:` line alone.
+
 ```sh
 # stamp_ok <word> — exit 0 only for a report stamp, retro-YYYYMMDDTHHMMSSZ,
 # the whole value: the one shape a word must have before it enters a search.
 stamp_ok() {
 	case $1 in *[!A-Za-z0-9-]*) return 1 ;; esac
 	printf '%s\n' "$1" | grep -Eqx 'retro-[0-9]{8}T[0-9]{6}Z'
+}
+
+# candidate_lines <candidate block file> <report stamp> — the stamp lines a
+# retro candidate's ticket carries: `Retro: <stamp>`, then the block's
+# `Targets:` line when it has one. Exit 1, nothing printed, for a block with
+# an `Edits:` line and no `Targets:` line — nothing is published from it;
+# exit 2 for a stamp not of a report's shape, or a line the checker refuses.
+candidate_lines() {
+	stamp_ok "$2" || return 2
+	if grep -q '^Edits: ' "$1" && ! grep -q '^Targets: ' "$1"; then return 1; fi
+	grep -E '^(Edits|Runs|Targets): ' "$1" | sh scripts/vocab.sh >/dev/null || return 2
+	printf 'Retro: %s\n' "$2"
+	grep '^Targets: ' "$1" | head -n 1
 }
 
 # window_start <report> — the YYYYMMDDTHHMMSSZ the report's first line opens
