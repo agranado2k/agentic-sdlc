@@ -4,7 +4,7 @@
 - **Date**: 2026-10-08
 - **Deciders**: the implementer session for #630, on the operator's standing delegation of rulings (2026-10-08); the merge of its pull request is the operator's yes
 - **Supersedes / amends**: ADR-0008 clause 7, in one respect — it names one more operator-run reader of the trace (clause 1 below)
-- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; amended 2026-10-10 for #723: the script's third read, `pr.open`, recorded and held by a check; amended 2026-10-14 for #775: a fourth read, `ticket.start` on the landed ticket, recorded on `merge.land` as `data.ticket_start=no` when absent; amended 2026-11-02 for #945: a fifth read, `verify.verdict` at the head, recorded on `merge.land` as `data.verified` and never checked; see the amendments below)
+- **Superseded by**: — (amended 2026-10-10 for #673: the same check, the same way, for a `review.verdict` at the head, overridden by `--no-review '<reason>'`; amended 2026-10-10 for #723: the script's third read, `pr.open`, recorded and held by a check; amended 2026-10-14 for #775: a fourth read, `ticket.start` on the landed ticket, recorded on `merge.land` as `data.ticket_start=no` when absent; amended 2026-11-02 for #945: a fifth read, `verify.verdict` at the head, recorded on `merge.land` as `data.verified` and never checked; amended 2026-11-08 for #914: a sixth read, the lane's own `merge.land` holds, so a hold is recorded once per PR, head and token; see the amendments below)
 
 ## Context and problem statement
 
@@ -184,3 +184,25 @@ delegation; the merge of its pull request is the operator's yes.
    Unconfigured, nothing is read (clause 5). The key is the script's alone.
 3. The #723 amendment's clause 3 now names five kinds; `tests/land.test.sh`
    section 15 holds the list, and section 22 drives the read.
+
+## Amendment 2026-11-08 — the lane's `merge.land` read (#914)
+
+PRD-10's second slice gives the script a lane mode (ADR-0047): with
+`--lane`, a pull request the lane holds is recorded as one `merge.land`
+`skipped` with `data.via=lane`, its hold token and its head commit — and only
+once, so a lane run that holds the same PR at the same head again must know
+the trace already says so (runtime/R91). Decided by the implementer session
+for #914 (T-51) on the operator's standing delegation; the merge of its pull
+request is the operator's yes.
+
+1. **Clause 1 reads a sixth kind, in lane mode only.** The script reads
+   `show` for `merge.land` on the PR it is judging, and only to find a lane
+   hold with the same head and token. Without `--lane` it is never read.
+   Still no skill gains a read: the risk rule the lane runs reads the trace
+   itself, under ADR-0047 clause 7.
+2. **What the read is for.** A match records nothing; the hold's line and
+   exit 4 are the same either way. It is no check: it never refuses, and no
+   override applies to it. Unconfigured, nothing is read (clause 5), and the
+   hold is printed unrecorded.
+3. The #723 amendment's clause 3 now names six kinds; `tests/land.test.sh`
+   section 15 holds the list, and section 24 drives the read.

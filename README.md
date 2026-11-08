@@ -96,6 +96,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/lens-slice.sh` | Cuts the branch's diff into the slice each `/review-pr` standards lens reads, and the whole diff for the behavior axis. |
 | `scripts/lens-slice.config.sh` | **Yours.** Which changed paths each lens reads. Ships filled for a kit-shaped layout; retune it to yours. |
 | `scripts/policy.sh` | The policy reader: a judging file as the base branch has it (`read`), the judging files a diff touches (`touched`), and the risk thresholds (`thresholds`), each at a base ref, failing closed (`fail-closed <reason> <path>`, exit 3) and never falling back to the working tree. Shared layer. |
+| `scripts/lane.config.sh` | **Yours.** The lane policy: the operator who stands behind the low-risk lane, a forge login. Ships empty, so the lane is closed; a lane reads it at the base, never from a pull request. |
 | `scripts/risk.config.sh` | **Yours.** The risk policy: the miss-rate ceiling and precision floor a review area must meet, and extra judging paths. Ships filled (5, 80, none); always read at a base. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |

@@ -1406,9 +1406,9 @@ land_reads_unnamed() {
 	done
 }
 _lr_read=$(land_read_kinds "$LAND" | tr '\n' ' ')
-[ "$_lr_read" = "pr.iterate pr.open review.verdict ticket.start verify.verdict " ] &&
-	pass "the script's reads are the five kinds: $_lr_read" ||
-	fail "the script's reads read as '$_lr_read', not pr.iterate, pr.open, review.verdict, ticket.start and verify.verdict"
+[ "$_lr_read" = "merge.land pr.iterate pr.open review.verdict ticket.start verify.verdict " ] &&
+	pass "the script's reads are the six kinds: $_lr_read" ||
+	fail "the script's reads read as '$_lr_read', not merge.land, pr.iterate, pr.open, review.verdict, ticket.start and verify.verdict"
 _lr_miss=$(land_reads_unnamed "$LAND" "$ADR19")
 [ -z "$_lr_miss" ] && pass "ADR-0019 names every kind the landing script reads" ||
 	fail "ADR-0019 does not name the landing script's read of: $(echo $_lr_miss)"
@@ -1915,7 +1915,14 @@ landed_with 980 "process/R65: a PR the risk rule called high unlearned" '"outcom
 land 981
 landed_with 981 "process/R65: a PR the risk rule called low" '"outcome":"landed"'
 [ "$_rk_high" = "$(merges)" ] && pass "process/R65: both made the same merge call" || fail "process/R65: the high PR made $_rk_high merge calls, the low one $(merges)"
-grep -qE 'risk\.sh|risk\.judge' "$LAND" && fail "process/R65: the landing script reads the risk rule" || pass "process/R65: the landing script names neither the rule nor its event"
+# Its lane mode is the one exception PRD-10 writes into process/R65 (section
+# 24): the rule is named in the lane's block and nowhere else, comments aside.
+sed -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
+	fail "process/R65: the landing script reads the risk rule outside its lane mode" ||
+	pass "process/R65: outside its lane mode, the landing script names neither the rule nor its event"
+grep -q '^# --- 1L\.' "$LAND" && sed -n '/^# --- 1L\./,/^# --- 1d\./p' "$LAND" | grep -q 'scripts/risk\.sh' &&
+	pass "process/R65: the lane's block is where the rule is run — the cut above is not blind" ||
+	fail "process/R65: no lane block running scripts/risk.sh between 1L and 1d — the cut above reads nothing"
 
 banner "22. merge.land records what the verifier said at the head, and nothing waits on it (runtime/R214, R215, PRD-13 slice 4)"
 # ---------------------------------------------------------------------------
@@ -1988,5 +1995,225 @@ fi
 for _la_g in 'Low-risk lane' 'Lane policy' 'Hold' 'Escape' 'Notice'; do
 	grep -q "^- \*\*$_la_g\*\* —" "$KIT/docs/domain-glossary.md" && pass "the glossary defines $_la_g" || fail "the glossary has no $_la_g entry"
 done
+
+# ---------------------------------------------------------------------------
+banner "24. The low-risk lane lands a low-risk PR, and holds a closed lane, a tripped switch and a high risk (PRD-10 slice 2, #914)"
+# ---------------------------------------------------------------------------
+# With --lane the script makes every refusal above, then the lane's own
+# checks (ADR-0047): the lane policy read at the base through the policy
+# reader, and the risk rule run at the PR's head. Both need a real repository
+# the stub git cannot give, so this section runs a COPY of the kit's scripts
+# whose risk rule and policy reader are stubs: each logs its argv beside the
+# forge's and answers from the knobs. The script under test is the kit's own,
+# copied as it is; no environment switch reaches it, so nothing here is a
+# seam a lane run in production could be pointed at.
+LANEKIT="$SCRATCH/lanekit"
+mkdir -p "$LANEKIT/scripts"
+cp "$KIT"/scripts/*.sh "$LANEKIT/scripts/"
+LANE_FIX="$SCRATCH/lane-policies"
+mkdir -p "$LANE_FIX"
+printf "LANE_OPERATOR='octocat'\n" >"$LANE_FIX/open"
+printf "LANE_OPERATOR=''\n" >"$LANE_FIX/none"
+printf "LANE_OPERATOR='octo cat; BAIT-POLICY'\n" >"$LANE_FIX/bad"
+export LANE_FIX
+# The policy reader: STUB_LANE names the base's lane policy — open, none,
+# bad — or `fail`, the reader failing closed (exit 3, its one line).
+cat >"$LANEKIT/scripts/policy.sh" <<'EOF'
+#!/bin/sh
+printf 'ARGV: policy %s\n' "$*" >>"$STUB_LOG"
+[ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
+[ "${STUB_LANE:-open}" != fail ] || { echo "fail-closed missing $2"; exit 3; }
+printf '%s\n' "$LANE_FIX/${STUB_LANE:-open}"
+EOF
+# The risk rule: its lines, the effective and the switch from the knobs; the
+# rule's own line says low whatever the effective says, and a bait line
+# carries text no lane line may repeat — the lane reads two lines only.
+cat >"$LANEKIT/scripts/risk.sh" <<'EOF'
+#!/bin/sh
+printf 'ARGV: risk %s\n' "$*" >>"$STUB_LOG"
+[ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
+printf 'effective: %s\nplanner: low\nrule: low\narea: security earned\nswitch: %s\nBAIT-RISK: effective: low\n' \
+	"${STUB_EFFECTIVE-low}" "${STUB_SWITCH:-on}"
+EOF
+_land_kit=$LAND
+LAND="$LANEKIT/scripts/land.kit.sh"
+LANE_HEAD=1234567890123456789012345678901234567890
+
+# lane_lines_closed <label> — every stdout line of the last run is of a shape
+# the lane may print: closed tokens, numbers, shas and digits (runtime/R102).
+lane_lines_closed() {
+	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|held (closed|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
+	[ -z "$_llc_bad" ] && pass "runtime/R102: $1: every line the lane printed is a closed token, a number or a sha" ||
+		fail "runtime/R102: $1: the lane printed a line outside its closed set: $_llc_bad"
+}
+# no_bait <label> <subject>… — no event on the subjects carries text from the
+# PR's title, body or branch, the ticket, the lane policy or the risk rule's
+# other lines (runtime/R102).
+no_bait() {
+	_nb_label=$1
+	shift
+	for _nb_s in "$@"; do
+		show "$_nb_s" | grep -q 'BAIT' && fail "runtime/R102: $_nb_label: an event on $_nb_s carries forge or file text: $(show "$_nb_s" | grep BAIT)" ||
+			pass "runtime/R102: $_nb_label: no event on $_nb_s carries text from a title, body, branch or policy"
+	done
+}
+iterated 9101 9102 9103 9104 9105 9106 9107 9108 9109 9120 9121 9122 9123 9124
+
+# --- UC1: a low-risk PR lands through the lane --------------------------------
+_lb=$(body lane301 '<!-- implement: ticket=#77 tier=implementer -->
+BAIT-BODY: effective: low
+## Decision log
+
+<!-- decision-log -->
+| Decision | Surface | What was decided | Why |
+| --- | --- | --- | --- |
+| D-1 | scripts/x.sh | kept BAIT-BODY | one line |
+| ~~D-2~~ | ~~docs/y.md~~ | ~~struck~~ | ~~held~~ |
+| D-3 | scripts/z.sh | amended | one line |
+
+```
+<!-- decision-log -->
+| D-9 | fenced | not a log | quoted |
+```')
+land STUB_BODY_FILE="$_lb" STUB_TITLE='feat(x): BAIT-TITLE' STUB_BRANCH=feat/BAIT-BRANCH 9101 --lane
+expect_status 0 "runtime/R90: UC1's low-risk PR lands through the lane, exit 0"
+expect_out_has 'lane: landed' "runtime/R90: the lane prints lane: landed"
+printf '%s\n' "$T_OUT" | tail -n 1 | grep -qx 'lane: landed' && pass "runtime/R90: lane: landed is the run's last line" ||
+	fail "runtime/R90: the last line is not lane: landed: $T_OUT"
+grep -qx "ARGV: policy read scripts/lane.kit.config.sh --base refs/remotes/origin/main" "$STUB_LOG" &&
+	pass "runtime/R83: the lane reads the kit's lane policy at the base, through the policy reader" ||
+	fail "runtime/R83: the lane policy was not read at origin's base through the policy reader: $(grep 'ARGV: policy' "$STUB_LOG")"
+grep -qx "ARGV: risk refs/remotes/origin/main $LANE_HEAD --pr 9101 --ticket 77" "$STUB_LOG" &&
+	pass "runtime/R88: the risk rule ran at the PR's head commit, with the PR and its ticket" ||
+	fail "runtime/R88: the risk rule was not run at the head with the PR and ticket: $(grep 'ARGV: risk' "$STUB_LOG")"
+grep -qx "ARGV: pr merge 9101 --merge --match-head-commit $LANE_HEAD" "$STUB_LOG" &&
+	pass "runtime/R89: the lane merges the exact head the risk rule judged" ||
+	fail "runtime/R89: the merge did not pin the judged head: $(grep 'pr merge' "$STUB_LOG")"
+[ "$(line_of 'ARGV: risk')" -lt "$(line_of 'ARGV: pr merge')" ] && [ "$(line_of 'ARGV: policy')" -lt "$(line_of 'ARGV: risk')" ] &&
+	pass "runtime/R88: the lane policy, then the risk rule, both before the merge" ||
+	fail "runtime/R88: the lane's reads are out of order: $(cat "$STUB_LOG")"
+landed_with 9101 "runtime/R90: the lane's landing" '"outcome":"landed"' '"via":"lane"' '"decisions":"3"' "\"merge_sha\":\"$STUB_SHA\""
+_lf=$(show 'ticket:#77' --kind feedback | grep -F '"related":"pr:#9101"')
+printf '%s\n' "$_lf" | grep -qF '"outcome":"unasked"' && printf '%s\n' "$_lf" | grep -qF '"by":"lane"' &&
+	pass "runtime/R90: feedback outcome=unasked data.by=lane, joined to the PR" ||
+	fail "runtime/R90: no unasked feedback by the lane on the ticket: $_lf"
+lane_lines_closed "a lane landing"
+no_bait "a lane landing" 'pr:#9101' 'ticket:#77'
+
+# --- holds: closed, switch, risk ----------------------------------------------
+# lane_held <PR> <token> <label> — the last run held: exit 4, one line, no
+# merge call, and exactly one merge.land skipped by the lane with the token
+# and the head commit — the PR's only event.
+lane_held() {
+	expect_status 4 "runtime/R91: $3: held, exit 4"
+	[ "$T_OUT" = "lane: held $2" ] && pass "runtime/R91: $3: it prints lane: held $2, and nothing else" ||
+		fail "runtime/R91: $3: stdout is not 'lane: held $2': $T_OUT"
+	[ "$(merges)" = 0 ] && pass "runtime/R91: $3: no merge call" || fail "runtime/R91: $3: the forge was asked to merge a held PR"
+	_lh=$(show "pr:#$1" --kind merge.land)
+	[ "$(printf '%s\n' "$_lh" | grep -c .)" = 1 ] && printf '%s\n' "$_lh" | grep -qF '"outcome":"skipped"' &&
+		printf '%s\n' "$_lh" | grep -qF '"via":"lane"' && printf '%s\n' "$_lh" | grep -qF "\"hold\":\"$2\"" &&
+		printf '%s\n' "$_lh" | grep -qF "\"head\":\"$LANE_HEAD\"" &&
+		pass "runtime/R91: $3: one merge.land outcome=skipped data.via=lane, with the token and the head commit" ||
+		fail "runtime/R91: $3: the hold's merge.land is not the one expected: $_lh"
+	[ "$(events "$1" feedback)" = 0 ] && [ "$(show "pr:#$1" | grep -c '"kind"' | tr -d ' ')" = 3 ] &&
+		pass "runtime/R91: $3: the hold is the run's one event" ||
+		fail "runtime/R91: $3: a held run recorded more than its hold: $(show "pr:#$1")"
+	lane_lines_closed "$3"
+	no_bait "$3" "pr:#$1"
+}
+land STUB_LANE=none STUB_TITLE='BAIT-TITLE' 9102 --lane
+lane_held 9102 closed "runtime/R83: a lane policy that names no operator"
+grep -q '^ARGV: risk' "$STUB_LOG" && fail "runtime/R83: a closed lane still ran the risk rule" ||
+	pass "runtime/R83: a closed lane holds before the risk rule runs"
+land STUB_LANE=fail 9103 --lane
+lane_held 9103 closed "runtime/R83: a lane policy the base-branch policy contract cannot read"
+land STUB_LANE=bad 9107 --lane
+lane_held 9107 closed "runtime/R83: a lane policy whose operator is no forge login"
+land STUB_SWITCH=tripped STUB_EFFECTIVE='high unlearned' 9104 --lane
+lane_held 9104 switch "runtime/R88: a tripped kill switch"
+land STUB_EFFECTIVE='high unlearned' 9105 --lane
+lane_held 9105 risk "runtime/R88: a high effective risk, the rule's own line low"
+land STUB_EFFECTIVE='high unclear' STUB_SWITCH=bogus 9108 --lane
+lane_held 9108 risk "runtime/R88: a switch line neither on nor tripped, with a high risk"
+land STUB_EFFECTIVE= 9109 --lane
+lane_held 9109 risk "runtime/R88: a risk rule that printed no effective risk"
+
+# --- a second hold at the same head writes nothing ------------------------------
+land STUB_SWITCH=tripped 9104 --lane
+expect_status 4 "runtime/R91: the same hold again: exit 4"
+[ "$(events 9104 merge.land)" = 1 ] && pass "runtime/R91: a second hold at the same head and token records nothing" ||
+	fail "runtime/R91: a second hold at the same head recorded again: $(events 9104 merge.land) merge.land events"
+land STUB_SWITCH=tripped STUB_HEAD_OID=feedface0123456789feedface0123456789feed 9104 --lane
+expect_status 4 "runtime/R91: the same hold at a new head: exit 4"
+[ "$(events 9104 merge.land)" = 2 ] && pass "runtime/R91: a hold at a new head is recorded once more" ||
+	fail "runtime/R91: a hold at a new head: $(events 9104 merge.land) merge.land events, want 2"
+
+# --- a merge the forge refuses -----------------------------------------------------
+land STUB_MERGE_RC=1 9106 --lane
+expect_status 1 "runtime/R89: a head the forge will not merge (it moved): exit 1, as today"
+expect_out_lacks 'lane: landed' "runtime/R89: a refused merge prints no lane: landed"
+show 'pr:#9106' --kind merge.land | grep -F '"outcome":"stopped"' | grep -qF '"via":"lane"' &&
+	pass "runtime/R89: the refused merge records merge.land stopped, by the lane" ||
+	fail "runtime/R89: no stopped merge.land by the lane: $(show 'pr:#9106' --kind merge.land)"
+no_bait "a refused lane merge" 'pr:#9106'
+
+# --- the override flags --------------------------------------------------------------
+for _lo in "--no-iteration why" "--no-review why" "--unasked why" "--train"; do
+	# shellcheck disable=SC2086 # the flag and its reason, split on purpose
+	land 9120 --lane $_lo
+	expect_status 2 "runtime/R81: --lane with ${_lo%% *}: exit 2"
+	[ "$(merges)" = 0 ] && [ "$(show 'pr:#9120' | grep -c '"kind":"merge\.land\|"kind":"feedback\|"kind":"pr\.open' | tr -d ' ')" = 0 ] &&
+		pass "runtime/R81: --lane with ${_lo%% *}: nothing merged, nothing recorded" ||
+		fail "runtime/R81: --lane with ${_lo%% *} merged or recorded: $(show 'pr:#9120')"
+	# shellcheck disable=SC2086
+	land 9120 $_lo --lane
+	expect_status 2 "runtime/R81: ${_lo%% *} before --lane: exit 2"
+done
+
+# --- every refusal still refuses ----------------------------------------------------
+# lane_refused <knob> <PR> <label> — section 1's refusal, under --lane: exit 2,
+# nothing merged, nothing recorded, and the lane never consulted.
+lane_refused() {
+	land "$1" "$2" --lane
+	expect_status 2 "runtime/R80: $3, under --lane: refused with exit 2"
+	[ "$(merges)" = 0 ] && ! grep -qE '^ARGV: (policy|risk)' "$STUB_LOG" &&
+		pass "runtime/R80: $3, under --lane: no merge call, and the lane's checks never ran" ||
+		fail "runtime/R80: $3, under --lane: merged, or the lane ran: $(cat "$STUB_LOG")"
+	[ "$(show "pr:#$2" | grep -c '"kind":"merge\.land\|"kind":"feedback\|"kind":"pr\.open' | tr -d ' ')" = 0 ] &&
+		pass "runtime/R80: $3, under --lane: nothing reached the trace" ||
+		fail "runtime/R80: $3, under --lane: an event was recorded: $(show "pr:#$2")"
+	expect_out_lacks 'lane:' "runtime/R80: $3, under --lane: no lane line"
+}
+lane_refused STUB_CHECKS_RC=1 9121 "a red check"
+lane_refused STUB_MERGEABLE=CONFLICTING 9121 "a conflicting PR"
+lane_refused STUB_DRAFT=true 9121 "a draft"
+lane_refused STUB_REVIEW=CHANGES_REQUESTED 9121 "a human's changes requested"
+lane_refused STUB_MSS=BEHIND 9121 "a PR behind its base"
+lane_refused STUB_PRSTATE=MERGED 9121 "a PR already merged"
+lane_refused STUB_CHECKS_RC=8 9121 "pending checks"
+lane_refused STUB_VIEW_RC=1 9121 "a forge that does not answer for the PR"
+lane_refused STUB_HEAD_RC=1 9122 "a head the forge does not name"
+lane_refused STUB_PR_FILES=UPDATING.md 9123 "a shared-layer move with no version bump"
+lane_refused STUB_PR_FETCH_RC=1 9123 "a PR head that cannot be fetched"
+lane_refused STUB_PRSTATE=OPEN 9125 "no /pr-iterate iteration and no review at the head"
+seed pr.iterate stopped 9126
+lane_refused STUB_PRSTATE=OPEN 9126 "no review at the head"
+LAND=$_land_kit
+
+# --- the lane policy: shipped empty, a kit twin, both judging files --------------
+# Both are named `<name>.config.sh` directly under scripts/, the policy
+# reader's judging set (ADR-0039): read at the base, never the PR's tree.
+for _lp in lane.config.sh lane.kit.config.sh; do
+	_lp_op=$(sh -c 'unset LANE_OPERATOR; . "$1" >/dev/null 2>&1 </dev/null; printf "%s" "${LANE_OPERATOR-unset}"' _ "$KIT/scripts/$_lp")
+	[ -z "$_lp_op" ] && pass "runtime/R83: scripts/$_lp names no operator, so its lane is closed" ||
+		fail "runtime/R83: scripts/$_lp names an operator ('$_lp_op') — the lane opens only on the operator's own landing"
+done
+grep -q '^KIT_ONLY=.* scripts/lane\.kit\.config\.sh[ "]' "$KIT/bootstrap.sh" &&
+	pass "runtime/R83: bootstrap strips the kit's lane twin, so a consumer gets only the empty lane policy" ||
+	fail "runtime/R83: scripts/lane.kit.config.sh is not on bootstrap's KIT_ONLY list"
+grep -q 'policy\.sh read scripts/lane\.kit\.config\.sh --base' "$KIT/scripts/land.kit.sh" &&
+	pass "runtime/R83: the landing script reads the kit's twin, at a base, through the policy reader" ||
+	fail "runtime/R83: the landing script does not read scripts/lane.kit.config.sh through the policy reader at a base"
+
 
 t_done "land one PR by hand"
