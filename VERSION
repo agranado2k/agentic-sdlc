@@ -4168,6 +4168,8 @@
 # Config (9d): scripts/vocab.config.sh (yours) — VOCAB_FIELDS gains
 # `surface`, with VOCAB_SURFACE='output-format flag exit-code agent-rule
 # other'; a found policy is the whole policy, so a consumer adds the two.
+# And scripts/docs-conformance/config.mjs (yours) — skillCeilings raises
+# /review-pr's SKILL.md from 40500 to 41000 bytes for the text above.
 # Adapter (9e): none.
 # Kit-only, never shipped: scripts/forge-broker.kit.sh, which records each
 # outward item's surface as data.outward_items, reading a surface only as a

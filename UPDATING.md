@@ -245,7 +245,8 @@ checker's built-in defaults declare `surface`. **Config (9d):** a
 `VOCAB_SURFACE='output-format flag exit-code agent-rule other'`; `sh
 scripts/vocab.sh fields` then prints `surface: output-format flag exit-code
 agent-rule other`. Without it the trace refuses every `ruling` and every
-outward list. **Skills (9a):** take `/review-pr`'s `SKILL.md` — Agent 7
+outward list. The docs gate's `scripts/docs-conformance/config.mjs` raises
+`/review-pr`'s skill ceiling to 41000 bytes; raise yours with it. **Skills (9a):** take `/review-pr`'s `SKILL.md` — Agent 7
 writes `surface: <token>` right after `scope: outward`, every reader reads a
 missing or unknown surface as `other`, and §5b's Axis-2 verdict records
 `data.outward_items` — and `.agents/prompts/review-worker.md`, the
