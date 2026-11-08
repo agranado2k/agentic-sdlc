@@ -4228,7 +4228,7 @@
 # Bash call that runs the ruling recorder while clearing or overriding an
 # agent-harness marker in the same call — env -u or --unset, env -i, unset
 # or export -n, or an assignment to one (runtime/R149)
-# (adapters/claude-code/hooks/root-guard.sh), and its README says so
+# (the Claude Code adapter's hooks/root-guard.sh), and its README says so
 # (adapters/claude-code/README.md).
 # Kit-only, never shipped: docs/specs/runtime.md R59 modified and, from
 # PR #1022, R149's text and tests/root-guard.test.sh; the
