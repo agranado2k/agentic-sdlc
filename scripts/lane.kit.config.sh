@@ -18,7 +18,12 @@
 #                and single inner hyphens. Any other value reads as none.
 # LANE_HOLD_PATTERNS  paths no lane run lands, whatever their risk (PRD-10's
 #                `path` hold): the landing script, the risk rule, the hooks,
-#                the Claude Code adapter and its wiring, and the CI workflows.
+#                the Claude Code adapter and its wiring, the CI workflows, and
+#                every path under the review skill's directory and its
+#                bridge: a lens is the instrument the earned record is
+#                measured with, so a lane that let the judge rewrite itself
+#                would make the record self-certifying, and a lens edit waits
+#                for the operator (ADR-0048, PRD-11's process/R146).
 #                A `*` crosses a `/`; scripts/lane.config.sh says the shape.
 # LANE_LAND_COMMAND  the landing script; /pr-iterate's lane step runs it with --lane,
 #                the pull request and its ticket (PRD-10, process/R80). A
@@ -26,4 +31,4 @@
 
 LANE_OPERATOR=''
 LANE_LAND_COMMAND='sh scripts/land.kit.sh'
-LANE_HOLD_PATTERNS='scripts/land.kit.sh scripts/risk.sh scripts/risk.kit.sh .githooks/* adapters/claude-code/* .claude/settings.json .github/workflows/*'
+LANE_HOLD_PATTERNS='scripts/land.kit.sh scripts/risk.sh scripts/risk.kit.sh .githooks/* adapters/claude-code/* .claude/settings.json .github/workflows/* .agents/skills/review-pr/* .claude/skills/review-pr'
