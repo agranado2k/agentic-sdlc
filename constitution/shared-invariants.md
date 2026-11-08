@@ -83,6 +83,12 @@ Whatever an agent is trusted to do, it is not trusted to land it. The merge acti
 human decision with a human's name on it. An agent may prepare, test, review, fix, and
 report a change to the point of being one click away — and stops there.
 
+One exception, and only by a recorded decision of the project's: a change judged low risk
+from measured post-merge outcomes may land with no per-change human act, under a standing
+authorization that names that human, which a human can stop at once, and whose escaped
+mistakes return to that human. A project that records no such decision keeps this rule as
+it reads above.
+
 ## 8. Process docs are executable or CI-verified
 
 A rule written in a document that nothing checks decays into a lie, and stale standing

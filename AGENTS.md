@@ -100,6 +100,8 @@ pushes straight past both gates.
 7. **Autonomy never includes merge** (shared invariant §7). An agent may
    prepare, test, review, fix and report a change to the point of being one
    click away — and stops there. The merge action has a human's name on it.
+   The one exception is the low-risk lane (ADR-0047), closed until the operator
+   names themselves in its policy.
 8. **The docs gate must pass before you push.** `scripts/check.sh` is that gate
    and `.githooks/pre-push` runs it for you. It runs against *this* repo, not
    only against the throwaway project the demo builds: a red gate here means the
