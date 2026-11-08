@@ -4031,12 +4031,18 @@
 # staging a file `scripts/acceptance-guard.sh held` lists at the default
 # branch, at content other than its approval commit's, is refused with
 # `held: <ticket> <path>`; the guard is run as the default branch holds it,
-# and the hook fails open. Templates (9c): none. Config (9d): none.
+# and the hook fails open. Templates (9c): none.
+# Config (9d): scripts/lane.config.sh (yours), NEW — the lane policy, from
+# #1010 (factory T-51, landed after 0.118.0's tag): LANE_OPERATOR names the
+# forge login standing behind the low-risk lane; it ships empty, so the lane
+# is closed and every pull request lands by a human as before. Copy it in
+# as shipped; open the lane only by a decision record of your own.
 # Adapter (9e): the Claude Code adapter's root guard, root-guard.sh, and
 # adapters/claude-code/README.md — the root guard refuses an Edit, Write,
 # MultiEdit or notebook edit of a held file with the same line, in any
 # checkout, failing open; no new wiring.
-# Kit-only, never shipped: tests/acceptance-tripwires.test.sh, its kit-ci.yml
+# Kit-only, never shipped: from #1010, scripts/land.kit.sh's lane mode and
+# scripts/lane.kit.config.sh; tests/acceptance-tripwires.test.sh, its kit-ci.yml
 # job and bootstrap.sh's KIT_ONLY entry, docs/specs/acceptance.md R38 and
 # R39, and the AGENTS.md and README.md lines.
 

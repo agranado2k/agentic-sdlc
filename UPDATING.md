@@ -240,7 +240,12 @@ hooks directory, and its `README.md` — the root guard refuses an Edit,
 Write, MultiEdit or notebook edit of a held file with the same line; it is
 the entry you already wired, so no settings change. Both are tripwires for
 an honest build, never the judge, and both fail open — CI's acceptance guard
-step is what holds the file. No skill, template or config moves.
+step is what holds the file. **Config (9d): `scripts/lane.config.sh` is
+new — copy it in as shipped.** It is the lane policy: `LANE_OPERATOR` names
+the forge login that stands behind the low-risk lane, and it ships empty, so
+the lane is closed and every pull request lands by a human as before. The
+file is yours. Open the lane only by a decision record of your own, landed on
+the base branch by the human it names. No skill or template moves.
 
 **Arriving from 0.117.0 or older, shared invariant §7 names its one exception.**
 No file joins or leaves at 0.118.0; `constitution/shared-invariants.md`
@@ -2169,10 +2174,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3884 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3889 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 4038 insertions(+), 1 deletion(-)
+ 3 files changed, 4043 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
