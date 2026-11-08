@@ -4061,7 +4061,8 @@
 # `drop`/`within noise`/`no drop`/`inconclusive`/`pending` rows ending
 # `landed: lane|operator`, a count line, a closed note on a drop, and the
 # median priced tokens and agent wall-clock per wave; a small project's rows
-# read `inconclusive` for a while; ADR-0048 is kit-only.
+# read `inconclusive` for a while; ADR-0048 is kit-only
+# (.agents/skills/retro/SKILL.md and .agents/skills/retro/QUESTIONS.md).
 # Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/lane.config.sh (yours), from #915 (factory T-52, PR
 # #1012, landed after 0.119.0's tag): it gains LANE_HOLD_PATTERNS, shipped
