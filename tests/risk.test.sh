@@ -399,7 +399,11 @@ _pi_warn=$(t_line_of "$PI" '⚠️ For you (behavior confirm-list, human-only):'
 	pass "process/R64: the risk line is the report's first line under its title" || fail "process/R64: the risk line is not at the top of the report (title $_pi_title, risk $_pi_risk, confirm-list $_pi_warn)"
 t_text_has "$pi_flat" 'takes the same actions whatever the rule prints' "process/R65: /pr-iterate acts the same whatever the rule prints"
 LAND="$KIT/scripts/land.kit.sh"
-grep -qE 'risk\.sh|risk\.judge' "$LAND" && fail "process/R65: the landing script reads the risk rule" || pass "process/R65: the landing script reads nothing of the risk rule"
+# Its lane mode (PRD-10, ADR-0047) is the one exception: the rule is run in
+# the lane's block, between 1L and 1d, and named nowhere else, comments aside.
+sed -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
+	fail "process/R65: the landing script reads the risk rule outside its lane mode" ||
+	pass "process/R65: outside its lane mode, the landing script reads nothing of the risk rule"
 
 # ---------------------------------------------------------------------------
 banner "10. The decision and the vocabulary are recorded (PRD-09 §8)"
