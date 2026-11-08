@@ -2492,8 +2492,8 @@ skill_surface_missing() {
 	case "$_su" in *"\`data.outward_items\` lists each outward item as \`A2-<n>:<surface>\`"*"one entry per item \`data.outward\` counts"*) ;; *) printf '%s\n' 'outward items defined' ;; esac
 }
 miss=$(skill_surface_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
-[ -z "$miss" ] && pass "process/R147–R149: Agent 7 writes a surface after an outward scope, a missing one is other, and the verdict records data.outward_items" ||
-	fail "process/R147–R149: /review-pr's surface rules are missing: $miss"
+[ -z "$miss" ] && pass "process/R147, process/R148, process/R149: Agent 7 writes a surface after an outward scope, a missing one is other, and the verdict records data.outward_items" ||
+	fail "process/R147, process/R148, process/R149: /review-pr's surface rules are missing: $miss"
 miss=$(surface_rules_missing "$WORKER_ABS" | tr '\n' ',' | sed 's/,$//')
 [ -z "$miss" ] && pass "process/R147–R148: the dispatched worker writes the surface right after the scope, in the skill's words" ||
 	fail "process/R147–R148: $WORKER's surface rules are missing: $miss"
