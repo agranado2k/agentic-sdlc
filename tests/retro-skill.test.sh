@@ -119,7 +119,7 @@ banner "0. The files under test"
 # ---------------------------------------------------------------------------
 [ -f "$SKILL_ABS" ] && pass "$SKILL exists" || {
 	fail "$SKILL is missing — nothing else in this suite means anything"
-	t_done "/retro contract"
+t_done "/retro contract"
 }
 [ -f "$SIDECAR_ABS" ] && pass "$SIDECAR exists — the questions in full live beside the order" ||
 	fail "$SIDECAR is missing"
@@ -1152,10 +1152,11 @@ esac
 # `unasked` is the train's word alone (tests/trace-skills.test.sh holds
 # /pr-iterate to hit|adjusted|missed): the Reads paragraph, which names both
 # emitters, says so rather than listing it as theirs (review of PR #377, L-1).
+# The low-risk lane records its landing's feedback as unasked too (#921).
 sec7_reads=$(sec7 | awk '/^\*Reads:/ { r = 1 } r && /^$/ { exit } r' | flat)
 case "$sec7_reads" in
-*'`unasked` (the train'"'"'s alone)'*) pass "the Reads paragraph says unasked is /merge-train's alone" ;;
-*) fail "the Reads paragraph lists unasked without saying it is /merge-train's alone" ;;
+*'`unasked` (the train'"'"'s and the lane'"'"'s alone)'*) pass "the Reads paragraph says unasked is /merge-train's and the lane's alone" ;;
+*) fail "the Reads paragraph lists unasked without saying it is /merge-train's and the lane's alone" ;;
 esac
 # The order's one-line summary in SKILL.md carries the same distinction.
 q7_line=$(awk '/^7\. \*\*Aim calibration\*\*/ { on = 1; print; next } /^[0-9]+\. / { on = 0 } on' "$SKILL_ABS" | flat)
@@ -1180,7 +1181,7 @@ q7_has '`data.by`' "question 7 reads data.by"
 q7_has '`operator`' "…names the operator's verdict"
 q7_has '`train`' "…and the train's"
 q7_has 'never the human'"'"'s verdict' "…says a train's verdict is never the human's"
-q7_has '`<n> operator, <m> train`' "…counts the two apart on the row: n operator, m train"
+q7_has '`<n> operator, <m> train, <l> lane`' "…counts the three apart on the row: n operator, m train, l lane (the lane's since #921)"
 q7_has 'no human verdict' "…and reports a window whose verdicts are all train as no human verdict"
 q7_has 'no `data.by`' "…and says what a feedback written before the key counts as"
 q7_has '`<p> unattributed`' "…: p unattributed (L-3 of the same review)"
@@ -1403,7 +1404,8 @@ banner "15. Questions 7 and 8 retire while the project accepts train-only verdic
 # holding an operator verdict, a dismissal and an override, each prints the
 # count, the calibration case.
 sec_of() { awk -v n="$1" '$0 ~ "^## " n "\\. " { on = 1; next } /^## / { on = 0 } on' "$SIDECAR_ABS"; }
-vspan() { sec_of "$1" | grep -o '`sh scripts/trace\.sh export[^`]*`' | tr -d '`' | head -1; }
+# The span that counts feedback by data.by (section 23) is not this one.
+vspan() { sec_of "$1" | grep -o '`sh scripts/trace\.sh export[^`]*`' | tr -d '`' | grep -vF 'feedback by: ' | head -1; }
 v7=$(vspan 7)
 v8=$(vspan 8)
 [ -n "$v7" ] && pass "question 7 carries a span that counts its operator verdicts" || fail "question 7 carries no \`sh scripts/trace.sh export …\` span counting operator verdicts"
@@ -2284,5 +2286,115 @@ fi
 for g in 'Loop ticket' 'Repeat' 'Pooled SD' 'Loop closed' 'Priced tokens' 'Agent wall-clock'; do
 	grep -q "^- \*\*$g\*\* —" "$ROOT/docs/domain-glossary.md" && pass "the glossary defines $g" || fail "the glossary has no $g entry"
 done
+
+# ---------------------------------------------------------------------------
+banner "23. Questions 6 and 7 read the low-risk lane: its landings, holds by token, escapes by outcome, and its feedback apart (process/R83, R84, #921)"
+# ---------------------------------------------------------------------------
+# PRD-10 slice 5 (ADR-0047, ADR-0049). The lane records a landing as
+# merge.land outcome=landed data.via=lane, a hold as merge.land
+# outcome=skipped data.via=lane data.hold=<token>, an escape as lane.escape
+# by outcome, and its feedback as unasked with data.by=lane. Question 6
+# carries a span that prints UC5's one line; question 7 a span that counts
+# feedback by data.by, the lane's apart. Both RUN here over fixture traces.
+#
+# The window opens 2026-10-11. Fourteen PRs: 1-8 landed by the lane (8 held
+# for risk first, at an earlier head: it counts landed only); 9-12 held for
+# risk (9 held for path first: the latest hold counts; 12 then landed by the
+# operator: still the lane's hold); 13 held for path, 14 for check-table.
+# Never counted: an operator landing, a train landing, and a lane hold and a
+# lane landing before the window.
+ln_span=$(sec_of 6 | grep -o '`sh scripts/trace\.sh export[^`]*lane\\\.escape[^`]*`' | tr -d '`' | head -1)
+[ -n "$ln_span" ] && pass "process/R83: question 6 carries a span over the export that reads the lane's merge.land and lane.escape" ||
+	fail "process/R83: question 6 carries no \`sh scripts/trace.sh export … lane\\.escape …\` span counting the lane"
+fb_span=$(sec_of 7 | grep -o '`sh scripts/trace\.sh export[^`]*feedback by: [^`]*`' | tr -d '`' | head -1)
+[ -n "$fb_span" ] && pass "process/R84: question 7 carries a span that counts feedback by data.by" ||
+	fail "process/R84: question 7 carries no \`sh scripts/trace.sh export … feedback by: …\` span"
+ln_run() { # <dir> <span>
+	_ln_span=$(printf '%s\n' "$2" | sed -e 's/<YYYY-MM-DD>/2026-10-11/g' -e 's/ *|| *:$//')
+	( cd "$ROOT" && TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$_ln_span" 2>/dev/null )
+}
+# ln_land <dir> <ts> <pr> [via] — a landing, the lane's when via says so.
+ln_land() {
+	_ll_d=
+	[ -n "${4:-}" ] && _ll_d=",\"data\":{\"via\":\"$4\"}"
+	ba_ev "$1" "$2" merge.land ",\"subject\":\"pr:#$3\",\"outcome\":\"landed\",\"reason\":\"fixture\"$_ll_d"
+}
+# ln_hold <dir> <ts> <pr> <token> — one lane hold.
+ln_hold() { ba_ev "$1" "$2" merge.land ",\"subject\":\"pr:#$3\",\"outcome\":\"skipped\",\"reason\":\"fixture\",\"data\":{\"via\":\"lane\",\"hold\":\"$4\",\"head\":\"$(printf '%040d' "$ba_n")\"}"; }
+ln_wave() { # <dir>
+	ln_hold "$1" 2026-10-01T10:00:00Z 17 risk
+	ln_land "$1" 2026-10-01T11:00:00Z 18 lane
+	ln_hold "$1" 2026-10-12T09:00:00Z 8 risk
+	ln_hold "$1" 2026-10-12T09:30:00Z 9 path
+	for p in 1 2 3 4 5 6 7 8; do ln_land "$1" "2026-10-13T1${p}:00:00Z" "$p" lane; done
+	for p in 9 10 11 12; do ln_hold "$1" "2026-10-14T$(printf %02d "$p"):00:00Z" "$p" risk; done
+	ln_land "$1" 2026-10-15T10:00:00Z 12
+	ln_hold "$1" 2026-10-15T11:00:00Z 13 path
+	ln_hold "$1" 2026-10-15T12:00:00Z 14 check-table
+	ln_land "$1" 2026-10-16T10:00:00Z 15
+	ln_land "$1" 2026-10-16T11:00:00Z 16 train
+}
+ln_a="$SCRATCH/lane-wave.retro"
+ln_wave "$ln_a"
+ln_e="$SCRATCH/lane-escapes.retro"
+ln_wave "$ln_e"
+ba_ev "$ln_e" 2026-10-17T10:00:00Z lane.escape ',"subject":"pr:#3","outcome":"revert","reason":"fixture","data":{"from":"qa-failed"}'
+ba_ev "$ln_e" 2026-10-17T11:00:00Z lane.escape ',"subject":"pr:#5","outcome":"notified","reason":"fixture","data":{"from":"fixed"}'
+ba_ev "$ln_e" 2026-10-02T11:00:00Z lane.escape ',"subject":"pr:#18","outcome":"fix","reason":"fixture","data":{"from":"qa-failed"}'
+ln_u="$SCRATCH/lane-undeclared.retro"
+ln_hold "$ln_u" 2026-10-12T09:00:00Z 1 x-not-a-token
+ln_z="$SCRATCH/lane-empty.retro"
+ln_land "$ln_z" 2026-10-12T09:00:00Z 1
+if [ -n "$ln_span" ]; then
+	for c in "$ln_a|lane: landed 8, held 6 (risk 4, path 1, check-table 1), escapes 0|UC5's wave" \
+		"$ln_e|lane: landed 8, held 6 (risk 4, path 1, check-table 1), escapes 2 (revert 1, notified 1)|a wave with two escapes" \
+		"$ln_u|lane: landed 0, held 1 (undeclared 1), escapes 0|a hold whose token is no declared one" \
+		"$ln_z|lane: landed 0, held 0, escapes 0|a window the lane did nothing in"; do
+		_d=${c%%|*}
+		_r=${c#*|}
+		_w=${_r#*|}
+		_r=${_r%|*}
+		lout=$(ln_run "$_d" "$ln_span")
+		[ "$lout" = "$_r" ] && pass "process/R83: over $_w the lane span prints '$_r'" ||
+			fail "process/R83: over $_w the lane span printed '$(printf '%s' "$lout" | tr '\n' ';')', not '$_r'"
+	done
+	ln_run "$ln_u" "$ln_span" | grep -q x-not-a-token && fail "the lane span names a hold by trace text" ||
+		pass "…and names no hold by trace text: an undeclared token prints \`undeclared\`"
+fi
+for needle in '`data.via=lane`' '`data.hold`' '`lane.escape`' 'its latest'; do
+	sec_of 6 | flat | grep -qF "$needle" && pass "question 6 names: $needle" || fail "question 6 does not name '$needle' (process/R83)"
+done
+sec_of 6 | awk '/^\*Reads:/ { r = 1 } r && /^$/ { exit } r' | flat | grep -qF '`lane.escape`' &&
+	pass "question 6's Reads paragraph lists lane.escape" || fail "question 6's Reads paragraph does not list \`lane.escape\`"
+# Question 7: the lane's feedback counted apart, as the train's is.
+ln_f="$SCRATCH/lane-feedback.retro"
+ln_fb() {
+	_lf_d=
+	[ -n "${4:-}" ] && _lf_d=",\"data\":{\"by\":\"$4\"}"
+	ba_ev "$ln_f" "$1" feedback ",\"subject\":\"ticket:#$2\",\"outcome\":\"$3\",\"reason\":\"fixture\"$_lf_d"
+}
+ln_fb 2026-10-12T10:00:00Z 1 hit operator
+ln_fb 2026-10-12T11:00:00Z 2 adjusted operator
+ln_fb 2026-10-12T12:00:00Z 3 hit train
+for t in 4 5 6; do ln_fb "2026-10-13T1$t:00:00Z" "$t" unasked lane; done
+ln_fb 2026-10-14T10:00:00Z 7 hit
+ln_fb 2026-10-01T10:00:00Z 8 unasked lane
+if [ -n "$fb_span" ]; then
+	fout=$(ln_run "$ln_f" "$fb_span")
+	[ "$fout" = 'feedback by: 2 operator, 1 train, 3 lane, 1 unattributed' ] &&
+		pass "process/R84: question 7's span counts the lane's feedback apart from the operator's and the train's" ||
+		fail "process/R84: question 7's span printed '$(printf '%s' "$fout" | tr '\n' ';')', not 'feedback by: 2 operator, 1 train, 3 lane, 1 unattributed'"
+fi
+q7_has '`lane`' "question 7 names the lane's feedback"
+case "$sec7_reads" in
+*'`data.by`'*'`lane`'*) pass "question 7's Reads paragraph lists lane among data.by's words" ;;
+*) fail "question 7's Reads paragraph does not list \`lane\` among \`data.by\`'s words" ;;
+esac
+case "$q7_line" in
+*'`lane`'*) pass "SKILL.md's question 7 counts the lane's feedback apart" ;;
+*) fail "SKILL.md's question 7 does not name the \`lane\`'s feedback" ;;
+esac
+awk '/^6\. \*\*Chain health\*\*/ { on = 1; print; next } /^[0-9]+\. / { on = 0 } on' "$SKILL_ABS" | flat | grep -qF 'lane' &&
+	pass "SKILL.md's question 6 names the lane's counts" || fail "SKILL.md's question 6 does not name the lane's landings, holds and escapes"
 
 t_done "/retro contract"

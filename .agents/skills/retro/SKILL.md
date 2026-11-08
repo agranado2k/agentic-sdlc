@@ -79,16 +79,17 @@ The full form — what to read, what counts as a finding, where it goes — is i
    (a resumed ticket, a conflict, a stuck check), spawns that
    failed, timed out, hit budget or could not reach their vendor, runs never
    closed, tool calls denied (per session and tool), sub-agent stops read
-   before their transcript ended, and skills whose emits
-   are missing from where they should be.
+   before their transcript ended, skills whose emits
+   are missing from where they should be, and the low-risk lane's one line:
+   its landings, its holds by token and its escapes by outcome.
 7. **Aim calibration** — of the slices landed in the window, how many were
    followed by a re-cut of what came after them, and which tier or skill
    produced the misses. The `feedback` events are the loop's own
    self-correction; no verdicts over landed slices is itself a finding, a
    landing whose `feedback` is `unasked` counts as one with no verdict, and
-   a verdict `by` the `train` — judged under a delegating instruction — is
-   counted apart from the operator's: a window of only `train` verdicts
-   has no human verdict in it. A project whose binding decision record
+   a verdict `by` the `train` — judged under a delegating instruction — or
+   the `lane` is counted apart from the operator's: a window of only `train`
+   or `lane` verdicts has no human verdict in it. A project whose binding decision record
    accepts train-only verdicts has that window answered with one retired
    line, never a finding, until a window holds an operator verdict again.
 8. **Stamp calibration** — per decision field and per skill, never one
