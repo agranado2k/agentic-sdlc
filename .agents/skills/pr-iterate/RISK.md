@@ -2,6 +2,14 @@
 
 Opened from `/pr-iterate` step 6, whichever way the iteration ends, before the scratch files go. `SKILL.md` stays the entry point; this file is the branch.
 
+**Apply the ruling defaults first** — when this iteration's review recorded an Axis-2 verdict at a new head, before the risk rule reads it:
+
+```sh
+sh scripts/ruling.sh <N> --defaults --base <base> --head <head>
+```
+
+The recorder reads the risk policy's ruling defaults at `<base>` and records `keep` by `default` for each outward item whose surface they pair with every review area the diff touches. It prints closed lines only, one per item so ruled: `ruling: keep pr:#<N> <item> <surface> <head> default <entry>…`. Put each at the top of the report, under the `Risk:` line, as `Ruled by default: <item> <surface> (<entry>…)` — or `Ruled by default: none`. What it says on stderr — a `fail-closed` line, an entry it could not apply — goes in the report beside it; no exit code of it stops the iteration. Like the operator's two commands below, it records no ruling of this session's: a default is the operator's answer, given in advance at the base.
+
 **Run the risk rule at the head this iteration leaves:**
 
 ```sh

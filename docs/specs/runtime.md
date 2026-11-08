@@ -41,6 +41,8 @@ R103 joined from PRD-10 slice 4 (#919), keeping the PRD's number: the root
 guard keeps the trip marker from an agent.
 R149 joined from PRD-11's T-66 (#929), keeping the PRD's number: the root
 guard keeps the ruling recorder's `by` from an agent.
+R150 to R153 joined from PRD-11 slice 4 (#930), keeping the PRD's numbers:
+the ruling defaults, read at the base and applied by the ruling recorder.
 R95, R96 and R101 joined from PRD-10's escape cases (#918), keeping the
 PRD's numbers: an escape already undone only notifies, a conflicting revert
 files a fix ticket, and `--escapes` sweeps with no PR.
@@ -154,6 +156,10 @@ R146. The ruling recorder SHALL record nothing when the trace already holds a ru
 R147. The ruling recorder SHALL print and record only item ids, surface tokens, review area names, PR numbers, commit shas and the words of runtime/R140, and no text from a PR, a comment, a commit message or a ticket.
 R148. IF the trace is unconfigured, THEN the ruling recorder SHALL record nothing, print nothing on standard output, say so on standard error and exit 0.
 R149. The adapter's root guard SHALL refuse an agent's tool call that runs the ruling recorder while unsetting or overriding an agent-harness marker. [UC2 3b]
+R150. The risk policy SHALL ship with an empty ruling-defaults list whose entries take the form `<review area>:<surface>`. [UC4]
+R151. WHEN the ruling recorder runs with `--defaults` and a PR, it SHALL record one `ruling outcome=keep data.by=default` for each outward item at the latest Axis-2 verdict whose surface the ruling defaults pair with every review area the PR's diff from its merge base touches, and none for an item of surface `other`. [UC4 2, 2a, 2c]
+R152. The ruling recorder SHALL read the ruling defaults only through the base-branch policy contract, and SHALL record no default and print the fail-closed line on standard error when that read fails closed. [UC4 2b]
+R153. The ruling recorder SHALL apply no ruling-defaults entry whose area is not a review area of the lens-slice policy or whose surface is not in the vocabulary or is `other`, and SHALL name each such entry on standard error. [UC4 2c]
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
 R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]

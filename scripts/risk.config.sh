@@ -42,8 +42,25 @@
 #                        control: create it to trip the switch in this clone
 #                        at once, delete it to reset. No environment variable
 #                        reaches either.
+# RISK_RULING_DEFAULTS   RULING DEFAULTS, whitespace-separated, each of the
+#                        form `<review area>:<surface>`: the operator's answer
+#                        given in advance. `sh scripts/ruling.sh <PR>
+#                        --defaults --base <ref>` records an outward item of
+#                        that surface ruled `keep` by default when every review
+#                        area the pull request's diff touches is paired with
+#                        it — `security:exit-code` rules an exit-code item on a
+#                        PR touching security alone, never one that also
+#                        touches test-hygiene. The area must be a review area
+#                        of scripts/lens-slice.config.sh and the surface a word
+#                        of the vocabulary's `surface` field other than
+#                        `other`; any other entry is named on stderr and not
+#                        applied. Read at the base like the rest, so a pull
+#                        request cannot add one for itself. Ships EMPTY:
+#                        a default is the operator's call, and `/retro`
+#                        proposes one only from rulings that recur.
 
 RISK_MISS_RATE_BELOW=5
 RISK_PRECISION_FLOOR=80
 RISK_JUDGING_EXTRA=''
 RISK_KILL_SWITCH=on
+RISK_RULING_DEFAULTS=''

@@ -6,10 +6,13 @@
 #
 #   sh scripts/ruling.sh <PR> <A2-n> keep|change [--head <commit>]
 #   sh scripts/ruling.sh <PR> --unruled [--head <commit>]
+#   sh scripts/ruling.sh <PR> --defaults --base <ref> [--head <commit>]
 #
 # THE INTERFACE — the later tickets build on it, so it is fixed here:
 #   * arguments: the PR's number (digits), then the item id `A2-<n>` and one
-#     of `keep` and `change`, or `--unruled`. `--head <commit>` names the head
+#     of `keep` and `change`, or `--unruled`, or `--defaults` with `--base
+#     <ref>`, the base the ruling defaults are read at (`--base` goes with
+#     `--defaults` only; the head must be in the clone). `--head <commit>` names the head
 #     to rule at, read from the local clone; left out, the head is the forge's
 #     (`gh pr view <PR> --json headRefOid,commits`), its sha and committed date.
 #     Any other argument is a caller error, and so is any argument naming
@@ -27,8 +30,7 @@
 #   * WHO RULES (`data.by`): `session` when any agent-harness marker below is
 #     set and non-empty, `operator` otherwise — the pre-commit hook's list,
 #     word for word, held equal by tests/ruling.test.sh. `default` is written
-#     only by the ruling defaults (a later slice: `--defaults`, reserved here
-#     and refused today as a caller error).
+#     only by `--defaults`, whoever runs it.
 #   * THE EVENT: `ruling`, subject pr:#<PR>, outcome keep|change,
 #     `data.item`, `data.surface`, `data.head` (the head's 40-hex sha) and
 #     `data.by`. When the trace already holds a ruling with the same PR, item,
@@ -45,6 +47,21 @@
 #     the item and runs neither (process/R150). <self> is scripts/ruling.sh, or
 #     the wrapper RULING_SELF names when it is of the form scripts/<name>.sh
 #     (the kit's own, scripts/ruling.kit.sh).
+#   * THE RULING DEFAULTS (`--defaults`; runtime/R150-R153): the risk
+#     policy's RISK_RULING_DEFAULTS, `<review area>:<surface>` entries, read
+#     only through the policy reader at the base (`policy.sh read
+#     scripts/risk.config.sh --base <ref>`) and evaluated in a child process
+#     with the name unset. A read that fails closed records nothing and says
+#     the reader's `fail-closed <reason> <path>` line on stderr, exit 0. An
+#     entry whose area is not a review area of the lens-slice policy, or whose
+#     surface is not the vocabulary's or is `other`, is named on stderr and not
+#     applied. Each outward item whose surface is paired with EVERY review area
+#     the diff from merge-base(<base>, <head>) to <head> touches — a path in no
+#     area pairs with none — is ruled `keep` by `default`, once; an item of
+#     surface `other`, or one the operator ruled at the head, gets none. STDOUT:
+#     one line per item so ruled, recorded or already held, `ruling: keep
+#     pr:#<PR> <item> <surface> <head> default <area>:<surface>…`, naming the
+#     entries that ruled it.
 #   * NOTHING ELSE LEAVES IT: item ids, surface tokens, PR numbers, commit
 #     shas and the `ruling` kind's words — never text from a PR, a comment, a
 #     commit message or a ticket (runtime/R147). The forge is asked for a sha
@@ -74,7 +91,7 @@ say() { echo "ruling: $*" >&2; }
 # The agent-harness markers: .githooks/pre-commit's agent_markers, word for word.
 agent_markers='CLAUDECODE CLAUDE_CODE_SESSION_ID TRACE_SESSION GEMINI_CLI CODEX_SANDBOX CODEX_SANDBOX_NETWORK_DISABLED CODEX_THREAD_ID'
 
-usage='usage: sh scripts/ruling.sh <PR> <A2-n> keep|change [--head <commit>] | <PR> --unruled [--head <commit>]'
+usage='usage: sh scripts/ruling.sh <PR> <A2-n> keep|change [--head <commit>] | <PR> --unruled [--head <commit>] | <PR> --defaults --base <ref> [--head <commit>]'
 [ $# -ge 2 ] || die "$usage"
 pr=$1
 shift
@@ -85,11 +102,13 @@ for _a in "$@"; do
 done
 case $pr in '' | 0* | *[!0-9]*) die "the PR is its number, digits: $usage" ;; esac
 [ ${#pr} -le 9 ] || die "the PR is its number, digits: $usage"
-mode= item= outcome= head_arg=
+mode= item= outcome= head_arg= base_arg=
 while [ $# -gt 0 ]; do
 	case $1 in
 	--unruled) [ -z "$mode" ] || die "$usage"; mode=unruled; shift ;;
+	--defaults) [ -z "$mode" ] || die "$usage"; mode=defaults; shift ;;
 	--head) [ $# -ge 2 ] || die "$usage"; head_arg=$2; shift 2 ;;
+	--base) [ $# -ge 2 ] || die "$usage"; base_arg=$2; shift 2 ;;
 	A2-*)
 		[ -z "$mode" ] || die "$usage"
 		case ${1#A2-} in '' | *[!0-9]*) die "an item is A2-<n>: $usage" ;; esac
@@ -103,6 +122,13 @@ while [ $# -gt 0 ]; do
 	esac
 done
 [ -n "$mode" ] || die "$usage"
+# --base names the base the defaults are read at: --defaults takes it, and
+# nothing else does.
+if [ "$mode" = defaults ]; then
+	[ -n "$base_arg" ] || die "--defaults reads the ruling defaults at a base: $usage"
+else
+	[ -z "$base_arg" ] || die "--base goes with --defaults only: $usage"
+fi
 
 self=scripts/ruling.sh
 case ${RULING_SELF-} in
@@ -201,6 +227,77 @@ if [ "$mode" = unruled ]; then
 		else
 			printf 'unruled: %s %s\nkeep: sh %s %s %s keep\nchange: sh %s %s %s change\n' "$_i" "$_s" "$self" "$pr" "$_i" "$self" "$pr" "$_i"
 		fi
+	done <"$_tmp/items"
+	exit 0
+fi
+
+# --- the ruling defaults ---------------------------------------------------------
+# The base's risk policy, read through the policy reader and evaluated in a
+# child process that starts with the name unset: neither the environment nor
+# the pull request's tree can stand in for it (runtime/R152). Each entry is
+# held to the lens-slice policy's review areas and the vocabulary's surfaces
+# (runtime/R153); an item is ruled keep by default when its surface is paired
+# with every review area the diff from the merge base touches (runtime/R151).
+if [ "$mode" = defaults ]; then
+	git cat-file -e "$head^{commit}" 2>/dev/null || die "the head $head is not in this clone — fetch it; nothing recorded"
+	_rc=0
+	_copy=$(sh "$_here/policy.sh" read scripts/risk.config.sh --base "$base_arg" 2>/dev/null) || _rc=$?
+	if [ "$_rc" != 0 ] || [ ! -f "$_copy" ]; then
+		_fc=$(printf '%s\n' "$_copy" | grep -xE 'fail-closed [a-z-]+ [A-Za-z0-9/._-]+' | head -n 1)
+		say "${_fc:-fail-closed unreadable scripts/risk.config.sh} — no ruling default recorded"
+		exit 0
+	fi
+	sh -c 'unset RISK_RULING_DEFAULTS; . "$1" >/dev/null 2>&1 </dev/null; set -f; for e in ${RISK_RULING_DEFAULTS-}; do command printf "%s\n" "$e"; done' _ "$_copy" >"$_tmp/entries" 2>/dev/null </dev/null || : >"$_tmp/entries"
+	base=$(git rev-parse --verify --quiet "$base_arg^{commit}") || die "the base names no commit here"
+	mb=$(git merge-base "$base" "$head" 2>/dev/null) || die "the base and the head share no history — nothing recorded"
+	git -c core.quotePath=false diff --name-only -z --no-renames "$mb" "$head" 2>/dev/null | tr '\0' '\n' | sed '/^$/d' >"$_tmp/paths" ||
+		die "git cannot produce the diff — nothing recorded"
+	sh "$_here/lens-slice.sh" --areas <"$_tmp/paths" >"$_tmp/areas" 2>/dev/null || die "the lens-slice policy cannot be read — nothing recorded"
+	# The roster is the lines with no path; the touched areas, the rest. A
+	# changed path in no area is `none`, which no entry can pair.
+	awk -F '\t' '$2 == "" { print $1 }' "$_tmp/areas" >"$_tmp/roster"
+	awk -F '\t' '$2 != "" { print $1 }' "$_tmp/areas" | sort -u >"$_tmp/touched"
+	awk -F '\t' 'NR == FNR { if ($2 != "") seen[$2] = 1; next } NF && !($0 in seen) { print "none"; exit }' "$_tmp/areas" "$_tmp/paths" >>"$_tmp/touched"
+	: >"$_tmp/good"
+	while IFS= read -r _e; do
+		case $_e in
+		*[!a-z0-9:-]* | *:*:* | :* | *:) _why='not of the form <review area>:<surface>' ;;
+		*:*)
+			_why=
+			grep -qxF -- "${_e%%:*}" "$_tmp/roster" || _why='its area is not a review area of the lens-slice policy'
+			[ -n "$_why" ] || [ "$(surface_of "${_e#*:}")" != other ] || _why='its surface is not in the vocabulary, or is other'
+			;;
+		*) _why='not of the form <review area>:<surface>' ;;
+		esac
+		if [ -n "$_why" ]; then
+			case $_e in *[!A-Za-z0-9:._-]*) _e='an entry' ;; esac
+			[ ${#_e} -le 80 ] || _e='an entry'
+			say "ruling default $_e not applied — $_why"
+		else
+			printf '%s\n' "$_e" >>"$_tmp/good"
+		fi
+	done <"$_tmp/entries"
+	[ -s "$_tmp/touched" ] || exit 0
+	while read -r _i _s; do
+		[ "$_s" != other ] || continue
+		_ents=
+		while IFS= read -r _a; do
+			grep -qxF -- "$_a:$_s" "$_tmp/good" || { _ents=; break; }
+			_ents="$_ents $_a:$_s"
+		done <"$_tmp/touched"
+		[ -n "$_ents" ] || continue
+		if awk -v i="$_i" '$1 == i && $2 == "operator" { f = 1 } END { exit !f }' "$_tmp/rulings"; then
+			say "$_i is ruled by the operator at the head — no default recorded over it"
+			continue
+		fi
+		if ! awk -v i="$_i" '$1 == i && $2 == "default" && $3 == "keep" { f = 1 } END { exit !f }' "$_tmp/rulings"; then
+			TRACE_QUIET=1 sh "$_here/trace.sh" emit kind=ruling "subject=pr:#$pr" outcome=keep \
+				"data.item=$_i" "data.surface=$_s" "data.head=$head" data.by=default >/dev/null 2>&1 || {
+				echo "ruling: the trace refused the default ruling of $_i — nothing recorded" >&2
+				exit 1
+			}
+		fi
+		printf 'ruling: keep pr:#%s %s %s %s default%s\n' "$pr" "$_i" "$_s" "$head" "$_ents"
 	done <"$_tmp/items"
 	exit 0
 fi

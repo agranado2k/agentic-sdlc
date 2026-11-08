@@ -726,4 +726,52 @@ grep -qF 'ruled `keep`' "$RULE" && pass "the risk rule's header names the keep r
 grep -qF 'not ruled `keep`' "$KIT/.agents/skills/pr-iterate/RISK.md" && pass "/pr-iterate's RISK.md says an outward item not ruled keep raises the rule" ||
 	fail "/pr-iterate's RISK.md does not say a keep ruling lifts high outward"
 
+
+# ---------------------------------------------------------------------------
+banner "14. UC4: a ruling default at the base rules an outward item keep and lifts high outward (runtime/R151, R59)"
+# ---------------------------------------------------------------------------
+# A base that holds security:exit-code, and a pull request off it touching
+# security alone (sec/ is in no other area); another touching tests/ too.
+git -C "$R" checkout -q -b dbase main
+sed "s/^RISK_RULING_DEFAULTS=.*/RISK_RULING_DEFAULTS='security:exit-code'/" "$KIT/scripts/risk.config.sh" >"$R/scripts/risk.config.sh"
+t_commit "$R" "chore: a ruling default" >/dev/null
+git -C "$R" checkout -q main
+pr_branch_off() {
+	git -C "$R" checkout -q -b "$1" "$2"
+	shift 2
+	for _pb_p in "$@"; do t_write "$R" "$_pb_p" "the pull request
+"; done
+	t_commit "$R" "feat: the pull request" >/dev/null
+	git -C "$R" checkout -q main
+}
+pr_branch_off uc4 dbase sec/uc4.sh
+pr_branch_off uc4-tests dbase sec/uc4b.sh tests/uc4b.test.sh
+UC4_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# defaults <pr> <head> — the kit's ruling recorder's --defaults in the repository.
+defaults() {
+	t_exec sh -c 'cd "$1" || exit 99; p=$2 l=$3 r=$4; shift 4; env TRACE_CONFIG="$p" LENS_SLICE_CONFIG="$l" TRACE_QUIET=1 sh "$r" "$@"' _ "$R" "$P_EARNED" "$LENS" "$KIT/scripts/ruling.sh" "$1" --defaults --base dbase --head "$2"
+}
+verdict_items "$T_EARNED" "$UC4_AT" 1400 1 A2-1:exit-code
+defaults 1400 uc4
+[ "$T_OUT" = "ruling: keep pr:#1400 A2-1 exit-code $(git -C "$R" rev-parse uc4) default security:exit-code" ] &&
+	pass "runtime/R151: the default rules UC4's exit-code item keep" || fail "runtime/R151: --defaults printed: $T_OUT (stderr: $T_ERR)"
+rule "$P_EARNED" dbase uc4 --pr 1400 --ticket-file "$f"
+[ "$T_OUT" = "effective: low
+planner: low
+rule: low
+area: security earned
+switch: on" ] && pass "runtime/R59: the default's keep lifts high outward — effective: low" ||
+	fail "runtime/R59: UC4 printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+# UC4 3a: an operator change at the same head wins over the default.
+ev "$T_EARNED" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" ruling "pr:#1400" change "\"item\":\"A2-1\",\"surface\":\"exit-code\",\"head\":\"$(git -C "$R" rev-parse uc4)\",\"by\":\"operator\""
+rule "$P_EARNED" dbase uc4 --pr 1400 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R59: an operator change at the head makes it high outward again" ||
+	fail "runtime/R59: an operator change after the default printed $(rule_line)"
+# UC4 2a: a path in test-hygiene, which the defaults do not pair.
+verdict_items "$T_EARNED" "$UC4_AT" 1401 1 A2-1:exit-code
+defaults 1401 uc4-tests
+[ -z "$T_OUT" ] && pass "runtime/R151: a PR also touching test-hygiene gets no default" || fail "runtime/R151: an unpaired area printed: $T_OUT"
+rule "$P_EARNED" dbase uc4-tests --pr 1401 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R151: and stays high outward" || fail "runtime/R151: the unpaired PR printed $(rule_line)"
+
 t_done "the risk rule"

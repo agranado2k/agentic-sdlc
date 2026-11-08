@@ -275,4 +275,164 @@ grep -qF 'runs neither' "$RISK_MD" && grep -qF '`keep:`' "$RISK_MD" && grep -qF 
 	pass "process/R150: RISK.md prints the keep and change commands beside the item and runs neither" ||
 	fail "process/R150: RISK.md does not print both commands and say it runs neither"
 
+
+# ---------------------------------------------------------------------------
+banner "runtime/R150-R153: --defaults applies the base's ruling defaults to the outward items at the head"
+# A repository of its own: the risk policy at each base, a pull request per
+# shape of diff. Review areas: security reads sec/ and scripts/,
+# test-hygiene tests/, the other four api/ — every lens named, since a lens
+# the policy leaves out reads every path.
+DLENS="$SCRATCH/defaults-lens.config.sh"
+printf '%s\n' "LENS_SLICE_RULES='security ^(sec|scripts)/" 'api-crud ^api/' 'pattern ^api/' 'simplicity ^api/' 'reuse-dry ^api/' "test-hygiene ^tests/'" >"$DLENS"
+t_repo
+D=$REPO
+t_write "$D" scripts/risk.config.sh "$(sed "s/^RISK_RULING_DEFAULTS=.*/RISK_RULING_DEFAULTS='security:exit-code'/" "$KIT/scripts/risk.config.sh")
+"
+t_commit "$D" "chore: a ruling default" >/dev/null
+# dbranch <name> <from> <path>… — a branch off <from> writing each path.
+dbranch() {
+	git -C "$D" checkout -q -b "$1" "$2"
+	_db_n=$1
+	shift 2
+	for _db_p in "$@"; do t_write "$D" "$_db_p" "$_db_n
+"; done
+	t_commit "$D" "feat: $_db_n" >/dev/null
+	git -C "$D" checkout -q main
+}
+dbranch sec-only main sec/a.sh
+dbranch sec-tests main sec/a.sh tests/a.sh
+git -C "$D" checkout -q -b loosen main
+t_write "$D" sec/b.sh 'b
+'
+t_write "$D" scripts/risk.config.sh "$(sed "s/^RISK_RULING_DEFAULTS=.*/RISK_RULING_DEFAULTS='security:exit-code security:flag'/" "$KIT/scripts/risk.config.sh")
+"
+t_commit "$D" "feat: a pull request that loosens its own defaults" >/dev/null
+git -C "$D" checkout -q -b nopolicy main
+git -C "$D" rm -q scripts/risk.config.sh
+t_commit "$D" "chore: no risk policy" >/dev/null
+git -C "$D" checkout -q -b badbase main
+t_write "$D" scripts/risk.config.sh "$(sed "s/^RISK_RULING_DEFAULTS=.*/RISK_RULING_DEFAULTS='security:other nosuch:flag security:sideways security:exit-code'/" "$KIT/scripts/risk.config.sh")
+"
+t_commit "$D" "chore: entries the recorder cannot apply" >/dev/null
+dbranch bad-sec badbase sec/c.sh
+git -C "$D" checkout -q main
+DAT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+# drec <policy> <as> <args…> — the recorder in that repository, --head given.
+drec() {
+	_dp=$1 _das=$2
+	shift 2
+	t_exec sh -c '
+		cd "$1" || exit 99; pol=$2 as=$3 rec=$4 lens=$5; shift 5
+		for m in '"$T_AGENT_MARKERS"'; do unset "$m"; done
+		[ "$as" = session ] && export CLAUDECODE=1
+		LENS_SLICE_CONFIG="$lens" TRACE_CONFIG="$pol" TRACE_QUIET=1 sh "$rec" "$@"' \
+		_ "$D" "$_dp" "$_das" "$REC" "$DLENS" "$@"
+}
+SEC=$(git -C "$D" rev-parse sec-only)
+
+# UC4 2: the PR touches security only, and security:exit-code is at the base.
+T7="$SCRATCH/t7"
+P7=$(tpol "$T7")
+verdict2 "$T7" "$DAT" 1100 4 A2-1:exit-code,A2-2:flag,A2-3:sideways,A2-4:other
+drec "$P7" session 1100 --defaults --base main --head sec-only
+expect_status 0 "runtime/R151: --defaults exits 0"
+expect_out_is "ruling: keep pr:#1100 A2-1 exit-code $SEC default security:exit-code" "runtime/R151, process/R152: one default keep, its line naming the entry that ruled it"
+n=$(rulings "$T7" | grep -c .)
+[ "$n" = 1 ] && pass "runtime/R151: one ruling recorded — none for flag, none for other" || fail "runtime/R151: $n rulings recorded, expected 1"
+case $(rulings "$T7") in
+*'"outcome":"keep"'*'"item":"A2-1"'*'"surface":"exit-code"'*"\"head\":\"$SEC\""*'"by":"default"'*) pass "runtime/R151: the ruling is a keep by default at the head, under an agent-harness marker too" ;;
+*) fail "runtime/R151: the ruling is not a default keep: $(rulings "$T7")" ;;
+esac
+drec "$P7" session 1100 --defaults --base main --head sec-only
+expect_out_is "ruling: keep pr:#1100 A2-1 exit-code $SEC default security:exit-code" "runtime/R146: a second run prints the default it holds"
+[ "$(rulings "$T7" | grep -c .)" = 1 ] && pass "runtime/R146: and records nothing" || fail "runtime/R146: a second --defaults run recorded a ruling"
+drec "$P7" session 1100 --unruled --head sec-only
+expect_out_has "ruled: A2-1 exit-code default" "runtime/R59: --unruled reads the default keep as ruled"
+
+# UC4 2a: a path in an area the defaults do not pair records nothing.
+T8="$SCRATCH/t8"
+P8=$(tpol "$T8")
+verdict2 "$T8" "$DAT" 1101 1 A2-1:exit-code
+drec "$P8" operator 1101 --defaults --base main --head sec-tests
+expect_status 0 "runtime/R151: a PR in an unpaired area exits 0"
+expect_out_is "" "runtime/R151: and prints no default"
+[ -z "$(rulings "$T8")" ] && pass "runtime/R151: a path in test-hygiene, unpaired, records no default" || fail "runtime/R151: an unpaired area recorded a default"
+
+# The base's defaults judge, never the PR's own.
+T9="$SCRATCH/t9"
+P9=$(tpol "$T9")
+verdict2 "$T9" "$DAT" 1102 2 A2-1:exit-code,A2-2:flag
+drec "$P9" operator 1102 --defaults --base main --head loosen
+expect_out_is "ruling: keep pr:#1102 A2-1 exit-code $(git -C "$D" rev-parse loosen) default security:exit-code" "runtime/R152: a default the PR adds to its own policy is not applied"
+
+# UC4 2b: the risk policy fails closed at the base.
+T10="$SCRATCH/t10"
+P10=$(tpol "$T10")
+dbranch nopol-sec nopolicy sec/d.sh
+verdict2 "$T10" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 1103 1 A2-1:exit-code
+drec "$P10" operator 1103 --defaults --base nopolicy --head nopol-sec
+expect_status 0 "runtime/R152: a policy that fails closed exits 0"
+expect_out_is "" "runtime/R152: and prints no default"
+expect_err_has "fail-closed missing scripts/risk.config.sh" "runtime/R152: the fail-closed line is on stderr"
+drec "$P10" operator 1103 --defaults --base no-such-ref --head nopol-sec
+expect_err_has "fail-closed no-base scripts/risk.config.sh" "runtime/R152: a base that names no commit fails closed too"
+[ -z "$(rulings "$T10")" ] && pass "runtime/R152: no default recorded when the read fails closed" || fail "runtime/R152: a default was recorded past a closed read"
+
+# UC4 2c: entries the recorder cannot apply are named and skipped.
+T11="$SCRATCH/t11"
+P11=$(tpol "$T11")
+verdict2 "$T11" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 1104 2 A2-1:exit-code,A2-2:other
+drec "$P11" operator 1104 --defaults --base badbase --head bad-sec
+expect_err_has "security:other" "runtime/R153: an entry of surface other is named"
+expect_err_has "nosuch:flag" "runtime/R153: an entry whose area is no review area is named"
+expect_err_has "security:sideways" "runtime/R153: an entry whose surface is not in the vocabulary is named"
+expect_out_is "ruling: keep pr:#1104 A2-1 exit-code $(git -C "$D" rev-parse bad-sec) default security:exit-code" "runtime/R153: the good entry still applies, and an other item gets none"
+[ "$(rulings "$T11" | grep -c .)" = 1 ] && pass "runtime/R153: the named entries are not applied" || fail "runtime/R153: an unappliable entry recorded a ruling"
+
+# An operator ruling at the head wins: no default is recorded over it.
+T12="$SCRATCH/t12"
+P12=$(tpol "$T12")
+verdict2 "$T12" "$DAT" 1105 1 A2-1:exit-code
+ruling_ev "$T12" "$DAT" 1105 A2-1 exit-code "$SEC" operator change
+drec "$P12" operator 1105 --defaults --base main --head sec-only
+expect_out_is "" "runtime/R59: an item the operator ruled at the head gets no default"
+[ "$(rulings "$T12" | grep -c '"by":"default"')" = 0 ] && pass "runtime/R59: no default recorded over the operator's ruling" || fail "runtime/R59: a default was recorded over the operator's ruling"
+
+# Caller errors, and a head the verdict predates.
+for bad in "--defaults --head sec-only" "--base main --unruled" "--defaults --unruled --base main" "A2-1 keep --base main" "--defaults --base"; do
+	# shellcheck disable=SC2086  # the case is a word list on purpose
+	drec "$P7" operator 1100 $bad
+	expect_status 2 "runtime/R151: '$bad' is a caller error"
+done
+T13="$SCRATCH/t13"
+P13=$(tpol "$T13")
+verdict2 "$T13" "$OLD" 1106 1 A2-1:exit-code
+drec "$P13" operator 1106 --defaults --base main --head sec-only
+expect_status 2 "runtime/R151: a verdict older than the head applies no default, exit 2"
+[ -z "$(rulings "$T13")" ] && pass "runtime/R151: and records nothing" || fail "runtime/R151: a stale verdict recorded a default"
+drec "$PE" operator 1100 --defaults --base main --head sec-only
+expect_status 0 "runtime/R148: --defaults on an unconfigured trace exits 0"
+expect_out_is "" "runtime/R148: and prints nothing"
+
+# runtime/R150: the shipped risk policy carries the list, empty.
+grep -qxF "RISK_RULING_DEFAULTS=''" "$KIT/scripts/risk.config.sh" && pass "runtime/R150: the shipped risk policy's ruling-defaults list is empty" ||
+	fail "runtime/R150: scripts/risk.config.sh does not ship RISK_RULING_DEFAULTS=''"
+grep -qF '<review area>:<surface>' "$KIT/scripts/risk.config.sh" && pass "runtime/R150: the risk policy documents the entry's form" ||
+	fail "runtime/R150: scripts/risk.config.sh does not name the <review area>:<surface> form"
+
+# process/R151, R152: /pr-iterate runs --defaults before the risk rule and
+# reports what a default ruled.
+_d=$(grep -nF 'sh scripts/ruling.sh <N> --defaults --base <base>' "$RISK_MD" | head -n 1 | cut -d: -f1)
+_r=$(grep -nF 'sh scripts/risk.sh <base> <head>' "$RISK_MD" | head -n 1 | cut -d: -f1)
+[ -n "$_d" ] && [ -n "$_r" ] && [ "$_d" -lt "$_r" ] && pass "process/R151: RISK.md runs the recorder's --defaults before the risk rule" ||
+	fail "process/R151: RISK.md does not run 'sh scripts/ruling.sh <N> --defaults --base <base>' before the risk rule"
+PRI_MD="$KIT/.agents/skills/pr-iterate/SKILL.md"
+grep -qF 'Ruled by default: ' "$PRI_MD" && grep -qF 'Ruled by default: ' "$RISK_MD" &&
+	pass "process/R152: the report lists the items ruled keep by default, at its top" ||
+	fail "process/R152: neither SKILL.md's report nor RISK.md carries the 'Ruled by default: ' line"
+_t=$(grep -nF 'Ruled by default: ' "$PRI_MD" | head -n 1 | cut -d: -f1)
+_w=$(grep -nF '⚠️ For you' "$PRI_MD" | head -n 1 | cut -d: -f1)
+[ -n "$_t" ] && [ -n "$_w" ] && [ "$_t" -lt "$_w" ] && pass "process/R152: the line sits above the confirm-list block" ||
+	fail "process/R152: the 'Ruled by default:' line is not at the top of the report"
+
 t_done "ruling recorder"

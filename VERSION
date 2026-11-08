@@ -4234,7 +4234,28 @@
 # PR #1022, R149's text and tests/root-guard.test.sh; the
 # glossary's Risk rule; AGENTS.md's risk rule row; and tests/risk.test.sh.
 
-shared-layer: 0.125.0
+# 0.126.0 — the ruling recorder applies ruling defaults (ticket #930,
+# PRD-11 slice 4 of D-02, factory T-67; runtime/R150-R153, process/R151,
+# process/R152). No file joins or leaves. Two shared files change content:
+# scripts/ruling.sh, whose `--defaults --base <ref> [--head <commit>]`
+# reads the risk policy's RISK_RULING_DEFAULTS at the base through the
+# policy reader and records one `ruling outcome=keep data.by=default` per
+# outward item at the head's Axis-2 verdict whose surface is paired with
+# every review area the diff touches — none for surface other, none over an
+# operator's ruling at the head, nothing when the read fails closed (its
+# fail-closed line on stderr), and each entry it cannot apply named on
+# stderr; and UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate — RISK.md runs the recorder's --defaults before
+# the risk rule (.agents/skills/pr-iterate/RISK.md), and SKILL.md's report
+# carries a `Ruled by default:` line under `Risk:`
+# (.agents/skills/pr-iterate/SKILL.md).
+# Config (9d): scripts/risk.config.sh gains RISK_RULING_DEFAULTS='', shipped
+# empty; empty or absent, nothing changes.
+# Wiring (9b): none. Templates (9c): none. Adapter (9e): none.
+# Kit-only, never shipped: tests/ruling.test.sh and tests/risk.test.sh.
+
+shared-layer: 0.126.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
