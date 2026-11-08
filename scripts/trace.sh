@@ -10,6 +10,7 @@
 #   sh scripts/trace.sh end <run> [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
 #   sh scripts/trace.sh end --unregistered <run> reason=<text> [<field>=<value> …]
 #   sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
+#   sh scripts/trace.sh show --kind <kind> [--since YYYY-MM-DD]
 #   sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
 #   sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
 #   sh scripts/trace.sh verify [--since YYYY-MM-DD]
@@ -247,8 +248,8 @@ TRACE_EVENT_CAP=4000
 # on every kind but those TRACE_REQUIRED names (below, #832). The kind
 # list after it stays a literal line, because the skill suites read it as
 # one; the trace suite holds the two to the same kinds, row for row.
-TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed risk.judge=agreed|disagreed verify.verdict=pass|blocked|unavailable finding.verify=confirmed|disputed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
-TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome risk.judge verify.verdict finding.verify hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
+TRACE_OUTCOMES='session.start=fail session.end= session.usage=ok|fail agent.stop=ok|fail tool.use=ok|fail|denied run.start= run.end=ok|stopped spawn=dispatched|in-session|refused|passed|escalated|failed spawn.end=ok|fail|timeout|budget|unreachable prd.write=published ticket.write=stamped ticket.start=read|defaulted|disputed|resumed tdd.cycle=red|green|refactor review.verdict=pass|blocked|confirm finding.raise=raised finding.triage=accepted|rejected|escalated|answered finding.dismiss=dismissed pr.open=opened pr.iterate=green|red|stopped merge.land=landed|skipped|stopped merge.outcome=reverted|fixed|qa-failed lane.escape=revert|fix|notified risk.judge=agreed|disagreed verify.verdict=pass|blocked|unavailable finding.verify=confirmed|disputed hypothesis=proposed|confirmed|refuted|inconclusive spike.verdict=true|false|inconclusive brief.decide=presented|recorded housekeeping.finding=ticket|deepening|brief|deletion|none worktree.prune=removed|kept grill.decision=accepted|overridden feedback=hit|adjusted|missed|unasked note=*'
+TRACE_KINDS='session.start session.end session.usage agent.stop tool.use run.start run.end spawn spawn.end prd.write ticket.write ticket.start tdd.cycle review.verdict finding.raise finding.triage finding.dismiss pr.open pr.iterate merge.land merge.outcome lane.escape risk.judge verify.verdict finding.verify hypothesis spike.verdict brief.decide housekeeping.finding worktree.prune grill.decision feedback note'
 # THE SHAPES, beside the outcome words (the kit's ADR-0008 clause 1, as amended
 # 2026-10-01 for #420, 2026-10-02 for #466, 2026-10-07 for #567,
 # 2026-10-08 for #628 and 2026-10-09 for #663): a data key a reader joins
@@ -297,7 +298,7 @@ TRACE_SHAPES='finding.raise=id:[CHML]-[0-9]+|V-[CHML]-[0-9]+ finding.triage=id:[
 # value is no value. The VALUE stays the shape row's, the outcome table's, and for a raise's severity the
 # vocabulary checker's (trace_check_severity). `verify` advises on a line
 # already written without one (TRACE_AWK_REQUIRED reads this table).
-TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome verify.verdict=outcome finding.verify=outcome finding.verify=data.id finding.verify=data.where risk.judge=outcome'
+TRACE_REQUIRED='finding.raise=data.id finding.raise=data.severity review.verdict=outcome review.verdict=data.axis merge.outcome=outcome lane.escape=outcome verify.verdict=outcome finding.verify=outcome finding.verify=data.id finding.verify=data.where risk.judge=outcome'
 TRACE_STRING_FIELDS='skill subject related session run parent tier domain harness model outcome reason'
 TRACE_TOKEN_FIELDS='tok_in tok_out tok_cache_w tok_cache_r'
 
@@ -310,6 +311,7 @@ usage: sh scripts/trace.sh emit kind=<kind> [subject=<type:ref>] [<field>=<value
        sh scripts/trace.sh end <run> [outcome=<outcome>] [reason=<text>] [<field>=<value> …]
        sh scripts/trace.sh end --unregistered <run> reason=<text> [<field>=<value> …]
        sh scripts/trace.sh show <type:ref> [--since YYYY-MM-DD] [--kind <kind>]
+       sh scripts/trace.sh show --kind <kind> [--since YYYY-MM-DD]
        sh scripts/trace.sh summary [--by kind|skill|model|session|tier|domain] [--since YYYY-MM-DD]
        sh scripts/trace.sh export [--since YYYY-MM-DD] [--csv]
        sh scripts/trace.sh verify [--since YYYY-MM-DD]
@@ -1907,9 +1909,18 @@ trace_check_date() {
 
 trace_show() {
 	[ $# -ge 1 ] || usage
-	_sh_subject=$1
-	shift
-	trace_check_subject "$_sh_subject" || die "subject '$_sh_subject' is not $TRACE_SUBJECT_FORM — the one spelling emit writes, so the only one worth asking for"
+	# With no subject, a kind is the question: every event of that kind,
+	# whatever its subject — the lane's escapes are found across every PR
+	# (runtime/R92). A show naming neither is a usage error.
+	_sh_subject=
+	case $1 in
+	--*) ;;
+	*)
+		_sh_subject=$1
+		shift
+		trace_check_subject "$_sh_subject" || die "subject '$_sh_subject' is not $TRACE_SUBJECT_FORM — the one spelling emit writes, so the only one worth asking for"
+		;;
+	esac
 	# A run id never appears as a subject: `begin` writes it into the `run`
 	# field and every event inside the run carries it there, so a subject-only
 	# reader answered nothing for `run:<id>` — the one question a run id is for
@@ -1927,6 +1938,7 @@ trace_show() {
 		*) usage ;;
 		esac
 	done
+	[ -n "$_sh_subject$_sh_kind" ] || usage
 	trace_dir || { trace_unconfigured_note; return 0; }
 	trace_files "$_sh_since" | while IFS= read -r _sh_f; do
 		# An exact comparison over the ENVELOPE only: the data map is the last
@@ -1952,7 +1964,7 @@ trace_show() {
 			env = $0
 			d = index(env, ",\"data\":{")
 			if (d) env = substr(env, 1, d - 1)
-			hit = index(env, "\"subject\":\"" s "\"")
+			hit = s == "" || index(env, "\"subject\":\"" s "\"")
 			if (!hit && match(env, /"related":"[^"]*"/)) {
 				r = substr(env, RSTART + 11, RLENGTH - 12)
 				n = split(r, t, " ")
