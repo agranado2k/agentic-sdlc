@@ -264,5 +264,5 @@ when `sh scripts/agents.lib.sh reviewer` prints nothing, it lists
   and the required checks. That article is the authority for step 4c.
 - `docs/adr/INDEX.md` — if the merge method was a recorded decision, cite its
   number when you explain an ordering or a refusal.
-- `/pr-iterate` — drives a PR to green; never merges.
+- `/pr-iterate` — drives a PR to green; never merges itself, and its low-risk lane step lands one PR through the landing command, never through this train.
 - `/worktree-cleanup` — the final step of every train.

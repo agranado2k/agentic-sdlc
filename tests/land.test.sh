@@ -2409,4 +2409,98 @@ grep -q 'policy\.sh read scripts/lane\.kit\.config\.sh --base' "$KIT/scripts/lan
 	fail "runtime/R83: the landing script does not read scripts/lane.kit.config.sh through the policy reader at a base"
 
 
+# ---------------------------------------------------------------------------
+banner "25. /pr-iterate's lane step runs the landing command on a green, low-risk head (PRD-10 slice 2, #916)"
+# ---------------------------------------------------------------------------
+# The lane is reachable end to end only through /pr-iterate: its step 6 runs
+# the command the lane policy names, with --lane, once the iteration recorded
+# green and the risk rule printed `effective: low` at that head.
+PI="$KIT/.agents/skills/pr-iterate/SKILL.md"
+PL="$KIT/.agents/skills/pr-iterate/LANE.md"
+PIR="$KIT/.agents/skills/pr-iterate/RISK.md"
+[ -f "$PL" ] && pass "process/R80: /pr-iterate carries the lane step's branch file" || fail "process/R80: no .agents/skills/pr-iterate/LANE.md"
+pl_flat=$(tr '\n' ' ' <"$PL" 2>/dev/null | tr -s ' ')
+pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
+t_text_has "$pi_flat" 'A `green` iteration opens [`LANE.md`](LANE.md) before the run closes' "process/R80: step 6 opens the lane step after the green record, before the run ends"
+_pl_green=$(t_line_of "$PI" 'kind=pr.iterate subject=pr:#<N> outcome=green|red|stopped data.iteration=<i> data.applied')
+_pl_open=$(t_line_of "$PI" 'A `green` iteration opens [`LANE.md`](LANE.md)')
+[ -n "$_pl_green" ] && [ -n "$_pl_open" ] && [ "$_pl_open" -ge "$_pl_green" ] &&
+	pass "process/R80: the lane step comes after the iteration's record" || fail "process/R80: the lane step (line $_pl_open) precedes the iteration's record (line $_pl_green)"
+# R80: its three conditions, the invocation, and the three answers it reports.
+t_text_has "$pl_flat" 'this iteration recorded `pr.iterate outcome=green`' "process/R80: condition one, the iteration recorded green"
+t_text_has "$pl_flat" 'the risk rule exited 0 at this head and its first line is `effective: low`' "process/R80: condition two, effective low at that head"
+t_text_has "$pl_flat" 'the lane policy names a landing command' "process/R80: condition three, a landing command named"
+t_text_has "$pl_flat" 'lane_out=$($lane_cmd <N> --lane --ticket <T> 2>&1); lane_rc=$?' "process/R80: the command runs with --lane, the PR and its ticket, its status kept"
+for _pl_ans in '`lane: landed`' '`lane: held <token>`' 'Lane: refused, exit <lane_rc>'; do
+	t_text_has "$pl_flat" "$_pl_ans" "process/R80: the step reports what the command printed"
+done
+# R81: no command, nothing run, today's report.
+t_text_has "$pl_flat" 'An empty command — every consumer'"'"'s, as shipped — runs nothing, and the report is today'"'"'s' "process/R81: no landing command named runs none"
+# R82: the landing's report lists the decision-log ids, for after the fact.
+t_text_has "$pl_flat" 'Lane: Landed by the lane — decision log to read after the fact: <lane_ids, or none>' "process/R82: a lane landing's report lists the PR's decision-log ids"
+t_text_has "$pi_flat" 'Lane: <LANE.md'"'"'s line; omitted when the step ran nothing>' "process/R82: the report format carries the lane line"
+# R85: never the train, one landing per iteration.
+t_text_has "$pl_flat" 'The step never starts `/merge-train`, and runs one landing per iteration, for this PR alone' "process/R85: never the train, one landing per run"
+for _pl_f in "$PI" "$PL"; do
+	grep -qE 'gh pr merge|merge-train <|/merge-train [0-9<]' "$_pl_f" &&
+		fail "process/R85: $(basename "$_pl_f") merges or starts a train itself" || pass "process/R85: $(basename "$_pl_f") merges nothing and starts no train"
+done
+# Hard rule 2 gains the lane exception, citing its record.
+grep -n '^2\. \*\*NEVER\*\* merge the PR' "$PI" | grep -qF 'ADR-0047' && grep '^2\. \*\*NEVER\*\* merge the PR' "$PI" | grep -qF '[`LANE.md`](LANE.md)' &&
+	pass "process/R80: hard rule 2 names the lane exception and its decision record" || fail "process/R80: hard rule 2 carries no lane exception citing ADR-0047"
+
+# The step's own fence, run: the command read at the base, the decision-log ids.
+_pl_fence=$(t_fence "$PL" holds 'lane_command()')
+[ -n "$_pl_fence" ] && pass "LANE.md's fence defines lane_command and lane_dl_ids" || fail "LANE.md has no fence defining lane_command()"
+t_repo
+PLR=$REPO
+# The fence runs on the real git: this suite's stub git answers the landing's questions.
+PL_PATH=${PATH#"$STUBDIR:"}
+mkdir -p "$PLR/scripts"
+cp "$KIT/scripts/policy.sh" "$KIT/scripts/requirement.lib.sh" "$PLR/scripts/"
+# pl_cmd <LANE_LAND_COMMAND line, or nothing> [<policy path>] — the command the
+# fence reads from that policy committed on main, as /pr-iterate reads it.
+pl_cmd() {
+	t_write "$PLR" "${2:-scripts/lane.config.sh}" "LANE_OPERATOR=''
+$1
+"
+	t_commit "$PLR" "chore: lane policy" >/dev/null
+	(PATH=$PL_PATH && cd "$PLR" && eval "$_pl_fence" && lane_command main ${2:+"$2"})
+}
+[ "$(pl_cmd "LANE_LAND_COMMAND=''")" = '' ] && pass "process/R81: an empty landing command reads as none" || fail "process/R81: an empty command read as '$(pl_cmd "LANE_LAND_COMMAND=''")'"
+[ "$(pl_cmd '')" = '' ] && pass "process/R81: a policy with no landing-command key reads as none" || fail "process/R81: a missing key read as a command"
+[ "$(pl_cmd "LANE_LAND_COMMAND='sh scripts/land.kit.sh'")" = 'sh scripts/land.kit.sh' ] && pass "process/R80: a plain command reads back word for word" || fail "process/R80: a plain command read as '$(pl_cmd "LANE_LAND_COMMAND='sh scripts/land.kit.sh'")'"
+for _pl_bad in "LANE_LAND_COMMAND='sh land.sh; BAIT'" "LANE_LAND_COMMAND='sh \$(BAIT)'" "LANE_LAND_COMMAND='sh  land.sh'" "LANE_LAND_COMMAND='sh land.sh
+BAIT'"; do
+	[ "$(pl_cmd "$_pl_bad")" = '' ] && pass "process/R81: a command out of the plain-word shape reads as none" || fail "process/R81: '$_pl_bad' read as '$(pl_cmd "$_pl_bad")'"
+done
+[ "$(PATH=$PL_PATH && cd "$PLR" && eval "$_pl_fence" && lane_command no-such-base)" = '' ] && pass "process/R81: a policy the reader cannot read at the base reads as none" || fail "process/R81: an unreadable base read as a command"
+[ "$(pl_cmd "LANE_LAND_COMMAND='sh scripts/land.kit.sh'" scripts/lane.kit.config.sh)" = 'sh scripts/land.kit.sh' ] && pass "process/R80: the twin the root manual names is read in its place" || fail "process/R80: lane_command reads no named twin"
+_pl_body="intro
+<!-- decision-log -->
+| Decision | Surface | What was decided | Why |
+| --- | --- | --- | --- |
+| D-1 | a | kept | x |
+| ~~D-2~~ | ~~b~~ | ~~struck~~ | ~~y~~ |
+| D-3 | c | amended | z |
+
+\`\`\`text
+<!-- decision-log -->
+| D-9 | quoted | in a fence | no |
+\`\`\`
+<!-- explain-diff-appendix -->"
+_pl_ids=$(PATH=$PL_PATH && cd "$PLR" && eval "$_pl_fence" && printf '%s\n' "$_pl_body" | lane_dl_ids)
+[ "$_pl_ids" = 'D-1 D-3' ] && pass "process/R82: the ids read are every unstruck row's, a fenced log left out" || fail "process/R82: lane_dl_ids read '$_pl_ids'"
+_pl_none=$(PATH=$PL_PATH && cd "$PLR" && eval "$_pl_fence" && printf 'no log here\n' | lane_dl_ids)
+[ "$_pl_none" = '' ] && pass "process/R82: a body with no log reads no id" || fail "process/R82: a log-less body read '$_pl_none'"
+
+# The policy: shipped with no landing command, the kit's naming the landing script.
+_pl_shipped=$(sh -c 'unset LANE_LAND_COMMAND; . "$1" >/dev/null 2>&1 </dev/null; printf "%s" "${LANE_LAND_COMMAND-unset}"' _ "$KIT/scripts/lane.config.sh")
+[ -z "$_pl_shipped" ] && pass "process/R81: the shipped lane policy carries the key and names no landing command" || fail "process/R81: scripts/lane.config.sh's LANE_LAND_COMMAND is '$_pl_shipped'"
+_pl_kit=$(sh -c 'unset LANE_LAND_COMMAND; . "$1" >/dev/null 2>&1 </dev/null; printf "%s" "${LANE_LAND_COMMAND-unset}"' _ "$KIT/scripts/lane.kit.config.sh")
+[ "$_pl_kit" = 'sh scripts/land.kit.sh' ] && pass "process/R80: the kit's lane policy names the landing script" || fail "process/R80: scripts/lane.kit.config.sh's LANE_LAND_COMMAND is '$_pl_kit'"
+grep -q '^# LANE_LAND_COMMAND .*--lane' "$KIT/scripts/lane.kit.config.sh" && pass "process/R80: the kit's policy says /pr-iterate runs it with --lane" || fail "process/R80: the kit's policy never says the command runs with --lane"
+sed -n '/^10\. \*\*In THIS repo/,/^## /p' "$KIT/AGENTS.md" | grep -qF 'scripts/lane.kit.config.sh' &&
+	pass "process/R80: hard rule 10 sends /pr-iterate's lane step to the kit's twin" || fail "process/R80: hard rule 10 never names scripts/lane.kit.config.sh"
+
 t_done "land one PR by hand"

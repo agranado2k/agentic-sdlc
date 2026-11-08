@@ -426,7 +426,10 @@ const livingSpec = {
  * skill lowers its ceiling; raising one is this visible policy diff.
  * /pr-iterate's rose 500 bytes for the risk rule's step and report line
  * (PRD-09 slice 1, #905): it sat 3 bytes under 38000, and the step's whole
- * text already lives in its RISK.md.
+ * text already lives in its RISK.md. It rose 500 more for the lane step
+ * (PRD-10, T-53, #916): it sat 91 bytes under 38500, and the step's whole
+ * text lives in its LANE.md; what stays is hard rule 2's exception, step 6's
+ * pointer and the report's Lane line.
  * /to-tickets' rose 500 bytes for the risk stamp (PRD-09, T-48, #911): it
  * sat 60 bytes under 35000; the rubric lives in its RISK.md, and what stays
  * is rule 17's pointer, the quiz's check and line, and ticket.write's keys.
@@ -437,7 +440,7 @@ const livingSpec = {
 const skillCeilings = {
   ".agents/skills/review-pr/SKILL.md": 40500,
   ".agents/skills/to-tickets/SKILL.md": 35500,
-  ".agents/skills/pr-iterate/SKILL.md": 38500,
+  ".agents/skills/pr-iterate/SKILL.md": 39000,
   ".agents/skills/implement/SKILL.md": 27500,
 };
 

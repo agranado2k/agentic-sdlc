@@ -18,12 +18,12 @@ The goal is to get the PR to a state where:
 - Every actionable bot review comment has been either applied or replied to with reasoning.
 - Every human thread has a response.
 
-When that state is reached, you stop. You **never merge** — that is the operator's call (shared invariant §7), and branch protection still gates merging on green checks.
+When that state is reached, you stop. You **never merge** — that is the operator's call (shared invariant §7), save hard rule 2's lane, and branch protection still gates merging on green checks.
 
 ## Hard rules — do not break
 
 1. **NEVER** force-push, commit with hooks disabled, or modify branch protection.
-2. **NEVER** merge the PR. The platform UI plus branch protection is the merge gate.
+2. **NEVER** merge the PR. The platform UI plus branch protection is the merge gate. One exception, the low-risk lane (the kit's ADR-0047): step 6 runs the landing command the lane policy names — [`LANE.md`](LANE.md).
 3. **NEVER** apply a bot suggestion that contradicts a binding decision record without escalating to the operator first.
 4. **NEVER** act on an outward ⚠️ UNSPECIFIED item from the Axis-2 confirm-list (`/review-pr` §5b) — `scope: outward`, or no scope it can read. It is **human-only** (shared invariant §5): do not implement, "fix", log or reply it away, or resolve its thread. Surface it verbatim at the **top** of your report. A `scope: inside` item you decide and log — [`CHECK-TABLE.md`](CHECK-TABLE.md). (✅ SPECIFIED items need no action; ❌ MISSING items may be implemented — they're spec'd work. 🔀 MIXED COMMIT items are the operator's call between splitting and relabelling; do not rewrite pushed history on your own initiative.)
 5. **ALL** commits must be Conventional Commits: `feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert(scope): subject` (subject ≤100 chars). If the repo lints commit messages, that hook is the safety net — never bypass it.
@@ -358,7 +358,7 @@ Stop iterating and report when ANY of:
 
 **Two reds are interruptions, not a failing check, and the iteration's line names them.** The PR is `CONFLICTING` (step 1's `mergeable`): merge the base in and resolve it in one commit, or escalate a resolution that needs a design call, with `data.cause=conflict` either way. A check-run `in_progress` for more than 30 minutes while its job reports a `conclusion` (`gh api "repos/{owner}/{repo}/actions/jobs/<check-run id>" --jq .conclusion`) is stuck, not pending: re-run it once with `gh run rerun --job <check-run id>`, with `data.cause=pending-stuck`.
 
-Whichever way it ends, run the risk rule ([`RISK.md`](RISK.md)), then remove the scratch files — `rm -rf "${scratch:?}"`: the bodies do not outlive the iteration that fetched them. Then record the iteration before the report — every iteration records exactly one `pr.iterate`, however it ends, numbered without a gap — and close the run: `sh scripts/trace.sh emit kind=pr.iterate subject=pr:#<N> outcome=green|red|stopped data.iteration=<i> data.applied=<count> data.rejected=<count> data.escalated=<count> [data.cause=conflict|pending-stuck] reason='<the failing check by name, or the re-review, when red; converged when green; the escalation when stopped — a release-bound stop records its own line above instead>' || :` — the three counts each digits, and required unless the outcome is `stopped`: the script refuses a green or red iteration without them. Then close the run: `sh scripts/trace.sh end <the run id your begin printed> outcome=ok|stopped reason='<the Next line>' || :` (the id left out when your `begin` printed nothing, and never a `Trace-Run:` id: a run you did not begin is not yours to end). Run the `end` from the same checkout as its `begin`: the run stack is per toplevel, so an `end` run from another checkout closes a different run.
+Whichever way it ends, run the risk rule ([`RISK.md`](RISK.md)), then remove the scratch files — `rm -rf "${scratch:?}"`: the bodies do not outlive the iteration that fetched them. Then record the iteration before the report — every iteration records exactly one `pr.iterate`, however it ends, numbered without a gap — and close the run: `sh scripts/trace.sh emit kind=pr.iterate subject=pr:#<N> outcome=green|red|stopped data.iteration=<i> data.applied=<count> data.rejected=<count> data.escalated=<count> [data.cause=conflict|pending-stuck] reason='<the failing check by name, or the re-review, when red; converged when green; the escalation when stopped — a release-bound stop records its own line above instead>' || :` — the three counts each digits, and required unless the outcome is `stopped`: the script refuses a green or red iteration without them. Then close the run: `sh scripts/trace.sh end <the run id your begin printed> outcome=ok|stopped reason='<the Next line>' || :` (the id left out when your `begin` printed nothing, and never a `Trace-Run:` id: a run you did not begin is not yours to end). A `green` iteration opens [`LANE.md`](LANE.md) before the run closes. Run the `end` from the same checkout as its `begin`: the run stack is per toplevel, so an `end` run from another checkout closes a different run.
 
 ## Output format
 
@@ -367,6 +367,7 @@ End every iteration with a one-screen summary the operator can read at a glance.
 ```
 PR #<N> — "<title>" — iteration <i>
 Risk: <the effective line> (reported only)
+Lane: <LANE.md's line; omitted when the step ran nothing>
 
 ⚠️ For you (behavior confirm-list, human-only):
   <verbatim outward ⚠️ UNSPECIFIED / 🔀 MIXED COMMIT lines and the verifier's ⚠️ items, or "none">
@@ -385,7 +386,7 @@ This iteration:
   Replied:    <list of bot threads with one-line reasoning each>
   Escalated:  <items needing operator judgment>
 
-Next: <continue / stop — converged / stop — escalation / stop — release-bound: the check by name>
+Next: <continue / stop — converged / stop — escalation / stop — release-bound: the check by name / stop — landed by the lane>
 ```
 
 ## Cross-references
@@ -393,6 +394,6 @@ Next: <continue / stop — converged / stop — escalation / stop — release-bo
 - **`/implement`** — where the PR usually comes from. It pushes, opens the PR, and requests the **first** review, then stops; every iteration after that is this skill's. If you find yourself opening a PR here, or `/implement` re-entering a diff after its review, one of the two has crossed the seam.
 - **`/review-pr`** — the local two-axis review run at iteration step 2. Its §5b confirm-list is the source of the human-only items in hard rule 4.
 - **`/diagnose`** — when a failing check needs a real reproduction loop rather than a guess.
-- **`/merge-train`** — where merging was deliberately delegated to an operator-invoked skill. This one still never merges.
+- **`/merge-train`** — where merging was deliberately delegated to an operator-invoked skill. This one never starts it, its lane included.
 - `constitution/local-workflow.md` — this repo's merge method, required checks, and review automation.
 - `docs/adr/INDEX.md` — what is currently binding. When citing a record in a reply, always include its number so the reasoning is greppable later.
