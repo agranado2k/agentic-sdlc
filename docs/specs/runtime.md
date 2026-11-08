@@ -33,6 +33,10 @@ The verifier's dispatch and its broker joined as R206, R208 to R211 and
 R227, from PRD-13 slice 1 (#941, ADR-0044).
 R80, R81, R83, R88 to R91 and R102 joined from PRD-10 slice 2 (#914,
 ADR-0047), keeping the PRD's numbers: the landing script's lane mode.
+R82, R84 to R87 and R104 joined from PRD-10 slice 3 (#915), keeping the
+PRD's numbers: the lane's remaining holds. R82 leaves out `escape` until the
+slice that adds that hold restates it, as the PRD writes it; the slice
+restated R215 to name R104 as its one exception, as PRD-10 writes it.
 R103 joined from PRD-10 slice 4 (#919), keeping the PRD's number: the root
 guard keeps the trip marker from an agent.
 The earned record's verifier rows joined as R214 to R216, R223 and R228,
@@ -110,13 +114,19 @@ R68. The risk rule SHALL exit 0 whatever risk it prints, and SHALL write nothing
 R69. The risk rule SHALL print and record only risk tokens, review area names from the lens-slice policy, `none`, the switch words, digits and commit shas, and no text from a ticket body, a PR body or a commit message.
 R80. WHEN the landing script runs with `--lane`, it SHALL make every refusal it makes without `--lane`, with the same exit code and the same effect. [UC1 4, 4a]
 R81. IF `--lane` is given with `--no-iteration`, `--no-review`, `--unasked` or `--train`, THEN the landing script SHALL exit 2, merging and recording nothing. [UC1 4]
+R82. WHEN every refusal has passed in lane mode, the landing script SHALL check, in this order, `closed`, `drift`, `path`, `base-red`, `check-table`, `verifier`, `switch` and `risk`, and on the first that applies SHALL print `lane: held <token>`, merge nothing and exit 4. [UC1 5]
 R83. The lane SHALL read as closed, holding with `closed`, when the lane policy names no operator or cannot be read under the base-branch policy contract. [UC1 5a, UC4 6]
+R84. IF the landing script or the risk rule in the running checkout differs from its version on the base branch, THEN a lane run SHALL hold with `drift`. [UC1 5b]
+R85. IF the PR's diff from its merge base touches a file `VERSION`'s `files:` list names at either end, a policy file read under the base-branch policy contract, or a path the lane policy's hold patterns select, THEN a lane run SHALL hold with `path`. [UC2 1, 2, 1a]
+R86. IF the latest run of any workflow on the base branch's head did not succeed, THEN a lane run SHALL hold with `base-red`. [UC1 6a]
+R87. IF the check-table reader, given the PR body and the ticket body, exits anything but 0, or no ticket body is given, THEN a lane run SHALL hold with `check-table`. [UC1 5c]
 R88. A lane run SHALL run the risk rule at the PR's head commit with the PR and its ticket, SHALL read only its `effective:` and `switch:` lines, and SHALL hold with `switch` when it prints `switch: tripped` and with `risk` when it prints any effective risk but `low`. [UC1 5, 5d, UC4 4]
 R89. WHEN a lane run passes every check, the landing script SHALL merge the head commit the risk rule judged, and SHALL let the forge refuse a merge whose head has moved. [UC1 6, 5e]
 R90. WHEN the lane lands a PR, the landing script SHALL record `merge.land outcome=landed data.via=lane` with the count of decision-log ids in the PR body, and `feedback outcome=unasked data.by=lane`, and SHALL print `lane: landed`. [UC1 6]
 R91. WHEN a lane run holds a PR, the landing script SHALL record one `merge.land outcome=skipped data.via=lane` with the hold token and the head commit, and SHALL record nothing when the trace already holds one for the same PR, head and token. [UC1 6b]
 R102. The landing script's lane output, its lane events and its notices SHALL carry only closed tokens, review area names, PR and ticket numbers, commit shas, run ids and digits, and no text from a ticket body, a PR body, a commit message or a log.
 R103. The adapter's root guard SHALL refuse an agent's tool call that deletes, moves or overwrites the kill switch's trip marker. [UC4 5]
+R104. IF the latest `verify.verdict` on the PR, read as runtime/R214 reads it for `merge.land`, is not `pass`, THEN a lane run SHALL hold with `verifier`, print `lane: held verifier <reason>` with the reason `disputed` for a `blocked` verdict whose `data.disputed` is 1 or more, `blocked` for any other `blocked`, `unavailable` for `unavailable`, and `none` when there is no such verdict, and SHALL record the reason in the hold event's `data.reason`. [UC1 5f]
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
 R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]
@@ -128,7 +138,7 @@ R210. The broker's check for an earlier post SHALL read a verifier's markers and
 R211. WHEN the broker posts a verifier's report, it SHALL record one `verify.verdict` on `pr:#<N>` carrying `data.reviewed`, `data.provider` and `data.disputed`, with outcome `blocked` when the report holds a CRITICAL or HIGH finding or a disputed row and `pass` otherwise, and SHALL raise each finding as `finding.raise` with its `V-` id and `data.agent=verifier`. [UC1 4, 3a]
 R212. IF a verifier's report lacks one pin line for each `pass` row the check-table reader returns, or a pin line carries a word other than `upheld` or `disputed`, THEN the broker SHALL exit 65, posting nothing and recording nothing. [UC1 3b]
 R214. WHEN the landing script records `merge.land`, it SHALL carry `data.verified`: the outcome of the latest `verify.verdict` on the PR stamped at or after the head commit's committed date, or `none` when there is none. [UC3 1, 1b]
-R215. No `verify.verdict` outcome SHALL change whether the landing script refuses, waits or merges. [UC3 1]
+R215. No `verify.verdict` outcome SHALL change whether the landing script refuses, waits or merges, except the lane's `verifier` hold of runtime/R104. [UC3 1]
 R216. The record reader SHALL print, per review area, the verifier's findings held up, not held up and unlabelled, its precision, the mistakes it caught, and the count of landings whose `merge.land` carries `data.verified=blocked` while an Axis-1 `review.verdict` at the same head has outcome `pass`. [UC4 1, 2, 2a]
 R217. WHEN the dispatcher runs the verifier on a pull request's head, it SHALL also stage, as one data file, each finding the kit's own review raised on that PR at that head (any `data.agent` but `verifier`), with its id, severity, place and text, and SHALL stage an empty file when that review raised none. [UC1 2, 3d]
 R218. IF the kit's own Axis-1 `review.verdict` is not yet recorded at the head when the verifier is requested, THEN the dispatcher SHALL record one `verify.verdict outcome=unavailable` on the PR naming that reason, and nothing SHALL be posted. [UC1 0a]

@@ -103,10 +103,21 @@
 #   (runtime/R83); then the risk rule (scripts/risk.sh) at the PR's head with
 #   the PR and its ticket, of whose lines only `effective:` and `switch:` are
 #   read: `switch` when it prints `switch: tripped`, `risk` on any effective
-#   risk but `low` — a missing line too (runtime/R88). A hold prints
-#   `lane: held <token>`, merges nothing, exits 4 and records one merge.land
-#   `skipped` with data.via=lane, data.hold and data.head — none when the trace
-#   holds that PR, head and token already (runtime/R91). Past every check the
+#   risk but `low` — a missing line too (runtime/R88). Between `closed` and
+#   `switch`, in runtime/R82's order: `drift` when this checkout's landing
+#   script or risk rule differs from the base's (runtime/R84); `path` when the
+#   PR's diff touches a file VERSION's files: list names at either end, a
+#   judging file the policy reader names, or a path the lane policy's
+#   LANE_HOLD_PATTERNS select (runtime/R85); `base-red` when the latest run of
+#   any workflow on the base's head commit is not a success (runtime/R86);
+#   `check-table` when scripts/check-table.sh, given the PR's body and the
+#   ticket's, exits anything but 0, or there is no ticket body (runtime/R87);
+#   `verifier <reason>` when the latest verify.verdict at the head is not a
+#   pass — `disputed`, `blocked`, `unavailable` or `none` (runtime/R104). A
+#   hold prints `lane: held <token>`, merges nothing, exits 4 and records one
+#   merge.land `skipped` with data.via=lane, data.hold, data.head and the
+#   verifier's data.reason — none when the trace holds that PR, head and token
+#   already (runtime/R91). Past every check the
 #   merge pins the head the rule judged (`--match-head-commit`), so a head that
 #   moved is the forge's refusal, exit 1 as today (runtime/R89); merge.land
 #   carries data.via=lane and data.decisions, the decision-log ids in the PR
@@ -298,18 +309,19 @@ ITERATED=
 REVIEWED=
 REVIEWED_BLOCKED=
 VERIFIED=
-# at_head <kind> — print "<outcome> <axis>" for each <kind> event on pr:#<PR>
-# stamped at or after $HEAD_AT; exit 1 when there is none. The subject,
-# stamp and outcome are read from the envelope only — up to the data map, as
-# `show` prints it — so a data key never reads as one of them; the axis from
-# the data map.
+VERIFIED_DISPUTED=
+# at_head <kind> [<key>] — print "<outcome> <value>" for each <kind> event on
+# pr:#<PR> stamped at or after $HEAD_AT, the value its data map's <key> (axis
+# unless named); exit 1 when there is none. The subject, stamp and outcome are
+# read from the envelope only — up to the data map, as `show` prints it — so a
+# data key never reads as one of them; the value from the data map.
 at_head() {
 	trace_read show "pr:#$PR" --kind "$1" |
-		awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" '
+		awk -v s="\"subject\":\"pr:#$PR\"" -v h="$HEAD_AT" -v k="${2:-axis}" '
 			{ e = $0; m = ""; d = index(e, ",\"data\":{"); if (d) { m = substr(e, d); e = substr(e, 1, d - 1) } }
 			index(e, s) && match(e, /"ts":"[^"]*"/) && substr(e, RSTART + 6, RLENGTH - 7) >= h {
 				o = match(e, /"outcome":"[^"]*"/) ? substr(e, RSTART + 11, RLENGTH - 12) : "-"
-				a = match(m, /"axis":"[^"]*"/) ? substr(m, RSTART + 8, RLENGTH - 9) : "-"
+				a = match(m, "\"" k "\":\"[^\"]*\"") ? substr(m, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "-"
 				print o, a; f = 1
 			}
 			END { exit !f }'
@@ -336,7 +348,11 @@ else
 		! printf '%s\n' "$_verdicts" | grep -qx 'blocked 1' || REVIEWED_BLOCKED=yes
 		# What the verifier said at the head: the latest verify.verdict's
 		# outcome, read and recorded, never checked (runtime/R214, R215).
-		VERIFIED=$(at_head verify.verdict | awk '{ o = $1 } END { print o }')
+		# Its disputed pins ride along, for the lane's verifier hold alone
+		# (runtime/R104).
+		_vline=$(at_head verify.verdict disputed | tail -n 1)
+		VERIFIED=${_vline%% *}
+		VERIFIED_DISPUTED=${_vline#* }
 		case $VERIFIED in pass | blocked | unavailable) ;; *) VERIFIED=none ;; esac
 		;;
 	*) HEAD_AT='<undated>' ;;
@@ -467,15 +483,17 @@ fi
 # commit — never a line the policy, the risk rule or the forge wrote.
 DECISIONS=
 if [ -n "$LANE" ]; then
-	# hold <token> — print it, record it once per PR, head and token, exit 4.
+	# hold <token> [<reason>] — print it, record it once per PR, head and
+	# token, exit 4. A reason, the verifier's, follows the token on the line
+	# and rides the event as data.reason (runtime/R104).
 	hold() {
 		if ! trace_read show "pr:#$PR" --kind merge.land | grep -F "\"subject\":\"pr:#$PR\"" |
 			grep -F '"outcome":"skipped"' | grep -F '"via":"lane"' | grep -F "\"hold\":\"$1\"" |
 			grep -qF "\"head\":\"$HEAD_OID\""; then
 			trace quiet kind=merge.land "subject=pr:#$PR" ${TICKET:+"related=ticket:$TREF"} outcome=skipped \
-				data.via=lane "data.hold=$1" "data.head=$HEAD_OID"
+				data.via=lane "data.hold=$1" ${2:+"data.reason=$2"} "data.head=$HEAD_OID"
 		fi
-		printf 'lane: held %s\n' "$1"
+		printf 'lane: held %s\n' "$1${2:+ $2}"
 		exit 4
 	}
 	_lane_base="refs/remotes/origin/$BASE"
@@ -493,6 +511,67 @@ if [ -n "$LANE" ]; then
 	esac
 	# A forge login is 1 to 39 letters, digits and single inner hyphens.
 	[ "${#_lane_op}" -le 39 ] || hold closed
+	# drift: the landing script and the risk rule this run obeys are the
+	# base's, byte for byte, so no PR lands under the code it changes; a copy
+	# the base cannot give is drift too (runtime/R84).
+	for _lane_f in land.kit.sh risk.sh; do
+		_lane_b=$(git -C "$ROOT" show "$_lane_base:scripts/$_lane_f" 2>/dev/null) &&
+			[ "$_lane_b" = "$(cat "$ROOT/scripts/$_lane_f" 2>/dev/null)" ] || hold drift
+	done
+	# path: step 1c's diff, from the merge base to the head, touching a file
+	# the manifest names at either end, a judging file the policy reader
+	# names (its failing closed included), or a path one of the lane policy's
+	# hold patterns selects — whatever the risk (runtime/R85). A pattern is
+	# letters, digits, `.`, `_`, `/`, `-` and `*`, which crosses a `/`; one out
+	# of that shape holds every PR, and none is ever expanded as a filename.
+	[ -z "$_sl_hit" ] || hold path
+	(cd "$ROOT" && sh scripts/policy.sh touched "$_lane_base" "$HEAD_OID" </dev/null >/dev/null 2>&1) || hold path
+	_lane_pat=$(sh -c 'unset LANE_HOLD_PATTERNS; . "$1" >/dev/null 2>&1 </dev/null; command printf "%s\n" "${LANE_HOLD_PATTERNS-}"' _ "$_lane_copy" 2>/dev/null | tr '\n\t' '  ')
+	case $_lane_pat in *[!A-Za-z0-9._/*\ -]*) hold path ;; esac
+	set -f
+	for _lane_p in $_lane_pat; do
+		printf '%s\n' "$_sl_moved" | while IFS= read -r _lane_m; do
+			case $_lane_m in $_lane_p) exit 1 ;; esac
+		done || hold path
+	done
+	set +f
+	# base-red: the latest run of each workflow on the base branch's head
+	# commit, and every one of them a success — a run not yet finished, or a
+	# forge that cannot say, included (runtime/R86).
+	_lane_tip=$(git -C "$ROOT" rev-parse --verify --quiet "$_lane_base" 2>/dev/null) || hold base-red
+	case $_lane_tip in '' | *[!0-9a-f]*) hold base-red ;; esac
+	_lane_runs=$(gh run list --branch "$BASE" --commit "$_lane_tip" --limit 200 --json workflowName,status,conclusion,createdAt \
+		--jq 'group_by(.workflowName)[] | max_by(.createdAt) | if .status == "completed" then .conclusion else .status end' \
+		</dev/null 2>/dev/null) || hold base-red
+	! printf '%s\n' "$_lane_runs" | grep -v '^success$' | grep -q . || hold base-red
+	# check-table: the check-table reader on the PR's body and the ticket's —
+	# an issue's from the tracker, a factory ticket's its file at the base —
+	# exits 0, or the PR holds; no ticket, or an empty body, is no body
+	# (runtime/R87). Only the reader's exit is read.
+	_lane_ok=
+	_lane_tmp=$(mktemp -d "${TMPDIR:-/tmp}/land-lane.XXXXXX") || hold check-table
+	if [ -n "$TICKET" ] && gh pr view "$PR" --json body --jq '.body // ""' </dev/null >"$_lane_tmp/pr" 2>/dev/null; then
+		case $TICKET in
+		T-*) git -C "$ROOT" show "$_lane_base:.factory/items/$TICKET/ticket.md" >"$_lane_tmp/ticket" 2>/dev/null && _lane_ok=1 ;;
+		*) gh issue view "$TICKET" --json body --jq '.body // ""' </dev/null >"$_lane_tmp/ticket" 2>/dev/null && _lane_ok=1 ;;
+		esac
+		[ -z "$_lane_ok" ] || grep -q '[^[:space:]]' "$_lane_tmp/ticket" || _lane_ok=
+		[ -z "$_lane_ok" ] || sh "$ROOT/scripts/check-table.sh" "$_lane_tmp/pr" "$_lane_tmp/ticket" </dev/null >/dev/null 2>&1 || _lane_ok=
+	fi
+	rm -rf "$_lane_tmp"
+	[ -n "$_lane_ok" ] || hold check-table
+	# verifier: the latest verify.verdict at the head, as merge.land reads it
+	# above, is a pass — the one verifier outcome the landing script acts on
+	# (runtime/R104, R215). The hold names why: a blocked verdict with a
+	# disputed pin, any other blocked, unavailable, or none at all.
+	case $VERIFIED in
+	pass) ;;
+	blocked)
+		case $VERIFIED_DISPUTED in '' | 0 | *[!0-9]*) hold verifier blocked ;; *) hold verifier disputed ;; esac
+		;;
+	unavailable) hold verifier unavailable ;;
+	*) hold verifier none ;;
+	esac
 	# switch, risk: the risk rule at the head, with the PR and its ticket, read
 	# for two lines only (runtime/R88). Anything but `switch: on` and
 	# `effective: low` holds — a rule that printed neither included.

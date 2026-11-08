@@ -16,5 +16,10 @@
 #
 # LANE_OPERATOR  the lane's operator, a forge login: 1 to 39 letters, digits
 #                and single inner hyphens. Any other value reads as none.
+# LANE_HOLD_PATTERNS  paths no lane run lands, whatever their risk (PRD-10's
+#                `path` hold): the landing script, the risk rule, the hooks,
+#                the Claude Code adapter and its wiring, and the CI workflows.
+#                A `*` crosses a `/`; scripts/lane.config.sh says the shape.
 
 LANE_OPERATOR=''
+LANE_HOLD_PATTERNS='scripts/land.kit.sh scripts/risk.sh scripts/risk.kit.sh .githooks/* adapters/claude-code/* .claude/settings.json .github/workflows/*'

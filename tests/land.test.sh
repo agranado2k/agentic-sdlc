@@ -69,7 +69,8 @@ case " $* " in
 	# The PR body is a file the case wrote — free text, quotes and all, so it
 	# never passes through the knob file's quoting.
 	[ "${STUB_BODY_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_BODY_RC"; }
-	[ -z "${STUB_BODY_FILE:-}" ] || cat "$STUB_BODY_FILE"
+	_bf=${STUB_BODY_FILE:-${STUB_DEFAULT_BODY:-}}
+	[ -z "$_bf" ] || cat "$_bf"
 	;;
 *" pr view "*)
 	[ "${STUB_VIEW_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_VIEW_RC"; }
@@ -80,6 +81,24 @@ case " $* " in
 	;;
 *" pr checks "*) exit "${STUB_CHECKS_RC:-0}" ;;
 *" pr merge "*) exit "${STUB_MERGE_RC:-0}" ;;
+*" issue view "*)
+	# The ticket's body, for the lane's check-table hold (runtime/R87): a
+	# file the case wrote, or the section's default, or nothing.
+	[ "${STUB_ISSUE_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_ISSUE_RC"; }
+	_if=${STUB_ISSUE_FILE-${STUB_DEFAULT_ISSUE:-}}
+	[ -z "$_if" ] || cat "$_if"
+	;;
+*" run list "*"workflowName"*)
+	# The base branch's head's runs, for the lane's base-red hold
+	# (runtime/R86): under STUB_RUNS_JSON the script's own --jq program runs
+	# over a canned answer; else one word per workflow, STUB_BASE_RUNS.
+	[ "${STUB_BASE_RUNS_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_BASE_RUNS_RC"; }
+	if [ -n "${STUB_RUNS_JSON:-}" ]; then
+		STUB_PR_JSON=$STUB_RUNS_JSON
+		jq_answer "$@"
+	fi
+	printf '%s\n' ${STUB_BASE_RUNS-success success}
+	;;
 *" run list "*)
 	# A run the forge registers late shows from the second listing on.
 	printf '%s\n' ${STUB_RUNS-901}
@@ -142,6 +161,9 @@ _c=
 [ "${1:-}" = -C ] && { _c=$2; shift 2; }
 case ${1:-} in
 fetch | show | ls-remote | tag | push | cat-file | ls-tree) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;;
+# The base branch's head the lane's base-red hold asks for, only once
+# section 24 names the base's tree; every other rev-parse is the real git's.
+rev-parse) case "$*:${STUB_BASE_TREE:-}" in *refs/remotes/origin/main*:?*) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;; *) exec "$REAL_GIT" ${_c:+-C "$_c"} "$@" ;; esac ;;
 # The PR's own diff (#728): its merge base and the paths it moves are the
 # stub's; the root checkout's `diff --quiet` and `merge-base --is-ancestor`
 # still reach the real git.
@@ -177,9 +199,27 @@ show)
 	*'^1:VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_BEFORE:-0.1.0}" ;;
 	*':VERSION') printf '# a note\nshared-layer: %s\n' "${STUB_VER_AFTER:-0.1.0}" ;;
 	*':.github/workflows/'?*) cat "${STUB_WORKFLOWS:-/nonexistent}/${2##*/}" 2>/dev/null || exit 128 ;;
+	# The lane's reads at the base (runtime/R84, R87), only once section 24
+	# names the base's tree: the landing script and the risk rule as the
+	# running copy has them unless STUB_DRIFT names one (`gone`: unreadable),
+	# and a factory ticket's file.
+	"refs/remotes/origin/main:scripts/"*)
+		[ -n "${STUB_BASE_TREE:-}" ] || exit 128
+		_bf=${2#*:scripts/}
+		case ${STUB_DRIFT:-} in
+		"$_bf") echo '# drifted' ;;
+		gone) exit 128 ;;
+		*) cat "$STUB_BASE_TREE/scripts/$_bf" 2>/dev/null || exit 128 ;;
+		esac
+		;;
+	"refs/remotes/origin/main:.factory/items/"*/ticket.md)
+		[ -n "${STUB_FACTORY_TICKET:-}" ] || exit 128
+		cat "$STUB_FACTORY_TICKET"
+		;;
 	*) exit 128 ;;
 	esac
 	;;
+rev-parse) printf '%s\n' "${STUB_BASE_OID:-b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0}" ;;
 ls-remote)
 	# An annotated tag lists its tag object, then the commit it peels to; a
 	# lightweight one lists the commit alone.
@@ -1929,10 +1969,11 @@ banner "22. merge.land records what the verifier said at the head, and nothing w
 # The landing records data.verified — the latest verify.verdict on the PR
 # stamped at or after the head commit's date, or none — and no outcome of it
 # changes whether the script refuses, waits or merges (runtime/R215).
-# vverdict <PR> <outcome> — a verifier's verdict, now, in the broker's shape.
+# vverdict <PR> <outcome> [<disputed>] — a verifier's verdict, now, in the
+# broker's shape, with <disputed> disputed pins (0 unless given).
 vverdict() {
 	_vv_data=
-	[ "$2" = unavailable ] || _vv_data="data.reviewed=$STUB_SHA data.provider=anthropic data.rung=cross-provider data.disputed=0"
+	[ "$2" = unavailable ] || _vv_data="data.reviewed=$STUB_SHA data.provider=anthropic data.rung=cross-provider data.disputed=${3:-0}"
 	# shellcheck disable=SC2086 # the verdict's keys split into words on purpose
 	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=verify.verdict \
 		"subject=pr:#$1" "outcome=$2" data.via=broker $_vv_data reason=seeded </dev/null >/dev/null 2>&1 ||
@@ -2012,9 +2053,11 @@ mkdir -p "$LANEKIT/scripts"
 cp "$KIT"/scripts/*.sh "$LANEKIT/scripts/"
 LANE_FIX="$SCRATCH/lane-policies"
 mkdir -p "$LANE_FIX"
-printf "LANE_OPERATOR='octocat'\n" >"$LANE_FIX/open"
+printf "LANE_OPERATOR='octocat'\nLANE_HOLD_PATTERNS='scripts/land.kit.sh .githooks/* adapters/claude-code/*'\n" >"$LANE_FIX/open"
 printf "LANE_OPERATOR=''\n" >"$LANE_FIX/none"
 printf "LANE_OPERATOR='octo cat; BAIT-POLICY'\n" >"$LANE_FIX/bad"
+printf "LANE_OPERATOR='octocat'\nLANE_HOLD_PATTERNS='docs/*.md;BAIT-POLICY'\n" >"$LANE_FIX/badpat"
+printf "LANE_OPERATOR='octocat'\n" >"$LANE_FIX/nopat"
 export LANE_FIX
 # The policy reader: STUB_LANE names the base's lane policy — open, none,
 # bad — or `fail`, the reader failing closed (exit 3, its one line).
@@ -2022,6 +2065,8 @@ cat >"$LANEKIT/scripts/policy.sh" <<'EOF'
 #!/bin/sh
 printf 'ARGV: policy %s\n' "$*" >>"$STUB_LOG"
 [ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
+# `touched` answers STUB_TOUCHED: 1 a judging file in the diff, 3 failed closed.
+[ "$1" != touched ] || { [ "${STUB_TOUCHED:-0}" = 0 ] || echo scripts/BAIT.config.sh; exit "${STUB_TOUCHED:-0}"; }
 [ "${STUB_LANE:-open}" != fail ] || { echo "fail-closed missing $2"; exit 3; }
 printf '%s\n' "$LANE_FIX/${STUB_LANE:-open}"
 EOF
@@ -2038,11 +2083,26 @@ EOF
 _land_kit=$LAND
 LAND="$LANEKIT/scripts/land.kit.sh"
 LANE_HEAD=1234567890123456789012345678901234567890
+# The base branch's tree as the lane reads it (runtime/R84): the running copy
+# itself, so no drift unless a case says so. The ticket's body and the PR's
+# carry one covered requirement and its one passing row, so the check table
+# passes unless a case gives other bodies (runtime/R87).
+STUB_BASE_TREE=$LANEKIT
+LANE_TICKET="$SCRATCH/lane-ticket.md"
+printf '%s\n' 'BAIT-TICKET: Covers: none' 'Covers: runtime/R1' 'Test-tier: runtime/R1 suite' >"$LANE_TICKET"
+# lane_table <requirement> <tier> <result> <evidence> — one check-table row.
+lane_table() {
+	printf '<!-- check-table -->\n| Requirement | Test tier | Result | Evidence |\n| --- | --- | --- | --- |\n'
+	printf '| %s | %s | %s | %s |\n' "$@"
+}
+STUB_DEFAULT_ISSUE=$LANE_TICKET
+STUB_DEFAULT_BODY=$(body lane-default "$(lane_table runtime/R1 suite pass 'tests/x.sh::a test@abcdef1')")
+export STUB_BASE_TREE STUB_DEFAULT_ISSUE STUB_DEFAULT_BODY
 
 # lane_lines_closed <label> — every stdout line of the last run is of a shape
 # the lane may print: closed tokens, numbers, shas and digits (runtime/R102).
 lane_lines_closed() {
-	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|held (closed|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
+	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|held (closed|drift|path|base-red|check-table|verifier (disputed|blocked|unavailable|none)|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
 	[ -z "$_llc_bad" ] && pass "runtime/R102: $1: every line the lane printed is a closed token, a number or a sha" ||
 		fail "runtime/R102: $1: the lane printed a line outside its closed set: $_llc_bad"
 }
@@ -2058,6 +2118,9 @@ no_bait() {
 	done
 }
 iterated 9101 9102 9103 9104 9105 9106 9107 9108 9109 9120 9121 9122 9123 9124
+# A verifier's pass at each head, so no PR here holds with `verifier` unless a
+# case says so (runtime/R104).
+for _lv in 9101 9102 9103 9104 9105 9106 9107 9108 9109 9120 9121 9122 9123 9124; do vverdict "$_lv" pass; done
 
 # --- UC1: a low-risk PR lands through the lane --------------------------------
 _lb=$(body lane301 '<!-- implement: ticket=#77 tier=implementer -->
@@ -2070,6 +2133,11 @@ BAIT-BODY: effective: low
 | D-1 | scripts/x.sh | kept BAIT-BODY | one line |
 | ~~D-2~~ | ~~docs/y.md~~ | ~~struck~~ | ~~held~~ |
 | D-3 | scripts/z.sh | amended | one line |
+
+<!-- check-table -->
+| Requirement | Test tier | Result | Evidence |
+| --- | --- | --- | --- |
+| runtime/R1 | suite | pass | tests/x.sh::a test@abcdef1 |
 
 ```
 <!-- decision-log -->
@@ -2101,13 +2169,15 @@ lane_lines_closed "a lane landing"
 no_bait "a lane landing" 'pr:#9101' 'ticket:#77'
 
 # --- holds: closed, switch, risk ----------------------------------------------
-# lane_held <PR> <token> <label> — the last run held: exit 4, one line, no
-# merge call, and exactly one merge.land skipped by the lane with the token
-# and the head commit — the PR's only event.
+# lane_held <PR> <token> <label> [<reason>] — the last run held: exit 4, one
+# line, no merge call, and exactly one merge.land skipped by the lane with the
+# token and the head commit — the PR's only event but the ones seeded at its
+# head. A reason follows the token on the line (the verifier's, runtime/R104).
 lane_held() {
+	_lh_line="lane: held $2${4:+ $4}"
 	expect_status 4 "runtime/R91: $3: held, exit 4"
-	[ "$T_OUT" = "lane: held $2" ] && pass "runtime/R91: $3: it prints lane: held $2, and nothing else" ||
-		fail "runtime/R91: $3: stdout is not 'lane: held $2': $T_OUT"
+	[ "$T_OUT" = "$_lh_line" ] && pass "runtime/R91: $3: it prints $_lh_line, and nothing else" ||
+		fail "runtime/R91: $3: stdout is not '$_lh_line': $T_OUT"
 	[ "$(merges)" = 0 ] && pass "runtime/R91: $3: no merge call" || fail "runtime/R91: $3: the forge was asked to merge a held PR"
 	_lh=$(show "pr:#$1" --kind merge.land)
 	[ "$(printf '%s\n' "$_lh" | grep -c .)" = 1 ] && printf '%s\n' "$_lh" | grep -qF '"outcome":"skipped"' &&
@@ -2115,7 +2185,8 @@ lane_held() {
 		printf '%s\n' "$_lh" | grep -qF "\"head\":\"$LANE_HEAD\"" &&
 		pass "runtime/R91: $3: one merge.land outcome=skipped data.via=lane, with the token and the head commit" ||
 		fail "runtime/R91: $3: the hold's merge.land is not the one expected: $_lh"
-	[ "$(events "$1" feedback)" = 0 ] && [ "$(show "pr:#$1" | grep -c '"kind"' | tr -d ' ')" = 3 ] &&
+	[ "$(events "$1" feedback)" = 0 ] &&
+		[ "$(show "pr:#$1" | grep -vE '"kind":"(pr\.iterate|review\.verdict|verify\.verdict)"' | grep -c '"kind"' | tr -d ' ')" = 1 ] &&
 		pass "runtime/R91: $3: the hold is the run's one event" ||
 		fail "runtime/R91: $3: a held run recorded more than its hold: $(show "pr:#$1")"
 	lane_lines_closed "$3"
@@ -2137,6 +2208,128 @@ land STUB_EFFECTIVE='high unclear' STUB_SWITCH=bogus 9108 --lane
 lane_held 9108 risk "runtime/R88: a switch line neither on nor tripped, with a high risk"
 land STUB_EFFECTIVE= 9109 --lane
 lane_held 9109 risk "runtime/R88: a risk rule that printed no effective risk"
+
+# --- holds: drift, path, base-red, check-table, verifier (PRD-10 slice 3, #915) ---
+# Between `closed` and `switch`, in runtime/R82's order, each the same shape:
+# `lane: held <token>`, exit 4, one merge.land skipped by the lane.
+iterated 9130 9131 9132 9133 9134 9135 9136 9137 9138 9139 9140 9141 9142 9143 9144 9145 9146 9147 9148 9149 9150 9151 9152 9153 9154 9155 9156 9157 9158 9159 9160
+for _lv in 9130 9131 9132 9133 9134 9135 9136 9137 9138 9139 9140 9141 9142 9143 9144 9145 9146 9147 9148 9149 9150 9151 9152 9153 9154 9155 9156 9157 9158 9160; do vverdict "$_lv" pass; done
+
+# drift: the running copy's landing script or risk rule is not the base's.
+land STUB_DRIFT=land.kit.sh 9130 --lane
+lane_held 9130 drift "runtime/R84: a landing script that differs from the base branch's"
+grep -qx 'ARGV: git show refs/remotes/origin/main:scripts/land.kit.sh' "$STUB_LOG" &&
+	pass "runtime/R84: the lane reads the base's landing script at origin's base" ||
+	fail "runtime/R84: the base's landing script was not read: $(grep 'git show' "$STUB_LOG")"
+grep -q '^ARGV: risk' "$STUB_LOG" && fail "runtime/R82: a drift hold still ran the risk rule" ||
+	pass "runtime/R82: a drift hold comes before the risk rule"
+land STUB_DRIFT=risk.sh 9131 --lane
+lane_held 9131 drift "runtime/R84: a risk rule that differs from the base branch's"
+land STUB_DRIFT=gone 9132 --lane
+lane_held 9132 drift "runtime/R84: a base branch whose copy cannot be read"
+
+# path: the manifest at either end, a judging policy file, a hold pattern.
+land STUB_PR_FILES=UPDATING.md STUB_PR_VER_HEAD=0.2.0 9133 --lane
+lane_held 9133 path "runtime/R85: a diff touching a file VERSION's files: list names (a bumped release)"
+land STUB_PR_FILES=docs/gone.md STUB_MANIFEST_BASE_EXTRA=docs/gone.md STUB_PR_VER_HEAD=0.2.0 9134 --lane
+lane_held 9134 path "runtime/R85: a file the manifest names only at the merge base"
+land STUB_TOUCHED=1 STUB_PR_FILES=scripts/x.config.sh 9135 --lane
+lane_held 9135 path "runtime/R85: a diff touching a policy file read under the base-branch policy contract"
+grep -qx "ARGV: policy touched refs/remotes/origin/main $LANE_HEAD" "$STUB_LOG" &&
+	pass "runtime/R85: the judging files are asked of the policy reader, from the base to the head" ||
+	fail "runtime/R85: the policy reader was not asked which judging files moved: $(grep 'ARGV: policy' "$STUB_LOG")"
+land STUB_TOUCHED=3 9136 --lane
+lane_held 9136 path "runtime/R85: a policy reader that fails closed on the diff"
+land STUB_PR_FILES=.githooks/pre-push 9137 --lane
+lane_held 9137 path "runtime/R85: a diff touching a path the lane policy's hold patterns select"
+land STUB_PR_FILES='docs/a.md adapters/claude-code/hooks/root-guard.sh' 9138 --lane
+lane_held 9138 path "runtime/R85: a hold pattern whose * crosses a directory"
+land STUB_LANE=badpat STUB_PR_FILES=docs/a.md 9139 --lane
+lane_held 9139 path "runtime/R85: a hold pattern out of shape holds every PR"
+# A pattern is never a filename glob: a * the shell expanded against the
+# working directory would read as no pattern at all.
+_lp_here=$(pwd)
+mkdir -p "$SCRATCH/globdir/adapters/claude-code" && : >"$SCRATCH/globdir/adapters/claude-code/x"
+cd "$SCRATCH/globdir" && land STUB_PR_FILES=adapters/claude-code/hooks/root-guard.sh 9140 --lane
+cd "$_lp_here"
+lane_held 9140 path "runtime/R85: a hold pattern matched as a pattern, run from a directory it would glob"
+
+# base-red: the latest run of any workflow on the base's head.
+land STUB_BASE_RUNS='success failure' 9141 --lane
+lane_held 9141 base-red "runtime/R86: a base branch whose latest workflow run failed"
+grep -q "^ARGV: run list .*--commit b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0" "$STUB_LOG" &&
+	pass "runtime/R86: the runs asked for are the base branch's head's" ||
+	fail "runtime/R86: the run listing did not name the base's head: $(grep 'run list' "$STUB_LOG")"
+land STUB_BASE_RUNS_RC=1 9142 --lane
+lane_held 9142 base-red "runtime/R86: a forge that cannot list the base's runs"
+_rj="$SCRATCH/lane-runs.json"
+printf '%s\n' '[{"workflowName":"CI","status":"completed","conclusion":"failure","createdAt":"2026-01-01T00:00:00Z"},' \
+	'{"workflowName":"CI","status":"completed","conclusion":"success","createdAt":"2026-01-02T00:00:00Z"},' \
+	'{"workflowName":"Guards","status":"in_progress","conclusion":"","createdAt":"2026-01-02T00:00:00Z"}]' >"$_rj"
+land STUB_RUNS_JSON="$_rj" 9143 --lane
+lane_held 9143 base-red "runtime/R86: a workflow whose latest run has not finished"
+printf '%s\n' '[{"workflowName":"CI","status":"completed","conclusion":"failure","createdAt":"2026-01-01T00:00:00Z"},' \
+	'{"workflowName":"CI","status":"completed","conclusion":"success","createdAt":"2026-01-02T00:00:00Z"},' \
+	'{"workflowName":"Guards","status":"completed","conclusion":"success","createdAt":"2026-01-01T00:00:00Z"}]' >"$_rj"
+land STUB_RUNS_JSON="$_rj" 9144 --lane
+expect_status 0 "runtime/R86: a workflow re-run green on the base's head: its latest run is what counts, and it lands"
+
+# check-table: the reader, given the PR's body and the ticket's.
+land STUB_BODY_FILE="$(body lane-skip "$(lane_table runtime/R1 suite skipped -)")" 9145 --lane
+lane_held 9145 check-table "runtime/R87: a check table with a skipped row"
+_lt2="$SCRATCH/lane-ticket2.md"
+printf '%s\n' 'Covers: runtime/R1, runtime/R2' 'Test-tier: runtime/R1 suite' 'Test-tier: runtime/R2 suite' >"$_lt2"
+land STUB_ISSUE_FILE="$_lt2" 9146 --lane
+lane_held 9146 check-table "runtime/R87: a check table missing a covered requirement's row"
+land STUB_TICKET= 9147 --lane
+lane_held 9147 check-table "runtime/R87: no ticket, so no ticket body"
+land STUB_ISSUE_RC=1 9148 --lane
+lane_held 9148 check-table "runtime/R87: a ticket body the forge cannot give"
+land STUB_ISSUE_FILE= 9149 --lane
+lane_held 9149 check-table "runtime/R87: an empty ticket body"
+land STUB_TICKET= STUB_FACTORY_TICKET="$LANE_TICKET" 9150 --lane --ticket T-07
+expect_status 0 "runtime/R87: a factory ticket's body, read at the base, passes the table and lands"
+grep -qx 'ARGV: git show refs/remotes/origin/main:.factory/items/T-07/ticket.md' "$STUB_LOG" &&
+	pass "runtime/R87: a factory ticket's body is its file at origin's base" ||
+	fail "runtime/R87: the factory ticket's file was not read at the base: $(grep 'git show' "$STUB_LOG")"
+
+# verifier: the latest verify.verdict at the head, its reason named.
+vverdict 9151 blocked 1
+land 9151 --lane
+lane_held 9151 verifier "runtime/R104: a blocked verdict with a disputed check-table row" disputed
+vverdict 9152 blocked
+land 9152 --lane
+lane_held 9152 verifier "runtime/R104: a blocked verdict with no disputed row" blocked
+vverdict 9153 unavailable
+land 9153 --lane
+lane_held 9153 verifier "runtime/R104: no verifier could be reached" unavailable
+land 9159 --lane
+lane_held 9159 verifier "runtime/R104: no verdict at all" none
+for _vr in 9151:disputed 9152:blocked 9153:unavailable 9159:none; do
+	show "pr:#${_vr%%:*}" --kind merge.land | grep -qF "\"reason\":\"${_vr#*:}\"" &&
+		pass "runtime/R104: the ${_vr#*:} hold records its reason in data.reason" ||
+		fail "runtime/R104: the ${_vr#*:} hold's event lacks data.reason: $(show "pr:#${_vr%%:*}" --kind merge.land)"
+done
+grep -q '^ARGV: risk' "$STUB_LOG" && fail "runtime/R82: a verifier hold still ran the risk rule" ||
+	pass "runtime/R82: the verifier hold comes before the risk rule"
+
+# The order: the earlier token wins where two apply.
+land STUB_LANE=none STUB_DRIFT=land.kit.sh 9154 --lane
+lane_held 9154 closed "runtime/R82: closed before drift"
+land STUB_DRIFT=risk.sh STUB_PR_FILES=.githooks/pre-push 9155 --lane
+lane_held 9155 drift "runtime/R82: drift before path"
+land STUB_PR_FILES=.githooks/pre-push STUB_BASE_RUNS=failure 9156 --lane
+lane_held 9156 path "runtime/R82: path before base-red"
+land STUB_BASE_RUNS=failure STUB_ISSUE_FILE= 9157 --lane
+lane_held 9157 base-red "runtime/R82: base-red before check-table"
+land STUB_ISSUE_FILE= STUB_SWITCH=tripped STUB_EFFECTIVE='high unlearned' 9158 --lane
+lane_held 9158 check-table "runtime/R82: check-table before switch"
+
+# None applies: a PR touching nothing held, on a green base, with a passing
+# table, a pass at the head and a low risk, lands (UC1).
+land STUB_PR_FILES='docs/a.md scripts/feature.sh' STUB_LANE=nopat 9160 --lane
+expect_status 0 "runtime/R82: a PR no hold applies to still lands through the lane"
+lane_lines_closed "a lane landing past every hold"
 
 # --- a second hold at the same head writes nothing ------------------------------
 land STUB_SWITCH=tripped 9104 --lane
