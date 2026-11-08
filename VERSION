@@ -4164,6 +4164,9 @@
 # (.agents/skills/review-pr/SKILL.md); and the dispatched reviewer's
 # contract, which ships beside the skills and writes the surface on the
 # item's own line (.agents/prompts/review-worker.md).
+# And /retro reads the low-risk lane — question 6 prints `lane: landed <n>,
+# held <n> (<token> <n>, …), escapes <n> (<outcome> <n>, …)`, and question 7
+# counts `feedback` by `lane` apart from the operator's and the train's (#921).
 # Wiring (9b): none. Templates (9c): none.
 # Config (9d): scripts/vocab.config.sh (yours) — VOCAB_FIELDS gains
 # `surface`, with VOCAB_SURFACE='output-format flag exit-code agent-rule

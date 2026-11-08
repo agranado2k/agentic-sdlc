@@ -250,7 +250,10 @@ writes `surface: <token>` right after `scope: outward`, every reader reads a
 missing or unknown surface as `other`, and §5b's Axis-2 verdict records
 `data.outward_items` — and `.agents/prompts/review-worker.md`, the
 dispatched reviewer's contract, which writes the surface on the item's own
-line. No wiring, template or adapter moves.
+line — and `/retro`'s `SKILL.md` and `QUESTIONS.md`: question 6 prints the
+low-risk lane's landings, holds and escapes, and question 7 counts
+`feedback` by `lane` apart from the operator's and the train's. No wiring,
+template or adapter moves.
 
 **Arriving from 0.121.0 or older, the vocabulary gains `edits` and `runs`
 — add them to your policy.** No file joins or leaves at 0.122.0;
@@ -2251,10 +2254,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 3967 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 3970 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 4121 insertions(+), 1 deletion(-)
+ 3 files changed, 4124 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
