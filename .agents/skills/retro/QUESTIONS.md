@@ -614,19 +614,23 @@ all is question 6's — a missing `pr.iterate` emit, never a fast review.
 Route: `/to-tickets` — a sizing finding for the next decomposition, or, for
 a wait on the human gate, the landing cadence in `/merge-train`.
 
-## Before and after — a lens or skill edit, by its `Targets:` query
+## Before and after — each loop ticket, judged against noise
 
 *Not a ninth question either: a section of its own after the flow section,
 checking each learning-loop edit against the measure it named when it was
-proposed. Reads: `merge.land` (`outcome=landed`, its `ts`, the ticket in its
-`related`), `run.start` (`data.kit`), `spawn` (`tier`, `model`), `run.end`
-(`outcome=stopped`), and whatever kind each ticket's query names.*
+proposed, and printing the wave's two summed measures beside it. Reads:
+`merge.land` (`outcome=landed`, its `ts`, the ticket in its `related`,
+`data.via`), `run.start` (`data.kit`, `skill`, `subject`, `parent`),
+`spawn` (`tier`, `model`), `run.end`, `note` (`outcome=closed`,
+`data.question`), each event's priced cost, and whatever kind each ticket's
+query names.*
 
-A ticket that edits a review lens or a skill may carry a **`Targets:`** stamp
-line — a trace filter, `kind=<kind>` and up to seven more `<field>=<value>`
-or `data.<key>=<value>` terms, every one of which an event must match — for
-the security lens's high findings, the kind `finding.raise` with
-`data.agent=security data.severity=high`. It is
+A **loop ticket** is any landed ticket whose stamp carries a **`Targets:`**
+line, whatever wrote it — a retro candidate, a planner's ticket, an
+efficiency proposal. The line is a trace filter, `kind=<kind>` and up to
+seven more `<field>=<value>` or `data.<key>=<value>` terms, every one of
+which an event must match — for the security lens's high findings, the kind
+`finding.raise` with `data.agent=security data.severity=high`. It is
 fixed when the edit is proposed, so whoever proposes it cannot move the bar
 it is judged by. It is a stamp line, so it is read the way `/implement` reads
 a tier: through `scripts/stamp.sh`, which prints it only once
@@ -636,8 +640,17 @@ untrusted, and is never read by eye into a command.
 The window length is this pass's own, `W`: from the window's start to the
 trace's last event. A ticket landed at `T` is judged over `[T − W, T)` before
 against an **equal window** `(T, T + W]` after — so it is judged by the first
-retro whose window reaches `T + W`, and until then reads `pending`. Three
-steps:
+retro whose window reaches `T + W`, and until then reads `pending`. Each
+side is split into three equal consecutive repeats, a **repeat** being one
+third of a side: `[T − W, T − 2W/3)`,
+`[T − 2W/3, T − W/3)` and `[T − W/3, T)` before, `(T, T + W/3]`,
+`(T + W/3, T + 2W/3]` and `(T + 2W/3, T + W]` after. A repeat's rate is the
+query's matches in it per landed PR in it. The **pooled SD** is
+`sqrt((s_b² + s_a²) / 2)`, where `s_b` and `s_a` are the sample standard
+deviations (divisor 2) of the three before-rates and the three after-rates.
+This is a post-landing noise check over the trace, not an eval run before a
+change lands: it gates nothing, it says whether a landed fix moved its count
+beyond noise. Five steps:
 
 1. **List** the tickets landed in this window or the one before it, from the
    whole export (a landing before the window still has its after window in
@@ -655,32 +668,74 @@ steps:
    exit 2 as refused, its line never quoted into a command. Exit 3 is a
    ticket with no stamp at all, and one with no `Targets:` line is simply
    not checked.
-3. **Check**: `sh scripts/trace.sh export | tf=<targets-file> awk -v since=<YYYY-MM-DD> 'function v(k, s) { return match(s, "\"" k "\":\"[^\"]*") ? substr(s, RSTART + length(k) + 4, RLENGTH - length(k) - 4) : "" } function t(s, y, m, d, a) { y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0; a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3; return (d + int((153 * m + 2) / 5) + 365 * y + int(y / 4) - int(y / 100) + int(y / 400)) * 86400 + substr(s, 12, 2) * 3600 + substr(s, 15, 2) * 60 + substr(s, 18, 2) } function tj(k) { return "ticket:" (k ~ /^T-/ ? "" : "#") k } BEGIN { while (("cat \"$tf\"" | getline l) > 0) if (tolower(l) ~ /^(t-)?[0-9]+ +targets *:/) { split(l, f, " "); sub(/^[^:]*: */, "", l); q[f[1]] = l } else if (l ~ /^(T-)?[0-9]+ stamp-exit [0-9]+$/) { split(l, f, " "); print tj(f[1]) ": stamp not read — scripts/stamp.sh exit " f[3] } } { n++; ts = v("ts", $0); if (ts > e) e = ts; T[n] = t(ts); dt[n] = match($0, /"data":\{.*/) ? substr($0, RSTART) : ""; tp[n] = dt[n] != "" ? substr($0, 1, RSTART - 1) : $0; k = v("kind", tp[n]); K[n] = k; R[n] = v("run", tp[n]); o = v("outcome", tp[n]) } k == "run.end" && o == "stopped" { bad[R[n]] = 1 } k == "merge.land" && o == "landed" { L[n] = 1; r = v("related", tp[n]); if (match(r, "ticket:(#[0-9]+|T-[0-9][0-9]+)")) { tk = substr(r, RSTART + 7, RLENGTH - 7); sub(/^#/, "", tk); if (!(tk in ld)) ld[tk] = T[n] } } k == "run.start" { kt[n] = v("kit", dt[n]) } k == "spawn" { st[n] = v("tier", tp[n]); sm[n] = v("model", tp[n]) } END { s = t(since "T00:00:00Z"); W = t(e) - s; for (tk in q) { if (!(tk in ld) || s - W > ld[tk]) continue; split(q[tk], term, " "); lb = ""; kd = ""; for (j in term) { split(term[j], kv, "="); if (kv[1] == "kind") kd = kv[2]; else if (substr(kv[1], 1, 5) == "data.") lb = lb (lb == "" ? "" : "/") kv[2] } lb = lb == "" ? kd : lb; if (ld[tk] + W > t(e)) { print tj(tk) " " lb ": pending — its after window is still open"; continue } split("", c); split("", p); split("", kits); split("", nk); split("", md); split("", tr); for (i = 1; n >= i; i++) { w = T[i] >= ld[tk] - W && ld[tk] > T[i] ? 1 : T[i] > ld[tk] && ld[tk] + W >= T[i] ? 2 : 0; if (!w) continue; if (i in L) p[w]++; if (kt[i] != "") { kits[w, kt[i]] = 1; nk[w]++ } if (st[i] != "" && sm[i] != "") { md[w, st[i], sm[i]] = 1; tr[w, st[i]] = 1 } if (R[i] in bad) continue; hit = 1; for (j in term) { split(term[j], kv, "="); x = substr(kv[1], 1, 5) == "data." ? v(substr(kv[1], 6), dt[i]) : v(kv[1], tp[i]); if (x != kv[2]) { hit = 0; break } } if (hit) c[w]++; } why = ""; sh = 0; for (z in tr) { split(z, zz, SUBSEP); if (zz[1] == 1 && ((2, zz[2]) in tr)) sh++ } for (z in md) { split(z, zz, SUBSEP); if (((1, zz[2]) in tr) && ((2, zz[2]) in tr) && !((3 - zz[1], zz[2], zz[3]) in md)) why = "tier mapping changed" } if (why == "" && !sh) why = "tier mapping not recorded"; if (why == "") for (z in kits) { split(z, zz, SUBSEP); if (!((3 - zz[1], zz[2]) in kits)) why = "kit version changed" } if (why == "" && (!nk[1] || !nk[2])) why = "kit version not recorded"; if (why == "" && (!p[1] || !p[2])) why = "no landed PR in a window"; if (why != "") { print tj(tk) " " lb ": inconclusive — " why; continue } b = c[1] / p[1]; a = c[2] / p[2]; printf "%s %s: %.2f → %.2f per PR%s\n", tj(tk), lb, b, a, (b > a ? "" : " — no drop"); } }'`
-   prints one row per landed ticket with a `Targets:` line:
-   `ticket:#<N> <label>: <before> → <after> per PR` (`ticket:T-<digits>` for a
-   factory ticket), the query's matches per
-   landed PR in each window, the label the query's `data.*` values joined by
-   `/` (its kind when it has none). The landing itself counts in neither
-   window.
+3. **Check**: `sh scripts/trace.sh export | tf=<targets-file> awk -v since=<YYYY-MM-DD> 'function v(k, s) { return match(s, "\"" k "\":\"[^\"]*") ? substr(s, RSTART + length(k) + 4, RLENGTH - length(k) - 4) : "" } function t(s, y, m, d, a) { y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0; a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3; return (d + int((153 * m + 2) / 5) + 365 * y + int(y / 4) - int(y / 100) + int(y / 400)) * 86400 + substr(s, 12, 2) * 3600 + substr(s, 15, 2) * 60 + substr(s, 18, 2) } function tj(k) { return "ticket:" (k ~ /^T-/ ? "" : "#") k } BEGIN { while (("cat \"$tf\"" | getline l) > 0) if (tolower(l) ~ /^(t-)?[0-9]+ +targets *:/) { split(l, f, " "); sub(/^[^:]*: */, "", l); q[f[1]] = l } else if (l ~ /^(T-)?[0-9]+ stamp-exit [0-9]+$/) { split(l, f, " "); print tj(f[1]) ": stamp not read — scripts/stamp.sh exit " f[3] } } { n++; ts = v("ts", $0); if (ts > e) e = ts; T[n] = t(ts); dt[n] = match($0, /"data":\{.*/) ? substr($0, RSTART) : ""; tp[n] = dt[n] != "" ? substr($0, 1, RSTART - 1) : $0; k = v("kind", tp[n]); K[n] = k; R[n] = v("run", tp[n]); o = v("outcome", tp[n]) } k == "run.end" && o == "stopped" { bad[R[n]] = 1 } k == "merge.land" && o == "landed" { L[n] = 1; r = v("related", tp[n]); if (match(r, "ticket:(#[0-9]+|T-[0-9][0-9]+)")) { tk = substr(r, RSTART + 7, RLENGTH - 7); sub(/^#/, "", tk); if (!(tk in ld)) { ld[tk] = T[n]; lw[tk] = v("via", dt[n]) == "lane" ? "lane" : "operator" } } } k == "note" && o == "closed" && v("question", dt[n]) == "before-after" { r = " " v("related", tp[n]) " "; while (match(r, / ticket:(#[0-9]+|T-[0-9][0-9]+) /)) { tk = substr(r, RSTART + 8, RLENGTH - 9); sub(/^#/, "", tk); cl[tk] = 1; r = substr(r, RSTART + RLENGTH - 1) } } k == "run.start" { kt[n] = v("kit", dt[n]) } k == "spawn" { st[n] = v("tier", tp[n]); sm[n] = v("model", tp[n]) } END { s = t(since "T00:00:00Z"); W = t(e) - s; for (tk in q) { if (!(tk in ld) || s - W > ld[tk]) continue; split(q[tk], term, " "); lb = ""; kd = ""; for (j in term) { split(term[j], kv, "="); if (kv[1] == "kind") kd = kv[2]; else if (substr(kv[1], 1, 5) == "data.") lb = lb (lb == "" ? "" : "/") kv[2] } lb = lb == "" ? kd : lb; how = "; landed: " lw[tk]; if (lw[tk] == "lane") nl++; if (ld[tk] + W > t(e)) { print tj(tk) " " lb ": pending — its after window is still open" how; np++; continue } split("", c); split("", p); split("", kits); split("", nk); split("", md); split("", tr); for (i = 1; n >= i; i++) { w = T[i] >= ld[tk] - W && ld[tk] > T[i] ? 1 : T[i] > ld[tk] && ld[tk] + W >= T[i] ? 2 : 0; if (!w) continue; if (kt[i] != "") { kits[w, kt[i]] = 1; nk[w]++ } if (st[i] != "" && sm[i] != "") { md[w, st[i], sm[i]] = 1; tr[w, st[i]] = 1 } if (R[i] in bad) continue; x = 3 * (T[i] - ld[tk] + (w == 1 ? W : 0)) / W; g = int(x); if (w == 1 || x > g) g++; g = (g > 3 ? 3 : 1 > g ? 1 : g) + (w == 2 ? 3 : 0); if (i in L) p[g]++; hit = 1; for (j in term) { split(term[j], kv, "="); y = substr(kv[1], 1, 5) == "data." ? v(substr(kv[1], 6), dt[i]) : v(kv[1], tp[i]); if (y != kv[2]) { hit = 0; break } } if (hit) c[g]++ } why = ""; sh = 0; for (z in tr) { split(z, zz, SUBSEP); if (zz[1] == 1 && ((2, zz[2]) in tr)) sh++ } for (z in md) { split(z, zz, SUBSEP); if (((1, zz[2]) in tr) && ((2, zz[2]) in tr) && !((3 - zz[1], zz[2], zz[3]) in md)) why = "tier mapping changed" } if (why == "" && !sh) why = "tier mapping not recorded"; if (why == "") for (z in kits) { split(z, zz, SUBSEP); if (!((3 - zz[1], zz[2]) in kits)) why = "kit version changed" } if (why == "" && (!nk[1] || !nk[2])) why = "kit version not recorded"; for (g = 1; why == "" && 6 >= g; g++) if (3 > p[g]) why = "fewer than 3 landed PRs in a repeat"; if (why != "") { print tj(tk) " " lb ": inconclusive — " why how; ni++; continue } for (g = 1; 6 >= g; g++) rt[g] = c[g] / p[g]; B = (rt[1] + rt[2] + rt[3]) / 3; A = (rt[4] + rt[5] + rt[6]) / 3; vb = ((rt[1] - B) * (rt[1] - B) + (rt[2] - B) * (rt[2] - B) + (rt[3] - B) * (rt[3] - B)) / 2; va = ((rt[4] - A) * (rt[4] - A) + (rt[5] - A) * (rt[5] - A) + (rt[6] - A) * (rt[6] - A)) / 2; S = sqrt((vb + va) / 2); vd = B - A > S ? "drop" : A >= B ? "no drop" : "within noise"; nv[vd]++; printf "%s %s: %.2f %.2f %.2f → %.2f %.2f %.2f per PR; mean %.2f → %.2f, pooled SD %.2f — %s%s\n", tj(tk), lb, rt[1], rt[2], rt[3], rt[4], rt[5], rt[6], B, A, S, vd, how; if (vd == "drop" && !(tk in cl)) print "loop closed: " tj(tk) } printf "loop tickets: drop %d, within noise %d, no drop %d, inconclusive %d, pending %d; via lane %d\n", nv["drop"], nv["within noise"], nv["no drop"], ni, np, nl }'`
+   prints one row per landed loop ticket:
+   `ticket:#<N> <label>: <b1> <b2> <b3> → <a1> <a2> <a3> per PR; mean <B> → <A>, pooled SD <S> — <verdict>; landed: <lane|operator>`
+   (`ticket:T-<digits>` for a factory ticket) — the six repeats' rates, each
+   side's mean and the pooled SD, the label the query's `data.*` values
+   joined by `/` (its kind when it has none). The landing itself counts in
+   no repeat. The **verdict**, from the before-mean `B`, the after-mean `A`
+   and the pooled SD `S`, compared unrounded and printed to two decimals:
+   `drop` when `B − A > S`; `no drop` when `A ≥ B`; `within noise`
+   otherwise. Every row, `pending` and `inconclusive` ones too, ends
+   `landed: lane` when the ticket's `merge.land` carries `data.via=lane`
+   and `landed: operator` otherwise. A `drop` row whose ticket has no
+   closed note yet is followed by a `loop closed: <ticket>` line. The check
+   ends with one count line,
+   `loop tickets: drop <n>, within noise <n>, no drop <n>, inconclusive <n>, pending <n>; via lane <n>`
+   — the rows by verdict, then the rows whose ticket the lane landed. Save
+   what it prints beside the report; the next step reads it.
+4. **Close each loop**: `sed -n 's/^loop closed: \(ticket:[#T0-9-]*\)$/\1/p' <the check's output> | while read -r k; do sh scripts/trace.sh emit kind=note subject=retro:<YYYYMMDDTHHMMSSZ> related="$k" outcome=closed data.question=before-after reason='loop closed: a drop beyond the pooled SD' || :; done`
+   records one `note outcome=closed` with `data.question=before-after` per
+   `loop closed:` line, naming the ticket in `related` — the **loop
+   closed**. A ticket the trace already holds that note for prints no
+   `loop closed:` line, so a second retro records none. The
+   `data.question` mark is what keeps a finding's closed note (the
+   procedure's step 6) from reading as a closed loop.
+5. **Measure the wave**: `sh scripts/trace.sh export --csv | awk -v since=<YYYY-MM-DD> 'function csv(s, f,   n, q, c, u) { n = 0; q = 0; u = ""; while (s != "") { c = substr(s, 1, 1); s = substr(s, 2); if (q && c == "\"" && substr(s, 1, 1) == "\"") { u = u c; s = substr(s, 2) } else if (c == "\"") q = !q; else if (c == "," && !q) { f[++n] = u; u = "" } else u = u c } f[++n] = u } function t(s, y, m, d, a) { y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0; a = int((14 - m) / 12); y = y + 4800 - a; m = m + 12 * a - 3; return (d + int((153 * m + 2) / 5) + 365 * y + int(y / 4) - int(y / 100) + int(y / 400)) * 86400 + substr(s, 12, 2) * 3600 + substr(s, 15, 2) * 60 + substr(s, 18, 2) } function h(x) { return sprintf("%dh%02dm", int(x / 3600), int((x % 3600) / 60)) } function md(a, n,   i, j, x) { for (i = 2; n >= i; i++) { x = a[i]; for (j = i - 1; j && a[j] > x; j--) a[j + 1] = a[j]; a[j + 1] = x } return a[int((n + 1) / 2)] } NR == 1 { csv($0, hd); for (i in hd) k[hd[i]] = i; next } { split("", f); csv($0, f); e = f[k["kind"]]; ru = f[k["run"]]; up = f[k["parent"]]; x = f[k["cost_usd"]]; if (ru != "" && up != "" && ru != up) pa[ru] = up } e == "run.start" && f[k["skill"]] == "implement" && f[k["subject"]] ~ "^ticket:" { u = f[k["subject"]]; im[ru] = u; tr[u] = tr[u] " " ru; rs[ru] = t(f[k["ts"]]) } e == "run.end" { re[ru] = t(f[k["ts"]]) } x != "" && x != "0.000000" { m++; ec[m] = x; er[m] = ru; es[m] = f[k["skill"]]; el[m] = " " f[k["related"]] " " } e == "merge.land" && f[k["outcome"]] == "landed" && f[k["ts"]] >= since && match(f[k["related"]], "ticket:(#[0-9]+|T-[0-9][0-9]+)") { lt[substr(f[k["related"]], RSTART, RLENGTH)] = 1 } END { for (i = 1; m >= i; i++) { split("", ow); y = er[i]; for (j = 0; y != "" && 64 > j; j++) { if (y in im) ow[im[y]] = 1; y = pa[y] } if (es[i] == "implement") for (u in tr) if (index(el[i], " " u " ")) ow[u] = 1; for (u in ow) if (ec[i] == "unpriced") un[u] = 1; else co[u] += ec[i] } for (u in lt) { nt++; if (!(u in tr)) { nr++; continue } z = split(tr[u], rr, " "); w = 0; ok = 1; for (j = 1; z >= j; j++) if (rr[j] in re) w += re[rr[j]] - rs[rr[j]]; else ok = 0; if (!ok) { ne++; continue } W[++nw] = w; if (u in un) nu++; else P[++np] = co[u] + 0 } printf "summed measures over %d landed tickets: median priced tokens %s over %d (left out: no /implement run %d, no run.end %d, unpriced %d); median agent wall-clock %s over %d (left out: no /implement run %d, no run.end %d)\n", nt, np ? sprintf("%.2f USD", md(P, np)) : "n/a", np, nr, ne, nu, nw ? h(md(W, nw)) : "n/a", nw, nr, ne }'`
+   prints the wave's two **summed measures**, one line, each on its own —
+   never one score, never folded with each other or with a count. Per ticket
+   landed in the window: its **priced tokens**, the cost the export prices,
+   per model, for the token-bearing events of every run the ticket's
+   `/implement` opened (a `run.start` with `skill` `implement` and the
+   ticket as its subject) and the runs beneath it by `parent`, with the stop
+   of the agent that ran that `/implement`, which the agent harness files
+   under the run that spawned it and names the ticket in its `related`; and
+   its **agent wall-clock**, each such run's `run.start` to its `run.end`,
+   the run ending at the open, reviewed PR — never to the ticket's
+   `merge.land`, so the human's time after the PR opens is left out. The
+   line prints the median of each (the lower middle over an even count) and
+   how many tickets entered it, and counts what it left out: a ticket with no
+   `/implement` run and one with a run that has no `run.end` leave both
+   medians, a ticket whose tokens hold an unpriced model leaves the token
+   median only. Put it in the report above the count line, so the count line
+   ends the section. There is no operator wait among the measures:
+   approval, review and QA waits are the factory's gate-time metrics, and
+   they measure the operator, not the change.
 
-The row reads **`inconclusive — <reason>`** instead of a rate when the two
+The row reads **`inconclusive — <reason>`** instead of rates when the two
 windows cannot be compared like with like (process/R26), checked in this
 order: `tier mapping changed` — a tier spawned in both windows on a model
 in one that it was never spawned on in the other, read from the `spawn`
 events' `tier` and `model`; `tier mapping not recorded` — no tier spawned in
 both; `kit version changed` — the two windows' `run.start` events carry
 different sets of `data.kit`; `kit version not recorded` — a window with no
-`run.start` carrying one; `no landed PR in a window` — no denominator. A run
-that ended **`stopped`** — the trace's failed run — has its events left out
-of both counts, never counted as zero: its `run.end` names it, and every
-matching event carrying that `run` is skipped.
+`run.start` carrying one; `fewer than 3 landed PRs in a repeat` — a repeat
+whose rate three PRs cannot carry. A run that ended **`stopped`** — the
+trace's failed run — has its events left out of every count, never counted
+as zero: its `run.end` names it, and every event carrying that `run` is
+skipped, its landings and its matches alike.
 
-What counts as a finding: a row marked **`— no drop`** — its after-rate not
-below its before-rate (process/R27). The finding **names the ticket**, the
-query and both rates, and is recorded like any other (the procedure's step
-6), so the next decomposition can reopen or revert the edit. An
-`inconclusive` row is reported, never a finding: the comparison was not
-fair, which says nothing of the edit; it waits for a pair of windows that
-ran under one kit and one mapping.
+What counts as a finding: a row marked **`— no drop`** — its after-mean not
+below its before-mean (process/R27). The finding **names the ticket**, the
+query and both means, and is recorded like any other (the procedure's step
+6), so the next decomposition can reopen or revert the edit. A
+`within noise` row is reported, never a finding: a fix that did no
+measurable harm is not reopened on noise, and its loop simply stays open,
+with no closed note. An `inconclusive` row is reported, never a finding:
+the comparison was not fair, which says nothing of the edit; it waits for a
+pair of windows that ran under one kit and one mapping, with three landed
+PRs in every repeat. The summed measures are reported, never a finding on
+their own.
 
 Route: `/to-tickets` — reopen or revert the ticket the row names.

@@ -119,15 +119,26 @@ from the `data.class` `/implement` records on `ticket.start` from a `Class:` sta
 
 ## The before-and-after section
 
-Then one more: each lens or skill edit checked against the measure it named
-when it was proposed. A ticket that makes one may carry a **`Targets:`**
-stamp line, a trace filter read through `scripts/stamp.sh`; for each landed
-ticket that does, the report prints the query's matches per landed PR in the
-window before its landing and in an equal window after, `inconclusive` when
-the two windows ran under a different kit or tier mapping, with a stopped
-run's events left out of both counts — and a row whose rate did not drop is
-a finding naming the ticket. `QUESTIONS.md`'s "Before and after" section
-holds the spans, the order of the inconclusive reasons and the window.
+Then one more: each **loop ticket** — a landed ticket whose stamp carries a
+**`Targets:`** line, a trace filter read through `scripts/stamp.sh`,
+whatever wrote it — judged against noise. The window before its landing,
+and an equal window after, are each split into three equal consecutive
+repeats; the report prints the query's matches per landed PR in each of the
+six, each side's mean and the pooled SD, and reads the row `drop` when the
+before-mean beats the after-mean by more than the pooled SD, `no drop` when
+the after-mean is not below the before-mean — a finding naming the ticket —
+and `within noise` otherwise, reported and never a finding. A row reads
+`inconclusive` when the two windows ran under a different kit or tier
+mapping or a repeat holds fewer than 3 landed PRs, `pending` while its after
+window is open, and leaves a stopped run's events out of every count. Each
+row ends `landed: lane` or `landed: operator`; a `drop` records one closed
+note — the loop closed — and none for a ticket that already has one; one
+count line ends the section. Beside the rows go the wave's two summed
+measures, the medians of the **priced tokens** and the **agent wall-clock**
+of each landed ticket's `/implement` run, each on its own and never one
+score; no operator wait is a measure. `QUESTIONS.md`'s "Before and after"
+section holds the spans, the order of the inconclusive reasons and the
+window.
 
 ## Procedure
 

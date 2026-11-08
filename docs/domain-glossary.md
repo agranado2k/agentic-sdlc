@@ -768,6 +768,39 @@ Grouped by the seam each term belongs to. Entry shape:
   (shared invariant §11). Ref: PRD #237; the eighth question is PRD #273's.
   - _Avoid_: "post-mortem" (a retro is per wave and has no incident);
     "lessons file" (the thing §11 forbids it from writing).
+- **Loop ticket** — a landed ticket whose stamp carries a `Targets:` line,
+  whatever wrote it (a retro candidate, a planner, an efficiency proposal).
+  `/retro`'s before-and-after section judges it against noise once its after
+  window closes (ADR-0048, PRD-11).
+  - _Avoid_: "retro ticket" (its source does not matter), "experiment".
+- **Repeat** — one third of a side of a loop ticket's landing: the window
+  before it and the equal window after are each split into three equal
+  consecutive repeats, and a repeat's rate is the query's matches per landed
+  PR in it. Fewer than 3 landed PRs in any repeat reads `inconclusive`
+  (ADR-0048).
+  - _Avoid_: "run" (a run is a trace run), "sample", "trial".
+- **Pooled SD** — `sqrt((s_b² + s_a²) / 2)`, each `s` the sample standard
+  deviation (divisor 2) of one side's three repeat rates. A loop ticket's row
+  reads `drop` only when the before-mean beats the after-mean by more than
+  it, `no drop` when the after-mean is not below the before-mean, `within
+  noise` otherwise (ADR-0048).
+  - _Avoid_: "variance", "error bar".
+- **Loop closed** — a loop ticket whose row read `drop`: `/retro` records one
+  `note outcome=closed` naming it, marked `data.question=before-after`, and
+  never a second (ADR-0048).
+  - _Avoid_: "fix verified", "done" (a closed loop says the count dropped
+    beyond noise, nothing more).
+- **Priced tokens** — per landed ticket, the cost the trace's priced export
+  gives, per model, for the token-bearing events of the runs its
+  `/implement` opened and the runs beneath them. Reported as a median per
+  wave, beside the counts, never folded into a score (ADR-0048, PRD-11).
+  - _Avoid_: "spend" alone (question 5's per-tier reading), "token count"
+    (it is priced).
+- **Agent wall-clock** — per landed ticket, its `/implement` run's
+  `run.start` to its `run.end`, at the open, reviewed PR, never to the
+  `merge.land`: the human's time after the PR opens is not the change's.
+  Reported as a median per wave (ADR-0048, PRD-11).
+  - _Avoid_: "lead time" (the flow section's, to the landing), "cycle time".
 - **Retro folder** — `.retro/<YYYY>/<MM>/` at the root checkout, where
   `/retro` writes `retro-<YYYYMMDDTHHMMSSZ>.md` and the `.csv` it pivoted,
   the root resolved through git's common directory exactly as the trace

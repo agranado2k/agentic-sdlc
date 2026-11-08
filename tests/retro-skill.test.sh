@@ -1755,14 +1755,10 @@ ba_run() {
 	( cd "$ROOT" && BA_TF=$ba_targets TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$_br_span" 2>/dev/null )
 }
 ba_drop="$SCRATCH/ba-drop.retro"
-ba_flat="$SCRATCH/ba-flat.retro"
 ba_model="$SCRATCH/ba-model.retro"
 ba_kit="$SCRATCH/ba-kit.retro"
-ba_stop="$SCRATCH/ba-stop.retro"
 ba_fixture "$ba_drop" 1 m-one
-ba_fixture "$ba_flat" 3 m-one
 ba_fixture "$ba_model" 1 m-two
-ba_fixture "$ba_stop" 1 m-one stopped
 ba_fixture "$ba_kit" 1 m-one
 ba_ctx "$ba_kit" 2026-10-14T00:00:00Z 0.83.0 m-one
 ( cd "$ROOT" && TRACE_DIR="$ba_drop" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the before-and-after fixture is a trace verify accepts" ||
@@ -1777,14 +1773,14 @@ if [ -n "$ba_check" ]; then
 		_ba_out=$(ba_run "$1" "$ba_check")
 		printf '%s\n' "$_ba_out" | grep -qxF "$2" && pass "$3: '$2'" || fail "$3: expected '$2'; it printed: $(printf '%s' "$_ba_out" | tr '\n' ';')"
 	}
-	ba_assert "$ba_drop" 'ticket:#61 security/high: 2.00 → 0.33 per PR' "process/R25: a drop, per landed PR before and after"
-	ba_assert "$ba_drop" 'ticket:#70 security: pending — its after window is still open' "process/R25: a ticket whose after window has not closed waits"
-	ba_assert "$ba_flat" 'ticket:#61 security/high: 2.00 → 1.00 per PR' "process/R25: a smaller drop"
-	ba_fixture "$SCRATCH/ba-none.retro" 6 m-one
-	ba_assert "$SCRATCH/ba-none.retro" 'ticket:#61 security/high: 2.00 → 2.00 per PR — no drop' "process/R27: no drop is marked, the finding filed"
-	ba_assert "$ba_model" 'ticket:#61 security/high: inconclusive — tier mapping changed' "process/R26: a changed tier mapping is inconclusive"
-	ba_assert "$ba_kit" 'ticket:#61 security/high: inconclusive — kit version changed' "process/R26: a changed kit version is inconclusive"
-	ba_assert "$ba_stop" 'ticket:#61 security/high: 2.00 → 0.33 per PR' "process/R26: a stopped run's events are left out of both counts"
+	# Section 18's fixture holds two or three landed PRs a window, so each of
+	# its repeats holds fewer than three: the eval gate reads it inconclusive
+	# (process/R26). Section 22 holds the judged rows over a fixture whose
+	# repeats are full.
+	ba_assert "$ba_drop" 'ticket:#61 security/high: inconclusive — fewer than 3 landed PRs in a repeat; landed: operator' "process/R26: a repeat under three landed PRs is inconclusive"
+	ba_assert "$ba_drop" 'ticket:#70 security: pending — its after window is still open; landed: operator' "process/R25, process/R141: a ticket whose after window has not closed waits, and says how it landed"
+	ba_assert "$ba_model" 'ticket:#61 security/high: inconclusive — tier mapping changed; landed: operator' "process/R26: a changed tier mapping is inconclusive"
+	ba_assert "$ba_kit" 'ticket:#61 security/high: inconclusive — kit version changed; landed: operator' "process/R26: a changed kit version is inconclusive"
 	ba_assert "$ba_drop" 'ticket:#62: stamp not read — scripts/stamp.sh exit 2' "a refused stamp is named, never dropped (review M-2), read from a path with a quote in it"
 	ba_run "$ba_drop" "$ba_check" | grep -q 'ticket:#9' && fail "the check judged a ticket landed before the window before" ||
 		pass "…and judges no ticket landed before the window before"
@@ -1923,7 +1919,7 @@ if [ -n "$ba_list" ]; then
 fi
 if [ -n "$ba_check" ]; then
 	fxc=$(fx_ba_run "$ba_check")
-	for row in 'ticket:T-61 security/high: 2.00 → 0.33 per PR' 'ticket:#70 security: pending — its after window is still open' \
+	for row in 'ticket:T-61 security/high: inconclusive — fewer than 3 landed PRs in a repeat; landed: operator' 'ticket:#70 security: pending — its after window is still open; landed: operator' \
 		'ticket:T-62: stamp not read — scripts/stamp.sh exit 2'; do
 		printf '%s\n' "$fxc" | grep -qxF "$row" && pass "process/R242: the before-and-after check prints '$row'" ||
 			fail "process/R242: the before-and-after check did not print '$row'; it printed: $(printf '%s' "$fxc" | tr '\n' ';')"
@@ -2025,5 +2021,235 @@ if [ -n "$v8" ]; then
 	[ "$(vcount "$rv" "$v8")" = 1 ] && pass "process/R66: question 8's operator-verdict count counts a risk override at the quiz" ||
 		fail "question 8's operator-verdict span printed '$(vcount "$rv" "$v8")' over one risk override, not 1"
 fi
+
+# ---------------------------------------------------------------------------
+banner "22. Each loop ticket is judged against noise: three repeats a side, a drop beyond the pooled SD (process/R25-R27, R140-R142, R158-R160, #923)"
+# ---------------------------------------------------------------------------
+# PRD-11 slice 1 (ADR-0048). A loop ticket is any landed ticket whose stamp
+# carries a Targets: line. The check splits the window before its landing,
+# and an equal window after, into three equal consecutive repeats, and
+# prints the query's matches per landed PR in each of the six, each side's
+# mean and the pooled SD; it reads the row drop, within noise or no drop,
+# ends it with how the ticket landed, prints `loop closed:` for a drop not
+# yet closed, and ends with one count line. Then the close span records the
+# note, and the measures span prints the wave's two summed measures. All
+# three RUN here over fixture traces.
+#
+# The window is 2026-10-11 to the trace's last event, 2026-10-20: nine days.
+# Ticket 950 landed on 2026-10-05, so its repeats are three days each:
+# [09-26, 09-29) [09-29, 10-02) [10-02, 10-05) before, and (10-05, 10-08]
+# (10-08, 10-11] (10-11, 10-14] after. Ticket 951 landed on 10-15 and waits.
+lp_check="$ba_check"
+lp_close=$(ba_sec | grep -o '`sed -n .s/^loop closed: [^`]*`' | tr -d '`' | head -1)
+lp_meas=$(ba_sec | grep -o '`sh scripts/trace\.sh export --csv | awk[^`]*`' | tr -d '`' | head -1)
+[ -n "$lp_close" ] && pass "process/R140: the before-and-after section carries the close span, reading the check's \`loop closed:\` lines" ||
+	fail "process/R140: the before-and-after section carries no \`sed -n 's/^loop closed: …\` span recording the closed note"
+[ -n "$lp_meas" ] && pass "process/R158: the before-and-after section carries the measures span over the priced export" ||
+	fail "process/R158: the before-and-after section carries no \`sh scripts/trace.sh export --csv | awk …\` span for the summed measures"
+# lp_repeat <dir> <first day> <landed PRs> <hits> <pr base> — one repeat:
+# its landed PRs on its first day, its hits on the next. A hit is the triage
+# of the self-host check, the query ticket 950 names.
+lp_repeat() {
+	_lr_i=0
+	while [ "$_lr_i" -lt "$3" ]; do
+		_lr_i=$((_lr_i + 1))
+		ba_land "$1" "$2T$(printf '%02d' "$_lr_i"):00:00Z" "$(($5 + _lr_i))"
+	done
+	_lr_i=0
+	_lr_next=$(printf '%s\n' "$2" | awk -F- '{ printf "%s-%s-%02d", $1, $2, $3 + 1 }')
+	while [ "$_lr_i" -lt "$4" ]; do
+		_lr_i=$((_lr_i + 1))
+		ba_ev "$1" "${_lr_next}T$(printf '%02d' "$_lr_i"):00:00Z" finding.triage ",\"subject\":\"pr:#1\"${6:+,\"run\":\"$6\"},\"outcome\":\"accepted\",\"reason\":\"fixture\",\"data\":{\"source\":\"check\",\"id\":\"Kit-CI-self-host\"}"
+	done
+}
+# lp_fixture <dir> "<before hits ×3>" "<after hits ×3>" <lane|operator> ["<landed PRs ×6>"]
+lp_fixture() {
+	set -- "$1" "$2" "$3" "$4" "${5:-10 10 10 10 10 10}"
+	ba_ctx "$1" 2026-09-26T12:00:00Z 0.118.0 m-one
+	ba_ctx "$1" 2026-10-06T12:00:00Z 0.118.0 m-one
+	_lf_days='2026-09-26 2026-09-29 2026-10-02 2026-10-05 2026-10-08 2026-10-11'
+	_lf_hits="$2 $3"
+	_lf_prs=$5
+	_lf_g=0
+	for _lf_d in $_lf_days; do
+		_lf_g=$((_lf_g + 1))
+		_lf_h=$(printf '%s\n' "$_lf_hits" | awk -v g="$_lf_g" '{ print $g }')
+		_lf_p=$(printf '%s\n' "$_lf_prs" | awk -v g="$_lf_g" '{ print $g }')
+		lp_repeat "$1" "$_lf_d" "$_lf_p" "$_lf_h" "$((1000 + _lf_g * 100))"
+	done
+	if [ "$4" = lane ]; then
+		ba_ev "$1" 2026-10-05T00:00:00Z merge.land ',"subject":"pr:#900","related":"ticket:#950","outcome":"landed","reason":"fixture","data":{"via":"lane"}'
+	else
+		ba_land "$1" 2026-10-05T00:00:00Z 900 950
+	fi
+	ba_land "$1" 2026-10-15T00:00:00Z 901 951
+	ba_ev "$1" 2026-10-20T00:00:00Z note ",\"subject\":\"pr:#1\",\"outcome\":\"candidate\",\"reason\":\"fixture\""
+}
+lp_tf="$SCRATCH/lp-targets"
+printf '%s\n' '950 Tier: implementer' '950 Targets: kind=finding.triage data.id=Kit-CI-self-host' \
+	'951 Targets: kind=finding.triage data.id=Kit-CI-self-host' >"$lp_tf"
+lp_run() { # <dir> <span>
+	_lp_span=$(printf '%s\n' "$2" | sed -e 's/<YYYY-MM-DD>/2026-10-11/g' -e 's|<targets-file>|"$BA_TF"|g' \
+		-e 's|<the check'"'"'s output>|"$LP_OUT"|g' -e 's/<YYYYMMDDTHHMMSSZ>/20261020T000000Z/g')
+	( cd "$ROOT" && BA_TF=$lp_tf LP_OUT="${3:-}" TRACE_DIR="$1" TRACE_QUIET=1 sh -c "$_lp_span" 2>/dev/null )
+}
+lp_drop="$SCRATCH/lp-drop.retro"
+lp_noise="$SCRATCH/lp-noise.retro"
+lp_flat="$SCRATCH/lp-flat.retro"
+lp_thin="$SCRATCH/lp-thin.retro"
+lp_stop="$SCRATCH/lp-stop.retro"
+lp_fixture "$lp_drop" '5 4 6' '1 2 0' lane
+lp_fixture "$lp_noise" '5 1 9' '3 0 6' operator
+lp_fixture "$lp_flat" '5 4 6' '5 4 6' operator
+lp_fixture "$lp_thin" '5 4 6' '1 2 0' operator '10 2 10 10 10 10'
+# A stopped run's hits are left out: two more in the second after repeat,
+# under a run that ended stopped, leave the drop row as it was.
+lp_fixture "$lp_stop" '5 4 6' '1 2 0' lane
+lp_repeat "$lp_stop" 2026-10-08 0 2 0 20261008T000000Z-9-0000dead
+ba_ev "$lp_stop" 2026-10-09T12:00:00Z run.end ',"run":"20261008T000000Z-9-0000dead","outcome":"stopped","reason":"fixture"'
+( cd "$ROOT" && TRACE_DIR="$lp_drop" TRACE_QUIET=1 sh "$TRACE" verify >/dev/null 2>&1 ) && pass "the loop-ticket fixture is a trace verify accepts" ||
+	fail "the loop-ticket fixture does not verify — the spans would be read over a damaged trace"
+lp_row='ticket:#950 Kit-CI-self-host: 0.50 0.40 0.60 → 0.10 0.20 0.00 per PR; mean 0.50 → 0.10, pooled SD 0.10 — drop; landed: lane'
+lp_has() { # <output> <line> <message>
+	printf '%s\n' "$1" | grep -qxF "$2" && pass "$3: '$2'" || fail "$3: expected '$2'; it printed: $(printf '%s' "$1" | tr '\n' ';')"
+}
+if [ -n "$lp_check" ]; then
+	lp_out=$(lp_run "$lp_drop" "$lp_check")
+	lp_has "$lp_out" "$lp_row" "process/R25, process/R27, process/R141: a drop beyond the pooled SD, three repeats a side, landed through the lane"
+	lp_has "$lp_out" 'loop closed: ticket:#950' "process/R140: a drop not yet closed is named for the close span"
+	lp_has "$lp_out" 'ticket:#951 Kit-CI-self-host: pending — its after window is still open; landed: operator' "process/R141: a pending row ends with how it landed"
+	lp_has "$lp_out" 'loop tickets: drop 1, within noise 0, no drop 0, inconclusive 0, pending 1; via lane 1' "process/R142: the section ends with the count line"
+	[ "$(printf '%s\n' "$lp_out" | sed -n '$p')" = 'loop tickets: drop 1, within noise 0, no drop 0, inconclusive 0, pending 1; via lane 1' ] &&
+		pass "process/R142: …and the count line is the check's last" || fail "process/R142: the check's last line is not its count line: $(printf '%s\n' "$lp_out" | sed -n '$p')"
+	lp_out=$(lp_run "$lp_noise" "$lp_check")
+	lp_has "$lp_out" 'ticket:#950 Kit-CI-self-host: 0.50 0.10 0.90 → 0.30 0.00 0.60 per PR; mean 0.50 → 0.30, pooled SD 0.35 — within noise; landed: operator' \
+		"process/R27: a drop under the pooled SD is within noise"
+	printf '%s\n' "$lp_out" | grep -q '^loop closed:' && fail "process/R140: a within-noise row closed the loop" || pass "process/R140: …and closes no loop"
+	lp_has "$lp_out" 'loop tickets: drop 0, within noise 1, no drop 0, inconclusive 0, pending 1; via lane 0' "process/R142: the count line counts within noise"
+	lp_out=$(lp_run "$lp_flat" "$lp_check")
+	lp_has "$lp_out" 'ticket:#950 Kit-CI-self-host: 0.50 0.40 0.60 → 0.50 0.40 0.60 per PR; mean 0.50 → 0.50, pooled SD 0.10 — no drop; landed: operator' \
+		"process/R27: equal means read no drop, the row a finding names"
+	lp_has "$lp_out" 'loop tickets: drop 0, within noise 0, no drop 1, inconclusive 0, pending 1; via lane 0' "process/R142: the count line counts no drop"
+	lp_out=$(lp_run "$lp_thin" "$lp_check")
+	lp_has "$lp_out" 'ticket:#950 Kit-CI-self-host: inconclusive — fewer than 3 landed PRs in a repeat; landed: operator' "process/R26: a repeat holding 2 landed PRs is inconclusive"
+	lp_has "$lp_out" 'loop tickets: drop 0, within noise 0, no drop 0, inconclusive 1, pending 1; via lane 0' "process/R142: the count line counts inconclusive"
+	lp_out=$(lp_run "$lp_stop" "$lp_check")
+	lp_has "$lp_out" "$lp_row" "process/R26: a stopped run's hits are left out of every repeat"
+fi
+# process/R140, RUN: the close span records one closed note from the check's
+# output, and a second retro over the same trace records none.
+if [ -n "$lp_check" ] && [ -n "$lp_close" ]; then
+	lp_o1="$SCRATCH/lp-check-1.txt"
+	lp_run "$lp_drop" "$lp_check" >"$lp_o1"
+	lp_run "$lp_drop" "$lp_close" "$lp_o1" >/dev/null
+	# The note is stamped now, which would stretch this fixture's window to
+	# today; it is moved back to just before the window's last event, so the
+	# second retro reads the same window and the same drop row.
+	for _lp_f in "$lp_drop"/events/*.jsonl; do
+		case "$_lp_f" in */2026-09-* | */2026-10-*) ;; *)
+			grep '"kind":"note"' "$_lp_f" | sed 's/"ts":"[^"]*"/"ts":"2026-10-19T23:59:00Z"/' >>"$lp_drop/events/2026-10-19.jsonl"
+			rm -f "$_lp_f" ;;
+		esac
+	done
+	lp_notes() { cat "$lp_drop"/events/*.jsonl | grep '"kind":"note"' | grep '"outcome":"closed"' | grep -c '"related":"ticket:#950"'; }
+	[ "$(lp_notes)" = 1 ] && pass "process/R140: the close span records one note outcome=closed naming the ticket" ||
+		fail "process/R140: the close span recorded $(lp_notes) closed notes naming ticket:#950, not 1"
+	cat "$lp_drop"/events/*.jsonl | grep '"kind":"note"' | grep '"outcome":"closed"' | grep -q '"question":"before-after"' &&
+		pass "process/R140: …marked data.question=before-after, so a finding's closed note is not a loop's" ||
+		fail "process/R140: the closed note carries no data.question=before-after"
+	lp_o2="$SCRATCH/lp-check-2.txt"
+	lp_run "$lp_drop" "$lp_check" >"$lp_o2"
+	grep -q '^loop closed:' "$lp_o2" && fail "process/R140: the second check names a loop the trace already closed" ||
+		pass "process/R140: a second check names no loop the trace already closed"
+	grep -qxF "$lp_row" "$lp_o2" && pass "process/R140: …and still prints the drop row" || fail "process/R140: the second check lost the drop row; it printed: $(tr '\n' ';' <"$lp_o2")"
+	lp_run "$lp_drop" "$lp_close" "$lp_o2" >/dev/null
+	[ "$(lp_notes)" = 1 ] && pass "process/R140: a second retro records no second closed note" ||
+		fail "process/R140: a second retro left $(lp_notes) closed notes naming ticket:#950, not 1"
+fi
+# process/R158, R159, RUN: the summed measures over a fixture wave. Prices
+# are the policy's (TRACE_PRICE_M1: 3 USD per million input tokens); every
+# ticket lands two days or more after its /implement run ended, so a
+# wall-clock run to the landing would read in days. Ticket 81: a 1h run, 3
+# USD under it and 3 under a run beneath it. 82: 2h, its tokens on the stop
+# of the agent that ran /implement, filed under no run. 83: 3h, 9 USD. 84:
+# landed, no /implement run. 85: 4h, its tokens on an unpriced model. 86: a
+# run with no run.end. 79: landed before the window, not counted.
+lm="$SCRATCH/measures.retro"
+mkdir -p "$lm"
+printf "TRACE_DIR='%s'\nTRACE_PRICE_M1='3,15,3.75,0.30'\n" "$lm/t" >"$lm/policy.sh"
+lm_run() { # <ticket> <start ts> <end ts or -> <run>
+	ba_ev "$lm/t" "$2" run.start ",\"skill\":\"implement\",\"subject\":\"ticket:#$1\",\"run\":\"$4\",\"data\":{\"kit\":\"0.118.0\"}"
+	[ "$3" = - ] || ba_ev "$lm/t" "$3" run.end ",\"run\":\"$4\",\"outcome\":\"ok\",\"reason\":\"fixture\""
+}
+lm_stop() { # <ts> <model> <tok_in> <run|-> [ticket]
+	_ls_r=
+	[ "$4" = - ] || _ls_r=",\"run\":\"$4\""
+	ba_ev "$lm/t" "$1" agent.stop ",\"skill\":\"implement\",\"subject\":\"agent:a1\"${5:+,\"related\":\"ticket:#$5\"}$_ls_r,\"model\":\"$2\",\"tok_in\":$3"
+}
+lm_run 81 2026-10-12T10:00:00Z 2026-10-12T11:00:00Z 20261012T100000Z-81-0000aaaa
+lm_stop 2026-10-12T10:30:00Z m1 1000000 20261012T100000Z-81-0000aaaa
+ba_ev "$lm/t" 2026-10-12T10:40:00Z run.start ",\"skill\":\"review-pr\",\"subject\":\"pr:#181\",\"run\":\"20261012T104000Z-81-0000bbbb\",\"parent\":\"20261012T100000Z-81-0000aaaa\",\"data\":{\"kit\":\"0.118.0\"}"
+lm_stop 2026-10-12T10:50:00Z m1 1000000 20261012T104000Z-81-0000bbbb
+ba_land "$lm/t" 2026-10-14T10:00:00Z 181 81
+lm_run 82 2026-10-13T10:00:00Z 2026-10-13T12:00:00Z 20261013T100000Z-82-0000aaaa
+lm_stop 2026-10-13T12:05:00Z m1 500000 - 82
+ba_land "$lm/t" 2026-10-16T10:00:00Z 182 82
+lm_run 83 2026-10-13T10:00:00Z 2026-10-13T13:00:00Z 20261013T100000Z-83-0000aaaa
+lm_stop 2026-10-13T11:00:00Z m1 3000000 20261013T100000Z-83-0000aaaa
+ba_land "$lm/t" 2026-10-18T10:00:00Z 183 83
+ba_land "$lm/t" 2026-10-18T11:00:00Z 184 84
+lm_run 85 2026-10-14T10:00:00Z 2026-10-14T14:00:00Z 20261014T100000Z-85-0000aaaa
+lm_stop 2026-10-14T11:00:00Z m-unpriced 1000 20261014T100000Z-85-0000aaaa
+ba_land "$lm/t" 2026-10-19T10:00:00Z 185 85
+lm_run 86 2026-10-15T10:00:00Z - 20261015T100000Z-86-0000aaaa
+ba_land "$lm/t" 2026-10-19T11:00:00Z 186 86
+lm_run 79 2026-10-01T10:00:00Z 2026-10-01T10:10:00Z 20261001T100000Z-79-0000aaaa
+ba_land "$lm/t" 2026-10-02T10:00:00Z 179 79
+lm_line='summed measures over 6 landed tickets: median priced tokens 6.00 USD over 3 (left out: no /implement run 1, no run.end 1, unpriced 1); median agent wall-clock 2h00m over 4 (left out: no /implement run 1, no run.end 1)'
+if [ -n "$lp_meas" ]; then
+	_lm_span=$(printf '%s\n' "$lp_meas" | sed -e 's/<YYYY-MM-DD>/2026-10-11/g')
+	lm_out=$( cd "$ROOT" && TRACE_CONFIG="$lm/policy.sh" TRACE_QUIET=1 sh -c "$_lm_span" 2>/dev/null )
+	lp_has "$lm_out" "$lm_line" "process/R158, process/R159: the measures span prints both medians on one line, each on its own, the left-out tickets counted"
+	[ "$(printf '%s\n' "$lm_out" | grep -c .)" = 1 ] && pass "process/R159: …and prints that one line only" ||
+		fail "process/R159: the measures span printed $(printf '%s\n' "$lm_out" | grep -c .) lines, not 1"
+fi
+# process/R160: no line of the section's spans prints an operator wait or a
+# score that combines the measures.
+lp_all="$(lp_run "$lp_drop" "$lp_check")
+${lm_out:-}"
+printf '%s\n' "$lp_all" | grep -iqE 'wait|approv|review time|QA|score|combined' &&
+	fail "process/R160: the section printed an operator wait or a combined score: $(printf '%s\n' "$lp_all" | grep -iE 'wait|approv|review time|QA|score|combined')" ||
+	pass "process/R160: no line of the section prints an operator wait or a combined score"
+# The prose: SKILL.md's section and QUESTIONS.md's say what the spans do.
+lp_sk=$(awk '/^## The before-and-after section/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" | flat)
+for needle in 'loop ticket' 'three equal consecutive repeats' 'pooled SD' 'within noise' 'landed: lane' 'loop closed' 'priced tokens' 'agent wall-clock' 'never one score' 'no operator wait'; do
+	case "$lp_sk" in *"$needle"*) pass "process/R25-R27, R140-R142, R158-R160: SKILL.md's before-and-after section says: $needle" ;;
+	*) fail "SKILL.md's before-and-after section does not say: $needle" ;; esac
+done
+for needle in '**loop ticket**' '**repeat**' '**pooled SD**' 'divisor 2' '`drop`' '`within noise`' '`no drop`' 'compared unrounded' 'two decimals' \
+	'`landed: lane`' '`landed: operator`' '**loop closed**' '`note outcome=closed`' 'data.question=before-after' '**priced tokens**' '**agent wall-clock**' \
+	'never to the ticket'"'"'s `merge.land`' 'no operator wait' 'reported, never a finding'; do
+	case "$baprose" in *"$needle"*) pass "QUESTIONS.md's before-and-after section says: $needle" ;; *) fail "QUESTIONS.md's before-and-after section does not say: $needle" ;; esac
+done
+# The decision record: one new record defines the loop ticket and the eval
+# gate, and amends what PRD-11 §8 names, as a new record; the index row says so.
+lp_adr=$(grep -l '^# ADR-[0-9]*: .*loop ticket' "$ROOT"/docs/adr/[0-9]*.md 2>/dev/null | head -1)
+if [ -n "$lp_adr" ]; then
+	pass "a decision record defines the loop ticket: $(basename "$lp_adr")"
+	for needle in 'amends ADR-0024 clause 7' 'ADR-0036' 'ADR-0037' 'loop ticket' 'pooled SD' 'not D-08' 'surface' '`Edits:`' '`Runs:`' '`ruling`' \
+		'ruling recorder' 'candidate block' 'priced tokens' 'agent wall-clock' 'never one score' 'data.question=before-after'; do
+		tr '\n' ' ' <"$lp_adr" | sed 's/  */ /g' | grep -qF "$needle" && pass "…and it says: $needle" || fail "the loop-ticket record lacks: $needle"
+	done
+	lp_row_ix=$(grep -F "($(basename "$lp_adr"))" "$ROOT/docs/adr/INDEX.md")
+	printf '%s\n' "$lp_row_ix" | grep -qF 'amends ADR-0024 clause 7' && printf '%s\n' "$lp_row_ix" | grep -qF 'ADR-0036' &&
+		printf '%s\n' "$lp_row_ix" | grep -qF 'ADR-0037' &&
+		pass "the decision index row for the loop-ticket record names what it amends" ||
+		fail "the index row for $(basename "$lp_adr") does not name ADR-0024 clause 7, ADR-0036 and ADR-0037: $lp_row_ix"
+else
+	fail "no decision record titled with the loop ticket under docs/adr/"
+fi
+for g in 'Loop ticket' 'Repeat' 'Pooled SD' 'Loop closed' 'Priced tokens' 'Agent wall-clock'; do
+	grep -q "^- \*\*$g\*\* —" "$ROOT/docs/domain-glossary.md" && pass "the glossary defines $g" || fail "the glossary has no $g entry"
+done
 
 t_done "/retro contract"
