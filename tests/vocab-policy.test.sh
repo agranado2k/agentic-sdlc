@@ -269,7 +269,7 @@ banner "targets — a query field /to-tickets writes and checks (process/R25, #8
 printf '%s\n' "$FIELDS" | grep -qx 'targets (query):' && pass "targets is declared a query field" ||
 	fail "targets must be a QUERY field — its value is a trace filter, not a token"
 assert_file_has "$TICKETS" "\`'Targets: <query>'\`" "/to-tickets checks a Targets: line at the quiz"
-assert_file_has "$TICKETS" "a \`Targets:\` line on a ticket that edits a review lens or a skill" "/to-tickets writes one on a lens or skill edit"
+assert_file_has "$TICKETS" "a \`Targets:\` line on a ticket that edits a lens, skill, check or policy" "/to-tickets writes one on any edit a retro candidate proposes (process/R145)"
 
 # ---------------------------------------------------------------------------
 banner "13. The ticket contract's five fields and the published line bounds (process/R41)"
@@ -335,6 +335,28 @@ for word in '`accept-test`' '`VOCAB_PIN=' '`accept-test=32`' '`VOCAB_BOUNDS`' 's
 	case $note in
 	*"$word"*) pass "acceptance/R7: the paragraph names $word" ;;
 	*) fail "acceptance/R7: the paragraph does not name $word" ;;
+	esac
+done
+
+# process/R143: the shipped policy and the checker's defaults declare the
+# retro candidate's two fields; the edit kinds are in the order /retro's
+# filing check spells them; and the release that ships them tells a consumer
+# whose policy file predates it to add them (a found file is the whole policy).
+for line in 'edits (named): lens skill check policy' 'runs (run ids):'; do
+	printf '%s\n' "$FIELDS" | grep -qxF -- "$line" && pass "process/R143: the shipped policy declares '$line'" ||
+		fail "process/R143: the shipped policy does not declare '$line'"
+	printf '%s\n' "$DEFAULTS" | grep -qxF -- "$line" && pass "process/R143: the checker's defaults declare '$line'" ||
+		fail "process/R143: the checker's defaults do not declare '$line'"
+done
+retro_kinds=$(grep -o '`Edits: <[a-z|]*> <name>`' "$KIT/.agents/skills/retro/SKILL.md" | head -1 | sed 's/^`Edits: <//; s/> <name>`$//' | tr '|' ' ')
+assert_equal "process/R143: the edits vocabulary is /retro's four kinds, in the filing check's order" "$retro_kinds" "$(printf '%s\n' "$FIELDS" | sed -n 's/^edits (named): //p')"
+note=$(awk '/^\*\*Arriving from 0\.121\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$KIT/UPDATING.md" | tr '\n' ' ')
+[ -n "$note" ] && pass "process/R143: UPDATING.md carries the arriving-from-0.121.0 paragraph" ||
+	fail "process/R143: UPDATING.md has no 'Arriving from 0.121.0 or older' paragraph"
+for word in '`edits`' '`runs`' "\`VOCAB_NAMED='edits'\`" "\`VOCAB_RUNID='runs'\`" "\`VOCAB_EDITS='lens skill check policy'\`" 'scripts/vocab.config.sh' 'whole policy' '/retro' '/to-tickets'; do
+	case $note in
+	*"$word"*) pass "process/R143: the paragraph names $word" ;;
+	*) fail "process/R143: the paragraph does not name $word" ;;
 	esac
 done
 

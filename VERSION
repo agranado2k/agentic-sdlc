@@ -4112,7 +4112,41 @@
 # --escapes — with docs/specs/runtime.md, the AGENTS.md row and
 # tests/land.test.sh beside it.
 
-shared-layer: 0.121.0
+# 0.122.0 — every retro candidate that edits something is held to checked
+# Edits:, Runs: and Targets: lines (ticket #924, PRD-11 slice 2 of D-02,
+# factory T-61). No file joins or leaves. Two shared files change content:
+# scripts/vocab.sh, which gains the NAMED kind of field (one of its tokens,
+# then one name of the token shape) and the RUN-ID kind (one to 32 run ids,
+# each asked of scripts/trace.sh's `id --check` beside it, refused without
+# it), reserves the field names `named` and `runid`, and declares `edits`
+# (`lens skill check policy`) and `runs` in its built-in defaults; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /retro — SKILL.md's new filing check section, whose
+# `file_candidates` hands each candidate block's Edits:, Runs: and Targets:
+# lines to the vocabulary checker, whatever it edits, prints `file:` or
+# `not filed:` and moves a block with a missing or refused line under the
+# report's `## Observations` heading, replacing step 8's inline pattern,
+# which knew lens and skill edits only (.agents/skills/retro/SKILL.md); and
+# /to-tickets — RETRO-CANDIDATES.md's `candidate_lines`, which prints a
+# retro candidate's `Retro:` and `Targets:` stamp lines for its ticket and
+# refuses, exit 1, a candidate with an Edits: line and no Targets: line,
+# and SKILL.md's publish step naming it
+# (.agents/skills/to-tickets/SKILL.md and
+# .agents/skills/to-tickets/RETRO-CANDIDATES.md).
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/vocab.config.sh (yours) — VOCAB_FIELDS gains `edits
+# runs`, with VOCAB_NAMED='edits', VOCAB_RUNID='runs' and
+# VOCAB_EDITS='lens skill check policy'; a found policy is the whole policy,
+# so a consumer adds the four lines. Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/process.md R28 restated and R143 to
+# R145, and tests/vocab.test.sh, tests/vocab-policy.test.sh,
+# tests/retro-skill.test.sh and tests/spec-skills.test.sh; and from PR #1018
+# (factory T-57, landed after 0.121.0's tag) scripts/land.kit.sh's notice to
+# the lane's operator when the base turns red after a lane landing, with
+# docs/specs/runtime.md, the AGENTS.md row and tests/land.test.sh beside it.
+
+shared-layer: 0.122.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited

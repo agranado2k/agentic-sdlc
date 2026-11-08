@@ -70,19 +70,26 @@
 # keyed fields whose value after the id is a TEST PIN, `<path>::<test-name>`,
 # held to a grammar the checker owns rather than to tokens: such a field is
 # keyed too, declares no VOCAB_<FIELD>, and may repeat an id once per test.
-# No rule reads a qualified or a keyed field either.
+# VOCAB_NAMED names the fields whose value is one of VOCAB_<FIELD>'s tokens,
+# then exactly one NAME held to the token shape alone. VOCAB_RUNID names the
+# fields whose value is one or more RUN IDS, each the shape the trace mints,
+# held to the trace's own check rather than to tokens: such a field declares
+# no VOCAB_<FIELD>. No rule reads a qualified, keyed, named or run-id field
+# either.
 #
 # VOCAB_BOUND and VOCAB_BOUNDS are the LINE BOUNDS a stamp reader holds a
 # ticket to: at most VOCAB_BOUND lines of any one stamp key, and the
 # per-field exceptions as `<field>=<count>`. Published here, not hard-coded,
 # so a planner outside the kit reads them from the same file.
 
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope finding-verdict'
+VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope finding-verdict edits runs'
 VOCAB_OPEN='domain class'
 VOCAB_QUERY='targets'
 VOCAB_QUALIFIED='risk'
 VOCAB_KEYED='test-tier accept-test'
 VOCAB_PIN='accept-test'
+VOCAB_NAMED='edits'
+VOCAB_RUNID='runs'
 
 # tier — owned by scripts/agents.lib.sh (see above); stamped by /to-tickets
 # as `Tier:`, read by /implement.
@@ -139,8 +146,8 @@ VOCAB_COMMAND_SHAPED='yes no'
 # read for, and `Author: <a name>` is a line ordinary bodies carry.
 VOCAB_AUTHOR_KIND='bot human'
 
-# targets — a QUERY: the trace events a ticket that edits a review lens or a
-# skill means to move, stamped by /to-tickets as `Targets:` and read by
+# targets — a QUERY: the trace events a ticket that edits a lens, a skill, a
+# check or a policy means to move, stamped by /to-tickets as `Targets:` and read by
 # /retro's before-and-after check (process/R25): `kind=<kind>` and up to seven
 # more `<field>=<value>` or `data.<key>=<value>` terms, all of which an event
 # must match. Its grammar is the checker's (vocab_query_ok); no tokens here.
@@ -189,6 +196,16 @@ VOCAB_SCOPE='inside outward'
 # finding-verdict — the verifier's word on a finding the kit's own review
 # raised: real at the head it judged, or not.
 VOCAB_FINDING_VERDICT='confirmed disputed'
+
+# edits — NAMED: what a /retro candidate edits, `Edits: <kind> <name>` — a
+# review lens, a skill, a check (a gate, a guard, a suite) or a policy file —
+# then the one thing it names. Checked by /retro before it files the
+# candidate, read by /to-tickets, which publishes no ticket from a candidate
+# with an Edits: line and no Targets: line (the kit's ADR-0048 clause 9).
+VOCAB_EDITS='lens skill check policy'
+
+# runs — RUN-ID: the trace runs a /retro candidate's evidence came from,
+# `Runs: <run id> …`, one to 32 ids in the shape the trace mints. No tokens.
 
 # The line bounds: 8 lines of any one stamp key, 32 Test-tier: lines and 32
 # Accept-test: lines.

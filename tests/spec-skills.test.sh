@@ -853,6 +853,39 @@ else
 			pass "stamp_ok refuses a stamp with something before, after or under it"
 	done
 
+	# process/R145: a retro candidate's ticket carries its Targets: line as a
+	# stamp line beside its Retro: line, and a candidate with an Edits: line
+	# and no Targets: line publishes nothing (#924).
+	printf '%s\n' 'Finding: the risk thresholds are loose' 'Edits: policy risk' 'Runs: 20261015T000000Z-6-0000abcd' \
+		'Targets: kind=risk.judge outcome=disagreed' >"$SCRATCH/cand-ok"
+	printf '%s\n' 'Finding: the self-host check misses a stale note' 'Edits: check self-host' 'Runs: 20261014T000000Z-5-0000f00d' >"$SCRATCH/cand-bare"
+	printf '%s\n' 'Finding: the price table is stale' 'Route: to-tickets' >"$SCRATCH/cand-none"
+	printf '%s\n' 'Finding: x' 'Edits: prose readme' 'Runs: 20261015T000000Z-6-0000abcd' 'Targets: kind=feedback' >"$SCRATCH/cand-bad"
+	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-ok" retro-20261020T000000Z)); rc=$?
+	[ "$rc" = 0 ] && [ "$got" = "Retro: retro-20261020T000000Z${nl}Targets: kind=risk.judge outcome=disagreed" ] &&
+		pass "process/R145: a retro candidate's ticket carries its Retro: and Targets: stamp lines" ||
+		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a complete policy candidate"
+	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-bare" retro-20261020T000000Z)); rc=$?
+	[ "$rc" = 1 ] && [ -z "$got" ] && pass "process/R145: a candidate with Edits: and no Targets: is refused, nothing to publish" ||
+		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a candidate with Edits: and no Targets:"
+	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-none" retro-20261020T000000Z)); rc=$?
+	[ "$rc" = 0 ] && [ "$got" = "Retro: retro-20261020T000000Z" ] && pass "process/R145: a candidate that edits nothing carries its Retro: line alone" ||
+		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a candidate that edits nothing"
+	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-bad" retro-20261020T000000Z 2>/dev/null)); rc=$?
+	[ "$rc" = 2 ] && [ -z "$got" ] && pass "process/R145: a line the vocabulary checker refuses publishes nothing (exit 2)" ||
+		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a refused Edits: line"
+	printf '%s\n' 'Finding: y' 'Edits: lens reuse' 'Edits: lens reuse' 'Targets: kind=finding.raise' >"$SCRATCH/cand-dup"
+	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-dup" retro-20261020T000000Z 2>/dev/null)); rc=$?
+	[ "$rc" = 2 ] && [ -z "$got" ] && pass "process/R145: a block naming one field twice publishes nothing (exit 2)" ||
+		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a block with Edits: twice"
+	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-ok" 'retro-2026" OR x')); rc=$?
+	[ "$rc" = 2 ] && [ -z "$got" ] && pass "process/R145: a stamp not of a report's shape publishes nothing (exit 2)" ||
+		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a malformed stamp"
+	cand=$(section_of "$RETRO_CAND_ABS" "A retro's candidates" | tr '\n' ' ' | tr -s ' ')
+	t_text_has "$cand" "beside its \`Retro:\` line" "process/R145: the section says the Targets: line rides beside the Retro: line"
+	t_text_has "$cand" "no \`Targets:\` line is not published" "process/R145: the section says an edit with no Targets: is not published"
+	t_text_has "$publish" "candidate_lines" "process/R145: publish step 4 names candidate_lines"
+
 	# The stand-in forge CLI: every call logged; `api user` answers the login;
 	# `issue view` answers an author from GH_AUTHORS (number=login …) or a body;
 	# `issue edit` copies the body file it is handed; `issue list` prints the

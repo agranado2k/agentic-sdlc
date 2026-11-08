@@ -1792,34 +1792,67 @@ esac
 for needle in '`Targets:`' 'scripts/stamp.sh' 'equal window' 'per landed PR' 'inconclusive' 'stopped' '— no drop' 'names the ticket'; do
 	case "$baprose" in *"$needle"*) pass "the before-and-after section says: $needle" ;; *) fail "the before-and-after section does not say: $needle" ;; esac
 done
-# R28, RUN: the filing check over a fixture report. Three lens or skill
-# edits — one with its run ids and its Targets: line, one with no run id, one
-# with no Targets: line — and a finding that edits nothing, which the check
-# leaves alone.
-r28span=$(sed -n '/^## Procedure/,/^## Routing/p' "$SKILL_ABS" | grep -o "\`awk 'BEGIN { RS = \"\" }[^\`]*\`" | tr -d '\`' | head -1)
-[ -n "$r28span" ] && pass "process/R28: SKILL.md carries the filing check as a span" ||
-	fail "process/R28: SKILL.md's procedure carries no \`awk 'BEGIN { RS = \"\" } …' <the report>\` filing check"
-if [ -n "$r28span" ]; then
+# R28, R144, RUN: the filing check over a fixture report. Every candidate
+# block that edits something — a lens, a skill, a check or a policy — has its
+# Edits:, Runs: and Targets: lines handed to the vocabulary checker before it
+# is filed; a block with a missing or refused line moves to the report's
+# observations, and a finding that edits nothing is left alone (#924).
+r28fence=$(t_fence "$SKILL_ABS" holds 'file_candidates()')
+[ -n "$r28fence" ] && pass "process/R144: SKILL.md carries the filing check as an sh fence defining file_candidates()" ||
+	fail "process/R144: SKILL.md carries no sh fence defining file_candidates() — the filing check is prose nobody can run"
+if [ -n "$r28fence" ]; then
+	printf '%s\n' "$r28fence" >"$SCRATCH/r28-fence.sh"
 	r28rep="$SCRATCH/r28-report.md"
-	printf '%s\n' '# retro' '' \
+	printf '%s\n' '# retro' '' '## Findings' '' \
 		'Finding: the security lens misses unsafe-path findings' 'Edits: lens security' \
 		'Runs: 20261011T000000Z-2-0000dead 20261012T000000Z-3-0000beef' 'Targets: kind=finding.raise data.agent=security' '' \
 		'Finding: the pattern lens repeats itself' 'Edits: lens pattern' 'Targets: kind=finding.raise data.agent=pattern' '' \
 		'Finding: /diagnose guesses first' 'Edits: skill diagnose' 'Runs: 20261013T000000Z-4-0000cafe' '' \
+		'Finding: the self-host check misses a stale note' 'Edits: check self-host' 'Runs: 20261014T000000Z-5-0000f00d' '' \
+		'Finding: the risk thresholds are loose' 'Edits: policy risk' 'Runs: 20261015T000000Z-6-0000abcd' 'Targets: kind=risk.judge outcome=disagreed' '' \
+		'Finding: the docs read badly' 'Edits: prose readme' 'Runs: 20261016T000000Z-7-0000abcd' 'Targets: kind=feedback outcome=missed' '' \
+		'Finding: the gate is slow' 'Edits: check gate' 'Runs: 2026-bad-id' 'Targets: kind=pr.iterate outcome=red' '' \
+		'Finding: the lens is doubled' 'Edits: lens reuse' 'Edits: lens reuse' 'Targets: kind=finding.raise' '' \
+		'Finding: the window reads odd' 'Runs: 20261017T000000Z-8-0000abcd' 'Targets: kind=' '' \
 		'Finding: the price table is stale' 'Route: to-tickets' >"$r28rep"
-	r28out=$(sh -c "$(printf '%s\n' "$r28span" | sed "s|<the report>|$r28rep|")" 2>&1)
-	for row in 'file: the security lens misses unsafe-path findings' 'not filed: the pattern lens repeats itself' 'not filed: /diagnose guesses first'; do
-		printf '%s\n' "$r28out" | grep -qxF "$row" && pass "process/R28: the filing check prints '$row'" ||
-			fail "process/R28: the filing check did not print '$row'; it printed: $(printf '%s' "$r28out" | tr '\n' ';')"
+	r28out=$(cd "$ROOT" && sh -c '. "$1"; file_candidates "$2"' sh "$SCRATCH/r28-fence.sh" "$r28rep" 2>/dev/null)
+	for row in 'file: the security lens misses unsafe-path findings' 'file: the risk thresholds are loose' \
+		'not filed: the pattern lens repeats itself' 'not filed: /diagnose guesses first' \
+		'not filed: the self-host check misses a stale note' 'not filed: the docs read badly' 'not filed: the gate is slow' \
+		'not filed: the lens is doubled' 'not filed: the window reads odd'; do
+		printf '%s\n' "$r28out" | grep -qxF "$row" && pass "process/R28, process/R144: the filing check prints '$row'" ||
+			fail "process/R28, process/R144: the filing check did not print '$row'; it printed: $(printf '%s' "$r28out" | tr '\n' ';')"
 	done
-	printf '%s\n' "$r28out" | grep -qF 'price table' && fail "process/R28: the filing check judged a finding that edits no lens or skill" ||
-		pass "process/R28: …and leaves a finding that edits nothing alone"
+	printf '%s\n' "$r28out" | grep -qF 'price table' && fail "process/R144: the filing check judged a finding that edits nothing" ||
+		pass "process/R144: …and leaves a finding that edits nothing alone"
+	# The report itself: the findings keep the filed blocks, bare; the refused
+	# ones sit under the observations heading, quoted so no reader of bare
+	# lines takes them for a candidate again.
+	r28find=$(awk '/^## Observations/ { exit } { print }' "$r28rep")
+	r28obs=$(awk '/^## Observations/ { on = 1 } on { print }' "$r28rep")
+	printf '%s\n' "$r28find" | grep -qxF 'Edits: policy risk' && pass "process/R144: the complete policy candidate stays in the findings, filed" ||
+		fail "process/R144: the complete policy candidate left the findings"
+	printf '%s\n' "$r28find" | grep -qxF 'Edits: check self-host' && fail "process/R28: the check candidate with no Targets: line is still a bare block in the findings" ||
+		pass "process/R28: the check candidate with no Targets: line is gone from the findings — nothing to file"
+	printf '%s\n' "$r28obs" | grep -qF 'not filed: the self-host check misses a stale note' && pass "process/R144: the check candidate is listed under the report's observations" ||
+		fail "process/R144: the report's observations do not list the check candidate missing Targets:; they read: $(printf '%s' "$r28obs" | tr '\n' ';')"
+	printf '%s\n' "$r28obs" | grep -qxF '> Edits: check self-host' && pass "process/R144: …its lines kept, quoted" ||
+		fail "process/R144: the observations do not keep the moved block's lines quoted"
+	printf '%s\n' "$r28find" | grep -qxF 'Route: to-tickets' && pass "process/R144: the finding that edits nothing stays where it was" ||
+		fail "process/R144: the filing check moved a finding that edits nothing"
+	r28again=$(cd "$ROOT" && sh -c '. "$1"; file_candidates "$2"' sh "$SCRATCH/r28-fence.sh" "$r28rep" 2>/dev/null)
+	[ "$(grep -c '^## Observations' "$r28rep")" = 1 ] && ! printf '%s\n' "$r28again" | grep -q '^not filed:' &&
+		pass "process/R144: a second run moves nothing and opens no second observations heading" ||
+		fail "process/R144: a second run moved blocks again or added a heading: $(printf '%s' "$r28again" | tr '\n' ';')"
 fi
-# R28: a lens or skill edit this pass proposes cites its evidence by run id
-# and carries its Targets: line, or is not filed.
+# R28, R144: what the procedure says about it.
 r28=$(sed -n '/^## Procedure/,/^## Anti-patterns/p' "$SKILL_ABS" | flat)
-for needle in 'the before-and-after section' 'by run id' '`Targets:` line' 'never filed without'; do
+for needle in 'the before-and-after section' 'by run id' '`Targets:` line' 'never filed without' 'a lens, a skill, a check or a policy' 'file_candidates'; do
 	case "$r28" in *"$needle"*) pass "process/R28: SKILL.md says: $needle" ;; *) fail "process/R28: SKILL.md does not say: $needle" ;; esac
+done
+r144=$(awk '/^## The filing check$/ { on = 1; next } /^## / { on = 0 } on' "$SKILL_ABS" | flat)
+for needle in 'scripts/vocab.sh' 'observations' 'whatever it edits'; do
+	case "$r144" in *"$needle"*) pass "process/R144: the filing check section says: $needle" ;; *) fail "process/R144: the filing check section does not say: $needle" ;; esac
 done
 
 # ---------------------------------------------------------------------------
