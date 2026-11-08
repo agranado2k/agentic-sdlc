@@ -783,7 +783,7 @@ from rulings that recur.
 
 Every `ruling` event is read, the whole export and not only the window, and
 each PR is mapped to its review areas **through its landing**, as the record
-reader does (ADR-0036): the paths of its latest landing's merge commit
+reader does (the kit's ADR-0036): the paths of its latest landing's merge commit
 against its first parent, each in every area the lens-slice policy puts it.
 A PR that never landed, or whose merge commit is not in this repository,
 counts in no area. Per pair of a review area and a surface, the **latest 5**
