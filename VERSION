@@ -4106,7 +4106,11 @@
 # script as the kit's landing command, AGENTS.md hard rule 10 sends the lane
 # step to that twin, docs/specs/process.md R80 to R82 and R85 added and R65
 # modified, the glossary's risk rule entry, and tests/land.test.sh section
-# 25 and tests/risk.test.sh section 9.
+# 25 and tests/risk.test.sh section 9; and from PR #1017 (factory T-55,
+# landed after 0.120.0's tag) scripts/land.kit.sh's escape notices — an
+# undone escape notified, a conflicting revert ticketed, a sweep with
+# --escapes — with docs/specs/runtime.md, the AGENTS.md row and
+# tests/land.test.sh beside it.
 
 shared-layer: 0.121.0
 
