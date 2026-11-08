@@ -82,7 +82,7 @@
 # per-field exceptions as `<field>=<count>`. Published here, not hard-coded,
 # so a planner outside the kit reads them from the same file.
 
-VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope finding-verdict edits runs'
+VOCAB_FIELDS='tier label domain severity status action outcome confidence command-shaped author-kind targets class risk risk-confidence test-tier accept-test result scope surface finding-verdict edits runs'
 VOCAB_OPEN='domain class'
 VOCAB_QUERY='targets'
 VOCAB_QUALIFIED='risk'
@@ -192,6 +192,12 @@ VOCAB_RESULT='pass fail skipped'
 # scope — the review's mark on an unspecified behavior item: its effect stays
 # inside the change, or a user, a consumer or another skill sees it.
 VOCAB_SCOPE='inside outward'
+
+# surface — what an outward unspecified item touches, written right after its
+# scope: an output format, a flag, an exit code, a rule an agent obeys, or
+# something else. Every reader takes a missing or unknown word as other, and
+# a ruling on the item carries it (the kit's ADR-0048 clause 7).
+VOCAB_SURFACE='output-format flag exit-code agent-rule other'
 
 # finding-verdict — the verifier's word on a finding the kit's own review
 # raised: real at the head it judged, or not.

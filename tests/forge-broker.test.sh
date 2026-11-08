@@ -1718,6 +1718,10 @@ for want in '"outcome":"confirm"' '"unspecified":"4"' '"outward":"3"' '"mixed":"
 	*) fail "process/R54–R55: the axis-2 verdict lacks $want: $AX2" ;;
 	esac
 done
+case "$AX2" in
+*'"outward_items":"A2-2:other,A2-3:other,A2-4:other"'*) pass "runtime/R142: each outward item is listed by its place in the list, its missing surface read as other" ;;
+*) fail "runtime/R142: the axis-2 verdict's outward_items is not A2-2:other,A2-3:other,A2-4:other: $AX2" ;;
+esac
 # Only `inside` lowers the count, and only as a whole word: a word that
 # merely begins with it is not the vocabulary's.
 STUB_PR=43
@@ -1744,6 +1748,78 @@ t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trac
 case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"') in
 *'"outward":"4"'*) pass "process/R54: with no inside in the vocabulary, every UNSPECIFIED item is outward" ;;
 *) fail "process/R54: an inside item lowered the count under a vocabulary that holds no inside: $T_OUT" ;;
+esac
+STUB_PR=12
+export STUB_PR
+
+banner "27. Each outward item's surface is carried into the axis-2 verdict, as a vocabulary token or other (#926)"
+# ---------------------------------------------------------------------------
+# runtime/R142, process/R148, ADR-0048 clause 7: the worker writes
+# `surface: <token>` right after `scope: outward`; the broker lists every
+# outward item as A2-<n>:<surface>, n its place in the confirm-list counted
+# from 1, the surface a word of the vocabulary's surface field, and `other`
+# where it is missing or not a word the field holds.
+SURFACED="$SCRATCH/surfaced.md"
+cat >"$SURFACED" <<EOF
+REVIEWED: $HEAD_SHA
+VERDICT: not blocking — behavior items to confirm
+
+## Axis 1 — Standards
+
+#### CRITICAL
+— none found.
+#### HIGH
+— none found.
+#### MEDIUM
+— none found.
+#### LOW
+— none found.
+
+## Axis 2 — Behavior (for a human)
+
+🔀 MIXED COMMIT abc1234 refactor: rename — claims refactor but changes scripts/a.sh.
+✅ SPECIFIED    R8 — scripts/a.sh: the restatement names the covered ids.
+⚠️ UNSPECIFIED  scope: inside — scripts/a.sh: a local variable is renamed.
+⚠️ UNSPECIFIED  scope: outward surface: exit-code — scripts/a.sh: the exit code on a bad flag moved from 1 to 2.
+❌ MISSING      R9 — the second flag is not delivered.
+⚠️ UNSPECIFIED  scope: outward — scripts/a.sh: the help text gained a line.
+
+🧬 MUTATION     no covered source changed — mutation run skipped
+EOF
+STUB_PR=45
+export STUB_PR
+broker 45 "$SURFACED"
+expect_status 0 "process/R147: a report whose outward items carry a surface passes the contract"
+case "$(payload issues/45/comments)" in
+*'scope: outward surface: exit-code — scripts/a.sh'*) pass "the comment carries the surfaced item verbatim" ;;
+*) fail "the comment lost the surfaced item" ;;
+esac
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#45' --kind review.verdict
+AX2=$(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"')
+case "$AX2" in
+*'"outward":"2"'*'"outward_items":"A2-4:exit-code,A2-6:other"'*) pass "runtime/R142: data.outward_items=A2-4:exit-code,A2-6:other — the second item carries no surface" ;;
+*) fail "runtime/R142: the axis-2 verdict lacks outward=2 and outward_items=A2-4:exit-code,A2-6:other: $AX2" ;;
+esac
+# An unknown word, and a surface written somewhere other than right after
+# the scope, are both read as other.
+STUB_PR=46
+export STUB_PR
+sed -e 's/surface: exit-code — /surface: colour — /' -e 's/scope: outward — scripts\/a.sh: the help/scope: outward — scripts\/a.sh: surface: flag the help/' "$SURFACED" >"$SCRATCH/surfaced-unknown.md"
+broker 46 "$SCRATCH/surfaced-unknown.md"
+expect_status 0 "…a report with an unknown surface word lands too"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#46' --kind review.verdict
+case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"') in
+*'"outward_items":"A2-4:other,A2-6:other"'*) pass "process/R148: an unknown surface word, and one not right after the scope, read as other" ;;
+*) fail "process/R148: an unknown or misplaced surface was not read as other: $T_OUT" ;;
+esac
+STUB_PR=47
+export STUB_PR
+sed 's/surface: exit-code — /surface: exit-codes — /' "$SURFACED" >"$SCRATCH/surfaced-prefix.md"
+broker 47 "$SCRATCH/surfaced-prefix.md"
+t_exec env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" sh "$KIT/scripts/trace.sh" show 'pr:#47' --kind review.verdict
+case $(printf '%s\n' "$T_OUT" | grep -F '"axis":"2"') in
+*'"outward_items":"A2-4:other,A2-6:other"'*) pass "process/R148: 'exit-codes' is no token the field holds — read as other" ;;
+*) fail "process/R148: a word beginning with a token was read as that token: $T_OUT" ;;
 esac
 STUB_PR=12
 export STUB_PR

@@ -2465,4 +2465,51 @@ for b in \
 done
 rm -f "$SCRATCH/acc-bait.md"
 
+# ---------------------------------------------------------------------------
+banner "30. Every outward item carries a surface, and the verdict lists them (#926)"
+# ---------------------------------------------------------------------------
+# process/R147–R149, ADR-0048 clause 7: Agent 7 writes `surface: <token>`
+# right after `scope: outward`, one of the vocabulary's `surface` field's five
+# words; every reader takes a missing or unknown surface as `other`; the
+# Axis-2 verdict records data.outward_items, one A2-<n>:<surface> entry per
+# outward item in list order. The dispatched worker writes the surface in the
+# same words, on the item's own line.
+SURFACE_WORDS=$(sh scripts/vocab.sh fields | sed -n 's/^surface: //p')
+[ "$SURFACE_WORDS" = 'output-format flag exit-code agent-rule other' ] &&
+	pass "the vocabulary's surface field holds output-format flag exit-code agent-rule other" ||
+	fail "the vocabulary's surface field is '$SURFACE_WORDS', not the five words ADR-0048 fixes"
+# surface_rules_missing <file> — the surface rules a skill or contract has lost.
+surface_rules_missing() {
+	_su=$(tr '\n' ' ' <"$1" | tr -s ' ')
+	case "$_su" in *"\`surface: <token>\` right after \`scope: outward\`"*) ;; *) printf '%s\n' 'surface after scope' ;; esac
+	case "$_su" in *"\`output-format\`, \`flag\`, \`exit-code\`, \`agent-rule\` or \`other\`, the vocabulary's \`surface\` field"*) ;; *) printf '%s\n' 'five tokens' ;; esac
+	case "$_su" in *"an outward item with no surface, or a word the vocabulary's \`surface\` field does not hold, as \`other\`"*) ;; *) printf '%s\n' 'other default' ;; esac
+}
+skill_surface_missing() {
+	surface_rules_missing "$1"
+	_su=$(tr '\n' ' ' <"$1" | tr -s ' ')
+	grep -qF 'data.outward=<count> [data.outward_items=<entries>] data.mixed=<count>' "$1" || printf '%s\n' 'verdict lists outward items'
+	case "$_su" in *"\`data.outward_items\` lists each outward item as \`A2-<n>:<surface>\`"*"one entry per item \`data.outward\` counts"*) ;; *) printf '%s\n' 'outward items defined' ;; esac
+}
+miss=$(skill_surface_missing "$SKILL_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "process/R147–R149: Agent 7 writes a surface after an outward scope, a missing one is other, and the verdict records data.outward_items" ||
+	fail "process/R147–R149: /review-pr's surface rules are missing: $miss"
+miss=$(surface_rules_missing "$WORKER_ABS" | tr '\n' ',' | sed 's/,$//')
+[ -z "$miss" ] && pass "process/R147–R148: the dispatched worker writes the surface right after the scope, in the skill's words" ||
+	fail "process/R147–R148: $WORKER's surface rules are missing: $miss"
+for b in \
+	'surface after scope|s/`surface: <token>` right after `scope: outward`/`surface: <token>` somewhere/' \
+	'five tokens|s/`agent-rule` or `other`, the vocabulary/`agent-rule`, the vocabulary/' \
+	'other default|s/does not hold, as `other`/does not hold, as `flag`/' \
+	'verdict lists outward items|s/ \[data.outward_items=<entries>\]//' \
+	'outward items defined|s/lists each outward item as `A2-<n>:<surface>`/lists the outward items/'; do
+	bait_gap skill_surface_missing "${b%%|*}" "${b#*|}" && pass "bait: /review-pr without '${b%%|*}' goes red" ||
+		fail "bait: /review-pr without '${b%%|*}' was not caught — or the bait planted nothing"
+done
+bait_copy "$WORKER_ABS" "$SCRATCH/bait926w.md" 's/`surface: <token>` right after `scope: outward`/a surface/' &&
+	surface_rules_missing "$SCRATCH/bait926w.md" | grep -qxF 'surface after scope' &&
+	pass "bait: a worker contract with no surface rule goes red" ||
+	fail "bait: a worker contract with no surface rule was not caught — or the bait planted nothing"
+rm -f "$SCRATCH/bait926w.md"
+
 t_done "/review-pr output contract"

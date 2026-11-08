@@ -4146,7 +4146,37 @@
 # the lane's operator when the base turns red after a lane landing, with
 # docs/specs/runtime.md, the AGENTS.md row and tests/land.test.sh beside it.
 
-shared-layer: 0.122.0
+# 0.123.0 — an outward confirm-list item carries its surface into the
+# review verdict, and the trace learns the ruling kind (ticket #926, PRD-11
+# slice 3 of D-02, factory T-63; ADR-0048 clause 7). No file joins or
+# leaves. Three shared files change content: scripts/trace.sh, which gains
+# the kind `ruling` (outcomes keep and change, subject pr:#<N>, data.item
+# A2-<n>, data.surface a word of the vocabulary's surface field, data.head
+# 40 hex digits, data.by operator, session or default — every other shape
+# refused, exit 2) and holds an Axis-2 review.verdict's data.outward_items to
+# a comma-separated list of A2-<n>:<surface> entries counting data.outward;
+# scripts/vocab.sh, whose built-in defaults declare `surface`; and
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /review-pr — SKILL.md's Agent 7 writes `surface: <token>`
+# right after `scope: outward`, every reader reads a missing or unknown
+# surface as other, and §5b's Axis-2 verdict records data.outward_items
+# (.agents/skills/review-pr/SKILL.md); and the dispatched reviewer's
+# contract, which ships beside the skills and writes the surface on the
+# item's own line (.agents/prompts/review-worker.md).
+# Wiring (9b): none. Templates (9c): none.
+# Config (9d): scripts/vocab.config.sh (yours) — VOCAB_FIELDS gains
+# `surface`, with VOCAB_SURFACE='output-format flag exit-code agent-rule
+# other'; a found policy is the whole policy, so a consumer adds the two.
+# Adapter (9e): none.
+# Kit-only, never shipped: scripts/forge-broker.kit.sh, which records each
+# outward item's surface as data.outward_items, reading a surface only as a
+# vocabulary token and as other otherwise; docs/specs/runtime.md R140 to
+# R142 and docs/specs/process.md R147 to R149; docs/domain-glossary.md's
+# Surface and Ruling; and tests/trace.test.sh, tests/forge-broker.test.sh
+# and tests/review-pr-output.test.sh.
+
+shared-layer: 0.123.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
