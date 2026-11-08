@@ -2445,9 +2445,9 @@ PIR="$KIT/.agents/skills/pr-iterate/RISK.md"
 [ -f "$PL" ] && pass "process/R80: /pr-iterate carries the lane step's branch file" || fail "process/R80: no .agents/skills/pr-iterate/LANE.md"
 pl_flat=$(tr '\n' ' ' <"$PL" 2>/dev/null | tr -s ' ')
 pi_flat=$(tr '\n' ' ' <"$PI" | tr -s ' ')
-t_text_has "$pi_flat" 'A `green` iteration opens [`LANE.md`](LANE.md) before the run closes' "process/R80: step 6 opens the lane step after the green record, before the run ends"
+t_text_has "$pi_flat" 'A `green` iteration then opens [`LANE.md`](LANE.md). Then close the run:' "process/R80: step 6 opens the lane step after the green record, before the run ends"
 _pl_green=$(t_line_of "$PI" 'kind=pr.iterate subject=pr:#<N> outcome=green|red|stopped data.iteration=<i> data.applied')
-_pl_open=$(t_line_of "$PI" 'A `green` iteration opens [`LANE.md`](LANE.md)')
+_pl_open=$(t_line_of "$PI" 'A `green` iteration then opens [`LANE.md`](LANE.md)')
 [ -n "$_pl_green" ] && [ -n "$_pl_open" ] && [ "$_pl_open" -ge "$_pl_green" ] &&
 	pass "process/R80: the lane step comes after the iteration's record" || fail "process/R80: the lane step (line $_pl_open) precedes the iteration's record (line $_pl_green)"
 # R80: its three conditions, the invocation, and the three answers it reports.
@@ -2462,7 +2462,7 @@ done
 t_text_has "$pl_flat" 'An empty command — every consumer'"'"'s, as shipped — runs nothing, and the report is today'"'"'s' "process/R81: no landing command named runs none"
 # R82: the landing's report lists the decision-log ids, for after the fact.
 t_text_has "$pl_flat" 'Lane: Landed by the lane — decision log to read after the fact: <lane_ids, or none>' "process/R82: a lane landing's report lists the PR's decision-log ids"
-t_text_has "$pi_flat" 'Lane: <LANE.md'"'"'s line; omitted when the step ran nothing>' "process/R82: the report format carries the lane line"
+t_text_has "$pl_flat" 'one `Lane:` line under the `Risk:` line' "process/R82: the lane's answer is one report line under the risk line"
 # R85: never the train, one landing per iteration.
 t_text_has "$pl_flat" 'The step never starts `/merge-train`, and runs one landing per iteration, for this PR alone' "process/R85: never the train, one landing per run"
 for _pl_f in "$PI" "$PL"; do
