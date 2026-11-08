@@ -350,9 +350,9 @@ for line in 'edits (named): lens skill check policy' 'runs (run ids):'; do
 done
 retro_kinds=$(grep -o '`Edits: <[a-z|]*> <name>`' "$KIT/.agents/skills/retro/SKILL.md" | head -1 | sed 's/^`Edits: <//; s/> <name>`$//' | tr '|' ' ')
 assert_equal "process/R143: the edits vocabulary is /retro's four kinds, in the filing check's order" "$retro_kinds" "$(printf '%s\n' "$FIELDS" | sed -n 's/^edits (named): //p')"
-note=$(awk '/^\*\*Arriving from 0\.120\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$KIT/UPDATING.md" | tr '\n' ' ')
-[ -n "$note" ] && pass "process/R143: UPDATING.md carries the arriving-from-0.120.0 paragraph" ||
-	fail "process/R143: UPDATING.md has no 'Arriving from 0.120.0 or older' paragraph"
+note=$(awk '/^\*\*Arriving from 0\.121\.0 or older/ { on = 1 } on && /^$/ { exit } on' "$KIT/UPDATING.md" | tr '\n' ' ')
+[ -n "$note" ] && pass "process/R143: UPDATING.md carries the arriving-from-0.121.0 paragraph" ||
+	fail "process/R143: UPDATING.md has no 'Arriving from 0.121.0 or older' paragraph"
 for word in '`edits`' '`runs`' "\`VOCAB_NAMED='edits'\`" "\`VOCAB_RUNID='runs'\`" "\`VOCAB_EDITS='lens skill check policy'\`" 'scripts/vocab.config.sh' 'whole policy' '/retro' '/to-tickets'; do
 	case $note in
 	*"$word"*) pass "process/R143: the paragraph names $word" ;;
