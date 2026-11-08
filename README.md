@@ -98,6 +98,7 @@ second time rather than overwriting a manual you have since edited.
 | `scripts/policy.sh` | The policy reader: a judging file as the base branch has it (`read`), the judging files a diff touches (`touched`), and the risk thresholds (`thresholds`), each at a base ref, failing closed (`fail-closed <reason> <path>`, exit 3) and never falling back to the working tree. Shared layer. |
 | `scripts/lane.config.sh` | **Yours.** The lane policy: the operator who stands behind the low-risk lane, a forge login. Ships empty, so the lane is closed; a lane reads it at the base, never from a pull request. |
 | `scripts/risk.config.sh` | **Yours.** The risk policy: the miss-rate ceiling and precision floor a review area must meet, and extra judging paths. Ships filled (5, 80, none); always read at a base. |
+| `scripts/ruling.sh` | The ruling recorder: records the operator's `keep` or `change` on one outward item of a PR's Axis-2 confirm-list as a `ruling` event at the head the verdict was made at, `by` read from the environment; `--unruled` lists the items not yet ruled `keep` with both commands. Closed tokens only. |
 | `scripts/worktree-cleanup.sh` | Prunes merged worktrees and fast-forwards the root checkout. Driven by the `/worktree-cleanup` skill. **Yours** — not shared layer. |
 | `.githooks/pre-push` | Runs the docs gate and the pairing guard before every push, each with its own loud, logged bypass. |
 | `.githooks/pre-commit` | Refuses an agent's commit from the main working copy or on the default branch (hard rule 1, "Worktree, always"); a human with no agent-harness marker set commits as before. One loud bypass, documented in the hook. |
@@ -256,7 +257,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.123.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.124.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -731,6 +732,16 @@ skeleton (K0).
   unlearned`, and unreadable thresholds, an unconfigured trace and an unknown
   `SCHEMA` fail closed at exit 0; no ticket text leaves the rule, and
   `/pr-iterate` reports the verdict without acting on it.
+- `sh tests/ruling.test.sh` holds `scripts/ruling.sh`, the ruling recorder
+  (PRD-11 slice 3, the kit's ADR-0048): in a throwaway repository with a
+  stand-in forge and a fixture trace, the operator's `keep` on an outward item
+  records one `ruling` with the item's surface from the latest Axis-2 verdict
+  and the head it was made at; no verdict, a stale one or an unlisted item is
+  exit 2, nothing recorded; an agent-harness marker records `by=session` and a
+  caller's `by` is refused; the same ruling twice is recorded once; an
+  unconfigured trace records nothing at exit 0; and `--unruled` lists each
+  outward item not ruled `keep` at the head with its `keep:` and `change:`
+  commands, which `/pr-iterate` prints and runs neither.
 - `sh tests/acceptance-tripwires.test.sh` holds the edit-time tripwires
   (PRD-14 slice 5): in a throwaway factory project holding T-90's approval,
   the adapter's root guard refuses an Edit, Write or MultiEdit of the held
@@ -1049,6 +1060,7 @@ sh tests/policy.test.sh                                # the policy reader reads
 sh tests/acceptance-guard.test.sh                      # the acceptance guard holds an approved test file at the base, failing closed
 sh tests/acceptance-tripwires.test.sh                  # an agent's edit or commit of an approved test is refused, failing open
 sh tests/risk.test.sh                                  # the risk rule judges a PR from its review areas' earned records
+sh tests/ruling.test.sh                                # the ruling recorder records the operator's keep or change on an outward item
 sh tests/factory-config.test.sh                        # a value the factory defines is read from its manifest, at the base too
 sh tests/outcome-recorder.test.sh                      # a revert, or a fix inside the fix window, is recorded against the PR
 sh tests/worktree-cleanup.test.sh                      # the pruning rule

@@ -14,4 +14,12 @@ The rule reads the ticket's `Risk:` line through the stamp reader, each review a
 
 **Report it.** Its `effective:` value goes at the top of the report, under the title, as `Risk: <the effective line> (reported only)`, with the areas its `area:` lines call `unlearned` beside it. When `rc` is not 0 — a caller error, or a value the checker refused, and nothing printed — report `Risk: not judged (reported only)`; the iteration goes on either way.
 
+**The outward items, and the operator's two commands.** After the risk rule, ask the ruling recorder which outward items of the Axis-2 verdict at the head are not yet ruled `keep` there:
+
+```sh
+sh scripts/ruling.sh <N> --unruled
+```
+
+It prints closed lines only: `ruled: <item> <surface> <by>` for an item the operator — or a ruling default — ruled `keep` at the head, and for every other item `unruled: <item> <surface>` followed by a `keep:` line and a `change:` line, each a whole recorder command filled with the PR and the item id. In the report's ⚠️ block, beside each outward item the confirm-list lists as `A2-<n>`, print those two lines verbatim when it is `unruled`, and `ruled keep (<by>)` when it is `ruled`. This skill runs neither command, ever: a ruling is the operator's act, and one this session ran would record `by=session`, which lifts nothing. Exit 2 (no Axis-2 verdict at the head, or none of its items listed) or any other non-zero exit prints the items without commands; the iteration goes on either way.
+
 **Never act on it, save the lane.** This skill takes the same actions whatever the rule prints, save its one exception: the lane step ([`LANE.md`](LANE.md)) and the landing script's lane mode it runs. Outside them no fix, reply, push, stop condition or `Next:` line moves with it, and the landing reads nothing of it either.
