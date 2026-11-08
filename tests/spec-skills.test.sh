@@ -874,6 +874,10 @@ else
 	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-bad" retro-20261020T000000Z 2>/dev/null)); rc=$?
 	[ "$rc" = 2 ] && [ -z "$got" ] && pass "process/R145: a line the vocabulary checker refuses publishes nothing (exit 2)" ||
 		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a refused Edits: line"
+	printf '%s\n' 'Finding: y' 'Edits: lens reuse' 'Edits: lens reuse' 'Targets: kind=finding.raise' >"$SCRATCH/cand-dup"
+	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-dup" retro-20261020T000000Z 2>/dev/null)); rc=$?
+	[ "$rc" = 2 ] && [ -z "$got" ] && pass "process/R145: a block naming one field twice publishes nothing (exit 2)" ||
+		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a block with Edits: twice"
 	got=$( (cd "$ROOT" && . "$SCRATCH/fence.sh" && candidate_lines "$SCRATCH/cand-ok" 'retro-2026" OR x')); rc=$?
 	[ "$rc" = 2 ] && [ -z "$got" ] && pass "process/R145: a stamp not of a report's shape publishes nothing (exit 2)" ||
 		fail "process/R145: candidate_lines printed '$got' (exit $rc) for a malformed stamp"

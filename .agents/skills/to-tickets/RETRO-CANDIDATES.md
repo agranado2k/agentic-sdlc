@@ -31,6 +31,7 @@ candidate_lines() {
 	stamp_ok "$2" || return 2
 	if grep -q '^Edits: ' "$1" && ! grep -q '^Targets: ' "$1"; then return 1; fi
 	[ "$(grep -cE '^(Edits|Runs|Targets): ' "$1")" -le 3 ] || return 2
+	[ -z "$(grep -E '^(Edits|Runs|Targets): ' "$1" | cut -d: -f1 | sort | uniq -d)" ] || return 2
 	grep -E '^(Edits|Runs|Targets): ' "$1" | sh scripts/vocab.sh >/dev/null || return 2
 	printf 'Retro: %s\n' "$2"
 	grep '^Targets: ' "$1" | head -n 1

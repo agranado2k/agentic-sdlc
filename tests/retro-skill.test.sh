@@ -1812,11 +1812,14 @@ if [ -n "$r28fence" ]; then
 		'Finding: the risk thresholds are loose' 'Edits: policy risk' 'Runs: 20261015T000000Z-6-0000abcd' 'Targets: kind=risk.judge outcome=disagreed' '' \
 		'Finding: the docs read badly' 'Edits: prose readme' 'Runs: 20261016T000000Z-7-0000abcd' 'Targets: kind=feedback outcome=missed' '' \
 		'Finding: the gate is slow' 'Edits: check gate' 'Runs: 2026-bad-id' 'Targets: kind=pr.iterate outcome=red' '' \
+		'Finding: the lens is doubled' 'Edits: lens reuse' 'Edits: lens reuse' 'Targets: kind=finding.raise' '' \
+		'Finding: the window reads odd' 'Runs: 20261017T000000Z-8-0000abcd' 'Targets: kind=' '' \
 		'Finding: the price table is stale' 'Route: to-tickets' >"$r28rep"
 	r28out=$(cd "$ROOT" && sh -c '. "$1"; file_candidates "$2"' sh "$SCRATCH/r28-fence.sh" "$r28rep" 2>/dev/null)
 	for row in 'file: the security lens misses unsafe-path findings' 'file: the risk thresholds are loose' \
 		'not filed: the pattern lens repeats itself' 'not filed: /diagnose guesses first' \
-		'not filed: the self-host check misses a stale note' 'not filed: the docs read badly' 'not filed: the gate is slow'; do
+		'not filed: the self-host check misses a stale note' 'not filed: the docs read badly' 'not filed: the gate is slow' \
+		'not filed: the lens is doubled' 'not filed: the window reads odd'; do
 		printf '%s\n' "$r28out" | grep -qxF "$row" && pass "process/R28, process/R144: the filing check prints '$row'" ||
 			fail "process/R28, process/R144: the filing check did not print '$row'; it printed: $(printf '%s' "$r28out" | tr '\n' ';')"
 	done

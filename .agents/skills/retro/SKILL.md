@@ -152,7 +152,8 @@ and is filed only when all three are there, one line each, and accepted.
 `file_candidates`
 does it, run from the project root over the report: it prints `file:` or
 `not filed:` per candidate, and moves each one not filed to the report's
-observations, under its `## Observations` heading, its last section, its lines quoted so no reader
+observations — appended at the end of the report, under an `## Observations`
+heading it opens when none exists — its lines quoted so no reader
 of bare lines takes it for a candidate again. A block with no `Edits:`
 line edits nothing and keeps its place; one whose `Runs:` or `Targets:`
 line is refused is moved all the same. A second run moves nothing.
@@ -165,6 +166,7 @@ file_candidates() {
 		lines=$(fc_block "$1" "$b" | grep -E '^(Edits|Runs|Targets): ')
 		finding=$(fc_block "$1" "$b" | sed -n 's/^Finding: //p' | head -n 1)
 		if [ "$(printf '%s\n' "$lines" | grep -c '')" -le 3 ] &&
+			[ -z "$(printf '%s\n' "$lines" | cut -d: -f1 | sort | uniq -d)" ] &&
 			printf '%s\n' "$lines" | sh scripts/vocab.sh >/dev/null &&
 			{ ! printf '%s\n' "$lines" | grep -q '^Edits: ' ||
 				{ printf '%s\n' "$lines" | grep -q '^Runs: ' && printf '%s\n' "$lines" | grep -q '^Targets: '; }; }; then
