@@ -42,9 +42,14 @@
 # on the PR stamped at or after the head commit's committer date (UTC), as
 # the landing script reads "at the head". Its `data.outward` of 1 or more —
 # something outside the PR relies on an unspecified change
-# (the kit's ADR-0038) — makes the rule's risk `high outward` (runtime/R59). No such
-# verdict, one only at an older commit, or one that carries no outward count
-# in digits makes it `high unclear`: the rule cannot rule out an outward item
+# (the kit's ADR-0038) — makes the rule's risk `high outward` while it counts
+# more outward items than are ruled `keep` at that head, as the ruling
+# recorder (scripts/ruling.sh) reads it: the latest `operator` or `default`
+# ruling of the item at the head reads keep, and a `session` ruling never
+# counts (runtime/R59). A verdict that names no outward items is lifted by no
+# ruling, and neither is one the recorder cannot read. No such verdict, one
+# only at an older commit, or one that carries no outward count in digits
+# makes it `high unclear`: the rule cannot rule out an outward item
 # it has not seen (runtime/R60).
 #
 # The reason, in order: `outward`, then `unlearned` (any unlearned area),
@@ -240,6 +245,21 @@ if [ -n "$record" ]; then
 			}
 			END { if (o != "") print o }')
 fi
+# The outward items ruled `keep` at the head, as the ruling recorder reads
+# them: the latest operator or default ruling of the item at that head reads
+# keep, and a session ruling never counts (runtime/R59). Only its `ruled:`
+# lines are counted; a recorder that is absent, refuses or fails counts none.
+ruled=0
+case $outward in
+'' | - | 0) ;;
+*)
+	if [ -f "$_here/ruling.sh" ]; then
+		_rc=0
+		sh "$_here/ruling.sh" "$pr" --unruled --head "$head" >"$_tmp/ruled" 2>/dev/null || _rc=$?
+		[ "$_rc" = 0 ] && ruled=$(grep -c '^ruled: A2-[0-9][0-9]* ' "$_tmp/ruled")
+	fi
+	;;
+esac
 
 # --- the kill switch ----------------------------------------------------------------
 # The base's value, read through the policy reader and evaluated in a child
@@ -266,7 +286,7 @@ case $outward in
 '' | -) rule='high unclear' ;;
 esac
 [ -z "$unlearned" ] || rule='high unlearned'
-case $outward in '' | - | 0) ;; *) rule='high outward' ;; esac
+case $outward in '' | - | 0) ;; *) [ "$ruled" -ge "$outward" ] || rule='high outward' ;; esac
 # A tripped switch lets the rule call nothing low (runtime/R65).
 [ "$switch" = on ] || [ "$rule" != low ] || rule='high unlearned'
 plevel=${planner%% *}
