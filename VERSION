@@ -4207,7 +4207,27 @@
 # recorder; AGENTS.md's hard rule 10 and row; README.md's rows and suite
 # line; and the kit-ci job.
 
-shared-layer: 0.124.0
+# 0.125.0 — an operator or default keep ruling at the head lifts the risk
+# rule's outward verdict (ticket #928, PRD-11 slice 3 of D-02, factory
+# T-65; runtime/R59 modified). No file joins or leaves. Two shared files
+# change content: scripts/risk.sh, whose rule reads `high outward` only
+# while the Axis-2 review.verdict at the head counts more outward items
+# than the ruling recorder's `--unruled --head <head>` prints `ruled:` —
+# the latest operator or default ruling there reads keep, a session ruling
+# never counts — and falls to the next reason once every item is ruled
+# keep; a verdict with no data.outward_items, or a recorder absent or
+# failing, lifts nothing; and UPDATING.md, its entry and both worked
+# examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate — RISK.md's passage says an outward item not
+# ruled keep by the operator or a ruling default raises the rule
+# (.agents/skills/pr-iterate/RISK.md).
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: docs/specs/runtime.md R59 modified; the
+# glossary's Risk rule; AGENTS.md's risk rule row; and tests/risk.test.sh.
+
+shared-layer: 0.125.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
