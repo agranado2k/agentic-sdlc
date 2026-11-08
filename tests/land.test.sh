@@ -79,6 +79,30 @@ case " $* " in
 		"mergeStateStatus=${STUB_MSS:-CLEAN}" "reviewDecision=${STUB_REVIEW-APPROVED}" baseRefName=main "ticket=${STUB_TICKET-77}" \
 		"headRefName=${STUB_BRANCH-feat/x}" "title=${STUB_TITLE:-feat(x): a slice}" | order
 	;;
+*" pr list "*)
+	# A revert PR the lane opened before, found by its head branch
+	# (runtime/R94): its number, or nothing.
+	[ -z "${STUB_REVERT_EXISTING:-}" ] || printf '%s\n' "$STUB_REVERT_EXISTING"
+	;;
+*" pr create "* | *" issue create "*)
+	# The lane's revert PR and its notice (runtime/R94, R97): each body is
+	# kept whole beside the log, so a case reads what the forge was sent.
+	_nb= _pv=
+	for a; do [ "$_pv" = --body ] && _nb=$a; _pv=$a; done
+	printf '%s\n%s\n' "--- $1" "$_nb" >>"$STUB_LOG.bodies"
+	case $2 in
+	create)
+		[ "${STUB_PR_CREATE_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_PR_CREATE_RC"; }
+		printf 'https://github.com/o/r/pull/%s\n' "${STUB_REVERT_PR:-9301}"
+		;;
+	esac
+	case $1 in
+	issue)
+		[ "${STUB_ISSUE_CREATE_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_ISSUE_CREATE_RC"; }
+		printf 'https://github.com/o/r/issues/%s\n' "${STUB_NOTICE:-9401}"
+		;;
+	esac
+	;;
 *" pr checks "*) exit "${STUB_CHECKS_RC:-0}" ;;
 *" pr merge "*) exit "${STUB_MERGE_RC:-0}" ;;
 *" issue view "*)
@@ -159,6 +183,38 @@ cat >"$STUBDIR/git" <<'EOF'
 [ -s "$STUB_KNOBS" ] && . "$STUB_KNOBS"
 _c=
 [ "${1:-}" = -C ] && { _c=$2; shift 2; }
+# The lane's throwaway worktree for a revert (runtime/R94), under
+# STUB_GIT_DIR: every command run in it is logged and answered here, and
+# `worktree add` and `remove` make and drop its directory, so no case ever
+# touches a real repository's worktrees.
+if [ -n "${STUB_GIT_DIR:-}" ]; then
+	case $_c in "$STUB_GIT_DIR"/*)
+		printf 'ARGV: git-wt %s\n' "$*" >>"$STUB_LOG"
+		case $1 in
+		revert) exit "${STUB_REVERT_RC:-0}" ;;
+		push) exit "${STUB_ESC_PUSH_RC:-0}" ;;
+		esac
+		exit 0
+		;;
+	esac
+	case "$*" in
+	'worktree add '*)
+		printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG"
+		[ "${STUB_WT_RC:-0}" = 0 ] || exit "$STUB_WT_RC"
+		eval "_wp=\${$(($# - 1))}"
+		mkdir -p "$_wp"
+		exit 0
+		;;
+	'worktree remove '*)
+		printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG"
+		eval "_wp=\${$#}"
+		rm -rf "$_wp"
+		exit 0
+		;;
+	'worktree prune'*) exit 0 ;;
+	*--git-common-dir*) printf '%s\n' "$STUB_GIT_DIR"; exit 0 ;;
+	esac
+fi
 case ${1:-} in
 fetch | show | ls-remote | tag | push | cat-file | ls-tree) printf 'ARGV: git %s\n' "$*" >>"$STUB_LOG" ;;
 # The base branch's head the lane's base-red hold asks for, only once
@@ -221,6 +277,8 @@ show)
 	;;
 rev-parse) printf '%s\n' "${STUB_BASE_OID:-b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0}" ;;
 ls-remote)
+	# A revert branch a lane run pushed before (runtime/R94).
+	[ -z "${STUB_REMOTE_BRANCH:-}" ] || printf '%s\trefs/heads/%s\n' 3333333333333333333333333333333333333333 "$STUB_REMOTE_BRANCH"
 	# An annotated tag lists its tag object, then the commit it peels to; a
 	# lightweight one lists the commit alone.
 	[ -n "${STUB_REMOTE_TAG:-}" ] || exit 0
@@ -1397,8 +1455,10 @@ banner "15. Every kind the script reads from the trace is named by ADR-0019 (#72
 ADR19=$(ls "$KIT"/docs/adr/0019-*.md 2>/dev/null | head -1)
 # land_read_kinds <script> — one line per read: its kind; `?<line>` for a
 # read whose kind is neither a literal nor a wrapper's "$1", or a wrapper
-# called with a kind it cannot spell; `!<subcommand> <line>` for a trace read
-# through any subcommand but `show` and `dir`. A backslash-continued line is
+# called with a kind it cannot spell; `outcomes` for the lane's run of the
+# outcome recorder, a read the record must name like a kind (ADR-0047 clause
+# 7, ADR-0049); `!<subcommand> <line>` for a trace read through any other
+# subcommand but `show` and `dir`. A backslash-continued line is
 # read with the next, and a function's name is dropped at its closing brace,
 # so a top-level "$1" read follows no wrapper.
 land_read_kinds() {
@@ -1411,7 +1471,8 @@ land_read_kinds() {
 		/^}/ { fn = "" }
 		/trace_read[ \t]+[a-z]/ {
 			c = $0; sub(/.*trace_read[ \t]+/, "", c); sub(/[^a-z].*/, "", c)
-			if (c != "show" && c != "dir") print "!" c " " NR
+			if (c == "outcomes") print c
+			else if (c != "show" && c != "dir") print "!" c " " NR
 		}
 		/show[^|]*--kind/ {
 			k = $0; sub(/.*--kind[ =]*/, "", k); sub(/[ \t|;)].*/, "", k)
@@ -1445,13 +1506,21 @@ land_reads_unnamed() {
 		esac
 	done
 }
-_lr_read=$(land_read_kinds "$LAND" | tr '\n' ' ')
-[ "$_lr_read" = "merge.land pr.iterate pr.open review.verdict ticket.start verify.verdict " ] &&
-	pass "the script's reads are the six kinds: $_lr_read" ||
-	fail "the script's reads read as '$_lr_read', not merge.land, pr.iterate, pr.open, review.verdict, ticket.start and verify.verdict"
-_lr_miss=$(land_reads_unnamed "$LAND" "$ADR19")
-[ -z "$_lr_miss" ] && pass "ADR-0019 names every kind the landing script reads" ||
-	fail "ADR-0019 does not name the landing script's read of: $(echo $_lr_miss)"
+_lr_read=$(land_read_kinds "$LAND" | LC_ALL=C sort | tr '\n' ' ')
+[ "$_lr_read" = "lane.escape merge.land merge.outcome outcomes pr.iterate pr.open review.verdict ticket.start verify.verdict " ] &&
+	pass "the script's reads are the eight kinds and the outcome recorder: $_lr_read" ||
+	fail "the script's reads read as '$_lr_read', not lane.escape, merge.land, merge.outcome, outcomes, pr.iterate, pr.open, review.verdict, ticket.start and verify.verdict"
+# ADR-0019 is at its amendment cap (ADR-0021 clause 5), so a read that joins
+# later is recorded in a new record that amends it (ADR-0049 for the lane's
+# escape reads, #917), its header saying "ADR-0019 clause 1, whose landing
+# script gains" — the phrase that marks a record adding a read: the record
+# that binds is ADR-0019 plus every such one.
+ADR19_ALL="$SCRATCH/adr19-all.md"
+{ cat "$ADR19"; grep -l '^- \*\*Supersedes / amends\*\*:.*ADR-0019 clause 1, whose landing script gains' "$KIT"/docs/adr/[0-9]*.md 2>/dev/null | grep -vF "$ADR19" | xargs cat 2>/dev/null; } >"$ADR19_ALL"
+_lr_miss=$(land_reads_unnamed "$LAND" "$ADR19_ALL")
+[ -z "$_lr_miss" ] && pass "ADR-0019 and the records amending it name every kind the landing script reads" ||
+	fail "ADR-0019 and the records amending it do not name the landing script's read of: $(echo $_lr_miss)"
+ADR19=$ADR19_ALL
 LR_BAIT="$SCRATCH/land.reads-bait"
 mkdir -p "$LR_BAIT"
 { cat "$LAND"; printf '%s\n' 'trace_read show "pr:#$PR" --kind feedback >/dev/null'; } >"$LR_BAIT/literal.sh"
@@ -1490,6 +1559,10 @@ grep -vF 'pr.open' "${ADR19:-/dev/null}" >"$LR_BAIT/record.md"
 [ "$(land_reads_unnamed "$LAND" "$LR_BAIT/record.md")" = pr.open ] &&
 	pass "bait: with pr.open cut from the record, the check names it" ||
 	fail "bait: a record that does not name pr.open passed: $(land_reads_unnamed "$LAND" "$LR_BAIT/record.md")"
+grep -vF '`outcomes`' "${ADR19:-/dev/null}" >"$LR_BAIT/record-oc.md"
+[ "$(land_reads_unnamed "$LAND" "$LR_BAIT/record-oc.md")" = outcomes ] &&
+	pass "bait: with the outcome recorder cut from the records, the check names it" ||
+	fail "bait: records that do not name the outcomes read passed: $(land_reads_unnamed "$LAND" "$LR_BAIT/record-oc.md")"
 printf '%s\n' 'echo no reads here' >"$LR_BAIT/none.sh"
 case $(land_reads_unnamed "$LR_BAIT/none.sh" "$ADR19") in
 *'no show --kind read'*) pass "bait: a script with no read found fails, having read nothing" ;;
@@ -2051,6 +2124,15 @@ banner "24. The low-risk lane lands a low-risk PR, and holds a closed lane, a tr
 LANEKIT="$SCRATCH/lanekit"
 mkdir -p "$LANEKIT/scripts"
 cp "$KIT"/scripts/*.sh "$LANEKIT/scripts/"
+# A repository, as the root checkout is: the lane runs the outcome recorder
+# there (runtime/R92), and the recorder reads git. Its git directory for the
+# revert's throwaway worktree is the stub's (runtime/R94).
+"$REAL_GIT" -C "$LANEKIT" init -q && t_git_identity "$LANEKIT" t t@t &&
+	"$REAL_GIT" -C "$LANEKIT" add -A && "$REAL_GIT" -C "$LANEKIT" commit -q -m 'chore: the lane kit' ||
+	fail "could not make the lane kit a repository"
+STUB_GIT_DIR="$SCRATCH/lane-gitdir"
+mkdir -p "$STUB_GIT_DIR"
+export STUB_GIT_DIR
 LANE_FIX="$SCRATCH/lane-policies"
 mkdir -p "$LANE_FIX"
 printf "LANE_OPERATOR='octocat'\nLANE_HOLD_PATTERNS='scripts/land.kit.sh .githooks/* adapters/claude-code/*'\n" >"$LANE_FIX/open"
@@ -2102,7 +2184,7 @@ export STUB_BASE_TREE STUB_DEFAULT_ISSUE STUB_DEFAULT_BODY
 # lane_lines_closed <label> — every stdout line of the last run is of a shape
 # the lane may print: closed tokens, numbers, shas and digits (runtime/R102).
 lane_lines_closed() {
-	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|held (closed|drift|path|base-red|check-table|verifier (disputed|blocked|unavailable|none)|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
+	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|escape pr:#[0-9]+ revert pr:#[0-9]+|held (closed|drift|escape|path|base-red|check-table|verifier (disputed|blocked|unavailable|none)|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
 	[ -z "$_llc_bad" ] && pass "runtime/R102: $1: every line the lane printed is a closed token, a number or a sha" ||
 		fail "runtime/R102: $1: the lane printed a line outside its closed set: $_llc_bad"
 }
@@ -2186,7 +2268,7 @@ lane_held() {
 		pass "runtime/R91: $3: one merge.land outcome=skipped data.via=lane, with the token and the head commit" ||
 		fail "runtime/R91: $3: the hold's merge.land is not the one expected: $_lh"
 	[ "$(events "$1" feedback)" = 0 ] &&
-		[ "$(show "pr:#$1" | grep -vE '"kind":"(pr\.iterate|review\.verdict|verify\.verdict)"' | grep -c '"kind"' | tr -d ' ')" = 1 ] &&
+		[ "$(show "pr:#$1" | grep -vE '"kind":"(pr\.iterate|review\.verdict|verify\.verdict|lane\.escape)"' | grep -c '"kind"' | tr -d ' ')" = 1 ] &&
 		pass "runtime/R91: $3: the hold is the run's one event" ||
 		fail "runtime/R91: $3: a held run recorded more than its hold: $(show "pr:#$1")"
 	lane_lines_closed "$3"
@@ -2431,6 +2513,162 @@ grep -q '^KIT_ONLY=.* scripts/lane\.kit\.config\.sh[ "]' "$KIT/bootstrap.sh" &&
 grep -q 'policy\.sh read scripts/lane\.kit\.config\.sh --base' "$KIT/scripts/land.kit.sh" &&
 	pass "runtime/R83: the landing script reads the kit's twin, at a base, through the policy reader" ||
 	fail "runtime/R83: the landing script does not read scripts/lane.kit.config.sh through the policy reader at a base"
+
+banner "25. The lane handles a lane landing's escape once: a revert PR, a notice, lane.escape, and the revert held (PRD-10 slice 3, #917)"
+# ---------------------------------------------------------------------------
+# An escape is a merge.outcome against a PR the lane landed (ADR-0047 clause
+# 6). Before it judges a PR past `drift`, a lane run runs the outcome recorder
+# and handles each escape with no lane.escape yet: for a failed QA, a revert
+# of the escaped merge commit in a throwaway worktree under the git
+# directory, one revert PR, one notice to the lane's operator, one
+# lane.escape outcome=revert. The section runs section 24's lane kit.
+LAND="$LANEKIT/scripts/land.kit.sh"
+ESC_SHA=e5ca9ee5ca9ee5ca9ee5ca9ee5ca9ee5ca9ee5ca
+# escaped <PR> [<outcome>] — a PR the lane landed, with a merge sha, and a
+# post-merge outcome against it (a failed QA unless named), each event
+# carrying text no lane line, event or notice may repeat.
+escaped() {
+	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=merge.land \
+		"subject=pr:#$1" outcome=landed data.via=lane "data.merge_sha=$ESC_SHA" data.method=merge reason=BAIT-LANDING </dev/null >/dev/null 2>&1 &&
+		env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=merge.outcome \
+			"subject=pr:#$1" "outcome=${2:-qa-failed}" data.ticket=T-90 reason=BAIT-OUTCOME </dev/null >/dev/null 2>&1 ||
+		fail "could not seed an escape on pr:#$1"
+}
+escapes_of() { show "pr:#$1" --kind lane.escape | grep -cF "\"subject\":\"pr:#$1\"" | tr -d ' '; }
+creates() { grep -c "^ARGV: $1 create" "$STUB_LOG" | tr -d ' '; }
+wt_left() { find "$STUB_GIT_DIR" -mindepth 1 -maxdepth 1 | grep -c . | tr -d ' '; }
+iterated 9170 9171 9172 9173 9174 9175 9176 9177 9178 9179 9180 9301
+for _lv in 9170 9171 9172 9173 9174 9175 9176 9177 9178 9179 9180 9301; do vverdict "$_lv" pass; done
+
+# --- a failed QA against a lane landing: revert, notice, event -----------------
+escaped 9201
+# A landing that was not the lane's, with the same outcome, is no escape.
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=merge.land subject='pr:#9209' \
+	outcome=landed data.via=land "data.merge_sha=$ESC_SHA" </dev/null >/dev/null 2>&1
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=merge.outcome subject='pr:#9209' \
+	outcome=qa-failed data.ticket=T-91 </dev/null >/dev/null 2>&1
+: >"$STUB_LOG.bodies"
+land STUB_PR_FILES=scripts/feature.sh STUB_REVERT_PR=9301 STUB_NOTICE=9401 9170 --lane
+expect_status 0 "runtime/R92: the lane handles the escape, then goes on judging the PR it was given, which lands"
+expect_out_has 'lane: escape pr:#9201 revert pr:#9301' "runtime/R94: it prints lane: escape pr:#<N> revert pr:#<M>"
+printf '%s\n' "$T_OUT" | tail -n 1 | grep -qx 'lane: landed' && pass "runtime/R92: the judged PR's own verdict is still the run's last line" ||
+	fail "runtime/R92: the last line is not lane: landed: $T_OUT"
+[ "$(creates pr)" = 1 ] && pass "runtime/R94: one revert PR opened" || fail "runtime/R94: $(creates pr) PRs opened, want 1: $(cat "$STUB_LOG")"
+[ "$(creates issue)" = 1 ] && pass "runtime/R97: one notice filed" || fail "runtime/R97: $(creates issue) notices filed, want 1"
+grep '^ARGV: issue create' "$STUB_LOG" | grep -q -- '--assignee octocat' && pass "runtime/R97: the notice is assigned to the lane policy's operator" ||
+	fail "runtime/R97: the notice is not assigned to octocat: $(grep '^ARGV: issue create' "$STUB_LOG")"
+grep -q '^ARGV: pr create .*--base main .*--head revert/lane-escape-pr-9201' "$STUB_LOG" &&
+	pass "runtime/R94: the revert PR is from a new branch, into the base branch" ||
+	fail "runtime/R94: the revert PR's base or head is not the one expected: $(grep '^ARGV: pr create' "$STUB_LOG")"
+grep -q "^ARGV: git worktree add -q --detach $STUB_GIT_DIR/lane-escape\.[^ ]* refs/remotes/origin/main\$" "$STUB_LOG" &&
+	pass "runtime/R94: the revert is made in a throwaway worktree under the git directory, from the base branch" ||
+	fail "runtime/R94: no throwaway worktree from the base under the git directory: $(grep 'worktree' "$STUB_LOG")"
+grep -q "^ARGV: git-wt revert --no-commit -m 1 $ESC_SHA\$" "$STUB_LOG" &&
+	pass "runtime/R94: it reverts the escaped PR's merge commit against its first parent" ||
+	fail "runtime/R94: the escaped merge commit was not reverted: $(grep 'git-wt' "$STUB_LOG")"
+grep -q '^ARGV: git-wt push -q origin HEAD:refs/heads/revert/lane-escape-pr-9201$' "$STUB_LOG" &&
+	pass "runtime/R94: and pushes it to the new branch" || fail "runtime/R94: the revert was not pushed to its branch: $(grep 'git-wt' "$STUB_LOG")"
+[ "$(line_of 'ARGV: git-wt push')" -lt "$(line_of 'ARGV: pr create')" ] && [ "$(line_of 'ARGV: pr create')" -lt "$(line_of 'ARGV: issue create')" ] &&
+	[ "$(line_of 'ARGV: issue create')" -lt "$(line_of 'ARGV: pr merge')" ] &&
+	pass "runtime/R92: the push, the revert PR, the notice — all before the judged PR's merge" ||
+	fail "runtime/R92: the escape's steps are out of order: $(cat "$STUB_LOG")"
+[ "$(wt_left)" = 0 ] && pass "runtime/R94: the throwaway worktree is gone afterwards" || fail "runtime/R94: the throwaway worktree was left: $(ls "$STUB_GIT_DIR")"
+_le=$(show 'pr:#9201' --kind lane.escape)
+[ "$(escapes_of 9201)" = 1 ] && printf '%s\n' "$_le" | grep -qF '"outcome":"revert"' && printf '%s\n' "$_le" | grep -qF '"related":"pr:#9301"' &&
+	pass "runtime/R94: one lane.escape outcome=revert on the escaped PR, the revert PR in related" ||
+	fail "runtime/R94: the escape's event is not the one expected: $_le"
+[ "$(escapes_of 9209)" = 0 ] && [ "$(grep -c 'revert/lane-escape-pr-9209' "$STUB_LOG" | tr -d ' ')" = 0 ] &&
+	pass "runtime/R92: a failed QA against a landing that was not the lane's is no escape" ||
+	fail "runtime/R92: the lane handled an escape it did not land: $(show 'pr:#9209' --kind lane.escape)"
+# runtime/R97, R102: what the forge was sent is tokens and numbers.
+_eb=$(cat "$STUB_LOG.bodies")
+printf '%s\n' "$_eb" | grep -q BAIT && fail "runtime/R102: a revert PR or notice body carries text from the trace or the forge: $_eb" ||
+	pass "runtime/R102: no revert PR or notice body carries text from an event's reason, a title, a body or a log"
+_eb_bad=$(printf '%s\n' "$_eb" | grep -vE '^(--- (pr|issue)|lane-escape: qa-failed|escaped: pr:#[0-9]+|ticket: T-[0-9]+|merge: [0-9a-f]{40}|areas: ([a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*|none)|revert: pr:#[0-9]+|held: escape|)$')
+[ -z "$_eb_bad" ] && pass "runtime/R102: every body line is a closed token, a number, a sha or a review area" ||
+	fail "runtime/R102: a body line outside the closed set: $_eb_bad"
+printf '%s\n' "$_eb" | sed -n '/^--- issue$/,$p' | grep -qx 'revert: pr:#9301' && printf '%s\n' "$_eb" | sed -n '/^--- issue$/,$p' | grep -qx 'escaped: pr:#9201' &&
+	printf '%s\n' "$_eb" | sed -n '/^--- issue$/,$p' | grep -qx 'lane-escape: qa-failed' && printf '%s\n' "$_eb" | sed -n '/^--- issue$/,$p' | grep -qE '^areas: .*simplicity' &&
+	pass "runtime/R97: the notice names the outcome, the escaped PR, its review areas and the revert PR" ||
+	fail "runtime/R97: the notice lacks the outcome, PR, areas or revert PR: $_eb"
+printf '%s\n' "$_eb" | sed -n '/^--- pr$/,/^--- issue$/p' | sed -n 2p | grep -qx 'lane-escape: qa-failed' &&
+	pass "runtime/R94: the revert PR's body opens with the escape's tokens" || fail "runtime/R94: the revert PR's body does not open with the escape's tokens: $_eb"
+lane_lines_closed "an escape handled"
+show 'pr:#9201' --kind lane.escape | grep -q BAIT && fail "runtime/R102: the lane.escape carries text from the trace or the forge" ||
+	pass "runtime/R102: the lane.escape carries no text from an event's reason, a title, a body or a log"
+no_bait "an escape handled" 'pr:#9301'
+
+# --- a second run finds it handled ---------------------------------------------------
+: >"$STUB_LOG.bodies"
+land STUB_PR_FILES=scripts/feature.sh 9171 --lane
+expect_status 0 "runtime/R92: a second lane run lands its own PR"
+[ "$(creates pr)" = 0 ] && [ "$(creates issue)" = 0 ] && [ "$(escapes_of 9201)" = 1 ] && ! grep -q 'worktree add' "$STUB_LOG" &&
+	pass "runtime/R92: a second run finds the escape handled: no PR, no notice, no event" ||
+	fail "runtime/R92: a handled escape was handled again: $(cat "$STUB_LOG")"
+expect_out_lacks 'lane: escape' "runtime/R92: and prints no escape line"
+
+# --- a failing forge call records nothing and holds with escape ---------------------
+escaped 9202
+land STUB_PR_CREATE_RC=1 9172 --lane
+lane_held 9172 escape "runtime/R98: a revert PR the forge would not open"
+[ "$(escapes_of 9202)" = 0 ] && pass "runtime/R98: no lane.escape for an escape whose revert PR failed" || fail "runtime/R98: a failed escape was recorded"
+expect_err_has 'revert' "runtime/R98: the cause is named on standard error"
+[ "$(wt_left)" = 0 ] && pass "runtime/R98: the throwaway worktree is gone after a failure too" || fail "runtime/R98: a failed escape left its worktree: $(ls "$STUB_GIT_DIR")"
+# The branch the failed run pushed is on the forge: the next run opens its
+# PR from it, with no second revert.
+land STUB_ISSUE_CREATE_RC=1 STUB_REMOTE_BRANCH=revert/lane-escape-pr-9202 9173 --lane
+lane_held 9173 escape "runtime/R98: a notice the forge would not file"
+[ "$(escapes_of 9202)" = 0 ] && pass "runtime/R98: no lane.escape for an escape whose notice failed" || fail "runtime/R98: an escape with no notice was recorded"
+expect_err_has 'notice' "runtime/R98: the notice's failure is named on standard error"
+[ "$(creates pr)" = 1 ] && ! grep -q 'worktree add' "$STUB_LOG" &&
+	pass "runtime/R94: a revert branch already on the forge gets its PR, with no second revert" ||
+	fail "runtime/R94: the lane reverted again onto a branch the forge holds: $(cat "$STUB_LOG")"
+land STUB_REVERT_RC=1 9174 --lane
+lane_held 9174 escape "runtime/R98: a revert that does not apply"
+[ "$(wt_left)" = 0 ] && pass "runtime/R98: and its worktree is gone" || fail "runtime/R98: a failed revert left its worktree"
+land STUB_ESC_PUSH_RC=1 9175 --lane
+lane_held 9175 escape "runtime/R98: a revert branch the forge would not take"
+[ "$(escapes_of 9202)" = 0 ] && pass "runtime/R98: none of the failures recorded the escape" || fail "runtime/R98: a failure recorded the escape"
+# The next run tries again, and the escape is handled.
+land STUB_PR_FILES=scripts/feature.sh STUB_REVERT_EXISTING=9302 STUB_NOTICE=9402 9176 --lane
+expect_status 0 "runtime/R98: the next run handles the escape and judges its PR"
+[ "$(creates pr)" = 0 ] && ! grep -q 'worktree add' "$STUB_LOG" &&
+	pass "runtime/R94: a revert PR the forge already holds for the escape is taken, not opened twice" ||
+	fail "runtime/R94: the lane opened a second revert PR for one escape: $(cat "$STUB_LOG")"
+expect_out_has 'lane: escape pr:#9202 revert pr:#9302' "runtime/R98: the escape is handled on the run after the failures"
+[ "$(escapes_of 9202)" = 1 ] && pass "runtime/R98: and recorded once" || fail "runtime/R98: the escape was recorded $(escapes_of 9202) times"
+
+# An outcome recorder that fails holds too: the lane cannot see its escapes.
+# The lane kit with no repository is a recorder that cannot read git.
+mv "$LANEKIT/.git" "$LANEKIT/.git.off"
+land STUB_PR_FILES=scripts/feature.sh 9180 --lane
+mv "$LANEKIT/.git.off" "$LANEKIT/.git"
+lane_held 9180 escape "runtime/R98: an outcome recorder that fails"
+expect_err_has 'outcome recorder' "runtime/R98: the recorder's failure is named on standard error"
+[ "$(creates pr)" = 0 ] && [ "$(creates issue)" = 0 ] && pass "runtime/R98: and nothing was opened or filed" || fail "runtime/R98: a failed recorder still opened or filed: $(cat "$STUB_LOG")"
+
+# --- the revert PR is held with escape ----------------------------------------------
+land STUB_PR_FILES=scripts/feature.sh 9301 --lane
+lane_held 9301 escape "runtime/R99: the revert PR a lane.escape names in related"
+# A PR whose ticket a lane.escape names (a fix ticket, runtime/R95) is held too.
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=lane.escape subject='pr:#9203' \
+	related='ticket:#88' outcome=fix </dev/null >/dev/null 2>&1
+land STUB_TICKET=88 9177 --lane
+lane_held 9177 escape "runtime/R99: a PR whose ticket a lane.escape names"
+
+# --- the order: drift before escape, escape before path ----------------------------------
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=lane.escape subject='pr:#9204' \
+	related='pr:#9178 pr:#9179' outcome=revert </dev/null >/dev/null 2>&1
+land STUB_DRIFT=land.kit.sh 9178 --lane
+lane_held 9178 drift "runtime/R82: drift before escape"
+land STUB_PR_FILES=.githooks/pre-push 9179 --lane
+lane_held 9179 escape "runtime/R82: escape before path"
+
+# --- the lane escape kind joins the kit's own vocabulary ------------------------------
+grep -q '`lane.escape`' "$KIT/docs/adr/INDEX.md" && pass "runtime/R93: the decision index names the lane.escape kind" ||
+	fail "runtime/R93: no decision index row names lane.escape"
+LAND=$_land_kit
+rm -f "$STUB_LOG.bodies"
 
 
 t_done "land one PR by hand"

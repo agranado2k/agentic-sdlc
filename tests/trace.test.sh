@@ -1393,6 +1393,7 @@ pr.open opened
 pr.iterate green red stopped
 merge.land landed skipped stopped
 merge.outcome reverted fixed qa-failed
+lane.escape revert fix notified
 risk.judge agreed disagreed
 verify.verdict pass blocked unavailable
 finding.verify confirmed disputed
@@ -1515,6 +1516,34 @@ expect_exit 2 "runtime/R52: a risk.judge with no outcome is refused — it is no
 expect_exit 2 "a risk.judge's head is a 40-hex commit sha" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=risk.judge subject='pr:#1' outcome=agreed data.head=HEAD
 expect_exit 2 "a risk.judge's switch is on or tripped" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=risk.judge subject='pr:#1' outcome=agreed data.switch=off
 [ "$(cat "$OV"/events/*.jsonl 2>/dev/null | wc -l | tr -d ' ')" = "$_ov_n" ] && pass "runtime/R52: and a refused risk.judge writes nothing" || fail "runtime/R52: a refused risk.judge was written"
+# runtime/R93 (PRD-10 slice 3): the lane's handled escape is a kind of its
+# own — revert, fix or notified, its subject the escaped PR — and any other
+# word on it, or none, is refused, writing nothing.
+_ov_n=$(cat "$OV"/events/*.jsonl 2>/dev/null | wc -l | tr -d ' ')
+for _ov_w in revert fix notified; do
+	expect_exit 0 "runtime/R93: lane.escape outcome=$_ov_w is accepted" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit --dry-run kind=lane.escape subject='pr:#1' related='pr:#2' outcome="$_ov_w"
+done
+for _ov_w in other reverted qa-failed held; do
+	expect_exit 2 "runtime/R93: lane.escape outcome=$_ov_w is refused" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=lane.escape subject='pr:#1' outcome="$_ov_w"
+done
+expect_said "lane.escape"
+expect_exit 2 "runtime/R93: a lane.escape with no outcome is refused — it is no handled escape a reader can count" -- env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=lane.escape subject='pr:#1'
+[ "$(cat "$OV"/events/*.jsonl 2>/dev/null | wc -l | tr -d ' ')" = "$_ov_n" ] && pass "runtime/R93: and a refused lane.escape writes nothing" || fail "runtime/R93: a refused lane.escape was written"
+# runtime/R92: the lane finds its escapes across every PR, so `show` takes a
+# kind with no subject — every event of that kind, and nothing else; with
+# neither a subject nor a kind it is a usage error.
+env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=lane.escape subject='pr:#5' related='pr:#6' outcome=revert >/dev/null 2>&1
+env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=lane.escape subject='pr:#7' related='pr:#8' outcome=revert >/dev/null 2>&1
+env TRACE_CONFIG="$OVON" sh "$TRACE" emit kind=note subject='pr:#5' outcome=lane >/dev/null 2>&1
+t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" show --kind lane.escape
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 2 ] && ! printf '%s\n' "$T_OUT" | grep -qv '"kind":"lane.escape"' &&
+	printf '%s\n' "$T_OUT" | grep -qF '"subject":"pr:#5"' && printf '%s\n' "$T_OUT" | grep -qF '"subject":"pr:#7"' &&
+	pass "runtime/R92: show --kind with no subject prints every event of that kind, across subjects, and nothing else" ||
+	fail "runtime/R92: show --kind lane.escape (exit $T_STATUS) printed: $T_OUT"
+t_exec env TRACE_CONFIG="$OVON" sh "$TRACE" show --kind lane.escape --since 2000-01-01
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$T_OUT" | grep -c .)" = 2 ] && pass "runtime/R92: and --since still narrows it, after --kind" || fail "runtime/R92: show --kind --since printed (exit $T_STATUS): $T_OUT"
+expect_exit 2 "runtime/R92: show with neither a subject nor a kind is a usage error" -- env TRACE_CONFIG="$OVON" sh "$TRACE" show
+expect_exit 2 "runtime/R92: show with only --since, no subject and no kind, is a usage error" -- env TRACE_CONFIG="$OVON" sh "$TRACE" show --since 2000-01-01
 expect_exit 2 "begin refuses an outcome on run.start — it writes through emit" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement outcome=ok
 OVR=$(env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" begin implement)
 expect_exit 2 "end refuses an undeclared run.end outcome — delivered" -- env TRACE_CONFIG="$OVON" TRACE_SESSION=ov-348 sh "$TRACE" end "$OVR" outcome=delivered
