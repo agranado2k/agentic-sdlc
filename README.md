@@ -256,7 +256,7 @@ under `files:` in `VERSION` are the **shared layer**, copied verbatim from the
 kit and deliberately not edited downstream. They carry no product name, no
 command, and no vendor, which is exactly what makes them copyable at all.
 
-`VERSION` pins which release of that layer you took (`shared-layer: 0.118.0`). When
+`VERSION` pins which release of that layer you took (`shared-layer: 0.119.0`). When
 the kit moves, you diff the kit's shared layer against yours and apply what
 changed — a manual, reviewable update rather than a dependency bump. That recipe
 is `UPDATING.md`, **Part 1**: read both manifests, read the upstream delta,
@@ -731,6 +731,14 @@ skeleton (K0).
   unlearned`, and unreadable thresholds, an unconfigured trace and an unknown
   `SCHEMA` fail closed at exit 0; no ticket text leaves the rule, and
   `/pr-iterate` reports the verdict without acting on it.
+- `sh tests/acceptance-tripwires.test.sh` holds the edit-time tripwires
+  (PRD-14 slice 5): in a throwaway factory project holding T-90's approval,
+  the adapter's root guard refuses an Edit, Write or MultiEdit of the held
+  file with `held: T-90 <path>` and passes one on another file, and
+  `.githooks/pre-commit` refuses an agent's commit staging the held file
+  changed or deleted, passes the approved file brought in unchanged, a
+  commit staging no held file and a human's commit; with no guard at the
+  default branch both fail open.
 - `sh tests/acceptance-guard.test.sh` holds `scripts/acceptance-guard.sh`,
   the acceptance guard (PRD-14 slice 2, the kit's ADR-0046): in throwaway
   factory projects with a `main`, a branch and an approval commit off
@@ -1039,6 +1047,7 @@ sh tests/behavior-delta.test.sh
 sh tests/lens-slice.test.sh                            # each review lens reads only its slice
 sh tests/policy.test.sh                                # the policy reader reads a judging file at the base, failing closed
 sh tests/acceptance-guard.test.sh                      # the acceptance guard holds an approved test file at the base, failing closed
+sh tests/acceptance-tripwires.test.sh                  # an agent's edit or commit of an approved test is refused, failing open
 sh tests/risk.test.sh                                  # the risk rule judges a PR from its review areas' earned records
 sh tests/factory-config.test.sh                        # a value the factory defines is read from its manifest, at the base too
 sh tests/outcome-recorder.test.sh                      # a revert, or a fix inside the fix window, is recorded against the PR

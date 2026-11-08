@@ -50,3 +50,5 @@ R34. IF the acceptance guard exits 3 during a review, THEN Agent 7 SHALL list ev
 R35. IF a ticket's front matter `created` is missing or not a date, THEN the adoption date SHALL NOT exempt it.
 R36. The shipped TDD pairing workflow, and the kit's own guards workflow, SHALL run the acceptance guard's script as it is at the base commit, read from git's objects, and never the copy in the pull request's head. [UC3 1]
 R37. WHEN asked for `held --base <ref>`, the acceptance guard SHALL print one line `<ticket> <path>` per file a held ticket's `Accept-test:` lines name, and exit 0.
+R38. WHEN an agent's edit or write tool targets a path `held` lists, the agent harness adapter's pre-tool hook SHALL refuse it, naming the ticket and the path. [UC5 1]
+R39. WHEN a commit stages a change to a path `held` lists, the commit hook SHALL refuse it, naming the ticket and the path. [UC5 2]

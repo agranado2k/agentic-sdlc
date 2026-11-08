@@ -4021,7 +4021,32 @@
 # AGENTS.md hard rule 7 pointer, bootstrap.sh's KIT_OWN entry for the record,
 # and tests/land.test.sh section 23.
 
-shared-layer: 0.118.0
+# 0.119.0 — the edit-time tripwires refuse an agent's edit or commit of an
+# approved acceptance test (ticket #973, PRD-14 slice 5 of D-02, factory
+# T-91). No file joins or leaves. One shared file changes content:
+# UPDATING.md, its entry and both worked examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): none.
+# Wiring (9b): .githooks/pre-commit — in a factory project, an agent's commit
+# staging a file `scripts/acceptance-guard.sh held` lists at the default
+# branch, at content other than its approval commit's, is refused with
+# `held: <ticket> <path>`; the guard is run as the default branch holds it,
+# and the hook fails open. Templates (9c): none.
+# Config (9d): scripts/lane.config.sh (yours), NEW — the lane policy, from
+# #1010 (factory T-51, landed after 0.118.0's tag): LANE_OPERATOR names the
+# forge login standing behind the low-risk lane; it ships empty, so the lane
+# is closed and every pull request lands by a human as before. Copy it in
+# as shipped; open the lane only by a decision record of your own.
+# Adapter (9e): the Claude Code adapter's root guard, root-guard.sh, and
+# adapters/claude-code/README.md — the root guard refuses an Edit, Write,
+# MultiEdit or notebook edit of a held file with the same line, in any
+# checkout, failing open; no new wiring.
+# Kit-only, never shipped: from #1010, scripts/land.kit.sh's lane mode and
+# scripts/lane.kit.config.sh; tests/acceptance-tripwires.test.sh, its kit-ci.yml
+# job and bootstrap.sh's KIT_ONLY entry, docs/specs/acceptance.md R38 and
+# R39, and the AGENTS.md and README.md lines.
+
+shared-layer: 0.119.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
