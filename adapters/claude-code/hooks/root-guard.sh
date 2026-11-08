@@ -52,6 +52,16 @@
 # `Accept-test:` line at the default branch names is let through without
 # running the guard, so an ordinary edit pays one `git grep`.
 #
+# AND THE RULING RECORDER'S `by`, wherever the session works. The recorder
+# (scripts/ruling.sh) records `by=session` under any agent-harness marker and
+# `operator` under none, so an agent's Bash call that runs it while clearing
+# or overriding a marker anywhere in the same command — `env -u` or
+# `--unset` of one, `env -i`, `unset` or `export -n` of one, or any assignment
+# to one, empty or rebound — is refused (runtime/R149). It runs the recorder
+# as the command, through a shell, or inside a shell's `-c`. The operator's
+# call, with no marker set, goes through. The same tripwire limits hold: a
+# process outside the adapter can still claim `operator`.
+#
 # THE ROOT IS FOUND FROM THIS FILE, never from the caller's cwd, through git's
 # common directory (hook.lib.sh's hook_root): a session started inside a
 # worktree runs the worktree's copy of this hook, and the tree it guards is
@@ -344,18 +354,56 @@ command=$(field command)
 # `-C` moved git to; a discard of working changes (`git stash`, `git reset
 # --hard`, `git clean -f`) is a `discard` line carrying the same, and so is a
 # way around the commit guard, an `around` line.
-plan=$(printf '%s\n' "$command" | awk '
-function endseg(   i, j, k, c, s, inplace, last) {
-	i = 1
+plan=$(printf '%s\n' "$command" | awk -v markers="$agent_markers" '
+# cmdstart <i> — the index of the command word at or after <i>: `VAR=`
+# assignments and the `env`, `sudo`, `command`, `nohup`, `exec` and `time`
+# prefixes skipped, with their options.
+function cmdstart(i,   p) {
 	while (i <= nw && words[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/) i++
 	while (i <= nw && (words[i] == "env" || words[i] == "sudo" || words[i] == "command" || words[i] == "nohup" || words[i] == "exec" || words[i] == "time")) {
 		p = words[i]; i++
 		# The options of the prefix, and the ones that take a word with them.
 		while (i <= nw && (words[i] ~ /^-/ || words[i] ~ /^[A-Za-z_][A-Za-z0-9_]*=/)) {
-			if ((p == "env" && words[i] ~ /^-[uCS]$/) || (p == "sudo" && words[i] ~ /^-[ugCDhprtUT]$/)) i++
+			if ((p == "env" && words[i] ~ /^(-[uCS]|--unset|--chdir|--split-string)$/) || (p == "sudo" && words[i] ~ /^-[ugCDhprtUT]$/)) i++
 			i++
 		}
 	}
+	return i
+}
+# rulingseg — the ruling recorder (runtime/R149): a `ruling` line when this
+# simple command runs `ruling.sh` or its kit wrapper — as the command, through
+# a shell, or inside the `-c` of one — and an `unmark` line when any word of it
+# clears or overrides an agent-harness marker: an assignment to one, `env -u`
+# or `--unset` of one, `env -i`, `unset` or `export -n` of one.
+function rulingseg(   i, j, k, c, w, n, hasc, verb) {
+	verb = ""
+	for (k = 1; k <= nw; k++) {
+		w = words[k]; n = w
+		if (w == "unset" || w == "export" || w == "env") { verb = w; continue }
+		if (w ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { sub(/=.*/, "", n); if (n in mk) print "unmark"; continue }
+		if (verb == "env" && (w == "-" || w == "--ignore-environment" || w ~ /^-[A-Za-z]*i[A-Za-z]*$/)) print "unmark"
+		if (w ~ /^-u[A-Za-z_]/ || w ~ /^--unset=/) { sub(/^(-u|--unset=)/, "", n); if (n in mk) print "unmark"; continue }
+		if ((w == "-u" || w == "--unset") && k < nw && (words[k + 1] in mk)) print "unmark"
+		if (w == "-n" && verb == "export") verb = "unset"
+		if (verb == "unset" && (w in mk)) print "unmark"
+	}
+	i = cmdstart(1)
+	while (i <= nw) {
+		c = words[i]; sub(/.*\//, "", c)
+		if (c ~ /^ruling(\.kit)?\.sh$/) { print "ruling"; return }
+		if (c !~ /^(sh|bash|dash|zsh|ksh|\.|source)$/) return
+		hasc = 0
+		for (j = i + 1; j <= nw && words[j] ~ /^-/; j++) if (words[j] ~ /^-[A-Za-z]*c[A-Za-z]*$/) hasc = 1
+		if (j > nw) return
+		if (hasc) { i = cmdstart(j); continue }
+		c = words[j]; sub(/.*\//, "", c)
+		if (c ~ /^ruling(\.kit)?\.sh$/) print "ruling"
+		return
+	}
+}
+function endseg(   i, j, k, c, s, inplace, last) {
+	rulingseg()
+	i = cmdstart(1)
 	if (i > nw) { nw = 0; return }
 	c = words[i]; sub(/.*\//, "", c)
 	if (c == "cd") {
@@ -471,7 +519,7 @@ function scan(s,   n, t, i, expect) {
 	}
 	endseg()
 }
-BEGIN { hd = ""; acc = ""; nw = 0 }
+BEGIN { hd = ""; acc = ""; nw = 0; split(markers, _m, " "); for (_k in _m) mk[_m[_k]] = 1 }
 {
 	line = $0
 	if (hd != "") {
@@ -543,9 +591,21 @@ while IFS= read -r step; do
 		abs=$(resolve "${step#around }" "$here_cwd")
 		guarded "$abs" && refuse "Bash (a way around the commit guard)" "$abs"
 		;;
+	ruling) ruling=1 ;;
+	unmark) unmark=1 ;;
 	esac
 done <<EOF
 $plan
 EOF
+
+# The ruling recorder takes `by` from the agent-harness markers: an agent's
+# call that runs it while clearing or overriding one would record a false
+# `operator` (runtime/R149). Wherever the session works; the operator's own
+# call, with no marker set, goes through.
+if [ "${ruling:-}" = 1 ] && [ "${unmark:-}" = 1 ] && agent; then
+	echo "x root-guard: Bash runs the ruling recorder with an agent-harness marker cleared or overridden — a ruling recorded by=operator is the operator's own act, never an agent's." >&2
+	echo "  Run it with the markers as the agent harness set them; it records by=session." >&2
+	exit 2
+fi
 
 exit 0

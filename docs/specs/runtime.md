@@ -39,6 +39,8 @@ slice that adds that hold restates it, as the PRD writes it; the slice
 restated R215 to name R104 as its one exception, as PRD-10 writes it.
 R103 joined from PRD-10 slice 4 (#919), keeping the PRD's number: the root
 guard keeps the trip marker from an agent.
+R149 joined from PRD-11's T-66 (#929), keeping the PRD's number: the root
+guard keeps the ruling recorder's `by` from an agent.
 R95, R96 and R101 joined from PRD-10's escape cases (#918), keeping the
 PRD's numbers: an escape already undone only notifies, a conflicting revert
 files a fix ticket, and `--escapes` sweeps with no PR.
@@ -151,6 +153,7 @@ R145. The ruling recorder SHALL set `data.by` to `session` when the environment 
 R146. The ruling recorder SHALL record nothing when the trace already holds a ruling for the same PR, item, head, `by` and outcome.
 R147. The ruling recorder SHALL print and record only item ids, surface tokens, review area names, PR numbers, commit shas and the words of runtime/R140, and no text from a PR, a comment, a commit message or a ticket.
 R148. IF the trace is unconfigured, THEN the ruling recorder SHALL record nothing, print nothing on standard output, say so on standard error and exit 0.
+R149. The adapter's root guard SHALL refuse an agent's tool call that runs the ruling recorder while unsetting or overriding an agent-harness marker. [UC2 3b]
 R200. The trace SHALL accept the kind `verify.verdict` with the outcomes `pass`, `blocked` and `unavailable`, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC1 4, 1a]
 R201. The trace SHALL refuse, exit 2, a `verify.verdict` of outcome `pass` or `blocked` that carries no `data.reviewed` of 40 hex digits or no `data.provider` token. [UC1 4]
 R202. The trace SHALL accept a `finding.raise` or `finding.triage` id of the form `V-` followed by a lens finding id, and SHALL refuse every other id it refuses today. [UC1 4, UC2 1]

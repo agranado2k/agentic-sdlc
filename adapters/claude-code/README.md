@@ -851,6 +851,24 @@ let through — tripping the switch is anyone's — so an absent marker is never
 guarded. A marker that is a link is the link, never its target. The Bash
 reading is the same tripwire as below, with the same gaps.
 
+### The ruling recorder's marker
+
+The ruling recorder, `scripts/ruling.sh`, takes a ruling's `by` from the same
+markers: `session` when one in the table below is set, `operator` when none
+is. So the same hook refuses an agent's Bash call that runs the recorder —
+as the command, through a shell, or inside a shell's `-c` — while clearing or
+overriding a marker anywhere in that call: `env -u` or `--unset` of one,
+`env -i`, `unset` or `export -n` of one, or an assignment to one, empty or
+rebound (`CLAUDECODE= sh scripts/ruling.sh …`). The refusal names the
+recorder and leaves a `by=operator` ruling to the operator. From the root and
+from every worktree alike; an agent's plain call goes through and records
+`by=session`, and the operator's call, with no marker set, goes through
+whatever it clears. It is the same tripwire as below, with the same gaps: a
+process outside the adapter — a script that clears the marker itself, a
+shell no agent harness hooks — can still claim `operator`, the limit the
+commit hook states, accepted because a false `operator` ruling only lifts
+`outward` on one PR whose areas are already earned.
+
 ### Which commits the commit hook refuses
 
 `.githooks/pre-commit` refuses agents only. A commit is refused when one of

@@ -16,6 +16,9 @@
 #      `mv`, `git checkout` / `git restore` on, a TRACKED file at the root, and
 #      the three ways around the git layer (`--no-verify`, `-c
 #      core.hooksPath`, `git config core.hooksPath`) where git acts there.
+#      Wherever the session works, it also keeps the kill switch's trip
+#      marker (runtime/R103) and the ruling recorder's `by` (runtime/R149)
+#      from an agent.
 #   2. THE GIT LAYER refuses an agent's commit. `.githooks/pre-commit` refuses
 #      a commit from the main working copy or on the default branch when an
 #      agent-harness marker is in the environment, and lets a human with none
@@ -772,5 +775,82 @@ _before=$failures
 	pass "runtime/R103: the operator's own rm, with no agent harness between, resets the switch" ||
 	fail "the operator's own rm did not remove the marker"
 assert_file_has "$KIT/adapters/claude-code/README.md" "risk-switch-tripped" "the README names the marker the guard keeps"
+
+# ---------------------------------------------------------------------------
+banner "10. The ruling recorder's by: an agent cannot clear its marker (runtime/R149)"
+# ---------------------------------------------------------------------------
+# The ruling recorder (scripts/ruling.sh) records `data.by=session` under any
+# agent-harness marker and `operator` under none. So an agent's tool call that
+# runs it while clearing or overriding a marker — `env -u`, `unset`, an
+# empty or rebound assignment, on the same command — would record a false
+# `operator`; the guard refuses it, wherever the session works. The calls
+# below carry CLAUDECODE=1, set by section 9.
+
+# ruling_refused <label> — the blocking status, and a message naming the
+# ruling recorder and whose ruling `operator` is.
+ruling_refused() {
+	expect_status 2 "runtime/R149: $1 is refused"
+	case $T_ERR in
+	*'ruling recorder'*operator*) pass "and stderr names the ruling recorder and leaves operator to the operator" ;;
+	*) fail "$1: stderr does not name the ruling recorder and the operator: $T_ERR" ;;
+	esac
+	expect_out_is "" "and stdout stays empty"
+}
+
+guard_on "$(payload Bash command 'env -u CLAUDECODE sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an env -u of a marker before the recorder"
+guard_on "$(payload Bash command 'env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID -u TRACE_SESSION sh scripts/ruling.kit.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an env -u of every marker before the kit wrapper"
+guard_on "$(payload Bash command 'env --unset=TRACE_SESSION sh scripts/ruling.sh 12 A2-1 change' "$WT")"
+ruling_refused "an env --unset= of a marker"
+guard_on "$(payload Bash command 'env -uCODEX_THREAD_ID scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an env -u glued to its marker, the recorder run directly"
+guard_on "$(payload Bash command 'env -i PATH=/usr/bin sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an env -i that clears every marker"
+guard_on "$(payload Bash command 'unset CLAUDECODE CLAUDE_CODE_SESSION_ID; sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an unset of a marker before the recorder"
+guard_on "$(payload Bash command 'cd /tmp && unset TRACE_SESSION && sh "$OLDPWD/scripts/ruling.kit.sh" 12 A2-1 keep' "$WT")"
+ruling_refused "an unset in an earlier simple command of the same call"
+guard_on "$(payload Bash command 'sh -c "unset CLAUDECODE; sh scripts/ruling.sh 12 A2-1 keep"' "$WT")"
+ruling_refused "an unset inside sh -c"
+guard_on "$(payload Bash command 'CLAUDECODE= sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an empty marker assignment before the recorder"
+guard_on "$(payload Bash command 'CLAUDECODE="" CLAUDE_CODE_SESSION_ID= bash ./scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "empty marker assignments, quoted, before bash"
+guard_on "$(payload Bash command 'env TRACE_SESSION= sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an empty marker assignment through env"
+guard_on "$(payload Bash command 'CLAUDECODE=$NOTHING sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "a marker rebound to a variable"
+guard_on "$(payload Bash command 'export CLAUDECODE=; sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+ruling_refused "an export that empties a marker"
+guard_on "$(payload Bash command 'env -u CLAUDECODE sh scripts/ruling.sh 12 A2-1 keep')"
+ruling_refused "the same call from the root checkout"
+
+# Let through: the agent's plain call, which records by=session; a marker
+# cleared for anything but the recorder; the recorder's own --unruled read
+# with no marker touched.
+guard_on "$(payload Bash command 'sh scripts/ruling.kit.sh 12 A2-1 keep' "$WT")"
+allowed "runtime/R149: an agent's plain call to the recorder"
+guard_on "$(payload Bash command 'sh scripts/ruling.sh 12 --unruled' "$WT")"
+allowed "runtime/R149: an agent's --unruled read"
+guard_on "$(payload Bash command 'env -u CLAUDECODE sh tests/x.sh' "$WT")"
+allowed "runtime/R149: a marker cleared for another script"
+guard_on "$(payload Bash command 'env -u PAGER sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+allowed "runtime/R149: an env -u of a variable that is no marker"
+guard_on "$(payload Bash command 'grep -n agent_markers scripts/ruling.sh; unset CLAUDECODE' "$WT")"
+allowed "runtime/R149: a read of the recorder's source, which runs nothing"
+# The operator's: the same overriding commands with no agent-harness marker set.
+_before=$failures
+(
+	t_as_human
+	guard_on "$(payload Bash command 'env -u CLAUDECODE sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+	allowed "runtime/R149: the operator's env -u call"
+	guard_on "$(payload Bash command 'unset TRACE_SESSION; sh scripts/ruling.sh 12 A2-1 keep' "$WT")"
+	allowed "runtime/R149: the operator's unset call"
+	guard_on "$(payload Bash command 'CLAUDECODE= sh scripts/ruling.kit.sh 12 A2-1 keep' "$WT")"
+	allowed "runtime/R149: the operator's empty assignment"
+	[ "$failures" = "$_before" ]
+) || fail "runtime/R149: an operator's call to the recorder was refused"
+assert_file_has "$KIT/adapters/claude-code/README.md" "### The ruling recorder's marker" "the README names the refusal"
 
 t_done "root-guard"
