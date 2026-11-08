@@ -2537,8 +2537,8 @@ escaped() {
 escapes_of() { show "pr:#$1" --kind lane.escape | grep -cF "\"subject\":\"pr:#$1\"" | tr -d ' '; }
 creates() { grep -c "^ARGV: $1 create" "$STUB_LOG" | tr -d ' '; }
 wt_left() { find "$STUB_GIT_DIR" -mindepth 1 -maxdepth 1 | grep -c . | tr -d ' '; }
-iterated 9170 9171 9172 9173 9174 9175 9176 9177 9178 9179 9301
-for _lv in 9170 9171 9172 9173 9174 9175 9176 9177 9178 9179 9301; do vverdict "$_lv" pass; done
+iterated 9170 9171 9172 9173 9174 9175 9176 9177 9178 9179 9180 9301
+for _lv in 9170 9171 9172 9173 9174 9175 9176 9177 9178 9179 9180 9301; do vverdict "$_lv" pass; done
 
 # --- a failed QA against a lane landing: revert, notice, event -----------------
 escaped 9201
@@ -2637,6 +2637,15 @@ expect_status 0 "runtime/R98: the next run handles the escape and judges its PR"
 	fail "runtime/R94: the lane opened a second revert PR for one escape: $(cat "$STUB_LOG")"
 expect_out_has 'lane: escape pr:#9202 revert pr:#9302' "runtime/R98: the escape is handled on the run after the failures"
 [ "$(escapes_of 9202)" = 1 ] && pass "runtime/R98: and recorded once" || fail "runtime/R98: the escape was recorded $(escapes_of 9202) times"
+
+# An outcome recorder that fails holds too: the lane cannot see its escapes.
+# The lane kit with no repository is a recorder that cannot read git.
+mv "$LANEKIT/.git" "$LANEKIT/.git.off"
+land STUB_PR_FILES=scripts/feature.sh 9180 --lane
+mv "$LANEKIT/.git.off" "$LANEKIT/.git"
+lane_held 9180 escape "runtime/R98: an outcome recorder that fails"
+expect_err_has 'outcome recorder' "runtime/R98: the recorder's failure is named on standard error"
+[ "$(creates pr)" = 0 ] && [ "$(creates issue)" = 0 ] && pass "runtime/R98: and nothing was opened or filed" || fail "runtime/R98: a failed recorder still opened or filed: $(cat "$STUB_LOG")"
 
 # --- the revert PR is held with escape ----------------------------------------------
 land STUB_PR_FILES=scripts/feature.sh 9301 --lane
