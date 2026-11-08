@@ -2029,8 +2029,9 @@ land 981
 landed_with 981 "process/R65: a PR the risk rule called low" '"outcome":"landed"'
 [ "$_rk_high" = "$(merges)" ] && pass "process/R65: both made the same merge call" || fail "process/R65: the high PR made $_rk_high merge calls, the low one $(merges)"
 # Its lane mode is the one exception PRD-10 writes into process/R65 (section
-# 24): the rule is named in the lane's block and nowhere else, comments aside.
-sed -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
+# 24): the rule is named in the lane's block and the lane's helpers before
+# step 1, and nowhere else, comments aside.
+sed -e '/^# --- 0L\./,/^# --- 1\. /d' -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
 	fail "process/R65: the landing script reads the risk rule outside its lane mode" ||
 	pass "process/R65: outside its lane mode, the landing script names neither the rule nor its event"
 grep -q '^# --- 1L\.' "$LAND" && sed -n '/^# --- 1L\./,/^# --- 1d\./p' "$LAND" | grep -q 'scripts/risk\.sh' &&
