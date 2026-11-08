@@ -84,19 +84,33 @@ case " $* " in
 	# (runtime/R94): its number, or nothing.
 	[ -z "${STUB_REVERT_EXISTING:-}" ] || printf '%s\n' "$STUB_REVERT_EXISTING"
 	;;
+*" issue list "*)
+	# A fix ticket a lane run filed before (runtime/R95): its number, or nothing.
+	[ -z "${STUB_FIX_EXISTING:-}" ] || printf '%s\n' "$STUB_FIX_EXISTING"
+	;;
+*" repo view "*)
+	# The default branch, the base a sweep with no PR reads (runtime/R101).
+	[ "${STUB_REPO_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_REPO_RC"; }
+	printf '%s\n' "${STUB_DEFAULT_BRANCH-main}"
+	;;
 *" pr create "* | *" issue create "*)
-	# The lane's revert PR and its notice (runtime/R94, R97): each body is
-	# kept whole beside the log, so a case reads what the forge was sent.
-	_nb= _pv=
-	for a; do [ "$_pv" = --body ] && _nb=$a; _pv=$a; done
-	printf '%s\n%s\n' "--- $1" "$_nb" >>"$STUB_LOG.bodies"
-	case $2 in
-	create)
+	# The lane's revert PR, its fix ticket and its notice (runtime/R94, R95,
+	# R97): each body is kept whole beside the log, so a case reads what the
+	# forge was sent. A fix ticket is the issue whose title says fix.
+	_nb= _nt= _pv=
+	for a; do [ "$_pv" = --body ] && _nb=$a; [ "$_pv" = --title ] && _nt=$a; _pv=$a; done
+	_nk=$1
+	case $1:$_nt in issue:*' fix: '*) _nk=ticket ;; esac
+	printf '%s\n%s\n' "--- $_nk" "$_nb" >>"$STUB_LOG.bodies"
+	case $_nk in
+	pr)
 		[ "${STUB_PR_CREATE_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_PR_CREATE_RC"; }
 		printf 'https://github.com/o/r/pull/%s\n' "${STUB_REVERT_PR:-9301}"
 		;;
-	esac
-	case $1 in
+	ticket)
+		[ "${STUB_FIX_CREATE_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_FIX_CREATE_RC"; }
+		printf 'https://github.com/o/r/issues/%s\n' "${STUB_FIX_TICKET:-9501}"
+		;;
 	issue)
 		[ "${STUB_ISSUE_CREATE_RC:-0}" = 0 ] || { echo 'gh: HTTP 502 Bad Gateway' >&2; exit "$STUB_ISSUE_CREATE_RC"; }
 		printf 'https://github.com/o/r/issues/%s\n' "${STUB_NOTICE:-9401}"
@@ -2029,8 +2043,9 @@ land 981
 landed_with 981 "process/R65: a PR the risk rule called low" '"outcome":"landed"'
 [ "$_rk_high" = "$(merges)" ] && pass "process/R65: both made the same merge call" || fail "process/R65: the high PR made $_rk_high merge calls, the low one $(merges)"
 # Its lane mode is the one exception PRD-10 writes into process/R65 (section
-# 24): the rule is named in the lane's block and nowhere else, comments aside.
-sed -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
+# 24): the rule is named in the lane's block and the lane's helpers before
+# step 1, and nowhere else, comments aside.
+sed -e '/^# --- 0L\./,/^# --- 1\. /d' -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
 	fail "process/R65: the landing script reads the risk rule outside its lane mode" ||
 	pass "process/R65: outside its lane mode, the landing script names neither the rule nor its event"
 grep -q '^# --- 1L\.' "$LAND" && sed -n '/^# --- 1L\./,/^# --- 1d\./p' "$LAND" | grep -q 'scripts/risk\.sh' &&
@@ -2184,7 +2199,7 @@ export STUB_BASE_TREE STUB_DEFAULT_ISSUE STUB_DEFAULT_BODY
 # lane_lines_closed <label> — every stdout line of the last run is of a shape
 # the lane may print: closed tokens, numbers, shas and digits (runtime/R102).
 lane_lines_closed() {
-	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|escape pr:#[0-9]+ revert pr:#[0-9]+|held (closed|drift|escape|path|base-red|check-table|verifier (disputed|blocked|unavailable|none)|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
+	_llc_bad=$(printf '%s\n' "$T_OUT" | grep -vE '^(lane: (landed|escape pr:#[0-9]+ (revert pr:#[0-9]+|fix ticket:#[0-9]+|notified)|held (closed|drift|escape|path|base-red|check-table|verifier (disputed|blocked|unavailable|none)|switch|risk))|landed #[0-9]+ [0-9a-f]{40} \(merge\) · workflows [a-z]+ · waited [0-9]+s|feedback: unasked)$' | grep .)
 	[ -z "$_llc_bad" ] && pass "runtime/R102: $1: every line the lane printed is a closed token, a number or a sha" ||
 		fail "runtime/R102: $1: the lane printed a line outside its closed set: $_llc_bad"
 }
@@ -2531,7 +2546,7 @@ escaped() {
 	env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=merge.land \
 		"subject=pr:#$1" outcome=landed data.via=lane "data.merge_sha=$ESC_SHA" data.method=merge reason=BAIT-LANDING </dev/null >/dev/null 2>&1 &&
 		env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=merge.outcome \
-			"subject=pr:#$1" "outcome=${2:-qa-failed}" data.ticket=T-90 reason=BAIT-OUTCOME </dev/null >/dev/null 2>&1 ||
+			"subject=pr:#$1" "outcome=${2:-qa-failed}" data.ticket=T-90 ${2:+"data.by_sha=$ESC_SHA"} reason=BAIT-OUTCOME </dev/null >/dev/null 2>&1 ||
 		fail "could not seed an escape on pr:#$1"
 }
 escapes_of() { show "pr:#$1" --kind lane.escape | grep -cF "\"subject\":\"pr:#$1\"" | tr -d ' '; }
@@ -2623,9 +2638,9 @@ expect_err_has 'notice' "runtime/R98: the notice's failure is named on standard 
 [ "$(creates pr)" = 1 ] && ! grep -q 'worktree add' "$STUB_LOG" &&
 	pass "runtime/R94: a revert branch already on the forge gets its PR, with no second revert" ||
 	fail "runtime/R94: the lane reverted again onto a branch the forge holds: $(cat "$STUB_LOG")"
-land STUB_REVERT_RC=1 9174 --lane
-lane_held 9174 escape "runtime/R98: a revert that does not apply"
-[ "$(wt_left)" = 0 ] && pass "runtime/R98: and its worktree is gone" || fail "runtime/R98: a failed revert left its worktree"
+land STUB_WT_RC=1 9174 --lane
+lane_held 9174 escape "runtime/R98: a throwaway worktree that cannot be made"
+[ "$(wt_left)" = 0 ] && pass "runtime/R98: and nothing is left under the git directory" || fail "runtime/R98: a failed worktree left a directory"
 land STUB_ESC_PUSH_RC=1 9175 --lane
 lane_held 9175 escape "runtime/R98: a revert branch the forge would not take"
 [ "$(escapes_of 9202)" = 0 ] && pass "runtime/R98: none of the failures recorded the escape" || fail "runtime/R98: a failure recorded the escape"
@@ -2663,6 +2678,155 @@ land STUB_DRIFT=land.kit.sh 9178 --lane
 lane_held 9178 drift "runtime/R82: drift before escape"
 land STUB_PR_FILES=.githooks/pre-push 9179 --lane
 lane_held 9179 escape "runtime/R82: escape before path"
+
+# --- an escape already undone only notifies (runtime/R96, #918) --------------------
+# A `fixed` or `reverted` outcome is a mistake already undone: reverting the
+# original then would undo the fix. One notice, one lane.escape
+# outcome=notified, no PR, no ticket. A failed QA a later fix answered is
+# undone too.
+# bodies_closed <label> — every body line the forge was sent is a closed
+# token, a number, a sha, a review area or the fix ticket's stamp (runtime/R102).
+bodies_closed() {
+	_bc_bad=$(grep -vE '^(--- (pr|issue|ticket)|lane-escape: (qa-failed|reverted|fixed)|escaped: pr:#[0-9]+|ticket: #[0-9]+|merge: [0-9a-f]{40}|areas: ([a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*|none)|revert: pr:#[0-9]+|held: escape|Risk: high unclear|)$' "$STUB_LOG.bodies")
+	[ -z "$_bc_bad" ] && ! grep -q BAIT "$STUB_LOG.bodies" && pass "runtime/R102: $1: every body line is a closed token, a number, a sha, a review area or the stamp" ||
+		fail "runtime/R102: $1: a body line outside the closed set: $_bc_bad $(grep BAIT "$STUB_LOG.bodies")"
+}
+# escape_is <PR> <outcome> <related or -> <label> — one lane.escape on <PR>,
+# that outcome, that related (none for -).
+escape_is() {
+	_ei=$(show "pr:#$1" --kind lane.escape | grep -F "\"subject\":\"pr:#$1\"")
+	if [ "$(escapes_of "$1")" = 1 ] && printf '%s\n' "$_ei" | grep -qF "\"outcome\":\"$2\"" &&
+		{ if [ "$3" = - ]; then ! printf '%s\n' "$_ei" | grep -qF '"related"'; else printf '%s\n' "$_ei" | grep -qF "\"related\":\"$3\""; fi; }; then
+		pass "$4"
+	else
+		fail "$4: $_ei"
+	fi
+}
+iterated 9181 9182 9183 9184 9185
+for _lv in 9181 9182 9183 9184 9185; do vverdict "$_lv" pass; done
+escaped 9205 fixed
+escaped 9206 reverted
+escaped 9207
+env TRACE_CONFIG="$KIT/scripts/trace.kit.config.sh" TRACE_QUIET=1 sh "$TRACE" emit kind=merge.outcome subject='pr:#9207' \
+	outcome=fixed data.ticket=T-92 "data.by_sha=$ESC_SHA" </dev/null >/dev/null 2>&1
+: >"$STUB_LOG.bodies"
+land STUB_PR_FILES=scripts/feature.sh STUB_NOTICE=9405 9181 --lane
+expect_status 0 "runtime/R96: the lane notifies the undone escapes, then lands the PR it was given"
+expect_out_has 'lane: escape pr:#9205 notified' "runtime/R96: a fixed escape prints lane: escape pr:#<N> notified"
+expect_out_has 'lane: escape pr:#9206 notified' "runtime/R96: a reverted escape prints lane: escape pr:#<N> notified"
+expect_out_has 'lane: escape pr:#9207 notified' "runtime/R96: a failed QA a later fix undid only notifies"
+[ "$(creates pr)" = 0 ] && ! grep -q 'worktree add' "$STUB_LOG" && pass "runtime/R96: no revert made and no PR opened for an undone escape" ||
+	fail "runtime/R96: an undone escape was reverted or got a PR: $(cat "$STUB_LOG")"
+[ "$(creates issue)" = 3 ] && ! grep -q '^--- ticket$' "$STUB_LOG.bodies" && pass "runtime/R97: one notice per undone escape, and no ticket" ||
+	fail "runtime/R96: want 3 notices and no ticket: $(creates issue) issues; $(grep '^---' "$STUB_LOG.bodies")"
+escape_is 9205 notified - "runtime/R96: one lane.escape outcome=notified on the fixed PR, nothing related"
+escape_is 9206 notified - "runtime/R96: one lane.escape outcome=notified on the reverted PR"
+escape_is 9207 notified - "runtime/R96: one lane.escape outcome=notified on the failed QA a fix answered"
+awk '/^--- /{ n = ($0 == "--- issue") } n' "$STUB_LOG.bodies" | grep -qx 'lane-escape: fixed' &&
+	awk '/^--- /{ n = ($0 == "--- issue") } n' "$STUB_LOG.bodies" | grep -qx 'lane-escape: reverted' &&
+	awk '/^--- /{ n = ($0 == "--- issue") } n' "$STUB_LOG.bodies" | grep -qx 'escaped: pr:#9205' &&
+	pass "runtime/R97: each notice names its outcome and the escaped PR" || fail "runtime/R97: a notice lacks its outcome or PR: $(cat "$STUB_LOG.bodies")"
+! grep -q '^revert: \|^held: ' "$STUB_LOG.bodies" && pass "runtime/R97: an undone escape's notice names no revert and no hold" ||
+	fail "runtime/R97: an undone escape's notice names a revert or a hold: $(cat "$STUB_LOG.bodies")"
+bodies_closed "an undone escape's notice"
+lane_lines_closed "an undone escape notified"
+land STUB_PR_FILES=scripts/feature.sh 9182 --lane
+[ "$(creates issue)" = 0 ] && [ "$(escapes_of 9205)" = 1 ] && pass "runtime/R96: a second run notifies nothing again" ||
+	fail "runtime/R96: a notified escape was handled again: $(cat "$STUB_LOG")"
+
+# --- a revert that does not apply files a fix ticket (runtime/R95, #918) --------------
+escaped 9210
+: >"$STUB_LOG.bodies"
+land STUB_PR_FILES=scripts/feature.sh STUB_REVERT_RC=1 STUB_FIX_TICKET=9501 STUB_NOTICE=9410 9183 --lane
+expect_status 0 "runtime/R95: a conflicting revert is handled, and the lane goes on to land its PR"
+expect_out_has 'lane: escape pr:#9210 fix ticket:#9501' "runtime/R95: it prints lane: escape pr:#<N> fix ticket:#<M>"
+[ "$(creates pr)" = 0 ] && ! grep -q '^ARGV: git-wt push' "$STUB_LOG" && pass "runtime/R95: no PR opened and nothing pushed for a revert that does not apply" ||
+	fail "runtime/R95: a conflicting revert still pushed or opened a PR: $(cat "$STUB_LOG")"
+[ "$(grep -c '^--- ticket$' "$STUB_LOG.bodies" | tr -d ' ')" = 1 ] && [ "$(grep -c '^--- issue$' "$STUB_LOG.bodies" | tr -d ' ')" = 1 ] &&
+	pass "runtime/R95: one fix ticket and one notice" || fail "runtime/R95: want one ticket and one notice: $(grep '^---' "$STUB_LOG.bodies")"
+_ft=$(awk '/^--- /{ n = ($0 == "--- ticket") } n' "$STUB_LOG.bodies")
+printf '%s\n' "$_ft" | grep -qx 'Risk: high unclear' && printf '%s\n' "$_ft" | grep -qx 'escaped: pr:#9210' &&
+	printf '%s\n' "$_ft" | grep -qx 'lane-escape: qa-failed' && printf '%s\n' "$_ft" | grep -qE '^areas: .*simplicity' &&
+	pass "runtime/R95: the fix ticket is stamped Risk: high unclear and names the escaped PR, the outcome and its review areas" ||
+	fail "runtime/R95: the fix ticket lacks its stamp, PR, outcome or areas: $_ft"
+awk '/^--- /{ n = ($0 == "--- issue") } n' "$STUB_LOG.bodies" | grep -qx 'ticket: #9501' &&
+	pass "runtime/R97: the notice names the fix ticket" || fail "runtime/R97: the notice does not name the fix ticket: $(cat "$STUB_LOG.bodies")"
+[ "$(line_of '^ARGV: issue create --title lane escape fix')" -lt "$(line_of '^ARGV: issue create --title lane escape: ')" ] &&
+	pass "runtime/R95: the ticket is filed before the notice that names it" || fail "runtime/R95: the notice went before the ticket: $(grep 'issue create' "$STUB_LOG")"
+escape_is 9210 fix 'ticket:#9501' "runtime/R95: one lane.escape outcome=fix, the ticket in related"
+[ "$(wt_left)" = 0 ] && pass "runtime/R95: the throwaway worktree is gone" || fail "runtime/R95: a conflicting revert left its worktree"
+bodies_closed "a fix ticket and its notice"
+lane_lines_closed "a conflicting revert"
+show 'pr:#9210' --kind lane.escape | grep -q BAIT && fail "runtime/R102: the fix escape's lane.escape carries text from the trace or the forge" ||
+	pass "runtime/R102: the fix escape's lane.escape carries no text from an event's reason, a title, a body or a log"
+no_bait "a conflicting revert" 'ticket:#9501'
+
+# --- a fix ticket the forge would not file records nothing and holds (runtime/R98) ----
+escaped 9211
+land STUB_REVERT_RC=1 STUB_FIX_CREATE_RC=1 9184 --lane
+lane_held 9184 escape "runtime/R98: a fix ticket the forge would not file"
+[ "$(escapes_of 9211)" = 0 ] && pass "runtime/R98: no lane.escape for an escape whose ticket failed" || fail "runtime/R98: a failed ticket was recorded"
+expect_err_has 'fix ticket' "runtime/R98: the ticket's failure is named on standard error"
+[ "$(creates pr)" = 0 ] && [ "$(grep -c '^ARGV: issue create --title lane escape: ' "$STUB_LOG" | tr -d ' ')" = 0 ] &&
+	pass "runtime/R98: no PR and no notice when the ticket failed" || fail "runtime/R98: a failed ticket still opened or notified: $(cat "$STUB_LOG")"
+# A ticket filed by a run whose notice then failed is found, never filed twice.
+land STUB_PR_FILES=scripts/feature.sh STUB_REVERT_RC=1 STUB_FIX_EXISTING=9502 STUB_NOTICE=9411 9185 --lane
+expect_status 0 "runtime/R95: the next run takes the fix ticket an earlier run filed"
+grep -q '^ARGV: issue list .*--author @me' "$STUB_LOG" && [ "$(grep -c '^ARGV: issue create --title lane escape fix' "$STUB_LOG" | tr -d ' ')" = 0 ] &&
+	pass "runtime/R95: a fix ticket the lane already filed is taken, not filed twice" ||
+	fail "runtime/R95: the lane filed a second fix ticket: $(grep 'issue' "$STUB_LOG")"
+escape_is 9211 fix 'ticket:#9502' "runtime/R95: and recorded once, that ticket in related"
+
+# --- --escapes sweeps with no PR to judge (runtime/R101, #918) -------------------------
+escaped 9212
+escaped 9213 reverted
+_ml_before=$(show --kind merge.land | grep -c . | tr -d ' ')
+: >"$STUB_LOG.bodies"
+land STUB_REVERT_PR=9312 STUB_NOTICE=9412 --escapes
+expect_status 0 "runtime/R101: --escapes with no PR handles the escapes and exits 0"
+expect_out_has 'lane: escape pr:#9212 revert pr:#9312' "runtime/R101: a failed QA is reverted as a lane run reverts it"
+expect_out_has 'lane: escape pr:#9213 notified' "runtime/R101: an undone escape is notified as a lane run notifies it"
+! grep -q '^ARGV: pr \(merge\|view\|checks\)' "$STUB_LOG" && pass "runtime/R101: the sweep reads no PR and merges nothing" ||
+	fail "runtime/R101: the sweep read or merged a PR: $(grep '^ARGV: pr' "$STUB_LOG")"
+[ "$(show --kind merge.land | grep -c . | tr -d ' ')" = "$_ml_before" ] && pass "runtime/R101: the sweep records no landing and no hold" ||
+	fail "runtime/R101: the sweep wrote a merge.land"
+escape_is 9212 revert 'pr:#9312' "runtime/R101: the swept failed QA is recorded once"
+escape_is 9213 notified - "runtime/R101: the swept undone escape is recorded once"
+grep -q '^ARGV: issue create .*--assignee octocat' "$STUB_LOG" && pass "runtime/R101: the sweep's notices go to the lane policy's operator" ||
+	fail "runtime/R101: the sweep's notice is not assigned to octocat: $(grep 'issue create' "$STUB_LOG")"
+lane_lines_closed "a sweep"
+bodies_closed "a sweep"
+land STUB_REVERT_PR=9312 STUB_NOTICE=9412 --escapes
+expect_status 0 "runtime/R101: a second sweep exits 0"
+[ -z "$T_OUT" ] && [ "$(creates pr)" = 0 ] && [ "$(creates issue)" = 0 ] && [ "$(escapes_of 9212)" = 1 ] && [ "$(escapes_of 9213)" = 1 ] &&
+	pass "runtime/R101: run again, the sweep prints, opens and records nothing" || fail "runtime/R101: a second sweep acted: $T_OUT $(cat "$STUB_LOG")"
+# The sweep runs the outcome recorder, and one that fails stops it as it
+# holds a lane run: nothing handled, nothing recorded, exit 4.
+mv "$LANEKIT/.git" "$LANEKIT/.git.off"
+land --escapes
+mv "$LANEKIT/.git.off" "$LANEKIT/.git"
+expect_status 4 "runtime/R101: a sweep whose outcome recorder fails stops, exit 4"
+expect_out_has 'lane: held escape' "runtime/R101: and says lane: held escape"
+expect_err_has 'outcome recorder' "runtime/R101: the recorder's failure is named on standard error"
+[ "$(show --kind merge.land | grep -c . | tr -d ' ')" = "$_ml_before" ] && pass "runtime/R101: a stopped sweep records no hold: there is no PR to hold" ||
+	fail "runtime/R101: a stopped sweep wrote a merge.land"
+# A closed lane names no operator to notify: the sweep stops there.
+escaped 9214
+land STUB_LANE=none --escapes
+expect_status 4 "runtime/R101: a sweep on a closed lane stops, exit 4"
+expect_out_has 'lane: held closed' "runtime/R101: and says lane: held closed"
+[ "$(escapes_of 9214)" = 0 ] && [ "$(creates issue)" = 0 ] && pass "runtime/R101: a closed lane's sweep handles nothing" ||
+	fail "runtime/R101: a closed lane's sweep handled an escape"
+land STUB_REPO_RC=1 --escapes
+expect_status 2 "runtime/R101: a sweep whose base branch the forge cannot name refuses, exit 2"
+[ "$(escapes_of 9214)" = 0 ] && pass "runtime/R101: and handles nothing" || fail "runtime/R101: a sweep with no base handled an escape"
+# The sweep takes no PR and no other flag.
+for _ea in '9101 --escapes' '--escapes --lane' '--escapes --ticket 5' '--escapes --train'; do
+	# shellcheck disable=SC2086
+	land $_ea
+	expect_status 2 "runtime/R101: '$_ea' is a usage error, exit 2"
+done
+[ "$(escapes_of 9214)" = 0 ] && pass "runtime/R101: no usage error handled an escape" || fail "runtime/R101: a usage error handled an escape"
 
 # --- the lane escape kind joins the kit's own vocabulary ------------------------------
 grep -q '`lane.escape`' "$KIT/docs/adr/INDEX.md" && pass "runtime/R93: the decision index names the lane.escape kind" ||

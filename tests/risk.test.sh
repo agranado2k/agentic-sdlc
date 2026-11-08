@@ -402,8 +402,9 @@ t_text_has "$pi_flat" 'takes the same actions whatever the rule prints' "process
 t_text_has "$pi_flat" 'whatever the rule prints, save its one exception: the lane step ([`LANE.md`](LANE.md)) and the landing script'"'"'s lane mode it runs' "process/R65: the passage names the lane step and the lane mode as its one exception"
 LAND="$KIT/scripts/land.kit.sh"
 # Its lane mode (PRD-10, ADR-0047) is the one exception: the rule is run in
-# the lane's block, between 1L and 1d, and named nowhere else, comments aside.
-sed -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
+# the lane's block, between 1L and 1d, and its helpers before step 1 (0L,
+# the drift check), and named nowhere else, comments aside.
+sed -e '/^# --- 0L\./,/^# --- 1\. /d' -e '/^# --- 1L\./,/^# --- 1d\./d' -e '/^[[:space:]]*#/d' "$LAND" | grep -qE 'risk\.sh|risk\.judge' &&
 	fail "process/R65: the landing script reads the risk rule outside its lane mode" ||
 	pass "process/R65: outside its lane mode, the landing script reads nothing of the risk rule"
 
