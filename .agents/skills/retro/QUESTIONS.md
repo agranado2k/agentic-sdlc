@@ -230,7 +230,8 @@ decomposition.
 
 ## 6. Chain health
 
-*Reads: `ticket.write`, `ticket.start` (and `outcome` `resumed`), `pr.iterate` (`data.cause`), `pr.open`, `merge.land`, `spawn`,
+*Reads: `ticket.write`, `ticket.start` (and `outcome` `resumed`), `pr.iterate` (`data.cause`), `pr.open`, `merge.land`
+(and, the lane's, `outcome` with `data.via=lane` and `data.hold`), `lane.escape` (`outcome`), `spawn`,
 `spawn` (`outcome` `refused`), `spawn.end` (`outcome` — `ok`, `fail`, `timeout`, `budget`, `unreachable`),
 `agent.stop` with `outcome` `fail` (`data.last_kind`, `data.last_age_ms`) and a priced one (`data.final`),
 `run.start`, `run.end`, and `tool.use` with `outcome` `denied` (`data.tool`,
@@ -242,6 +243,26 @@ decomposition.
 - **PRs with no landing**: a `pr.open` with no `merge.land` — and a PR the
   forge shows merged with no `merge.land` at all, which is `/merge-train`
   not emitting, a different finding from a PR still open.
+- **The low-risk lane**: what the lane carried and why it held the rest.
+  A pull request counts once, by its latest lane event in the window: landed
+  when a `merge.land` with `outcome=landed` and `data.via=lane` names it,
+  held otherwise, by its latest hold's `data.hold` token — a hold the
+  operator then landed is still the lane's hold. The tokens print by count,
+  a tie in the order the lane checks them, and a token the lane does not
+  declare prints `undeclared`, never its text. Escapes count each escaped
+  pull request's latest `lane.escape` by outcome — `revert`, `fix`,
+  `notified`:
+  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk 'function v(k) { return match($0, "\"" k "\":\"[^\"]*\"") ? substr($0, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "" } /"kind":"merge\.land"/ && /"via":"lane"/ { p = v("subject"); o = v("outcome"); if (o == "landed") ld[p] = 1; else if (o == "skipped") hd[p] = v("hold") } /"kind":"lane\.escape"/ { es[v("subject")] = v("outcome") } END { n = split("closed drift escape path base-red check-table verifier switch risk undeclared", tk, " "); for (p in ld) l++; for (p in hd) { if (p in ld) continue; h++; for (i = 1; n > i; i++) if (tk[i] == hd[p]) break; c[tk[i]]++ } s = ""; for (m = 1; n >= m; m++) { b = 0; for (i = 1; n >= i; i++) if (c[tk[i]] > c[tk[b]]) b = i; if (!b) break; s = s (s == "" ? " (" : ", ") tk[b] " " c[tk[b]]; delete c[tk[b]] } s = s (s == "" ? "" : ")"); for (p in es) { e++; ec[es[p]]++ } x = ""; split("revert fix notified", eo, " "); for (i = 1; 3 >= i; i++) if (ec[eo[i]]) x = x (x == "" ? " (" : ", ") eo[i] " " ec[eo[i]]; x = x (x == "" ? "" : ")"); print "lane: landed " l + 0 ", held " h + 0 s ", escapes " e + 0 x }'`
+  prints, for a wave of fourteen:
+
+  ```
+  lane: landed 8, held 6 (risk 4, path 1, check-table 1), escapes 0
+  ```
+
+  A hold token that dominates the line is where the lane stops carrying
+  work — `risk` the review areas' earned records, `path` the hold list,
+  `check-table` the tickets — and an escape is a lane landing that turned
+  out wrong: one beside a low landed count is the lane's own finding.
 - **Spawns that ended badly**: a `spawn.end` with `outcome` `fail`, `timeout`
   or `budget`; an `unreachable` one, which is a vendor that could not be
   reached and a fallback the session then chose — a window where the
@@ -298,9 +319,10 @@ is never reachable.
 ## 7. Aim calibration
 
 *Reads: `feedback` — subject `ticket:#N` or `ticket:T-<digits>`, `related` its `pr:#N`, `outcome`
-one of `hit`, `adjusted`, `missed` or `unasked` (the train's alone),
-`data.by` one of `operator` or `train` (who gave the verdict: a human in
-the session, or the train under a delegating instruction), `reason` the
+one of `hit`, `adjusted`, `missed` or `unasked` (the train's and the lane's alone),
+`data.by` one of `operator`, `train` or `lane` (who gave the verdict: a human in
+the session, the train under a delegating instruction, or the low-risk lane
+landing with no act of the operator's), `reason` the
 answerer's words — emitted by `/merge-train` at landing and by
 `/pr-iterate` when a human comment changes the plan; joined to
 `ticket.write` for the tier and to the `skill` of the runs that built it.*
@@ -328,11 +350,14 @@ answerer's words — emitted by `/merge-train` at landing and by
   could not ask and the second one it never recorded asking.
 - Count the verdicts by `data.by`. `operator` is a human's answer; `train`
   is the train judging the slice itself under a delegating instruction —
-  never the human's verdict. Report the two apart on the row — `<n>
-  operator, <m> train` — and a window whose verdicts are all `train` as
-  **no human verdict**, read with the landings that got none. A `feedback`
-  with no `data.by` was written before the key existed: count it as `<p>
-  unattributed`, never as the operator's.
+  never the human's verdict; `lane` is the low-risk lane's landing, always
+  `unasked`, and never the human's verdict either. Report the three apart on
+  the row — `<n> operator, <m> train, <l> lane` — and a window whose verdicts
+  are all `train` or `lane` as **no human verdict**, read with the landings
+  that got none. A `feedback` with no `data.by` was written before the key
+  existed: count it as `<p> unattributed`, never as the operator's:
+  `sh scripts/trace.sh export --since <YYYY-MM-DD> | awk '/"kind":"feedback"/ { b = match($0, /"by":"[^"]*"/) ? substr($0, RSTART + 6, RLENGTH - 7) : ""; if (b == "operator" || b == "train" || b == "lane") c[b]++; else u++ } END { print "feedback by: " c["operator"] + 0 " operator, " c["train"] + 0 " train, " c["lane"] + 0 " lane, " u + 0 " unattributed" }'`
+  — any other `data.by` counts as unattributed too.
 - **Retired while the project accepts train-only verdicts.** A project
   that delegates its landings may decide that a train's verdict is enough,
   and records so in a binding decision record: one whose text says it
