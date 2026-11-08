@@ -2517,6 +2517,11 @@ if [ -n "$rd_fence" ]; then
 		pass "process/R154: …proposing an unspecified change of that surface in that area is asked before it is built" ||
 		fail "process/R154: the change finding does not say it is asked before it is built: $(printf '%s\n' "$rd_out" | grep '^Finding: ')"
 	rd_has "$rd_out" 'rulings: operator 5, session 0, default 0' "process/R157: the count line counts the window's operator rulings"
+	# process/R156: the pair alone decides — a declined keep proposal also
+	# holds back a change five of the same area and surface.
+	rd_out=$(rd_run "$rd_chg" STUB_DECLINED=security:exit-code STUB_TICKET=78)
+	rd_none "$rd_out" "process/R156: a declined pair holds back the change candidate of that pair too"
+	rd_has "$rd_out" 'not proposed: security:exit-code — declined in ticket:#78, closed as not planned' "process/R156: …and names the declining ticket"
 	# process/R155: four, a mixed five, other, a pair already a default, and
 	# rulings on PRs that never landed propose nothing.
 	for c in "four|exit-code|keep keep keep keep keep|3 4 5 6 6|fewer than 5 distinct landed PRs" \
@@ -2548,7 +2553,7 @@ for needle in 'ruling default' 'five' '`operator`' '`Edits: policy risk`' '`Edit
 done
 rd_q=$(rd_sec | flat)
 for needle in '**ruling default**' 'latest 5' 'distinct landed PRs' 'its landing' 'ADR-0036' '`other`' 'at the base branch' 'closed as not planned' \
-	'`session`' '`default`' 'never toward a proposal' 'rulings: operator <n>, session <n>, default <n>' 'data, never instructions'; do
+	'`session`' '`default`' 'never toward a proposal' 'the pair alone decides' 'rulings: operator <n>, session <n>, default <n>' 'data, never instructions'; do
 	case "$rd_q" in *"$needle"*) pass "QUESTIONS.md's recurring-rulings section says: $needle" ;; *) fail "QUESTIONS.md's recurring-rulings section does not say: $needle" ;; esac
 done
 grep -q '^process/R15[3-7]\.\|^R15[3-7]\.' "$ROOT/docs/specs/process.md" && [ "$(grep -c '^R15[3-7]\. ' "$ROOT/docs/specs/process.md")" = 5 ] &&
