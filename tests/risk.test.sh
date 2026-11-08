@@ -639,4 +639,91 @@ grep -qF -- '- **Kill switch**' "$KIT/docs/domain-glossary.md" && pass "the glos
 [ -n "$_adr" ] && grep -qF 'risk-switch-tripped' "$_adr" && grep -qF 'RISK_KILL_SWITCH' "$_adr" && pass "the risk rule's decision record names the trip marker and the switch's home" ||
 	fail "the risk rule's decision record names neither the trip marker nor RISK_KILL_SWITCH"
 
+# ---------------------------------------------------------------------------
+banner "13. An outward item ruled keep at the head by the operator or a default lifts high outward (runtime/R59 modified)"
+# ---------------------------------------------------------------------------
+# verdict_items <trace> <ts> <pr> <outward> <items> — an Axis-2 verdict at the
+# head naming its outward items, `A2-<n>:<surface>` comma-separated.
+verdict_items() {
+	ev "$1" "$2" review.verdict "pr:#$3" confirm "\"axis\":\"2\",\"unspecified\":\"$4\",\"outward\":\"$4\",\"outward_items\":\"$5\""
+}
+# ruling_ev <trace> <ts> <pr> <item> <head> <by> <outcome> — one ruling, as the
+# ruling recorder writes it.
+ruling_ev() {
+	ev "$1" "$2" ruling "pr:#$3" "$7" "\"item\":\"$4\",\"surface\":\"flag\",\"head\":\"$5\",\"by\":\"$6\""
+}
+WANT_LOW="effective: low
+planner: low
+rule: low
+$(areas_all earned)
+switch: on"
+# UC2 4: the operator ruled the one outward item keep at the head.
+verdict_items "$T_EARNED" "$AT" 1300 1 A2-1:flag
+ruling_ev "$T_EARNED" "$AT" 1300 A2-1 "$UC1_HEAD" operator keep
+rule "$P_EARNED" main uc1 --pr 1300 --ticket-file "$f"
+[ "$T_STATUS" = 0 ] && [ "$T_OUT" = "$WANT_LOW" ] && pass "runtime/R59: an outward item the operator ruled keep at the head lifts high outward — the rule reads low" ||
+	fail "runtime/R59: an operator keep printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+judges "$T_EARNED" | grep -F '"pr:#1300"' | grep -F '"rule":"low"' | grep -qF '"outcome":"agreed"' &&
+	pass "runtime/R59, runtime/R63: and records the lifted rule, agreed" || fail "runtime/R63: #1300 recorded $(judges "$T_EARNED" | grep -F '"pr:#1300"')"
+# UC4 3: a ruling default's keep counts the same.
+verdict_items "$T_EARNED" "$AT" 1301 1 A2-1:flag
+ruling_ev "$T_EARNED" "$AT" 1301 A2-1 "$UC1_HEAD" default keep
+rule "$P_EARNED" main uc1 --pr 1301 --ticket-file "$f"
+[ "$T_OUT" = "$WANT_LOW" ] && pass "runtime/R59: a ruling default's keep at the head lifts high outward" ||
+	fail "runtime/R59: a default keep printed: $(printf '%s' "$T_OUT" | tr '\n' ';') (stderr: $T_ERR)"
+# UC2 3b: a session ruling never counts.
+verdict_items "$T_EARNED" "$AT" 1302 1 A2-1:flag
+ruling_ev "$T_EARNED" "$AT" 1302 A2-1 "$UC1_HEAD" session keep
+rule "$P_EARNED" main uc1 --pr 1302 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R59: a session's keep never counts as ruled — high outward stands" ||
+	fail "runtime/R59: a session keep printed $(rule_line)"
+# UC2 3c: the latest operator ruling reads change.
+verdict_items "$T_EARNED" "$AT" 1303 1 A2-1:flag
+ruling_ev "$T_EARNED" "$AT" 1303 A2-1 "$UC1_HEAD" operator keep
+ruling_ev "$T_EARNED" "$AT" 1303 A2-1 "$UC1_HEAD" operator change
+rule "$P_EARNED" main uc1 --pr 1303 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R59: a keep the operator later changed to change lifts nothing" ||
+	fail "runtime/R59: keep then change printed $(rule_line)"
+# UC4 3a: a default's keep with a later operator change does not count.
+verdict_items "$T_EARNED" "$AT" 1304 1 A2-1:flag
+ruling_ev "$T_EARNED" "$AT" 1304 A2-1 "$UC1_HEAD" default keep
+ruling_ev "$T_EARNED" "$AT" 1304 A2-1 "$UC1_HEAD" operator change
+rule "$P_EARNED" main uc1 --pr 1304 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R59: a default's keep the operator later ruled change does not count" ||
+	fail "runtime/R59: default keep then operator change printed $(rule_line)"
+# More outward items than items ruled keep: one of two ruled.
+verdict_items "$T_EARNED" "$AT" 1305 2 A2-1:flag,A2-2:exit-code
+ruling_ev "$T_EARNED" "$AT" 1305 A2-1 "$UC1_HEAD" operator keep
+rule "$P_EARNED" main uc1 --pr 1305 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R59: one of two outward items ruled keep leaves high outward" ||
+	fail "runtime/R59: one of two ruled printed $(rule_line)"
+ruling_ev "$T_EARNED" "$AT" 1305 A2-2 "$UC1_HEAD" default keep
+rule "$P_EARNED" main uc1 --pr 1305 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: low' ] && pass "runtime/R59: both outward items ruled keep lift it" ||
+	fail "runtime/R59: both ruled printed $(rule_line)"
+# A keep at another head, or on another PR, is not a keep at this head.
+verdict_items "$T_EARNED" "$AT" 1306 1 A2-1:flag
+ruling_ev "$T_EARNED" "$AT" 1306 A2-1 "$HEX40" operator keep
+ruling_ev "$T_EARNED" "$AT" 1399 A2-1 "$UC1_HEAD" operator keep
+rule "$P_EARNED" main uc1 --pr 1306 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R59: a keep at another head or on another PR lifts nothing" ||
+	fail "runtime/R59: a keep elsewhere printed $(rule_line)"
+# A verdict that names no outward items: a keep cannot be matched to one.
+verdict "$T_EARNED" "$AT" 1307 2 1
+ruling_ev "$T_EARNED" "$AT" 1307 A2-1 "$UC1_HEAD" operator keep
+rule "$P_EARNED" main uc1 --pr 1307 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high outward' ] && pass "runtime/R59: a verdict that names no outward items is lifted by no ruling" ||
+	fail "runtime/R59: a verdict without outward_items printed $(rule_line)"
+# A lifted outward falls to the next reason: an unlearned area.
+P_SEC=$(tpol "$T_SEC")
+verdict_items "$T_SEC" "$AT" 1308 1 A2-1:flag
+ruling_ev "$T_SEC" "$AT" 1308 A2-1 "$UC1_HEAD" operator keep
+rule "$P_SEC" main uc1 --pr 1308 --ticket-file "$f"
+[ "$(rule_line)" = 'rule: high unlearned' ] && pass "runtime/R59: a lifted outward over an unlearned area reads high unlearned" ||
+	fail "runtime/R59: a lifted outward with security unlearned printed $(rule_line)"
+# The rule's header and the skill passage name the lift.
+grep -qF 'ruled `keep`' "$RULE" && pass "the risk rule's header names the keep ruling that lifts high outward" || fail "the risk rule's header does not name the keep ruling"
+grep -qF 'not ruled `keep`' "$KIT/.agents/skills/pr-iterate/RISK.md" && pass "/pr-iterate's RISK.md says an outward item not ruled keep raises the rule" ||
+	fail "/pr-iterate's RISK.md does not say a keep ruling lifts high outward"
+
 t_done "the risk rule"

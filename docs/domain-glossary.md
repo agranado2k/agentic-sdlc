@@ -611,7 +611,10 @@ Grouped by the seam each term belongs to. Entry shape:
   ticket, prints the **effective risk**, the planner's, its own, one line per
   review area the diff touches and the **kill switch**'s state, as closed tokens
   only, and records one `risk.judge` event, `agreed` or `disagreed`. Its own
-  risk is `high unlearned` when any touched area is **unlearned**, else `low`.
+  risk is `high outward` while the Axis-2 verdict at the head counts more
+  outward items than are **ruled** `keep` there (a `session` ruling never
+  counts), else `high unlearned` when any touched area is **unlearned**, else
+  `high unclear` with no Axis-2 verdict at the head, else `low`.
   Every unknown fails closed, toward high. The one route by which a chain
   skill sees anything derived from the trace: `/pr-iterate` reports it, and
   only its lane step acts on it, running the lane policy's landing command on
