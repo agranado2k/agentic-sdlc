@@ -2413,6 +2413,30 @@ land STUB_PR_FILES='docs/a.md scripts/feature.sh' STUB_LANE=nopat 9160 --lane
 expect_status 0 "runtime/R82: a PR no hold applies to still lands through the lane"
 lane_lines_closed "a lane landing past every hold"
 
+# --- the kit's own hold patterns: a lens edit waits for the operator (#925) ------
+# The kit's lane twin, its operator stood in for, so its own LANE_HOLD_PATTERNS
+# are what the lane reads: every path under the review skill's directory is
+# held with `path` whatever the risk says (ADR-0048, process/R146), and a
+# PR touching only another skill is not.
+{
+	cat "$KIT/scripts/lane.kit.config.sh"
+	printf "LANE_OPERATOR='octocat'\n"
+} >"$LANE_FIX/kit"
+iterated 9161 9162 9163 9164
+for _lv in 9161 9162 9163 9164; do vverdict "$_lv" pass; done
+land STUB_LANE=kit STUB_EFFECTIVE=low STUB_PR_FILES=.agents/skills/review-pr/lens-security.md 9161 --lane
+lane_held 9161 path "process/R146: a lens edit under the kit's own hold patterns, the risk rule's effective low"
+land STUB_LANE=kit STUB_EFFECTIVE=low STUB_PR_FILES='docs/a.md .agents/skills/review-pr/SKILL.md' 9162 --lane
+lane_held 9162 path "process/R146: the review skill's own SKILL.md, beside a file no pattern holds"
+land STUB_LANE=kit STUB_EFFECTIVE=low STUB_PR_FILES=.claude/skills/review-pr 9164 --lane
+lane_held 9164 path "process/R146: the review skill's bridge, retargeted"
+land STUB_LANE=kit STUB_EFFECTIVE=low STUB_PR_FILES=.agents/skills/tdd/SKILL.md 9163 --lane
+expect_status 0 "process/R146: a PR touching only another skill is not held by path, and lands"
+expect_out_lacks 'lane: held' "process/R146: another skill's edit prints no hold"
+grep -q 'ADR-0048' "$KIT/scripts/lane.kit.config.sh" &&
+	pass "process/R146: the kit's lane policy cites the record its lens hold rests on" ||
+	fail "process/R146: scripts/lane.kit.config.sh does not cite ADR-0048 for the lens hold"
+
 # --- a second hold at the same head writes nothing ------------------------------
 land STUB_SWITCH=tripped 9104 --lane
 expect_status 4 "runtime/R91: the same hold again: exit 4"
