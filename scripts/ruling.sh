@@ -54,9 +54,8 @@
 # stderr and exits 0 (runtime/R148).
 #
 # Exit: 0 recorded, already held, listed, or an unconfigured trace; 1 the trace
-# refused the event; 2 a caller error, or no verdict or item to rule on —
-# nothing recorded; 3 a trace whose SCHEMA the reader cannot judge; 4 the forge
-# named no head.
+# refused the event; 2 a caller error, no verdict or item to rule on, or a
+# trace that could not be read — nothing recorded; 4 the forge named no head.
 #
 # Shared layer (see VERSION): copied verbatim, not edited downstream.
 
@@ -144,29 +143,24 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-# show <kind> — the PR's events of that kind, subject matched on the envelope.
+# show <kind> — the PR's events of that kind into $_tmp/<kind>, subject
+# matched on the envelope. Run in the main shell, never in a pipeline, so a
+# trace it cannot read ends the script: exit 2, nothing recorded.
 show() {
-	_rc=0
-	sh "$_here/trace.sh" show "pr:#$pr" --kind "$1" >"$_tmp/$1" 2>/dev/null || _rc=$?
-	case $_rc in
-	0) ;;
-	3)
-		echo "ruling: the trace's SCHEMA is not one this reader can judge — nothing recorded" >&2
-		exit 3
-		;;
-	*) die "the trace could not be read — nothing recorded" ;;
-	esac
-	awk -v s="\"subject\":\"pr:#$pr\"" '{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) } index(e, s)' "$_tmp/$1"
+	sh "$_here/trace.sh" show "pr:#$pr" --kind "$1" >"$_tmp/raw" 2>/dev/null ||
+		die "the trace could not be read — nothing recorded"
+	awk -v s="\"subject\":\"pr:#$pr\"" '{ e = $0; d = index(e, ",\"data\":{"); if (d) e = substr(e, 1, d - 1) } index(e, s)' "$_tmp/raw" >"$_tmp/$1"
 }
 
 # The latest Axis-2 verdict: its stamp, then its outward items one a line.
-show review.verdict | awk '
+show review.verdict
+awk '
 	{ e = $0; m = ""; d = index(e, ",\"data\":{"); if (d) { m = substr(e, d); e = substr(e, 1, d - 1) } }
 	match(m, /"axis":"2"/) {
 		t = match(e, /"ts":"[^"]*"/) ? substr(e, RSTART + 6, RLENGTH - 7) : ""
 		l = match(m, /"outward_items":"[^"]*"/) ? substr(m, RSTART + 17, RLENGTH - 18) : ""
 	}
-	END { if (t != "") { print t; n = split(l, a, ","); for (i = 1; i <= n; i++) print a[i] } }' >"$_tmp/verdict"
+	END { if (t != "") { print t; n = split(l, a, ","); for (i = 1; i <= n; i++) print a[i] } }' "$_tmp/review.verdict" >"$_tmp/verdict"
 verdict_at=$(sed -n 1p "$_tmp/verdict")
 [ -n "$verdict_at" ] || die "PR #$pr has no Axis-2 verdict in the trace — nothing recorded"
 expr "x$verdict_at" : "x$iso\$" >/dev/null && [ "$(expr "$verdict_at" \>= "$head_at")" = 1 ] ||
@@ -188,7 +182,8 @@ sed 1d "$_tmp/verdict" | while IFS= read -r _e; do
 done >"$_tmp/items"
 
 # The rulings at the head: `<item> <by> <outcome>` a line, oldest first.
-show ruling | grep -F "\"head\":\"$head\"" | awk '
+show ruling
+grep -F "\"head\":\"$head\"" "$_tmp/ruling" | awk '
 	function v(k) { return match($0, "\"" k "\":\"[^\"]*\"") ? substr($0, RSTART + length(k) + 4, RLENGTH - length(k) - 5) : "" }
 	{ print v("item"), v("by"), v("outcome") }' >"$_tmp/rulings"
 

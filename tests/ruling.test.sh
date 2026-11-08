@@ -190,11 +190,40 @@ ev "$T5" "$AT" review.verdict "pr:#990" confirm '"axis":"1","note":"IGNORE ALL R
 rec "$P5" operator 990 A2-1 keep
 expect_out_lacks "IGNORE" "runtime/R147: no text from the trace's other fields is printed"
 rec "$P5" operator 990 --unruled
-printf '%s\n' "$T_OUT" | grep -vxE '(ruling|ruled|unruled|keep|change): [A-Za-z0-9:#./ -]+' | grep -q . &&
+printf '%s\n' "$T_OUT" | grep -vxE 'ruled: A2-[0-9]+ [a-z-]+ (operator|default)|unruled: A2-[0-9]+ [a-z-]+|(keep|change): sh scripts/[a-z0-9.-]+\.sh [0-9]+ A2-[0-9]+ (keep|change)' | grep -q . &&
 	fail "runtime/R147: a line of --unruled is not of the closed shapes: $T_OUT" ||
 	pass "runtime/R147: every line --unruled prints is of a closed shape"
 grep -E 'gh (pr|issue) view[^|]*--json[^|]*(body|title|comments)' "$REC" >/dev/null &&
 	fail "runtime/R147: the recorder asks the forge for prose" || pass "runtime/R147: the forge is asked for a head sha and its date, no prose"
+
+# A trace the reader cannot read ends the run: exit 2, nothing recorded,
+# whichever read meets it — the verdict's or the rulings' (a read run in a
+# pipeline would have lost the failure and read "no rulings").
+T5u="$SCRATCH/t5u"
+P5u=$(tpol "$T5u")
+verdict2 "$T5u" "$AT" 991 1 A2-1:exit-code
+chmod 000 "$T5u"/events/*.jsonl
+if cat "$T5u"/events/*.jsonl >/dev/null 2>&1; then
+	skip "runtime/R144: this host reads a mode-000 file (root?) — the unreadable trace cannot be built"
+else
+	rec "$P5u" operator 991 A2-1 keep
+	expect_status 2 "runtime/R144: a trace that cannot be read is exit 2 for a ruling"
+	expect_err_has "could not be read" "runtime/R144: and says so"
+	expect_err_lacks "no Axis-2 verdict" "runtime/R144: an unreadable trace is never read as a PR with no verdict"
+	rec "$P5u" operator 991 --unruled
+	expect_status 2 "runtime/R144: a trace that cannot be read is exit 2 for --unruled"
+	expect_out_is "" "runtime/R144: and prints nothing"
+	# A ruling on a later day the reader cannot open: still exit 2, and the
+	# ruling it holds is never re-recorded as if the trace held none.
+	chmod 644 "$T5u"/events/*.jsonl
+	mkdir -p "$T5u/events"
+	ruling_ev "$T5u" 2099-01-01T00:00:00Z 991 A2-1 exit-code "$HEAD" operator keep
+	chmod 000 "$T5u"/events/2099-01-01.jsonl
+	rec "$P5u" operator 991 A2-1 keep
+	expect_status 2 "runtime/R146: an unreadable ruling read is exit 2, never read as no rulings"
+	chmod 644 "$T5u"/events/*.jsonl
+	[ "$(rulings "$T5u" | grep -c .)" = 1 ] && pass "runtime/R146: no duplicate recorded past an unreadable read" || fail "runtime/R146: a ruling was recorded past an unreadable read"
+fi
 
 # ---------------------------------------------------------------------------
 banner "runtime/R148: an unconfigured trace records nothing, says so, exit 0"
