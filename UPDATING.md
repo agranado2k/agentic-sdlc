@@ -238,8 +238,12 @@ the next reason — `unlearned`, then `low`. A verdict with no
 `data.outward_items`, or a ruling recorder that is absent or fails, lifts
 nothing. Take `scripts/risk.sh` verbatim, after 0.124.0's
 `scripts/ruling.sh`. **Skills (9a):** take `/pr-iterate`'s `RISK.md`, whose
-passage says an outward item not ruled `keep` raises the rule. No wiring,
-template, config or adapter moves.
+passage says an outward item not ruled `keep` raises the rule. **Adapter
+(9e):** take the Claude Code adapter's `hooks/root-guard.sh` and its
+`README.md` — the root guard refuses an agent's Bash call that runs the ruling
+recorder while clearing or overriding an agent-harness marker (`env -u`,
+`env -i`, `unset`, `export -n`, or an assignment to one), so an agent cannot
+record `by=operator`. No wiring, template or config moves.
 
 **Arriving from 0.123.0 or older, `scripts/ruling.sh` joins the shared
 layer — the ruling recorder.** One file joins at 0.124.0 and only this file
@@ -2288,10 +2292,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 4006 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 4010 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 4160 insertions(+), 1 deletion(-)
+ 3 files changed, 4164 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md
