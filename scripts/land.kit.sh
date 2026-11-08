@@ -5,6 +5,7 @@
 #
 #   sh scripts/land.kit.sh <PR#> [--ticket <N|T-NN>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
 #   sh scripts/land.kit.sh <PR#> --lane [--ticket <N|T-NN>]
+#   sh scripts/land.kit.sh --escapes
 #
 # WHY THIS EXISTS. /merge-train records every landing it makes — a merge.land
 # with the merge sha, then the operator's verdict as a feedback event — and
@@ -107,13 +108,15 @@
 #   `switch`, in runtime/R82's order: `drift` when this checkout's landing
 #   script or risk rule differs from the base's (runtime/R84); `escape` once
 #   the lane has run the outcome recorder and handled each lane landing's
-#   failed QA with no lane.escape yet — a revert of its merge commit in a
-#   throwaway worktree under the git directory, one revert PR, one notice
-#   issue assigned to the lane's operator, one lane.escape outcome=revert and
-#   a `lane: escape pr:#<N> revert pr:#<M>` line — when handling one failed,
-#   which records nothing and names the cause on stderr, or when a
-#   lane.escape names this PR in related or its ticket (runtime/R92-R99,
-#   ADR-0049); `path` when the
+#   escape with no lane.escape yet — for a failed QA nothing undid, a revert
+#   of its merge commit in a throwaway worktree under the git directory and
+#   one revert PR, or one fix ticket stamped `Risk: high unclear` when the
+#   revert does not apply; for a PR a revert or a fix already answered,
+#   neither; then one notice issue assigned to the lane's operator, one
+#   lane.escape (revert, fix or notified) and one `lane: escape pr:#<N> …`
+#   line — when handling one failed, which records nothing and names the
+#   cause on stderr, or when a lane.escape names this PR in related or its
+#   ticket (runtime/R92-R99, ADR-0049); `path` when the
 #   PR's diff touches a file VERSION's files: list names at either end, a
 #   judging file the policy reader names, or a path the lane policy's
 #   LANE_HOLD_PATTERNS select (runtime/R85); `base-red` when the latest run of
@@ -133,6 +136,11 @@
 #   `lane: landed` (runtime/R90). What the lane prints and records is closed
 #   tokens, numbers, shas and digits only: no title, branch or reason text, and
 #   the forge's own chatter goes nowhere (runtime/R102).
+#   With --escapes and no PR, the SWEEP (runtime/R101): what a lane run does
+#   before it judges a PR — `closed`, `drift`, the outcome recorder and every
+#   unhandled escape — with no PR, on the forge's default branch; it merges
+#   nothing, records no landing or hold, and exits 0 (4 with `lane: held
+#   <token>` when a check or an escape stopped it). It takes no other flag.
 #   A failed post-merge workflow still records both events — the PR did land —
 #   and then exits 1: escalate, as the train's hard rule 6 says. So does a
 #   merge commit the forge never names (data.workflows=unknown, no sha), and
@@ -160,7 +168,7 @@
 # scripts/trace.kit.sh runs; a caller's TRACE_CONFIG still wins (the broker's
 # arrangement).
 #
-# exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 4 the lane held it · 69 no forge CLI
+# exit: 0 landed (or swept) · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, the PR refused, or no base to sweep · 4 the lane held it (or stopped the sweep) · 69 no forge CLI
 #
 # tests/land.test.sh drives this file against a stub `gh` on PATH, and a stub
 # `git` that answers the release questions and passes everything else through.
@@ -177,6 +185,7 @@ usage() {
 	cat >&2 <<'EOF'
 usage: sh scripts/land.kit.sh <PR#> [--ticket <N|T-NN>] [--unasked '<reason>'] [--no-iteration '<reason>'] [--no-review '<reason>'] [--train]
        sh scripts/land.kit.sh <PR#> --lane [--ticket <N|T-NN>]
+       sh scripts/land.kit.sh --escapes
   <PR#>       the pull request to land — green, mergeable, clean against its base
   --ticket    the ticket the PR implemented, when the PR closes none: an issue number or a factory ticket id (T-07)
   --unasked   record the verdict as unasked, with this reason (the operator is not at the prompt)
@@ -184,7 +193,8 @@ usage: sh scripts/land.kit.sh <PR#> [--ticket <N|T-NN>] [--unasked '<reason>'] [
   --no-review     land with no /review-pr verdict at the head commit, for this reason (recorded)
   --train     /merge-train is landing it: merge.land says via=train, and the verdict is left to the train
   --lane      the low-risk lane, /pr-iterate's: land it only when the lane is open and its risk low, else hold it; takes none of the flags above but --ticket
-exit: 0 landed · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, or the PR refused · 4 the lane held it · 69 no forge CLI
+  --escapes   with no PR: handle every lane escape not yet handled, as a lane run does, and land nothing
+exit: 0 landed (or swept) · 1 merge rejected, a post-merge workflow failed, no merge commit named, or a release left untagged · 2 usage, the PR refused, or no base to sweep · 4 the lane held it (or stopped the sweep) · 69 no forge CLI
 EOF
 	exit 2
 }
@@ -213,6 +223,7 @@ NO_REVIEW=
 VIA=land
 LANE=
 TRAIN=
+ESCAPES=
 while [ $# -gt 0 ]; do
 	case $1 in
 	--ticket)
@@ -235,13 +246,20 @@ while [ $# -gt 0 ]; do
 		;;
 	--train) TRAIN=1 VIA=train ;;
 	--lane) LANE=1 ;;
+	--escapes) ESCAPES=1 ;;
 	-h | --help) usage ;;
 	-*) note "unknown option '$1'"; usage ;;
 	*) [ -z "$PR" ] || usage; PR=$1 ;;
 	esac
 	shift
 done
-case $PR in '' | *[!0-9]*) [ -z "$PR" ] || note "'$PR' is not a pull request number"; usage ;; esac
+# The sweep takes no PR and no other flag: it judges nothing (runtime/R101).
+if [ -n "$ESCAPES" ]; then
+	[ -z "$PR$TICKET$LANE$TRAIN$UNASKED$NO_ITERATION$NO_REVIEW" ] || { note "--escapes takes no PR and no other flag"; usage; }
+	VIA=lane
+else
+	case $PR in '' | *[!0-9]*) [ -z "$PR" ] || note "'$PR' is not a pull request number"; usage ;; esac
+fi
 [ "$VIA" = land ] || [ -z "$UNASKED" ] || { note "--train leaves the verdict to the train; drop --unasked"; usage; }
 # The lane takes no override: each one is an operator's call, and no operator
 # is at a lane run (runtime/R81).
@@ -254,7 +272,7 @@ command -v gh >/dev/null 2>&1 || { note "no forge CLI (gh) on PATH"; exit 69; }
 # Descriptor 3 carries the forge's own chatter — a merge naming the PR's title,
 # a watch naming its jobs: stderr for the operator, nowhere in the lane, whose
 # caller reads only what runtime/R102 allows.
-if [ -n "$LANE" ]; then exec 3>/dev/null; else exec 3>&2; fi
+if [ -n "$LANE$ESCAPES" ]; then exec 3>/dev/null; else exec 3>&2; fi
 
 # trace loud|quiet <field>=<value> … — `quiet` silences the unconfigured
 # note, so an unconfigured run says it once. The switch rides the external
@@ -278,9 +296,10 @@ trace_read() {
 # each reads _lane_base, the base branch's remote ref, set before the call.
 # hold <token> [<reason>] — print it, record it once per PR, head and
 # token, exit 4. A reason, the verifier's, follows the token on the line
-# and rides the event as data.reason (runtime/R104).
+# and rides the event as data.reason (runtime/R104). A sweep has no PR to
+# hold, so it records nothing (runtime/R101).
 hold() {
-	if ! trace_read show "pr:#$PR" --kind merge.land | grep -F "\"subject\":\"pr:#$PR\"" |
+	if [ -n "$PR" ] && ! trace_read show "pr:#$PR" --kind merge.land | grep -F "\"subject\":\"pr:#$PR\"" |
 		grep -F '"outcome":"skipped"' | grep -F '"via":"lane"' | grep -F "\"hold\":\"$1\"" |
 		grep -qF "\"head\":\"$HEAD_OID\""; then
 		trace quiet kind=merge.land "subject=pr:#$PR" ${TICKET:+"related=ticket:$TREF"} outcome=skipped \
@@ -296,19 +315,22 @@ escape_failed() {
 	note "lane escape: $1 — nothing recorded for it; the next lane run tries again"
 	hold escape
 }
-# escape_body <PR> <merge sha> <areas> [<revert PR>] — a revert PR's body,
-# or with the revert PR a notice's: closed tokens, numbers, a sha and
-# review area names, the escape's tokens first (runtime/R94, R102).
+# escape_body <outcome> <PR> <merge sha> <areas> [<line>…] — an escape's
+# tokens, then each further line: a revert PR's body, a fix ticket's or a
+# notice's. Closed tokens, numbers, a sha and review area names only
+# (runtime/R94, R95, R97, R102).
 escape_body() {
-	printf 'lane-escape: qa-failed\nescaped: pr:#%s\nmerge: %s\nareas: %s\n' "$1" "$2" "$3"
-	[ -z "${4:-}" ] || printf 'revert: pr:#%s\n' "$4"
-	printf 'held: escape\n'
+	printf 'lane-escape: %s\nescaped: pr:#%s\nmerge: %s\nareas: %s\n' "$1" "$2" "$3" "$4"
+	shift 4
+	[ $# -eq 0 ] || printf '%s\n' "$@"
 }
 # escape_revert <PR> <merge sha> <branch> — the escaped merge commit
 # reverted against its first parent in a throwaway worktree under the git
 # directory, from the base, pushed to <branch>; the worktree is removed
-# whatever happened. On failure _esc_why says what failed.
+# whatever happened. On failure _esc_why says what failed, and _esc_conflict
+# is set when it was the revert itself that did not apply (runtime/R95).
 escape_revert() {
+	_esc_conflict=
 	_er_gd=$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir </dev/null 2>/dev/null) && [ -d "$_er_gd" ] &&
 		_er_wt=$(mktemp -d "$_er_gd/lane-escape.XXXXXX" 2>/dev/null) || {
 		_esc_why="no throwaway worktree for the revert of PR #$1 could be made under the git directory"
@@ -319,6 +341,7 @@ escape_revert() {
 		_esc_why="no throwaway worktree for the revert of PR #$1 could be made from the base"
 	elif ! git -C "$_er_wt" revert --no-commit -m 1 "$2" </dev/null >/dev/null 2>&1; then
 		_esc_why="the revert of PR #$1's merge commit does not apply cleanly"
+		_esc_conflict=1
 	elif ! git -C "$_er_wt" commit -q -m "revert: lane escape of PR #$1" </dev/null >/dev/null 2>&1; then
 		_esc_why="the revert of PR #$1 could not be committed"
 	elif ! git -C "$_er_wt" push -q origin "HEAD:refs/heads/$3" </dev/null >/dev/null 2>&1; then
@@ -331,30 +354,71 @@ escape_revert() {
 	git -C "$ROOT" worktree prune </dev/null >/dev/null 2>&1
 	[ -n "$_er_ok" ]
 }
-# escape_handle <PR> <merge sha> — one escape, from its revert PR to its
-# event; any step that fails holds through escape_failed.
+# escape_ticket <PR> <merge sha> <areas> — the one fix ticket of an escape
+# whose revert does not apply (runtime/R95): one this login filed for it
+# before, found by its title, or a new one, its body the escape's tokens
+# and the stamp `Risk: high unclear`. Prints the ticket's number, or
+# nothing when the forge could not say or would not file it.
+escape_ticket() {
+	_et_title="lane escape fix: PR #$1"
+	_et_n=$(gh issue list --author @me --state all --search "\"$_et_title\" in:title" --limit 20 --json number,title \
+		--jq "map(select(.title == \"$_et_title\")) | .[0].number // \"\"" </dev/null 2>/dev/null) || return 0
+	case $_et_n in *[!0-9]*) _et_n= ;; esac
+	[ -n "$_et_n" ] || _et_n=$(gh issue create --title "$_et_title" \
+		--body "$(escape_body qa-failed "$1" "$2" "$3" '' 'Risk: high unclear')" </dev/null 2>/dev/null |
+		sed -n 's|.*/issues/\([0-9][0-9]*\)$|\1|p' | tail -n 1)
+	printf '%s\n' "$_et_n"
+}
+# escape_handle <PR> <merge sha> <outcome> — one escape, to its one event.
+# A failed QA gets a revert PR, or a fix ticket when the revert does not
+# apply; an escape already undone (`reverted`, `fixed`) gets neither, since
+# reverting the original then would undo the fix (runtime/R96). Each gets
+# one notice to the lane's operator, one lane.escape and one line; any step
+# that fails holds through escape_failed.
 escape_handle() {
+	_eh_n=$1 _eh_sha=$2 _eh_from=$3
 	_esc_areas=$(git -C "$ROOT" diff --name-only --no-renames "$2^1" "$2" </dev/null 2>/dev/null |
 		(cd "$ROOT" && sh scripts/lens-slice.sh --areas 2>/dev/null) |
 		awk -F '\t' '$2 != "" && $1 ~ /^[a-z][a-z0-9-]*$/ && !s[$1]++ { printf "%s%s", (n++ ? " " : ""), $1 }')
 	[ -n "$_esc_areas" ] || _esc_areas=none
-	_esc_br="revert/lane-escape-pr-$1"
-	_esc_rv=$(gh pr list --head "$_esc_br" --state all --limit 1 --json number --jq '.[0].number // ""' </dev/null 2>/dev/null) ||
-		escape_failed "the forge could not say whether PR #$1 has a revert PR"
-	case $_esc_rv in *[!0-9]*) _esc_rv= ;; esac
-	if [ -z "$_esc_rv" ]; then
-		git -C "$ROOT" ls-remote origin "refs/heads/$_esc_br" </dev/null 2>/dev/null | grep -q "	refs/heads/$_esc_br\$" ||
-			escape_revert "$1" "$2" "$_esc_br" || escape_failed "$_esc_why"
-		_esc_rv=$(gh pr create --base "$BASE" --head "$_esc_br" --title "revert: lane escape of PR #$1" \
-			--body "$(escape_body "$1" "$2" "$_esc_areas")" </dev/null 2>/dev/null | sed -n 's|.*/pull/\([0-9][0-9]*\)$|\1|p' | tail -n 1)
-		[ -n "$_esc_rv" ] || escape_failed "the forge did not open the revert PR for PR #$1"
+	_esc_rv= _esc_tk=
+	if [ "$_eh_from" = qa-failed ]; then
+		_esc_br="revert/lane-escape-pr-$_eh_n"
+		_esc_rv=$(gh pr list --head "$_esc_br" --state all --limit 1 --json number --jq '.[0].number // ""' </dev/null 2>/dev/null) ||
+			escape_failed "the forge could not say whether PR #$_eh_n has a revert PR"
+		case $_esc_rv in *[!0-9]*) _esc_rv= ;; esac
+		if [ -z "$_esc_rv" ]; then
+			_esc_conflict=
+			git -C "$ROOT" ls-remote origin "refs/heads/$_esc_br" </dev/null 2>/dev/null | grep -q "	refs/heads/$_esc_br\$" ||
+				escape_revert "$_eh_n" "$_eh_sha" "$_esc_br" || [ -n "$_esc_conflict" ] || escape_failed "$_esc_why"
+			if [ -n "$_esc_conflict" ]; then
+				_esc_tk=$(escape_ticket "$_eh_n" "$_eh_sha" "$_esc_areas")
+				[ -n "$_esc_tk" ] || escape_failed "$_esc_why, and its fix ticket could not be found or filed"
+			else
+				_esc_rv=$(gh pr create --base "$BASE" --head "$_esc_br" --title "revert: lane escape of PR #$_eh_n" \
+					--body "$(escape_body qa-failed "$_eh_n" "$_eh_sha" "$_esc_areas" 'held: escape')" </dev/null 2>/dev/null |
+					sed -n 's|.*/pull/\([0-9][0-9]*\)$|\1|p' | tail -n 1)
+				[ -n "$_esc_rv" ] || escape_failed "the forge did not open the revert PR for PR #$_eh_n"
+			fi
+		fi
 	fi
-	_esc_nt=$(gh issue create --title "lane escape: PR #$1" --assignee "$_lane_op" \
-		--body "$(escape_body "$1" "$2" "$_esc_areas" "$_esc_rv")" </dev/null 2>/dev/null | sed -n 's|.*/issues/\([0-9][0-9]*\)$|\1|p' | tail -n 1)
-	[ -n "$_esc_nt" ] || escape_failed "the forge did not file the notice for PR #$1"
-	trace quiet kind=lane.escape "subject=pr:#$1" "related=pr:#$_esc_rv" outcome=revert data.from=qa-failed \
-		"data.merge_sha=$2" "data.notice=$_esc_nt" "data.areas=$(printf '%s' "$_esc_areas" | tr ' ' ',')"
-	printf 'lane: escape pr:#%s revert pr:#%s\n' "$1" "$_esc_rv"
+	if [ -n "$_esc_rv" ]; then
+		_eh_out=revert _eh_rel="pr:#$_esc_rv"
+		set -- "revert: pr:#$_esc_rv" 'held: escape'
+	elif [ -n "$_esc_tk" ]; then
+		_eh_out=fix _eh_rel="ticket:#$_esc_tk"
+		set -- "ticket: #$_esc_tk" 'held: escape'
+	else
+		_eh_out=notified _eh_rel=
+		set --
+	fi
+	_esc_nt=$(gh issue create --title "lane escape: PR #$_eh_n" --assignee "$_lane_op" \
+		--body "$(escape_body "$_eh_from" "$_eh_n" "$_eh_sha" "$_esc_areas" "$@")" </dev/null 2>/dev/null |
+		sed -n 's|.*/issues/\([0-9][0-9]*\)$|\1|p' | tail -n 1)
+	[ -n "$_esc_nt" ] || escape_failed "the forge did not file the notice for PR #$_eh_n"
+	trace quiet kind=lane.escape "subject=pr:#$_eh_n" ${_eh_rel:+"related=$_eh_rel"} "outcome=$_eh_out" "data.from=$_eh_from" \
+		"data.merge_sha=$_eh_sha" "data.notice=$_esc_nt" "data.areas=$(printf '%s' "$_esc_areas" | tr ' ' ',')"
+	printf 'lane: escape pr:#%s %s\n' "$_eh_n" "$_eh_out${_eh_rel:+ $_eh_rel}"
 }
 # closed: the lane policy at the base names a forge login, or the lane is
 # closed (runtime/R83). The kit's twin is read, as this script reads the
@@ -383,16 +447,20 @@ lane_drift() {
 }
 # escape: past `closed` and `drift` — the notice needs the operator the
 # policy names, and only the base's own code acts — the lane runs the
-# outcome recorder and handles, once, each escape: a failed QA against a
-# PR it landed, with no lane.escape yet (runtime/R92, ADR-0049). It reverts
-# the escaped merge commit on a new branch from the base, opens one revert
-# PR, files one notice to the lane's operator, records one lane.escape
-# outcome=revert and prints `lane: escape pr:#<N> revert pr:#<M>`
-# (runtime/R94, R97). An escape it cannot handle records nothing, names
-# the cause on stderr and holds this PR; the next run tries again, taking
-# a revert branch or PR an earlier run left (runtime/R98). Bodies and events
-# carry tokens and numbers only (runtime/R102). Unconfigured, there is
-# nothing to read.
+# outcome recorder and handles, once, each escape: a failed QA, a revert or
+# a fix against a PR it landed, with no lane.escape yet (runtime/R92,
+# ADR-0049). A failed QA nothing has undone gets a revert of the escaped
+# merge commit on a new branch from the base and one revert PR — or, when
+# the revert does not apply, one fix ticket stamped `Risk: high unclear`
+# (runtime/R94, R95); a PR a revert or a fix already answered gets neither
+# (runtime/R96). Each gets one notice to the lane's operator, one
+# lane.escape — outcome revert, fix or notified — and one line, `lane:
+# escape pr:#<N> revert pr:#<M>`, `… fix ticket:#<M>` or `… notified`
+# (runtime/R97). An escape it cannot handle records nothing, names the
+# cause on stderr and holds; the next run tries again, taking a revert
+# branch or PR, or a fix ticket, an earlier run left (runtime/R98). Bodies
+# and events carry tokens and numbers only (runtime/R102). Unconfigured,
+# there is nothing to read.
 lane_escapes() {
 	[ -n "$(trace_read dir)" ] || return 0
 	(cd "$ROOT" && trace_read outcomes >/dev/null) || escape_failed "the outcome recorder failed"
@@ -411,16 +479,39 @@ lane_escapes() {
 		t == "L" && str(e, "outcome") == "landed" && str(m, "via") == "lane" {
 			h = str(m, "merge_sha"); if (length(h) == 40 && h ~ /^[0-9a-f]+$/) sha[s] = h
 		}
-		t == "O" && str(e, "outcome") == "qa-failed" && !(s in qa) { qa[s] = ++n; seq[n] = s }
+		t == "O" { o = str(e, "outcome") }
+		t == "O" && (o == "qa-failed" || o == "reverted" || o == "fixed") {
+			if (!(s in how)) { seq[++n] = s; how[s] = o }
+			if (o != "qa-failed") how[s] = o
+		}
 		t == "E" { done[s] = 1 }
-		END { for (i = 1; i <= n; i++) { s = seq[i]; if ((s in sha) && !(s in done)) print substr(s, 5), sha[s] } }')
-	while read -r _esc_n _esc_sha; do
+		END { for (i = 1; i <= n; i++) { s = seq[i]; if ((s in sha) && !(s in done)) print substr(s, 5), sha[s], how[s] } }')
+	while read -r _esc_n _esc_sha _esc_how; do
 		[ -n "$_esc_n" ] || continue
-		escape_handle "$_esc_n" "$_esc_sha"
+		escape_handle "$_esc_n" "$_esc_sha" "$_esc_how"
 	done <<_ESCAPES_
 $_esc_list
 _ESCAPES_
 }
+
+# --- 0S. the escape sweep: --escapes, and no PR (runtime/R101) -----------------
+# What a lane run does before it judges a PR, with no PR: the base is the
+# forge's default branch, fetched; `closed` and `drift` stop it as they hold
+# a lane run, and then the outcome recorder runs and every unhandled escape
+# is handled. It merges nothing and records no landing or hold — there is no
+# PR to hold — and exits 0, or 4 with `lane: held <token>` when a check or
+# an escape stopped it; a base the forge does not name is exit 2. Nothing
+# starts it on its own: it is the operator's, or a `/loop`'s.
+if [ -n "$ESCAPES" ]; then
+	BASE=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name // ""' </dev/null 2>/dev/null) || BASE=
+	case $BASE in '' | -* | *..* | *[!A-Za-z0-9._/-]*) note "the forge did not name the default branch — nothing swept"; exit 2 ;; esac
+	git -C "$ROOT" fetch -q origin "$BASE" </dev/null >/dev/null 2>&1 || { note "fetching origin $BASE failed — nothing swept"; exit 2; }
+	_lane_base="refs/remotes/origin/$BASE"
+	lane_closed
+	lane_drift
+	lane_escapes
+	exit 0
+fi
 
 # --- 1. the gate: green and mergeable, or nothing happens ---------------------
 # One `name=value` line per field, every value folded onto one line, and each

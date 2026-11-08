@@ -39,6 +39,9 @@ slice that adds that hold restates it, as the PRD writes it; the slice
 restated R215 to name R104 as its one exception, as PRD-10 writes it.
 R103 joined from PRD-10 slice 4 (#919), keeping the PRD's number: the root
 guard keeps the trip marker from an agent.
+R95, R96 and R101 joined from PRD-10's escape cases (#918), keeping the
+PRD's numbers: an escape already undone only notifies, a conflicting revert
+files a fix ticket, and `--escapes` sweeps with no PR.
 The earned record's verifier rows joined as R214 to R216, R223 and R228,
 from PRD-13 slice 4 (#945), which restated R46 and R48 to count the kit's
 own review apart from the verifier.
@@ -127,9 +130,12 @@ R91. WHEN a lane run holds a PR, the landing script SHALL record one `merge.land
 R92. Before it judges a PR, a lane run SHALL run the outcome recorder, and SHALL handle every escape that has no `lane.escape` event. [UC3 1, 2, 5a]
 R93. The trace SHALL accept the kind `lane.escape` with the outcomes `revert`, `fix` and `notified`, subject the escaped PR, and SHALL refuse any other outcome on it, exit 2, writing nothing. [UC3 5]
 R94. WHEN an escape's outcome is `qa-failed`, the landing script SHALL open one PR reverting the escaped PR's merge commit on a new branch from the base branch, and record `lane.escape outcome=revert` with that PR in `related`. [UC3 3, 5]
+R95. IF the revert does not apply cleanly, THEN the landing script SHALL open no PR, SHALL file one fix ticket stamped `Risk: high unclear` naming the escaped PR, the outcome and its review areas, and SHALL record `lane.escape outcome=fix` with that ticket in `related`. [UC3 3a]
+R96. WHEN an escape's outcome is `reverted` or `fixed`, the landing script SHALL open no PR and file no ticket, and SHALL record `lane.escape outcome=notified`. [UC3 1a]
 R97. WHEN the landing script records a `lane.escape`, it SHALL send the lane's operator one notice naming the outcome, the escaped PR, its review areas and the revert PR or fix ticket when there is one. [UC3 4]
 R98. IF opening the revert, filing the ticket or sending the notice fails, THEN the landing script SHALL record no `lane.escape` for that escape, name the cause on standard error, and hold the PR it was judging with `escape`. [UC3 3b]
 R99. A lane run SHALL hold with `escape` a PR that a `lane.escape` event names in `related`, or whose ticket one names. [UC3 7]
+R101. WHEN the landing script runs with `--escapes` and no PR, it SHALL record outcomes and handle every unhandled escape as a lane run does, merge nothing, and exit 0. [UC3 7a]
 R102. The landing script's lane output, its lane events and its notices SHALL carry only closed tokens, review area names, PR and ticket numbers, commit shas, run ids and digits, and no text from a ticket body, a PR body, a commit message or a log.
 R103. The adapter's root guard SHALL refuse an agent's tool call that deletes, moves or overwrites the kill switch's trip marker. [UC4 5]
 R104. IF the latest `verify.verdict` on the PR, read as runtime/R214 reads it for `merge.land`, is not `pass`, THEN a lane run SHALL hold with `verifier`, print `lane: held verifier <reason>` with the reason `disputed` for a `blocked` verdict whose `data.disputed` is 1 or more, `blocked` for any other `blocked`, `unavailable` for `unavailable`, and `none` when there is no such verdict, and SHALL record the reason in the hold event's `data.reason`. [UC1 5f]
