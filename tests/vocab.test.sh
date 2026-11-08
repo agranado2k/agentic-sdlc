@@ -270,6 +270,9 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # refuses more than the policy's bound before the checker reads them (#870),
 # and its bare `Accept-test:` lines the same way, against that field's bound
 # (PRD-14 slice 4).
+# /retro's file_candidates and /to-tickets' candidate_lines lift a retro
+# candidate block's bare `Edits:`, `Runs:` and `Targets:` lines and hand the
+# checker at most three of them, one per field (#924).
 # risk.sh checks one risk value per call, its own token of the risk grammar's
 # shape — the planner's lifted by stamp.sh and held to that shape — never a
 # body (PRD-09 runtime/R62).
@@ -282,6 +285,8 @@ scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE "^[[:space:]]
 .agents/skills/dogfood/SKILL.md@@prescreen_ok@@sh "$checker" <"$2"@@[ "$(grep -c '' "$2" 2>/dev/null)" = 2 ] || return 1
 scripts/check-table.sh@@-@@printf '%s\n' "$stamps" | sh "$vocab" check@@[ "$n" -le "$bound" ] || {
 scripts/check-table.sh@@-@@printf '%s\n' "$approved" | sh "$vocab" check@@[ "$n" -le "$abound" ] || {
+.agents/skills/retro/SKILL.md@@file_candidates@@printf '%s\n' "$lines" | sh scripts/vocab.sh@@[ "$(printf '%s\n' "$lines" | grep -c '')" -le 3 ]
+.agents/skills/to-tickets/RETRO-CANDIDATES.md@@candidate_lines@@grep -E '^(Edits|Runs|Targets): ' "$1" | sh scripts/vocab.sh@@[ "$(grep -cE '^(Edits|Runs|Targets): ' "$1")" -le 3 ] || return 2
 scripts/risk.sh@@risk_checked@@sh "$_here/vocab.sh" check --writer risk-rule "Risk: $1"@@case $1 in low | "high "*) ;; *) return 1 ;; esac
 EOLIFT
 )

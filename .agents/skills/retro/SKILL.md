@@ -148,7 +148,8 @@ next by a blank line: `Finding: <the finding, one line>`, `Edits: <lens|skill|ch
 `Runs: <run id> …` and `Targets: <the query>`. Before the report is handed
 on, every such block, whatever it edits, has its `Edits:`, `Runs:` and
 `Targets:` lines checked by the vocabulary checker, `scripts/vocab.sh`,
-and is filed only when all three are there and accepted. `file_candidates`
+and is filed only when all three are there, one line each, and accepted.
+`file_candidates`
 does it, run from the project root over the report: it prints `file:` or
 `not filed:` per candidate, and moves each one not filed to the report's
 observations, under its `## Observations` heading, its last section, its lines quoted so no reader
@@ -163,7 +164,8 @@ file_candidates() {
 	for b in $(awk 'NF == 0 { b++; next } /^(Edits|Runs|Targets): / { print b + 0 }' "$1" | uniq); do
 		lines=$(fc_block "$1" "$b" | grep -E '^(Edits|Runs|Targets): ')
 		finding=$(fc_block "$1" "$b" | sed -n 's/^Finding: //p' | head -n 1)
-		if printf '%s\n' "$lines" | sh scripts/vocab.sh >/dev/null &&
+		if [ "$(printf '%s\n' "$lines" | grep -c '')" -le 3 ] &&
+			printf '%s\n' "$lines" | sh scripts/vocab.sh >/dev/null &&
 			{ ! printf '%s\n' "$lines" | grep -q '^Edits: ' ||
 				{ printf '%s\n' "$lines" | grep -q '^Runs: ' && printf '%s\n' "$lines" | grep -q '^Targets: '; }; }; then
 			echo "file: $finding"

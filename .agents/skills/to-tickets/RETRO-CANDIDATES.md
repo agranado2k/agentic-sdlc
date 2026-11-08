@@ -25,10 +25,12 @@ stamp_ok() {
 # retro candidate's ticket carries: `Retro: <stamp>`, then the block's
 # `Targets:` line when it has one. Exit 1, nothing printed, for a block with
 # an `Edits:` line and no `Targets:` line — nothing is published from it;
-# exit 2 for a stamp not of a report's shape, or a line the checker refuses.
+# exit 2 for a stamp not of a report's shape, more than one line of each of
+# the three, or a line the checker refuses.
 candidate_lines() {
 	stamp_ok "$2" || return 2
 	if grep -q '^Edits: ' "$1" && ! grep -q '^Targets: ' "$1"; then return 1; fi
+	[ "$(grep -cE '^(Edits|Runs|Targets): ' "$1")" -le 3 ] || return 2
 	grep -E '^(Edits|Runs|Targets): ' "$1" | sh scripts/vocab.sh >/dev/null || return 2
 	printf 'Retro: %s\n' "$2"
 	grep '^Targets: ' "$1" | head -n 1
