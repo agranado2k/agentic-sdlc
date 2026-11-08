@@ -2707,6 +2707,12 @@ for _pl_f in "$PI" "$PL"; do
 	grep -qE 'gh pr merge|merge-train <|/merge-train [0-9<]' "$_pl_f" &&
 		fail "process/R85: $(basename "$_pl_f") merges or starts a train itself" || pass "process/R85: $(basename "$_pl_f") merges nothing and starts no train"
 done
+# Beyond its pinned sentence, LANE.md names the train nowhere and passes no --train.
+_pl_rest=$(printf '%s\n' "$pl_flat" | sed 's/The step never starts `\/merge-train`, and runs one landing per iteration, for this PR alone//')
+case $_pl_rest in
+*merge-train* | *--train*) fail "process/R85: LANE.md names the train or --train outside its never-starts sentence" ;;
+*) pass "process/R85: outside its never-starts sentence, LANE.md names neither the train nor --train" ;;
+esac
 # Hard rule 2 gains the lane exception, citing its record.
 grep -n '^2\. \*\*NEVER\*\* merge the PR' "$PI" | grep -qF 'ADR-0047' && grep '^2\. \*\*NEVER\*\* merge the PR' "$PI" | grep -qF '[`LANE.md`](LANE.md)' &&
 	pass "process/R80: hard rule 2 names the lane exception and its decision record" || fail "process/R80: hard rule 2 carries no lane exception citing ADR-0047"
