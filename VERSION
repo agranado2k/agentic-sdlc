@@ -4179,7 +4179,35 @@
 # Surface and Ruling; and tests/trace.test.sh, tests/forge-broker.test.sh
 # and tests/review-pr-output.test.sh.
 
-shared-layer: 0.123.0
+# 0.124.0 — the ruling recorder records the operator's keep or change on
+# an outward confirm-list item (ticket #927, PRD-11 slice 3 of D-02, factory
+# T-64; ADR-0048 clauses 7 and 8). ONE file joins the shared layer:
+# scripts/ruling.sh, the ruling recorder — `sh scripts/ruling.sh <PR> <A2-n>
+# keep|change [--head <commit>]` records one `ruling` with the item's
+# surface from the latest Axis-2 review.verdict at the head and that head's
+# sha, data.by `session` under an agent-harness marker and `operator`
+# otherwise, never an argument (a caller's `by` is exit 2), and none again
+# for the same PR, item, head, by and outcome; no verdict at the head or an
+# unlisted item is exit 2, a forge that names no head exit 4, and an
+# unconfigured trace records nothing at exit 0; `<PR> --unruled` prints
+# `ruled:` or `unruled:` per outward item, the latter with its `keep:` and
+# `change:` commands. Closed tokens only leave it. One more shared file
+# changes content: UPDATING.md, its entry and both worked examples
+# re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): /pr-iterate — RISK.md, after the risk rule, runs `sh
+# scripts/ruling.sh <N> --unruled` and prints each unruled outward item's
+# `keep:` and `change:` commands beside it in the report's ⚠️ block, and
+# runs neither (.agents/skills/pr-iterate/RISK.md).
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): none.
+# Kit-only, never shipped: scripts/ruling.kit.sh, the kit's wrapper, and
+# tests/ruling.test.sh, both in bootstrap's KIT_ONLY; docs/specs/runtime.md
+# R143 to R148 and docs/specs/process.md R150; the glossary's Ruling
+# recorder; AGENTS.md's hard rule 10 and row; README.md's rows and suite
+# line; and the kit-ci job.
+
+shared-layer: 0.124.0
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
@@ -4217,6 +4245,7 @@ files:
   scripts/policy.sh
   scripts/acceptance-guard.sh
   scripts/risk.sh
+  scripts/ruling.sh
   scripts/check.sh
   scripts/docs-conformance/index.mjs
   scripts/docs-conformance/context.mjs
