@@ -30,5 +30,14 @@
 # LANE_OPERATOR  the lane's operator, a forge login: 1 to 39 letters, digits
 #                and single inner hyphens. Any other value reads as none, and
 #                the lane stays closed.
+# LANE_HOLD_PATTERNS  paths no lane run lands, whatever their risk: shell
+#                patterns separated by spaces, matched against each path the
+#                pull request's diff touches, of letters, digits, `.`, `_`,
+#                `/`, `-` and `*` — a `*` crosses a `/`. A pattern out of that
+#                shape holds every pull request with `path`. Ships empty: what
+#                your lane must never land is yours to name. The files your
+#                shared-layer manifest lists and the policy files read at the
+#                base branch are held whatever you name here.
 
 LANE_OPERATOR=''
+LANE_HOLD_PATTERNS=''
