@@ -1085,13 +1085,15 @@ sed '/kind=merge.land/s/ data\.waited=[^ ]*//' "$MT" >"$SCRATCH/mt.short"
 	pass "the field probe rejects a train line with a field dropped"
 
 # ---------------------------------------------------------------------------
-banner "11. After the landing, a clean root checkout on main is fast-forwarded; any other is left and named (#636)"
+banner "11. After the landing, a root checkout on main is fast-forwarded unless it would lose an edit; any other is left and named (#636, #1026)"
 # ---------------------------------------------------------------------------
 # mkroot <dir> — a checkout on main at c1, its origin/main one commit ahead
-# at c2, as a fetch would leave it (the stub's fetch fetches nothing).
+# at c2, as a fetch would leave it (the stub's fetch fetches nothing). c2
+# changes f and leaves u alone: an edit to u is one the fast-forward never
+# touches.
 mkroot() {
 	mkdir -p "$1" && t_git_identity "$1" t t@t &&
-		t_write "$1" f one && t_commit "$1" c1 >/dev/null &&
+		t_write "$1" f one && t_write "$1" u keep && t_commit "$1" c1 >/dev/null &&
 		t_write "$1" f two && t_commit "$1" c2 >/dev/null &&
 		git -C "$1" update-ref refs/remotes/origin/main HEAD &&
 		git -C "$1" reset -q --hard HEAD^
@@ -1106,7 +1108,7 @@ landed_with_root() {
 	: >"$STUB_LOG"
 	t_exec env LAND_ROOT_CHECKOUT="$_lr_root" LAND_POLL_SECONDS=0 "$@" sh "$LAND" "$_lr_pr" </dev/null
 }
-iterated 211 212 213 214 215
+iterated 211 212 213 214 215 216
 
 R="$SCRATCH/root-clean"
 mkroot "$R" || fail "could not build the clean root checkout"
@@ -1130,6 +1132,47 @@ expect_status 0 "a dirty root checkout does not fail the landing"
 	fail "a dirty root checkout was touched: HEAD $(head_of "$R"), f '$(cat "$R/f")'"
 expect_err_has "left the root checkout $R alone" "stderr names the dirty root it left"
 expect_err_has "uncommitted" "and says why: uncommitted changes"
+expect_err_has ": f" "and names the edited path the fast-forward would change"
+expect_err_has "1 commit behind origin/main" "and says how far behind origin/main the root is left"
+
+# An unstaged edit the fast-forward never touches holds nothing back (#1026):
+# one leftover edit in the root once froze it ~298 commits behind.
+R="$SCRATCH/root-unrelated"
+mkroot "$R" || fail "could not build the root checkout with an unrelated edit"
+echo mine >"$R/u"
+landed_with_root "$R" 214
+expect_status 0 "a landing with an unrelated unstaged edit in the root exits 0"
+[ "$(head_of "$R")" = "$("$REAL_GIT" -C "$R" rev-parse origin/main)" ] && [ "$(cat "$R/u")" = mine ] &&
+	pass "an unrelated unstaged edit does not hold the root back: fast-forwarded, the edit kept" ||
+	fail "a root with an unrelated unstaged edit was not fast-forwarded, or lost the edit: u '$(cat "$R/u")', $T_ERR"
+expect_err_has "fast-forwarded the root checkout $R" "stderr says the root was fast-forwarded"
+
+# The paths an overlap names are bounded: the first five, then a count.
+R="$SCRATCH/root-overlap-many"
+mkdir -p "$R" && t_git_identity "$R" t t@t &&
+	for _p in p1 p2 p3 p4 p5 p6 p7; do t_write "$R" "$_p" one; done && t_commit "$R" c1 >/dev/null &&
+	for _p in p1 p2 p3 p4 p5 p6 p7; do t_write "$R" "$_p" two; done && t_commit "$R" c2 >/dev/null &&
+	t_write "$R" p1 three && t_commit "$R" c3 >/dev/null &&
+	git -C "$R" update-ref refs/remotes/origin/main HEAD && git -C "$R" reset -q --hard HEAD~2 ||
+	fail "could not build the root checkout with many overlapping edits"
+was=$(head_of "$R")
+for _p in p1 p2 p3 p4 p5 p6 p7; do echo edit >"$R/$_p"; done
+landed_with_root "$R" 215
+[ "$(head_of "$R")" = "$was" ] && [ "$(cat "$R/p7")" = edit ] && pass "a root with overlapping edits is left alone, the edits intact" ||
+	fail "a root with overlapping edits was touched"
+expect_err_has "p1, p2, p3, p4, p5 and 2 more" "stderr names the first five overlapping paths and counts the rest"
+expect_err_has "2 commits behind origin/main" "and counts the commits it is behind"
+
+# A staged change is left alone, overlapping or not, as before #1026.
+R="$SCRATCH/root-staged"
+mkroot "$R" || fail "could not build the root checkout with a staged change"
+was=$(head_of "$R")
+echo staged >"$R/u" && git -C "$R" add u
+landed_with_root "$R" 216
+[ "$(head_of "$R")" = "$was" ] && [ "$(cat "$R/u")" = staged ] && pass "a root with a staged change is left alone, the change intact" ||
+	fail "a root with a staged change was touched: HEAD $(head_of "$R")"
+expect_err_has "left the root checkout $R alone" "stderr names the root with a staged change"
+expect_err_has "alone: it has uncommitted changes staged" "and says why: a staged change"
 
 R="$SCRATCH/root-branch"
 mkroot "$R" || fail "could not build the off-main root checkout"

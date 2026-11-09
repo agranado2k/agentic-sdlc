@@ -84,9 +84,11 @@
 #      `unasked` with the reason — never a verdict nobody gave.
 #   6. Fast-forwards the root checkout — the main worktree of this repo, or
 #      LAND_ROOT_CHECKOUT — to origin's base when it is on that branch, with
-#      no tracked change uncommitted, and not diverged, and says so on stderr; a dirty, off-base, detached
-#      or diverged root is left untouched and named (#636). No event, no
-#      exit status: the landing is what the record is about.
+#      nothing staged, no unstaged edit the fast-forward would overwrite, and
+#      not diverged, and says so on stderr; such an edit (its paths and how
+#      far behind the root is named), a staged change, an off-base, detached
+#      or diverged root is left untouched and named (#636, #1026). No event,
+#      no exit status: the landing is what the record is about.
 #   With --train, /merge-train is the caller (#662): it ran its own ordering
 #   and update-branch steps and lands each PR here, so a train meets the same
 #   gate and writes merge.land through the same emitter. merge.land is marked
@@ -1231,14 +1233,31 @@ fi
 # --- 6. the root checkout follows the landing (#636) ---------------------------
 # The hooks run from the root checkout, so a landed hook fix reaches no session
 # until the root moves. It is fast-forwarded to origin's base only when it is
-# a checkout, on the base branch, with no tracked change uncommitted and
-# nothing of its own that origin lacks; any other root is left exactly as it
-# was, and named. Tracked changes only, as scripts/worktree-cleanup.sh judges
-# the same root: an untracked file is safe, since `merge --ff-only` refuses
-# rather than overwrite one. Never a reset, a stash or a merge commit: the
-# one write is `merge --ff-only`. It changes no exit status and no event.
+# a checkout, on the base branch, with nothing staged, no unstaged edit to a
+# path the fast-forward changes, and nothing of its own that origin lacks; any
+# other root is left exactly as it was, and named. An unstaged edit elsewhere
+# rides along (#1026): one leftover edit once froze the root ~298 commits
+# behind. An untracked file is safe too, since `merge --ff-only` refuses
+# rather than overwrite one. Never a reset, a stash, a checkout or a merge
+# commit: the writes are the index's stat refresh and `merge --ff-only`. It
+# changes no exit status and no event.
 RC=${LAND_ROOT_CHECKOUT:-$(git -C "$ROOT" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')}
 leave_root() { note "left the root checkout $RC alone: $1 — fast-forward it by hand when it is clean and on $BASE"; }
+# root_overlap <to> — the root's unstaged edits to paths HEAD..<to> changes,
+# the first five comma-separated and the rest counted; nothing when none. The
+# stat refresh first, so a file merely touched is no edit.
+root_overlap() {
+	git -C "$RC" update-index -q --refresh >/dev/null 2>&1
+	{
+		git -C "$RC" -c core.quotePath=false diff-tree -r --name-only HEAD "$1"
+		echo
+		git -C "$RC" -c core.quotePath=false diff-files --name-only
+	} 2>/dev/null | awk '
+		!sep && $0 == "" { sep = 1; next }
+		!sep { moved[$0] = 1; next }
+		($0 in moved) && !seen[$0]++ { n++; if (n <= 5) out = out (n > 1 ? ", " : "") $0 }
+		END { if (n > 5) out = out " and " (n - 5) " more"; if (n) print out }'
+}
 # Read before the ladder, never inside it: empty is a detached HEAD, or no
 # checkout at all, which the first rung below names first.
 _rc_branch=$(git -C "$RC" symbolic-ref -q --short HEAD 2>/dev/null) || _rc_branch=
@@ -1249,8 +1268,8 @@ elif [ -z "$_rc_branch" ]; then
 	leave_root "its HEAD is detached, not on $BASE"
 elif [ "$_rc_branch" != "$BASE" ]; then
 	leave_root "it is on $_rc_branch, not $BASE"
-elif ! git -C "$RC" diff --quiet 2>/dev/null || ! git -C "$RC" diff --cached --quiet 2>/dev/null; then
-	leave_root "it has uncommitted changes"
+elif ! git -C "$RC" diff --cached --quiet 2>/dev/null; then
+	leave_root "it has uncommitted changes staged"
 elif ! git -C "$RC" fetch -q origin "$BASE" >/dev/null 2>&1; then
 	leave_root "fetching origin $BASE there failed"
 elif ! _rc_to=$(git -C "$RC" rev-parse -q --verify "refs/remotes/origin/$BASE^{commit}" 2>/dev/null); then
@@ -1259,6 +1278,10 @@ elif [ "$(git -C "$RC" rev-parse HEAD 2>/dev/null)" = "$_rc_to" ]; then
 	note "the root checkout $RC is already at origin/$BASE ($_rc_to)"
 elif ! git -C "$RC" merge-base --is-ancestor HEAD "$_rc_to" 2>/dev/null; then
 	leave_root "its $BASE has diverged from origin/$BASE (it holds commits origin lacks)"
+elif _rc_hit=$(root_overlap "$_rc_to") && [ -n "$_rc_hit" ]; then
+	_rc_behind=$(git -C "$RC" rev-list --count "HEAD..$_rc_to" 2>/dev/null) || _rc_behind='?'
+	[ "$_rc_behind" = 1 ] && _rc_s= || _rc_s=s
+	leave_root "its uncommitted edits would be overwritten by the fast-forward: $_rc_hit; it is $_rc_behind commit$_rc_s behind origin/$BASE"
 elif ! git -C "$RC" merge --ff-only -q "$_rc_to" >&2; then
 	leave_root "the fast-forward to origin/$BASE failed"
 else
