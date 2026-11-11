@@ -7,3 +7,10 @@
   kind: operator
   claim: >-
     Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-2
+  url: https://blog.cloudflare.com/ai-code-review
+  title: AI code review (Cloudflare blog)
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
