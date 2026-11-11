@@ -1,0 +1,1 @@
+- 2026-11-11 **Discovery opened.** Topic: which model runs which capability tier. The operator gave S-1 as a source to deep-read in phase 2.
