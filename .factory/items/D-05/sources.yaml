@@ -1,0 +1,9 @@
+# Evidence behind D-05. One entry per source; `claim` is what we take from it.
+
+# --- The operator's sources (phase 2) ---
+- id: S-1
+  url: https://github.com/andrewyng/openworker/blob/main/harness/README.md
+  title: openworker harness README (andrewyng/openworker, GitHub)
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.

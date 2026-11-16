@@ -1,0 +1,1 @@
+- 2026-11-16 **Discovery opened.** Topic: improving the SDLC agent harness. The operator gave S-1 as a source to deep-read in phase 2.
