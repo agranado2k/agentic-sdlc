@@ -159,6 +159,15 @@ hand-back; it designs the shape twice, compares on complexity, and writes
 nothing until your human says yes. A blank Architecture section is decided by
 the first feature diff instead.
 
+Before your human runs agent sessions against that remote, point them at
+`setup/agent-forge-token.md`, the kit's page at
+<https://github.com/agranado2k/agentic-sdlc/blob/main/setup/agent-forge-token.md>
+(bootstrap stripped this clone's copy in step 2, with the rest of `setup/`).
+It walks them through giving agents a bot token that cannot change the
+repository's rules, with their own admin token out of the agents' reach: the
+branch rules then guard against agents too, not only against careless
+humans. It is theirs to follow; you change no account, token or rule.
+
 ## The existing-repository arm
 
 Everything above assumed an empty future. Here the repo already exists —
