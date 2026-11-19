@@ -56,6 +56,7 @@ set -eu
 OP_SERVICE_ACCOUNT_TOKEN=$(cat '<service-account-token-file>')
 export OP_SERVICE_ACCOUNT_TOKEN
 bot_token=$(op read 'op://<agent-vault>/<bot-item>/token')
+[ -n "$bot_token" ] || { echo 'agent-session: empty bot token' >&2; exit 1; }
 unset OP_SERVICE_ACCOUNT_TOKEN
 GH_TOKEN=$bot_token exec "$@"
 ```
@@ -82,6 +83,7 @@ A second launcher reads it:
 set -eu
 unset OP_SERVICE_ACCOUNT_TOKEN
 admin_token=$(op read --account '<personal-account>' 'op://<private-vault>/<admin-item>/token')
+[ -n "$admin_token" ] || { echo 'admin-session: empty admin token' >&2; exit 1; }
 GH_TOKEN=$admin_token exec "$@"
 ```
 

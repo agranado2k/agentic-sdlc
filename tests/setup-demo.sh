@@ -398,6 +398,7 @@ done <<'PHRASES'
 Write role|the bot identity and its role
 OP_SERVICE_ACCOUNT_TOKEN|the agent launcher's service account
 GH_TOKEN|the token handed to the agent as GH_TOKEN
+empty bot token|the launcher refusing an empty token, which would leave gh to its stored login
 system-authentication|the admin launcher's prompt
 ten idle minutes|the limit of the admin authorization
 gh auth logout|removing the forge CLI's stored login
