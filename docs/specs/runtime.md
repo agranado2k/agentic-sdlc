@@ -22,7 +22,7 @@ PRD's numbers. R32, R33 and R39 to R42 joined with the outcome recorder
 (#876), which restated R43 to name the recorder beside the record reader, as
 the PRD writes it. R46 to R51 joined with the misses and lens precision
 (#877). R37 and R38 joined with the failed factory QA
-(#879). R229 to R236 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
+(#879); #953 (factory T-87) restated R38 to take the origin repository's PR URL. R229 to R236 joined from PRD-15 slice 1 (#963, ADR-0040), keeping
 the PRD's numbers past PRD-08 to PRD-13's drafts. R241 to R245 joined from
 PRD-15 slice 4 (#966), the landing script's factory ticket. R52 to R58,
 R61 to R64, R68 and R69 joined from PRD-09 slice 1 (#905, ADR-0045), the
@@ -89,7 +89,7 @@ R34. WHEN the outcome recorder runs, it SHALL write one `merge.outcome outcome=f
 R35. IF a `fix` landing touches a line of a PR that landed before the fix window, THEN the recorder SHALL write no outcome against that PR. [UC2 3]
 R36. The fix window SHALL be 30 days unless the trace's policy file sets another whole number of days.
 R37. WHERE the repository holds a `.factory/` folder, WHEN the recorder runs, it SHALL write one `merge.outcome outcome=qa-failed` against the PR a ticket's `links.pr` names when that ticket's `qa.outcome` is `fail`, with the ticket's id in `data.ticket`. [UC3 1, 2]
-R38. IF a factory ticket's `links.pr` is not `#<digits>`, or names a PR with no `merge.land`, THEN the recorder SHALL write nothing for that ticket and print its id on standard error. [UC3 2a]
+R38. IF a factory ticket's `links.pr` is neither `#<digits>` nor `https://github.com/<owner>/<repo>/pull/<digits>` naming the repository the `origin` remote names, compared ignoring case and a trailing `.git`, or names a PR with no `merge.land`, THEN the recorder SHALL write nothing for that ticket and print its id on standard error. [UC3 2a]
 R39. The recorder SHALL map a landed commit to its PR only through a `merge.land` event's `data.merge_sha`, and SHALL read from commit messages and factory items nothing but the Conventional Commit type token, a 40-hex sha, `qa.outcome` and `links.pr`, each held to its shape, so that a PR number written in prose produces no outcome. [UC2 1a]
 R40. A landing whose Conventional Commit type is neither `fix` nor `revert` SHALL produce no outcome. [UC2 1b]
 R41. The recorder SHALL write no outcome the trace already holds for the same PR, outcome and evidence (`data.by_sha`, or `data.ticket` for `qa-failed`), so that a second run over the same history writes nothing. [UC1 5]

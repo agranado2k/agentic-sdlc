@@ -375,6 +375,72 @@ printf '%s\n' "$T_OUT" | grep -qF 'security: landings 1 of 20, in the fix window
 	fail "runtime/R46: record printed: $(printf '%s' "$T_OUT" | tr '\n' ';')"
 R=$R_MAIN
 
+
+banner "7. A links.pr written as this repository's PR URL counts as its #<digits> (runtime/R37, R38, R41; T-87, #953)"
+
+# A fresh history: #892, #893 and #894 each land a file. links.pr may name
+# its PR as https://github.com/<owner>/<repo>/pull/<digits> when that
+# owner/repo is the one origin names — case and a trailing .git ignored.
+t_repo
+R=$REPO
+TU="$SCRATCH/trace-url"
+put src/u.sh v1
+S892=$(land 'feat: eight-ninety-two')
+put lib/u.sh w1
+S893=$(land 'feat: eight-ninety-three')
+put docs/u.md y1
+S894=$(land 'docs: eight-ninety-four')
+land_ev "$TU" pr:#892 "$S892"
+land_ev "$TU" pr:#893 "$S893"
+land_ev "$TU" pr:#894 "$S894"
+UON=$(policy "$TU")
+url_run() { t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" LENS_SLICE_CONFIG="$3" sh "$4" outcomes' _ "$R" "$UON" "$POL" "$TRACE"; }
+GH=https://github.com
+ticket T-41 'links:' "  pr: \"$GH/fixture-owner/fixture-repo/pull/892\"" 'qa:' '  outcome: fail'
+ticket T-42 'links:' "  pr: \"$GH/other-owner/fixture-repo/pull/893\"" 'qa:' '  outcome: fail'
+ticket T-43 'links:' "  pr: \"$GH/Fixture-Owner/Fixture-Repo/issues/893\"" 'qa:' '  outcome: fail'
+ticket T-44 'links:' "  pr: \"$GH/Fixture-Owner/Fixture-Repo/pull/893/files\"" 'qa:' '  outcome: fail'
+ticket T-45 'links:' "  pr: \"https://example.com/Fixture-Owner/Fixture-Repo/pull/893\"" 'qa:' '  outcome: fail'
+
+# No origin at all: no URL is this repository's, so each is refused.
+url_run
+[ "$T_STATUS" = 0 ] && [ -z "$(outcomes_in "$TU")" ] && case $T_ERR in *T-41*) true ;; *) false ;; esac &&
+	pass "runtime/R38: with no origin remote, a PR URL names no PR of this repository — nothing written, T-41 named on stderr" ||
+	fail "runtime/R38: with no origin, outcomes exited $T_STATUS, wrote: $(outcomes_in "$TU") | $T_ERR"
+
+# The SSH form of origin, its case differing from the URL's.
+git -C "$R" remote add origin git@github.com:Fixture-Owner/Fixture-Repo.git
+url_run
+UOUT=$(outcomes_in "$TU")
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$UOUT" | grep -c .)" = 1 ] &&
+	printf '%s\n' "$UOUT" | grep -F '"subject":"pr:#892"' | grep -F '"outcome":"qa-failed"' | grep -qF '"ticket":"T-41"' &&
+	pass "runtime/R37: under an SSH origin, T-41's links.pr URL for this repository gives one qa-failed on #892, data.ticket T-41" ||
+	fail "runtime/R37: under an SSH origin, expected one qa-failed on #892 for T-41, got (exit $T_STATUS): $UOUT | $T_ERR"
+for _id in T-42 T-43 T-44 T-45; do
+	case $T_ERR in *"$_id"*) pass "runtime/R38: $_id's links.pr (another repository's PR, or no PR URL) is named on stderr" ;;
+	*) fail "runtime/R38: stderr does not name $_id: $T_ERR" ;; esac
+done
+case $T_ERR in *T-41*) fail "runtime/R38: stderr names T-41, which was recorded: $T_ERR" ;;
+*) pass "runtime/R38: stderr does not name the recorded T-41" ;; esac
+case $T_ERR in *'#<digits>'*"$GH/<owner>/<repo>/pull/<digits>"*) pass "runtime/R38: the stderr line says both accepted forms" ;;
+*) fail "runtime/R38: the stderr line does not say both accepted forms: $T_ERR" ;; esac
+
+# The HTTPS form of origin, with no .git: T-46 joins; T-41 is not written again.
+git -C "$R" remote set-url origin https://github.com/fixture-owner/FIXTURE-REPO
+ticket T-46 'links:' "  pr: '$GH/Fixture-Owner/Fixture-Repo/pull/894'" 'qa:' '  outcome: fail'
+url_run
+UOUT=$(outcomes_in "$TU")
+[ "$T_STATUS" = 0 ] && [ "$(printf '%s\n' "$UOUT" | grep -c .)" = 2 ] &&
+	printf '%s\n' "$UOUT" | grep -F '"subject":"pr:#894"' | grep -qF '"ticket":"T-46"' &&
+	[ "$(printf '%s\n' "$UOUT" | grep -cF '"ticket":"T-41"')" = 1 ] &&
+	pass "runtime/R37, R41: under an HTTPS origin, T-46's URL gives a qa-failed on #894 and T-41's is not written twice" ||
+	fail "runtime/R37, R41: under an HTTPS origin, expected #892/T-41 once and #894/T-46, got (exit $T_STATUS): $UOUT | $T_ERR"
+_u1=$(count_in "$TU")
+url_run
+[ "$T_STATUS" = 0 ] && [ "$(count_in "$TU")" = "$_u1" ] && pass "runtime/R41: a second run over URL-linked tickets writes 0 lines" ||
+	fail "runtime/R41: the second run exited $T_STATUS and the trace went $_u1 -> $(count_in "$TU")"
+R=$R_MAIN
+
 OFF=$(mktemp "$SCRATCH/off.XXXXXX")
 printf "TRACE_DIR=''\n" >"$OFF"
 t_exec sh -c 'cd "$1" && env TRACE_CONFIG="$2" sh "$3" outcomes' _ "$R" "$OFF" "$TRACE"

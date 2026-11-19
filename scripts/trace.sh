@@ -221,7 +221,8 @@
 # links, with the ticket's id in `data.ticket`.
 # It reads nothing from a commit message but the type token and, for a revert
 # that removes no line, a 40-hex sha, and nothing from a factory ticket but
-# `qa.outcome` and `links.pr`. A second run writes nothing. The
+# `qa.outcome` and `links.pr` — `#<digits>`, or the origin repository's
+# pull request URL. A second run writes nothing. The
 # operator and /retro run it, before `record`; no chain skill does.
 #
 # Shared layer (see VERSION): copied verbatim, not edited downstream. Your
@@ -3478,6 +3479,16 @@ trace_outcomes() {
 	printf 'trace: outcomes: %d written\n' "$_oc_written"
 }
 
+# trace_outcomes_repo <owner/repo> — prints it lower-cased with one trailing
+# `.git` dropped, or nothing unless it is exactly two non-empty segments of
+# name characters.
+trace_outcomes_repo() {
+	_or=${1%.git}
+	case $_or in ?*/?*) ;; *) return 0 ;; esac
+	case $_or in */*/* | *[!A-Za-z0-9._/-]*) return 0 ;; esac
+	printf '%s\n' "$_or" | tr 'A-Z' 'a-z'
+}
+
 # trace_outcomes_qa — the factory step of `outcomes` (#879): one
 # `merge.outcome outcome=qa-failed` per factory ticket whose QA failed,
 # against the PR its `links.pr` names, with the ticket's id in `data.ticket`.
@@ -3489,9 +3500,12 @@ trace_outcomes() {
 # between the first two `---` lines — and nothing else: `outcome` nested
 # under a top-level `qa:` and `pr` nested under a top-level `links:`, each
 # a YAML scalar (quoted, or plain up to a comment), held whole to `pass|fail`
-# and `#[0-9]+`. Every other field, and the body, is never read, so a PR
+# and to `#[0-9]+` or `https://github.com/<owner>/<repo>/pull/[0-9]+` — the
+# URL only when <owner>/<repo> is the repository the `origin` remote names,
+# compared ignoring case and a trailing `.git`, and read as `#<digits>`
+# (T-87). Every other field, and the body, is never read, so a PR
 # number written in prose produces nothing. A ticket whose QA reads `fail`
-# and whose `links.pr` is not `#<digits>`, or names a PR no `merge.land`
+# and whose `links.pr` is neither form, or names a PR no `merge.land`
 # landed with a merge sha, gets nothing written and its id on stderr. The
 # key is the PR and `data.ticket`: a second run writes 0 lines. No
 # `.factory/` folder: the step is skipped, silently.
@@ -3500,6 +3514,15 @@ trace_outcomes_qa() {
 	[ -d "$_oq_top/.factory" ] || return 0
 	_oq_bad=
 	_oq_odd=0
+	# origin's <owner>/<repo>, lower-cased, or empty when origin is not GitHub's.
+	_oq_repo=$(git -C "$_oq_top" remote get-url origin 2>/dev/null) || _oq_repo=
+	case $_oq_repo in
+	git@github.com:*) _oq_repo=${_oq_repo#git@github.com:} ;;
+	ssh://git@github.com/*) _oq_repo=${_oq_repo#ssh://git@github.com/} ;;
+	https://github.com/*) _oq_repo=${_oq_repo#https://github.com/} ;;
+	*) _oq_repo= ;;
+	esac
+	_oq_repo=$(trace_outcomes_repo "$_oq_repo")
 	for _oq_f in "$_oq_top"/.factory/items/*/ticket.md; do
 		[ -f "$_oq_f" ] || continue
 		_oq_id=${_oq_f%/ticket.md}
@@ -3522,6 +3545,13 @@ trace_outcomes_qa() {
 			END { printf "%s\t%s\n", qa, pr }' "$_oq_f")
 		[ "${_oq_v%%"$_oc_tab"*}" = fail ] || continue
 		_oq_pr=${_oq_v#*"$_oc_tab"}
+		case $_oq_pr in https://github.com/*/pull/*)
+			_oq_n=${_oq_pr##*/pull/}
+			_oq_u=${_oq_pr#https://github.com/}
+			_oq_u=$(trace_outcomes_repo "${_oq_u%/pull/*}")
+			if [ -n "$_oq_repo" ] && [ "$_oq_u" = "$_oq_repo" ]; then _oq_pr="#$_oq_n"; fi
+			;;
+		esac
 		case $_oq_pr in '#' | '#'*[!0-9]* | [!#]* | '') _oq_bad="$_oq_bad $_oq_id" && continue ;; esac
 		_oq_s="pr:$_oq_pr"
 		printf '%s\n' "$_oc_ev" | awk -F '\t' -v p="$_oq_s" '$1 == "L" && $3 == p { f = 1 } END { exit !f }' || {
@@ -3532,7 +3562,7 @@ trace_outcomes_qa() {
 		( trace_emit kind=merge.outcome subject="$_oq_s" outcome=qa-failed data.ticket="$_oq_id" reason='outcome recorder: the factory ticket that links this PR failed QA' ) || return 2
 		_oc_written=$((_oc_written + 1))
 	done
-	[ -z "$_oq_bad" ] || echo "trace: outcomes: factory ticket(s)$_oq_bad failed QA, but links.pr is not #<digits> or names a PR with no merge.land — no outcome for them" >&2
+	[ -z "$_oq_bad" ] || echo "trace: outcomes: factory ticket(s)$_oq_bad failed QA, but links.pr is not #<digits> or https://github.com/<owner>/<repo>/pull/<digits> for origin's repository, or names a PR with no merge.land — no outcome for them" >&2
 	[ "$_oq_odd" -eq 0 ] || echo "trace: outcomes: $_oq_odd factory item folder(s) whose name is not a ticket id — not read" >&2
 	return 0
 }
