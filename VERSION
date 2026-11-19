@@ -4254,8 +4254,31 @@
 # empty; empty or absent, nothing changes.
 # Wiring (9b): none. Templates (9c): none. Adapter (9e): none.
 # Kit-only, never shipped: tests/ruling.test.sh and tests/risk.test.sh.
+#
+# 0.126.1 — the outcome recorder reads a factory ticket's links.pr written
+# as this repository's pull request URL (ticket #953, factory T-87;
+# runtime/R38 modified). A patch: no file joins or leaves. Two shared files
+# change content: scripts/trace.sh, whose `outcomes` reads a `links.pr` of
+# https://github.com/<owner>/<repo>/pull/<digits> as `#<digits>` when
+# <owner>/<repo> is the repository the origin remote names — compared
+# ignoring case and a trailing .git, under its SSH or HTTPS form — still
+# refusing another repository's URL or any other URL, now with both forms
+# named in its stderr line; and UPDATING.md, its entry and both worked
+# examples re-pinned.
+#   NON-MANIFEST HALF, enumerated — the part Part 2 of the recipe recovers.
+# Skills (9a): from PR #1025 (landed after 0.126.0's tag) /retro gains its
+# recurring-rulings section, which proposes a ruling default from five
+# recurring operator rulings of one review area and surface
+# (.agents/skills/retro/QUESTIONS.md), and SKILL.md runs and reports it
+# (.agents/skills/retro/SKILL.md).
+# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
+# none.
+# Kit-only, never shipped: docs/specs/runtime.md R38 modified,
+# tests/outcome-recorder.test.sh, and, landed after 0.126.0's tag,
+# scripts/land.kit.sh, tests/land.test.sh, tests/retro-skill.test.sh,
+# docs/specs/process.md and AGENTS.md.
 
-shared-layer: 0.126.0
+shared-layer: 0.126.1
 
 # NOT shared layer, and deliberately so: scripts/guards.config.sh. It is the
 # only file the guards read policy from, and its whole purpose is to be edited
