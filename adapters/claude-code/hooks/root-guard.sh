@@ -62,6 +62,16 @@
 # call, with no marker set, goes through. The same tripwire limits hold: a
 # process outside the adapter can still claim `operator`.
 #
+# AND THE FORGE'S BRANCH RULES, wherever the session works (#950). An agent's
+# Bash call that runs `gh api` with a writing method — `-X`/`--method` PUT,
+# POST, PATCH or DELETE, or with none named a `-f`/`-F`/`--input` body, which
+# implies POST — on a rulesets or branch protection path, or a `gh ruleset`
+# subcommand other than `list`, `view` and `check`, is refused: changing the
+# rules is the operator's act. Reads pass, and the operator's call, with no
+# marker set. The real lock is the agent's token, which carries no
+# administration permission; `curl` with a token, a GraphQL mutation or a
+# command assembled from variables gets past this tripwire.
+#
 # THE ROOT IS FOUND FROM THIS FILE, never from the caller's cwd, through git's
 # common directory (hook.lib.sh's hook_root): a session started inside a
 # worktree runs the worktree's copy of this hook, and the tree it guards is
@@ -321,6 +331,12 @@ refuse_held() {
 	exit 2
 }
 
+refuse_rules() {
+	echo "x root-guard: Bash refused — \`$1\` would change the forge's branch rules (a ruleset or branch protection). Changing the rules is the operator's act, never an agent's." >&2
+	echo "  Leave the rules as they are, and report the change you would make for the operator to apply from their own shell." >&2
+	exit 2
+}
+
 tool=$(field tool_name)
 cwd=$(field cwd)
 [ -n "$cwd" ] || cwd=$root
@@ -401,11 +417,53 @@ function rulingseg(   i, j, k, c, w, n, hasc, verb) {
 		return
 	}
 }
+# rulesseg <i> — the forge'"'"'s branch rules (#950): a `rules` line carrying the
+# command when the `gh` at <i> would change a ruleset or branch protection —
+# `gh api` with a writing method on a rulesets or branch protection path, or a
+# `gh ruleset` (`gh rs`) subcommand other than `list`, `view` and `check`.
+# A writing method is `-X`/`--method` PUT, POST, PATCH or DELETE; with none
+# named, a `-f`/`-F`/`--input` body, which `gh api` sends as a POST.
+function rulesseg(i,   j, k, w, s, method, body, path, sub_, text) {
+	j = i + 1
+	if (j > nw) return
+	s = words[j]
+	if (s == "api") {
+		method = ""; body = 0; path = ""
+		for (k = j + 1; k <= nw; k++) {
+			w = words[k]
+			if (w == "-X" || w == "--method") { method = words[k + 1]; k++ }
+			else if (w ~ /^-X./) method = substr(w, 3)
+			else if (w ~ /^--method=/) method = substr(w, 10)
+			else if (w == "-f" || w == "-F" || w == "--raw-field" || w == "--field" || w == "--input") { body = 1; k++ }
+			else if (w ~ /^-[fF]./ || w ~ /^--(raw-field|field|input)=/) body = 1
+			else if (w ~ /^(-H|--header|-q|--jq|-t|--template|-p|--preview|--hostname|--cache)$/) k++
+			else if (w ~ /^-/) continue
+			else if (path == "") path = w
+		}
+		method = toupper(method)
+		if (method != "" ? method !~ /^(PUT|POST|PATCH|DELETE)$/ : !body) return
+		sub(/\?.*/, "", path)
+		if (path !~ /(^|\/)rulesets(\/|$)/ && path !~ /(^|\/)branches\/.+\/protection(\/|$)/) return
+	} else if (s == "ruleset" || s == "rs") {
+		sub_ = ""
+		for (k = j + 1; k <= nw; k++) {
+			w = words[k]
+			if (w == "-R" || w == "--repo") { k++; continue }
+			if (w ~ /^-/) continue
+			sub_ = w; break
+		}
+		if (sub_ == "" || sub_ == "list" || sub_ == "view" || sub_ == "check") return
+	} else return
+	text = words[i]
+	for (k = i + 1; k <= nw; k++) text = text " " words[k]
+	print "rules " text
+}
 function endseg(   i, j, k, c, s, inplace, last) {
 	rulingseg()
 	i = cmdstart(1)
 	if (i > nw) { nw = 0; return }
 	c = words[i]; sub(/.*\//, "", c)
+	if (c == "gh") rulesseg(i)
 	if (c == "cd") {
 		j = i + 1
 		while (j <= nw && words[j] ~ /^-./) j++
@@ -590,6 +648,10 @@ while IFS= read -r step; do
 		# the root.
 		abs=$(resolve "${step#around }" "$here_cwd")
 		guarded "$abs" && refuse "Bash (a way around the commit guard)" "$abs"
+		;;
+	'rules '*)
+		# The forge's branch rules: the operator's to change (#950).
+		agent && refuse_rules "${step#rules }"
 		;;
 	ruling) ruling=1 ;;
 	unmark) unmark=1 ;;

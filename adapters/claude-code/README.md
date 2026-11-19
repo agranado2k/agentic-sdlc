@@ -869,6 +869,34 @@ shell no agent harness hooks — can still claim `operator`, the limit the
 commit hook states, accepted because a false `operator` ruling only lifts
 `outward` on one PR whose areas are already earned.
 
+### The forge's branch rules
+
+The rules that guard the default branch — a repository ruleset, or branch
+protection — are the operator's to change. The real lock is the agent's forge
+token: it carries no administration permission, so the forge itself refuses
+the write. This hook is an earlier tripwire behind that lock, put there after
+a session holding the operator's token edited the `main` ruleset through the
+forge CLI, so the ruleset could not guard itself (#950). Wherever the session
+works, it refuses an agent's Bash call that runs:
+
+- `gh api` with a writing method on a rulesets path (`repos/<o>/<r>/rulesets…`,
+  `orgs/<o>/rulesets…`) or a branch protection path
+  (`repos/<o>/<r>/branches/<branch>/protection…`). A writing method is
+  `-X`/`--method` `PUT`, `POST`, `PATCH` or `DELETE`, in any case and glued or
+  not; with no method named, a `-f`/`-F`/`--input` body, which `gh api` sends
+  as a `POST`.
+- `gh ruleset` (or its alias `gh rs`) with any subcommand but `list`, `view`
+  and `check`.
+
+The refusal quotes the command and says changing the rules is the operator's
+act. Reads pass — a `gh api` call with no method and no body, or `-X GET` with
+fields as its query — and so does a write on any other path. The operator's
+call, with no agent-harness marker set, goes through. It is the same tripwire
+as below, with its own gaps: `curl` with a token, a `gh api graphql` mutation,
+`gh` run through another shell's `-c` or an interpreter, and a command
+assembled from variables all get past it. The hook only notices the honest
+form; the guarantee is the token, not the hook.
+
 ### Which commits the commit hook refuses
 
 `.githooks/pre-commit` refuses agents only. A commit is refused when one of
