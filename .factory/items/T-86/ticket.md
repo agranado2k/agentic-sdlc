@@ -9,6 +9,8 @@ created: 2026-10-31
 updated: 2026-10-31
 deps: []
 priority: 3
+links:
+  pr: "#1035"
 stages:
   - {stage: proposed, at: 2026-10-31T12:55Z}
 ---
@@ -19,4 +21,4 @@ stages:
 
 ## Acceptance
 
-GitHub issue: #953
+GitHub issue: #954
