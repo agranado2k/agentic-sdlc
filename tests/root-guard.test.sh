@@ -17,8 +17,8 @@
 #      the three ways around the git layer (`--no-verify`, `-c
 #      core.hooksPath`, `git config core.hooksPath`) where git acts there.
 #      Wherever the session works, it also keeps the kill switch's trip
-#      marker (runtime/R103) and the ruling recorder's `by` (runtime/R149)
-#      from an agent.
+#      marker (runtime/R103), the ruling recorder's `by` (runtime/R149)
+#      and the forge's branch rules (#950) from an agent.
 #   2. THE GIT LAYER refuses an agent's commit. `.githooks/pre-commit` refuses
 #      a commit from the main working copy or on the default branch when an
 #      agent-harness marker is in the environment, and lets a human with none
@@ -852,5 +852,94 @@ _before=$failures
 	[ "$failures" = "$_before" ]
 ) || fail "runtime/R149: an operator's call to the recorder was refused"
 assert_file_has "$KIT/adapters/claude-code/README.md" "### The ruling recorder's marker" "the README names the refusal"
+
+# ---------------------------------------------------------------------------
+banner "11. The forge's branch rules: an agent cannot change them (#950)"
+# ---------------------------------------------------------------------------
+# An agent session holding the operator's token edited the `main` ruleset
+# through the forge CLI, so the ruleset could not guard itself. The real lock
+# is the token (no administration permission); this is the tripwire before it.
+# A `gh api` call with a writing method — `-X`/`--method` PUT, POST, PATCH or
+# DELETE, or a `-f`/`-F`/`--input` body, which implies POST — on a rulesets
+# or branch protection path is refused, and so is a `gh ruleset` subcommand
+# other than `list`, `view` and `check`. Reads pass.
+
+# rules_refused <label> — the blocking status, and a message naming the
+# command and leaving the rules to the operator.
+rules_refused() {
+	expect_status 2 "$1 is refused with the blocking status"
+	case $T_ERR in
+	*'gh '*operator*) pass "and stderr names the command and leaves the rules to the operator" ;;
+	*) fail "$1: stderr does not name the command and the operator: $T_ERR" ;;
+	esac
+	expect_out_is "" "and stdout stays empty"
+}
+
+guard_on "$(payload Bash command 'gh api -X PUT repos/o/r/rulesets/42 --input rules.json' "$WT")"
+rules_refused "a gh api -X PUT on a ruleset"
+case $T_ERR in
+*'repos/o/r/rulesets/42'*) pass "and the refusal quotes the path" ;;
+*) fail "the refusal does not quote the command's path: $T_ERR" ;;
+esac
+guard_on "$(payload Bash command 'gh api --method DELETE /repos/o/r/rulesets/42' "$WT")"
+rules_refused "a gh api --method DELETE on a ruleset"
+guard_on "$(payload Bash command 'gh api --method=patch repos/{owner}/{repo}/rulesets/42 -f enforcement=disabled' "$WT")"
+rules_refused "a gh api --method=patch, lower case, glued"
+guard_on "$(payload Bash command 'gh api -XPOST orgs/o/rulesets --input -' "$WT")"
+rules_refused "a gh api -XPOST on an organization's rulesets"
+guard_on "$(payload Bash command 'gh api repos/o/r/rulesets/42 -f enforcement=disabled' "$WT")"
+rules_refused "a gh api -f body on a ruleset, which implies POST"
+guard_on "$(payload Bash command 'gh api repos/o/r/rulesets -F name=x' "$WT")"
+rules_refused "a gh api -F body on the rulesets path"
+guard_on "$(payload Bash command 'jq . r.json | gh api repos/o/r/rulesets/42 --input -' "$WT")"
+rules_refused "a gh api --input body piped in"
+guard_on "$(payload Bash command 'gh api -X PUT repos/o/r/branches/main/protection --input p.json' "$WT")"
+rules_refused "a gh api -X PUT on branch protection"
+guard_on "$(payload Bash command 'gh api --method DELETE repos/o/r/branches/main/protection/required_status_checks' "$WT")"
+rules_refused "a gh api --method DELETE under branch protection"
+guard_on "$(payload Bash command 'gh api repos/o/r/branches/main/protection/enforce_admins -f x=y' "$WT")"
+rules_refused "a gh api -f body under branch protection"
+guard_on "$(payload Bash command 'gh api --input p.json repos/o/r/branches/main/protection' "$WT")"
+rules_refused "a gh api --input body before the path"
+guard_on "$(payload Bash command 'GH_TOKEN=x command gh api -X PUT repos/o/r/rulesets/42' "$WT")"
+rules_refused "a gh api write behind an assignment and a prefix"
+guard_on "$(payload Bash command 'cd /tmp && gh api -X DELETE repos/o/r/rulesets/42' "$WT")"
+rules_refused "a gh api write in a later simple command"
+guard_on "$(payload Bash command 'gh api -X PUT repos/o/r/rulesets/42 --input r.json')"
+rules_refused "the same call from the root checkout"
+guard_on "$(payload Bash command 'gh ruleset create' "$WT")"
+rules_refused "a gh ruleset create"
+guard_on "$(payload Bash command 'gh rs -R o/r delete 42' "$WT")"
+rules_refused "a gh rs delete, the alias, after -R"
+
+# Let through: reads on the same paths, the read subcommands, and the
+# operator's own call, with no agent-harness marker set.
+guard_on "$(payload Bash command 'gh api repos/o/r/rulesets/42' "$WT")"
+allowed "#950: a gh api GET on a ruleset"
+guard_on "$(payload Bash command 'gh api -X GET repos/o/r/branches/main/protection' "$WT")"
+allowed "#950: a gh api -X GET on branch protection"
+guard_on "$(payload Bash command 'gh api --method GET repos/o/r/rulesets -f includes_parents=true' "$WT")"
+allowed "#950: a gh api --method GET whose -f fields are a query"
+guard_on "$(payload Bash command 'gh api repos/o/r/rulesets --jq .[].name' "$WT")"
+allowed "#950: a gh api read with a --jq filter"
+guard_on "$(payload Bash command 'gh api -X POST repos/o/r/issues -f title=x' "$WT")"
+allowed "#950: a gh api write on a path that is no rule"
+guard_on "$(payload Bash command 'gh ruleset list' "$WT")"
+allowed "#950: a gh ruleset list"
+guard_on "$(payload Bash command 'gh ruleset view 42 -R o/r' "$WT")"
+allowed "#950: a gh ruleset view"
+guard_on "$(payload Bash command 'gh rs check main' "$WT")"
+allowed "#950: a gh rs check"
+guard_on "$(payload Bash command 'grep -n "gh api -X PUT repos/o/r/rulesets" notes.md' "$WT")"
+allowed "#950: a read that only names the command"
+_before=$failures
+(
+	t_as_human
+	guard_on "$(payload Bash command 'gh api -X PUT repos/o/r/rulesets/42 --input r.json' "$WT")"
+	allowed "#950: the operator's own ruleset write"
+	[ "$failures" = "$_before" ]
+) || fail "#950: an operator's ruleset write was refused"
+assert_file_has "$KIT/adapters/claude-code/README.md" "### The forge's branch rules" "the README names the refusal"
+assert_file_has "$KIT/adapters/claude-code/README.md" "the guarantee is the token" "and says the token, not the hook, is the guarantee"
 
 t_done "root-guard"
