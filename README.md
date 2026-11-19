@@ -821,6 +821,17 @@ skeleton (K0).
   the five values, the date and the two source-revision lines, leaves every
   other byte of the policy file alone, and commits nothing.
 
+- `sh tests/ruleset-drift.test.sh` proves the default branch's rules are held
+  to their committed snapshot (ticket #951). The kit-only
+  `scripts/ruleset-drift.kit.sh` runs against a stub forge CLI: a live answer
+  equal to `.github/rulesets.kit.json` passes, whatever its ids, timestamps,
+  links and list order; a removed rule, an added bypass actor, a changed
+  required check, enforcement turned off and an added ruleset each fail
+  naming the field path; a required check naming no workflow job fails as
+  `no-job:`; a token that cannot see the bypass actors, and a failed fetch,
+  are refused (exit 3) rather than read as nothing; every forge call is a GET
+  and the token is never printed.
+
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and
   redacted transcript fixtures. The session-start hook writes the pointer file
@@ -1113,6 +1124,7 @@ sh tests/mutation-kit.test.sh                          # the kit's own mutation 
 sh tests/suite-budget.test.sh                          # every suite runs inside the worker budget
 sh tests/budget-lib.test.sh                            # the worker Budget, through its four functions
 sh tests/ci-timeouts.test.sh                           # every kit CI job and package install carries a timeout
+sh tests/ruleset-drift.test.sh                         # the default branch's rules drift from their snapshot, named by field, through a stub forge CLI
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
@@ -1138,6 +1150,42 @@ blocks in `UPDATING.md` byte for byte against the run it just did, and fails on 
 stale one. A worked example nobody re-runs is exactly the stale standing
 instruction shared invariant §8 is about, so this one is re-run on every pass.
 Re-paste; never hand-edit a transcript to match.
+
+### The default branch's rules
+
+The rulesets that guard `main` are forge settings, not files, so a change made
+in the settings page passes no review. `.github/rulesets.kit.json` is their
+snapshot — normalised: ids, timestamps and links stripped, lists sorted — and
+`.github/workflows/kit-rules.yml` runs `sh scripts/ruleset-drift.kit.sh check`
+daily, on demand and after every push to `main`. It goes red naming each field
+that differs, and on a required status check that names no job in the
+workflows. To change the rules on purpose, change them, then
+`sh scripts/ruleset-drift.kit.sh print > .github/rulesets.kit.json` in a
+worktree and open the PR. All four files are kit-only; bootstrap strips them.
+
+**The `RULESET_READ_TOKEN` secret.** The workflow's own `GITHUB_TOKEN` reads
+the rulesets but not their bypass actors: the forge returns `bypass_actors`
+only to a token with the administration permission, which `GITHUB_TOKEN`
+cannot be granted. The script refuses a ruleset whose bypass actors it cannot
+see (exit 3), so the job needs a secret, made once by the operator:
+
+1. GitHub, Settings → Developer settings → Fine-grained personal access
+   tokens → Generate new token. Resource owner: the repository's owner;
+   repository access: **only this repository**; an expiry you will renew.
+2. Repository permissions: **Administration: Read-only**. Metadata:
+   Read-only comes with it. Nothing else.
+3. In this repository, Settings → Secrets and variables → Actions → New
+   repository secret, named `RULESET_READ_TOKEN`, the token as its value.
+4. Run the workflow by hand (Actions → "Kit — default branch rules" → Run
+   workflow) and expect green. If it refuses with "cannot see the bypass
+   actors", the read-only scope does not reveal them on this plan, and the
+   choice of a wider token is yours.
+
+With no secret, a run after a push to `main` emits a `::warning::` naming
+`RULESET_READ_TOKEN` and passes, running no check: the landing script waits on
+`main`'s workflows, and a red push run would fail every landing after it. The
+daily and on-demand runs fail with a named `::error::`, so the missing secret
+stays loud. With the secret, every run checks.
 
 ## References — where the ideas come from
 
