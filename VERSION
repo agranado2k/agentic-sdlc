@@ -4281,7 +4281,11 @@
 # Kit-only, never shipped: docs/specs/runtime.md R38 modified,
 # tests/outcome-recorder.test.sh, and, landed after 0.126.0's tag,
 # scripts/land.kit.sh, tests/land.test.sh, tests/retro-skill.test.sh,
-# tests/root-guard.test.sh, docs/specs/process.md and AGENTS.md.
+# tests/root-guard.test.sh, docs/specs/process.md and AGENTS.md; and from
+# PR #1033 (ticket #951, factory T-85) the ruleset drift check —
+# ruleset-drift.kit.sh, tests/ruleset-drift.test.sh, rulesets.kit.json,
+# kit-rules.yml, kit-ci.yml's job, bootstrap.sh's KIT_ONLY entries, README's
+# section and AGENTS.md's row.
 
 shared-layer: 0.126.1
 
