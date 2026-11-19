@@ -111,6 +111,7 @@ second time rather than overwriting a manual you have since edited.
 | `tests/docs-demo.sh` | K4's acceptance test — the personalized docs set, and the update recipe run end to end (removed by bootstrap). |
 | `VERSION` | The shared-layer manifest: which files are shared, at which version. |
 | `SETUP.md` + `setup/agent-bootstrap.md` | The one-line agent setup: the frozen entry doc the pasted line fetches, and the tag-pinned procedure it hands off to. Kit-only — both removed by bootstrap. |
+| `setup/agent-forge-token.md` | For the operator, after setup: agent sessions on a bot forge token that cannot change the repository's rules, the admin token out of the agents' reach — launchers, the stored login removed, the approving review, the four verification checks and the limits. Linked from the setup guide's step 6. Kit-only — removed by bootstrap. |
 | `tests/` | The kit's own acceptance tests and CI (removed from your project by bootstrap). |
 
 ### One manual, three entry points

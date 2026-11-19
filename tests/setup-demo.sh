@@ -371,6 +371,66 @@ else
 	fail "the README quickstart never mentions skill discovery — the by-hand reader hits the same silent gap (issue #86)"
 fi
 
+# The forge token page (#954, factory T-86): the setup guide links a page that
+# walks the operator through running agent sessions on a bot token that cannot
+# change the repository's rules, the admin token out of the agents' reach. The
+# page is kit-only — `setup` is gone from the produced project above — so this
+# suite is the one place that holds it.
+TOKEN_PAGE="$KIT/setup/agent-forge-token.md"
+if [ -f "$TOKEN_PAGE" ]; then
+	pass "setup/agent-forge-token.md exists"
+else
+	fail "setup/agent-forge-token.md is missing — the operator has no documented way to keep the admin token from agents (#954)"
+fi
+if grep -q 'setup/agent-forge-token\.md' "$PAYLOAD" 2>/dev/null; then
+	pass "the setup guide links the forge token page"
+else
+	fail "setup/agent-bootstrap.md never names setup/agent-forge-token.md — the page is unreachable from the setup guide (#954)"
+fi
+# Each step the ticket names, by a phrase the step cannot be written without.
+while IFS='|' read -r phrase step; do
+	if grep -Fq -- "$phrase" "$TOKEN_PAGE" 2>/dev/null; then
+		pass "the forge token page names $step"
+	else
+		fail "the forge token page lost $step (no '$phrase')"
+	fi
+done <<'PHRASES'
+Write role|the bot identity and its role
+OP_SERVICE_ACCOUNT_TOKEN|the agent launcher's service account
+GH_TOKEN|the token handed to the agent as GH_TOKEN
+empty bot token|the launcher refusing an empty token, which would leave gh to its stored login
+system-authentication|the admin launcher's prompt
+ten idle minutes|the limit of the admin authorization
+gh auth logout|removing the forge CLI's stored login
+required_approving_review_count|the required approving review
+gh api user|the verification that names the bot
+gh api -X POST|the verification that a ruleset write is refused
+op vault list|the verification that the password manager answers nothing unprompted
+printenv|the verification that the environment holds no admin token
+separate OS user|the limit: the agent still runs as the operator's user
+adapters/claude-code/README.md#the-forges-branch-rules|the link to the adapter's branch-rules section
+PHRASES
+# The link's target must exist, or the page points at nothing.
+if grep -q "^### The forge's branch rules\$" "$KIT/adapters/claude-code/README.md" 2>/dev/null; then
+	pass "the adapter README still carries the branch-rules section the page links"
+else
+	fail "the adapter README lost '### The forge's branch rules' — the page's link points at nothing"
+fi
+# The glossary's words this project does not use (docs/domain-glossary.md),
+# and no model named: the page sits outside the docs gate's banned-word scan,
+# so the suite holds it to the list.
+if grep -Eiwn 'install|installs|installed|config|harness|the framework|strategic design' "$TOKEN_PAGE" 2>/dev/null |
+	grep -Eiv 'agent harness|agent-harness' | grep -q .; then
+	fail "the forge token page uses a word the glossary bans"
+else
+	pass "the forge token page keeps to the glossary's words"
+fi
+if grep -Eiwq 'opus|sonnet|haiku|fable|gpt|gemini|codex' "$TOKEN_PAGE" 2>/dev/null; then
+	fail "the forge token page names a model — the kit names none outside its policy files"
+else
+	pass "the forge token page names no model"
+fi
+
 # ---------------------------------------------------------------------------
 banner "4. RED — the referee is not vacuous"
 # ---------------------------------------------------------------------------
