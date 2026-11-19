@@ -255,4 +255,44 @@ assert_file_has "$W" "secrets.RULESET_READ_TOKEN" "with the read-only secret, by
 assert_file_lacks "$W" ": write" "it asks for no write permission"
 assert_file_has "$ROOT/README.md" "RULESET_READ_TOKEN" "the README says how to make the secret"
 
+# ---------------------------------------------------------------------------
+banner "8. A missing secret warns on a push, and fails the daily and on-demand runs"
+# ---------------------------------------------------------------------------
+# The landing script waits on main's workflows, so a push run that is red only
+# because the secret was never made would fail every later landing. The step's
+# own run block is lifted out of the workflow and executed, with the drift
+# script replaced by one that records it ran.
+step_run() {
+	awk '
+		/- name: Compare the live rules with the snapshot/ { instep = 1; next }
+		instep && /^        run: \|/ { inrun = 1; next }
+		inrun && /^          / { sub(/^          /, ""); print; next }
+		inrun { exit }
+	' "$W"
+}
+STEP="$SCRATCH/step"
+mkdir -p "$STEP/scripts"
+printf 'echo "drift-script-ran $*"\n' >"$STEP/scripts/ruleset-drift.kit.sh"
+step_run >"$STEP/run.sh"
+[ -s "$STEP/run.sh" ] && pass "the step's run block was found" || fail "no run block under the comparison step"
+# on <event> <token> — run the step as Actions would for that event.
+on() { t_exec sh -c 'cd "$1" && GITHUB_EVENT_NAME=$2 GH_TOKEN=$3 sh run.sh' _ "$STEP" "$1" "$2"; }
+
+on push ""
+expect_status 0 "a push with no secret passes"
+expect_out_has "::warning::" "and warns"
+expect_out_has "RULESET_READ_TOKEN" "naming the missing secret"
+expect_out_lacks "drift-script-ran" "and runs no check"
+for ev in schedule workflow_dispatch; do
+	on "$ev" ""
+	expect_status 1 "a $ev run with no secret fails"
+	expect_out_has "::error::" "a $ev run with no secret says so as an error"
+	expect_out_lacks "drift-script-ran" "a $ev run with no secret runs no check"
+done
+for ev in push schedule workflow_dispatch; do
+	on "$ev" "$TOKEN"
+	expect_status 0 "a $ev run with the secret runs"
+	expect_out_has "drift-script-ran check" "a $ev run with the secret runs the check"
+done
+
 t_done "the default branch's rules are held to their snapshot"

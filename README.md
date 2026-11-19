@@ -1180,8 +1180,11 @@ see (exit 3), so the job needs a secret, made once by the operator:
    actors", the read-only scope does not reveal them on this plan, and the
    choice of a wider token is yours.
 
-With no secret the job fails, saying so: a drift check that cannot see who may
-bypass the rules would pass blind on the drift that matters most.
+With no secret, a run after a push to `main` emits a `::warning::` naming
+`RULESET_READ_TOKEN` and passes, running no check: the landing script waits on
+`main`'s workflows, and a red push run would fail every landing after it. The
+daily and on-demand runs fail with a named `::error::`, so the missing secret
+stays loud. With the secret, every run checks.
 
 ## References — where the ideas come from
 

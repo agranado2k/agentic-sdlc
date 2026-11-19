@@ -19,8 +19,10 @@ name: Kit — default branch rules
 # administration permission, and GITHUB_TOKEN can never be granted that one.
 # A bypass actor added in the settings page is the drift that matters most, so
 # the job reads through the RULESET_READ_TOKEN secret — README, "The default
-# branch's rules", says how the operator makes it — and, with no secret, fails
-# saying so rather than passing blind.
+# branch's rules", says how the operator makes it. With no secret, a push run
+# warns and passes without checking: the landing script waits on main's
+# workflows, and a red push run would fail every landing after it. The daily
+# and on-demand runs fail, saying so, and stay the loud reminder.
 #
 # timeout-minutes from the measured local run (under five seconds) plus
 # headroom; tests/ci-timeouts.test.sh holds it.
@@ -48,6 +50,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
+            if [ "$GITHUB_EVENT_NAME" = push ]; then
+              echo "::warning::No RULESET_READ_TOKEN secret: the rules were not checked on this push. README, \"The default branch's rules\", says how to make it."
+              exit 0
+            fi
             echo "::error::No RULESET_READ_TOKEN secret: the bypass actors cannot be read. README, \"The default branch's rules\", says how to make it."
             exit 1
           fi
