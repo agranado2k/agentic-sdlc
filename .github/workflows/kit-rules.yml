@@ -1,0 +1,54 @@
+name: Kit — default branch rules
+
+# THE KIT'S OWN CI, never shipped (bootstrap.sh strips it). Ticket #951,
+# factory T-85.
+#
+# The default branch's rulesets are settings, not files: a change made in the
+# forge's settings page passes no review and leaves no commit. This job holds
+# them to the snapshot committed at .github/rulesets.kit.json, and goes red on
+# any difference, naming the field — and on a required status check that names
+# no job in this repository's workflows, which would block every PR forever
+# (the `kit` context of 2026-10-30). Changing the rules on purpose is a
+# reviewed PR: `sh scripts/ruleset-drift.kit.sh print > .github/rulesets.kit.json`.
+#
+# Daily, on demand, and after every push to main: a push is when a new job
+# name lands, and a renamed job is how a required check loses its reporter.
+#
+# THE TOKEN. The workflow's own GITHUB_TOKEN can list and read the rulesets,
+# but the forge hides each ruleset's bypass actors from any token without the
+# administration permission, and GITHUB_TOKEN can never be granted that one.
+# A bypass actor added in the settings page is the drift that matters most, so
+# the job reads through the RULESET_READ_TOKEN secret — README, "The default
+# branch's rules", says how the operator makes it — and, with no secret, fails
+# saying so rather than passing blind.
+#
+# timeout-minutes from the measured local run (under five seconds) plus
+# headroom; tests/ci-timeouts.test.sh holds it.
+
+on:
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ruleset-drift:
+    name: The default branch's rules match their snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare the live rules with the snapshot
+        env:
+          GH_TOKEN: ${{ secrets.RULESET_READ_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::No RULESET_READ_TOKEN secret: the bypass actors cannot be read. README, \"The default branch's rules\", says how to make it."
+            exit 1
+          fi
+          sh scripts/ruleset-drift.kit.sh check

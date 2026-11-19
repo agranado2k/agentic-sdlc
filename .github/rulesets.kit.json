@@ -1,0 +1,185 @@
+{
+  "main": {
+    "bypass_actors": {},
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "~DEFAULT_BRANCH"
+        ]
+      }
+    },
+    "enforcement": "active",
+    "rules": {
+      "creation": true,
+      "deletion": true,
+      "non_fast_forward": true,
+      "pull_request": {
+        "allowed_merge_methods": [
+          "merge",
+          "rebase",
+          "squash"
+        ],
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_extra_approval_for_unattributed_changes": true,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
+        "required_review_thread_resolution": false,
+        "required_reviewers": []
+      },
+      "required_signatures": true,
+      "required_status_checks": {
+        "do_not_enforce_on_create": false,
+        "required_status_checks": {
+          "/design-brief contract": {
+            "integration_id": 15368
+          },
+          "/housekeeping contract": {
+            "integration_id": 15368
+          },
+          "/implement delivery contract": {
+            "integration_id": 15368
+          },
+          "/implement reads its ticket's stamp through one checked script": {
+            "integration_id": 15368
+          },
+          "/pr-iterate refuses a return that is not the declared shape": {
+            "integration_id": 15368
+          },
+          "/retro contract": {
+            "integration_id": 15368
+          },
+          "/review-pr output contract": {
+            "integration_id": 15368
+          },
+          "/to-prd and /to-tickets contracts": {
+            "integration_id": 15368
+          },
+          "/to-tickets' coverage check names uncovered requirements and orphan tickets": {
+            "integration_id": 15368
+          },
+          "A PR landed by hand records what the train records": {
+            "integration_id": 15368
+          },
+          "A loop stops on the third identical failure": {
+            "integration_id": 15368
+          },
+          "A mechanical ticket runs cheap-first, escalating on a red oracle": {
+            "integration_id": 15368
+          },
+          "Adapters are well-formed and dormant": {
+            "integration_id": 15368
+          },
+          "An advisory is audible through the gate": {
+            "integration_id": 15368
+          },
+          "Bootstrap demo (end-to-end)": {
+            "integration_id": 15368
+          },
+          "Docs set + UPDATING recipe (end-to-end)": {
+            "integration_id": 15368
+          },
+          "Every chain skill emits, and none reads the trace": {
+            "integration_id": 15368
+          },
+          "Every kit CI job carries a timeout": {
+            "integration_id": 15368
+          },
+          "Every skill declares its phase": {
+            "integration_id": 15368
+          },
+          "Every spawning skill and worker contract points at the cheap-reads reference": {
+            "integration_id": 15368
+          },
+          "Every suite runs inside the worker budget": {
+            "integration_id": 15368
+          },
+          "Exclusions record is current": {
+            "integration_id": 15368
+          },
+          "Existing-repo adoption arm": {
+            "integration_id": 15368
+          },
+          "Guard test tiers + demo": {
+            "integration_id": 15368
+          },
+          "Harness fixture tests": {
+            "integration_id": 15368
+          },
+          "No character art in the shipped prose": {
+            "integration_id": 15368
+          },
+          "One-line agent setup (end-to-end)": {
+            "integration_id": 15368
+          },
+          "Runtime catalogue admission": {
+            "integration_id": 15368
+          },
+          "Shared layer is portable": {
+            "integration_id": 15368
+          },
+          "Task entry contract": {
+            "integration_id": 15368
+          },
+          "The adapter's session hooks and usage extractor": {
+            "integration_id": 15368
+          },
+          "The broker lands a dispatched review": {
+            "integration_id": 15368
+          },
+          "The check-table reader holds a PR's check table to its ticket": {
+            "integration_id": 15368
+          },
+          "The gate's two engines agree on their path roots": {
+            "integration_id": 15368
+          },
+          "The harness's fixture builders": {
+            "integration_id": 15368
+          },
+          "The harness's folded assertion helpers": {
+            "integration_id": 15368
+          },
+          "The kit passes its own gate": {
+            "integration_id": 15368
+          },
+          "The kit's mutation wrapper": {
+            "integration_id": 15368
+          },
+          "The manifest grammar, once": {
+            "integration_id": 15368
+          },
+          "The optional skill, both ways": {
+            "integration_id": 15368
+          },
+          "The pre-screen of a PRD body and of product output is a checked typed return": {
+            "integration_id": 15368
+          },
+          "The price table's staleness advisory and its refresh": {
+            "integration_id": 15368
+          },
+          "The requirement-line grammar, once": {
+            "integration_id": 15368
+          },
+          "The root checkout refuses an agent's edit and an agent's commit": {
+            "integration_id": 15368
+          },
+          "The shipped vocabularies match the skills": {
+            "integration_id": 15368
+          },
+          "The vocabulary checker": {
+            "integration_id": 15368
+          },
+          "The worker Budget, through its four functions": {
+            "integration_id": 15368
+          },
+          "Workflow templates parse, and install inert": {
+            "integration_id": 15368
+          }
+        },
+        "strict_required_status_checks_policy": false
+      }
+    },
+    "target": "branch"
+  }
+}
