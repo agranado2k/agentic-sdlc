@@ -702,6 +702,18 @@ jobs:
       - name: Trace prices suite
         run: sh tests/trace-prices.test.sh
 
+  ruleset-drift:
+    name: The drift check names every field the default branch's rules moved
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # jq is on the runner. NO NETWORK and no token: the suite drives
+      # scripts/ruleset-drift.kit.sh against a stub forge CLI. The live check
+      # itself runs in kit-rules.yml, daily and after each push to main.
+      - name: Ruleset drift suite
+        run: sh tests/ruleset-drift.test.sh
+
   adopt-demo:
     name: Existing-repo adoption arm
     runs-on: ubuntu-latest
