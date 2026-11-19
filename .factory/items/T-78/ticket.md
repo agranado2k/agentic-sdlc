@@ -8,6 +8,8 @@ created: 2026-10-29
 updated: 2026-10-29
 deps: [T-76, T-77]
 priority: 3
+links:
+  pr: "#991"
 stages:
   - {stage: ready, at: 2026-10-29T12:20Z}
 ---
