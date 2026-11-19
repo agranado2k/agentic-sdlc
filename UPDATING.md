@@ -241,7 +241,12 @@ folder sees no change. Take `scripts/trace.sh` verbatim. Nothing to set.
 release: `/retro`'s `QUESTIONS.md` gains its recurring-rulings section,
 which proposes a ruling default once five operator rulings of one review
 area and surface agree, and its `SKILL.md` runs and reports it; take both.
-No wiring, template, config or adapter moves.
+**Adapter (9e):** the Claude Code adapter's `hooks/root-guard.sh` refuses an
+agent's `gh api` write on a rulesets or branch-protection path, and a `gh
+ruleset` subcommand other than `list`, `view` and `check`, as the operator's
+act — reads and the operator's own calls pass — and its `README.md` names the
+refusal and its gap; take both if you adopted the adapter. No wiring,
+template or config moves.
 
 **Arriving from 0.125.0 or older, the ruling recorder applies ruling
 defaults.** No file joins or leaves at 0.126.0; `scripts/ruling.sh` and this
@@ -2330,10 +2335,10 @@ $ comm -23 "$WORK/from.list" "$WORK/to.list"   # LEAVING
 (none)
 
 $ kit diff --stat "$FROM_REF" "$TO_REF" -- $(sort -u "$WORK/from.list" "$WORK/to.list")
- UPDATING.md                       | 4048 +++++++++++++++++++++++++++++++++++++
+ UPDATING.md                       | 4053 +++++++++++++++++++++++++++++++++++++
  constitution/shared-code-craft.md |  147 ++
  constitution/shared-invariants.md |    8 +-
- 3 files changed, 4202 insertions(+), 1 deletion(-)
+ 3 files changed, 4207 insertions(+), 1 deletion(-)
 
 $ kit diff "$FROM_REF" "$TO_REF" -- constitution/shared-invariants.md
 diff --git a/constitution/shared-invariants.md b/constitution/shared-invariants.md

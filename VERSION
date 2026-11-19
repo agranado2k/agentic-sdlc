@@ -4271,12 +4271,17 @@
 # recurring operator rulings of one review area and surface
 # (.agents/skills/retro/QUESTIONS.md), and SKILL.md runs and reports it
 # (.agents/skills/retro/SKILL.md).
-# Wiring (9b): none. Templates (9c): none. Config (9d): none. Adapter (9e):
-# none.
+# Wiring (9b): none. Templates (9c): none. Config (9d): none.
+# Adapter (9e): from PR #1032 (ticket #950, factory T-84, landed after
+# 0.126.0's tag) the Claude Code adapter's root guard refuses an agent's
+# gh api write on a rulesets or branch-protection path, and a gh ruleset
+# subcommand other than list, view and check, as the operator's act
+# (the Claude Code adapter's hooks/root-guard.sh), and its README names the
+# refusal and its gap (adapters/claude-code/README.md).
 # Kit-only, never shipped: docs/specs/runtime.md R38 modified,
 # tests/outcome-recorder.test.sh, and, landed after 0.126.0's tag,
 # scripts/land.kit.sh, tests/land.test.sh, tests/retro-skill.test.sh,
-# docs/specs/process.md and AGENTS.md.
+# tests/root-guard.test.sh, docs/specs/process.md and AGENTS.md.
 
 shared-layer: 0.126.1
 
