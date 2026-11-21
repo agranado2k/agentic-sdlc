@@ -3,15 +3,18 @@ id: PRD-08
 type: prd
 title: Policy files judged by the base branch, failing closed
 parent: D-02
-stage: approved
+stage: done
 created: 2026-10-28
-updated: 2026-10-29
+updated: 2026-11-21
 stages:
   - {stage: draft, at: 2026-10-28T12:26Z}
   - {stage: review, at: 2026-10-28T12:50Z}
   - {stage: approved, at: 2026-10-29T12:08Z}
+  - {stage: done, at: 2026-11-21T22:24Z}
 approved_by: "agranado"
 approved_at: 2026-10-29T12:08Z
+closed_by: "agranado"
+closed_at: 2026-11-21T22:24Z
 ---
 
 

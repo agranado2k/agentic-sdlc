@@ -3,15 +3,18 @@ id: PRD-14
 type: prd
 title: Acceptance tests approved with the ticket, held by a guard and built from first
 parent: D-02
-stage: approved
+stage: done
 created: 2026-10-29
-updated: 2026-10-31
+updated: 2026-11-21
 stages:
   - {stage: draft, at: 2026-10-29T16:33Z}
   - {stage: review, at: 2026-10-29T16:42Z}
   - {stage: approved, at: 2026-10-31T12:52Z}
+  - {stage: done, at: 2026-11-21T22:24Z}
 approved_by: "agranado"
 approved_at: 2026-10-31T12:52Z
+closed_by: "agranado"
+closed_at: 2026-11-21T22:24Z
 ---
 
 # PRD-14 · Acceptance tests approved with the ticket, held by a guard and built from first
