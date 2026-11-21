@@ -3,15 +3,28 @@ id: T-47
 type: ticket
 title: Judge the review's slicer, behavior lister and check table by the base branch
 parent: PRD-08
-stage: ready
+stage: done
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-21
 deps: [T-46]
 priority: 3
 links:
   pr: "#1006"
 stages:
   - {stage: ready, at: 2026-10-29T12:20Z}
+  - {stage: build, at: 2026-11-21T22:24Z}
+  - {stage: review, at: 2026-11-21T22:24Z}
+  - {stage: qa, at: 2026-11-21T22:24Z}
+  - {stage: done, at: 2026-11-21T22:24Z}
+review:
+  outcome: approved
+  commit: "2118f2b"
+  by: "agranado"
+  at: 2026-11-21T22:24Z
+qa:
+  outcome: pass
+  by: "agranado"
+  at: 2026-11-21T22:24Z
 ---
 
 # T-47 · Judge the review's slicer, behavior lister and check table by the base branch
