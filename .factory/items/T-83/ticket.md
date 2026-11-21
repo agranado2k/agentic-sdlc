@@ -3,15 +3,17 @@ id: T-83
 type: ticket
 title: The shipped CI review prompt writes scope words and pin judgements like the verifier
 parent: PRD-13
-stage: ready
+stage: review
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-11-21
 deps: []
 priority: 3
 links:
   pr: "#962"
 stages:
   - {stage: ready, at: 2026-10-29T12:20Z}
+  - {stage: build, at: 2026-11-21T22:16Z}
+  - {stage: review, at: 2026-11-21T22:16Z}
 ---
 
 # T-83 · The shipped CI review prompt writes scope words and pin judgements like the verifier
