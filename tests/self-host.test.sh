@@ -493,6 +493,12 @@ t_assert_no_kit_record_cite "$KIT/.agents/skills/dogfood" "the optional /dogfood
 	fail "tests/ survived bootstrap — a suite is missing from KIT_ONLY: $(ls "$PROJ/tests")" ||
 	pass "tests/ is gone — every suite is on bootstrap's KIT_ONLY list"
 
+# process/R243: the stop's suite holds this repository's own factory tickets, so
+# it is the kit's and never a consumer's — named on KIT_ONLY, gone after a bootstrap.
+grep "^KIT_ONLY=" "$KIT/bootstrap.sh" | grep -q " tests/factory-no-mirror.test.sh " && [ ! -e "$PROJ/tests/factory-no-mirror.test.sh" ] &&
+	pass "process/R243: bootstrap strips tests/factory-no-mirror.test.sh, the stop's kit-only suite" ||
+	fail "process/R243: tests/factory-no-mirror.test.sh is not on KIT_ONLY, or survived bootstrap"
+
 # Idempotency is unchanged: the strip must not turn "already bootstrapped" into
 # a silent re-stamp. It is guarded on the kit's own sentinel, and a stamped
 # project carries neither that nor the template.

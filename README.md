@@ -832,6 +832,15 @@ skeleton (K0).
   are refused (exit 3) rather than read as nothing; every forge call is a GET
   and the token is never printed.
 
+- `sh tests/factory-no-mirror.test.sh` holds the stop of PRD-15 slice 6
+  (T-92): from 2026-11-23 the kit opens no forge issue for a factory ticket.
+  A fixture ticket created on or after that date with a `GitHub issue:` line
+  fails, named; one created the day before keeps its line and passes; one
+  with no line passes; one with no `created:` date is reported, never passed;
+  the same words quoted in prose, or in an item that is not a ticket, are not
+  a mirror. Then it holds this repository's own `.factory/items/` at the head
+  (process/R243, process/R244).
+
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and
   redacted transcript fixtures. The session-start hook writes the pointer file
@@ -1125,6 +1134,7 @@ sh tests/suite-budget.test.sh                          # every suite runs inside
 sh tests/budget-lib.test.sh                            # the worker Budget, through its four functions
 sh tests/ci-timeouts.test.sh                           # every kit CI job and package install carries a timeout
 sh tests/ruleset-drift.test.sh                         # the default branch's rules drift from their snapshot, named by field, through a stub forge CLI
+sh tests/factory-no-mirror.test.sh                      # no factory ticket created on or after the stop date carries a GitHub issue line
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live
