@@ -833,7 +833,7 @@ skeleton (K0).
   and the token is never printed.
 
 - `sh tests/factory-no-mirror.test.sh` holds the stop of PRD-15 slice 6
-  (T-92): from 2026-11-23 the kit opens no forge issue for a factory ticket.
+  (T-92): from 2026-11-24 the kit opens no forge issue for a factory ticket.
   A fixture ticket created on or after that date with a `GitHub issue:` line
   fails, named; one created the day before keeps its line and passes; one
   with no line passes; one with no `created:` date is reported, never passed;

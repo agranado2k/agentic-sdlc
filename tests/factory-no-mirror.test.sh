@@ -31,7 +31,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 2
 t_init
 
-STOP_DATE=2026-11-23
+STOP_DATE=2026-11-24
 
 # mirror_findings <items-dir> — one line per factory ticket under <items-dir>
 # that breaks the stop; exit 1 when any, 0 when none. A ticket is an item whose
@@ -89,7 +89,7 @@ out=$(mirror_findings "$d") && pass "process/R243: a ticket created after the st
 
 # --- process/R244: before the stop date, the line is kept and passes ---
 d="$SCRATCH/before-stop"
-ticket "$d" T-60 2026-11-22 'GitHub issue: #923'
+ticket "$d" T-60 2026-11-23 'GitHub issue: #923'
 out=$(mirror_findings "$d") && pass "process/R244: a ticket created the day before the stop date keeps its GitHub issue line and passes" ||
 	fail "process/R244: a ticket created before the stop date failed: $out"
 
