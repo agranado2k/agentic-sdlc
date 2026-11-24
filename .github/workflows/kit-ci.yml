@@ -713,6 +713,14 @@ jobs:
       # itself runs in kit-rules.yml, daily and after each push to main.
       - name: Ruleset drift suite
         run: sh tests/ruleset-drift.test.sh
+  factory-no-mirror:
+    name: No factory ticket after the stop date mirrors a forge issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Factory no-mirror suite
+        run: sh tests/factory-no-mirror.test.sh
 
   adopt-demo:
     name: Existing-repo adoption arm

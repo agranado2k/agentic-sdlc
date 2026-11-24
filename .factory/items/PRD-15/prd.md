@@ -3,12 +3,15 @@ id: PRD-15
 type: prd
 title: The kit's chain names a factory ticket by its id, and the kit stops mirroring issues
 parent: D-02
-stage: review
+stage: approved
 created: 2026-10-31
-updated: 2026-10-31
+updated: 2026-11-21
 stages:
   - {stage: draft, at: 2026-10-31T14:03Z}
   - {stage: review, at: 2026-10-31T14:08Z}
+  - {stage: approved, at: 2026-11-21T22:38Z}
+approved_by: "agranado"
+approved_at: 2026-11-21T22:38Z
 ---
 
 # PRD-15 · The kit's chain names a factory ticket by its id, and the kit stops mirroring issues
