@@ -841,6 +841,16 @@ skeleton (K0).
   a mirror. Then it holds this repository's own `.factory/items/` at the head
   (process/R243, process/R244).
 
+- `sh tests/shell-parse.test.sh` parses (`-n`) every tracked shell file — a
+  `.sh` or `.sh.*` path, or one opening with an sh, dash or bash shebang —
+  under bash 3.2, which is macOS's `/bin/sh`, and under dash, and names the
+  file either refuses. A fixture with an unpaired `case` pattern, and one with
+  a heredoc, inside `$( )` fail under bash 3.2, named, and pass under dash. Its
+  CI job runs on a macOS runner, the one host with both shells; a shell that is
+  missing fails under CI and is a visible skip anywhere else. It runs nothing,
+  so it cannot see what bash 3.2 parses only at run time: a `$( )` inside double
+  quotes, an `eval`, a `sh -c` string.
+
 - `sh tests/trace-hooks.test.sh` covers the other end of that trace — the
   Claude Code adapter's session hooks, against the checked-in payload and
   redacted transcript fixtures. The session-start hook writes the pointer file
@@ -1135,6 +1145,7 @@ sh tests/budget-lib.test.sh                            # the worker Budget, thro
 sh tests/ci-timeouts.test.sh                           # every kit CI job and package install carries a timeout
 sh tests/ruleset-drift.test.sh                         # the default branch's rules drift from their snapshot, named by field, through a stub forge CLI
 sh tests/factory-no-mirror.test.sh                      # no factory ticket created on or after the stop date carries a GitHub issue line
+sh tests/shell-parse.test.sh                            # every tracked shell file parses under bash 3.2 (macOS's /bin/sh) and dash
 ```
 
 `bootstrap.sh` is edited by several kit tickets at once. Each one's changes live

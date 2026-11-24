@@ -722,6 +722,17 @@ jobs:
       - name: Factory no-mirror suite
         run: sh tests/factory-no-mirror.test.sh
 
+  shell-parse:
+    name: Every shell file parses under bash 3.2 and dash
+    # macOS on purpose: its /bin/sh is bash 3.2 and it carries /bin/dash. An
+    # ubuntu runner has no bash 3.2: moved to one, this job fails, not skips.
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell parse suite
+        run: sh tests/shell-parse.test.sh
+
   adopt-demo:
     name: Existing-repo adoption arm
     runs-on: ubuntu-latest

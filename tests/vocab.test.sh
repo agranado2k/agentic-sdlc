@@ -276,7 +276,10 @@ banner "Every call site hands the checker lifted lines, never a body (#337)"
 # risk.sh checks one risk value per call, its own token of the risk grammar's
 # shape — the planner's lifted by stamp.sh and held to that shape — never a
 # body (PRD-09 runtime/R62).
-LIFTED=$(
+# This heredoc, and calls_awk's below, sits in a function and not inside the
+# `$(`: bash 3.2, macOS's /bin/sh, ends a `$(` at the first `)` it cannot pair,
+# heredoc text included (tests/shell-parse.test.sh).
+lifted_sites() {
 	cat <<'EOLIFT'
 scripts/stamp.sh@@-@@sh "$vocab" <"$_stamp_tmp/lines"@@grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier|accept(-|[[:space:]_]+)test)[[:space:]]*:"
 scripts/stamp.sh@@-@@printf '%s\n' "$line" | sh "$vocab"@@grep -iE "^[[:space:]]*(${_lift_label}tier|confidence|domain|targets|class|covers|risk|risk(-|[[:space:]_]+)confidence|test(-|[[:space:]_]+)tier|accept(-|[[:space:]_]+)test)[[:space:]]*:"
@@ -289,7 +292,8 @@ scripts/check-table.sh@@-@@printf '%s\n' "$approved" | sh "$vocab" check@@[ "$n"
 .agents/skills/to-tickets/RETRO-CANDIDATES.md@@candidate_lines@@grep -E '^(Edits|Runs|Targets): ' "$1" | sh scripts/vocab.sh@@[ "$(grep -cE '^(Edits|Runs|Targets): ' "$1")" -le 3 ] || return 2
 scripts/risk.sh@@risk_checked@@sh "$_here/vocab.sh" check --writer risk-rule "Risk: $1"@@case $1 in low | "high "*) ;; *) return 1 ;; esac
 EOLIFT
-)
+}
+LIFTED=$(lifted_sites)
 
 # checker_calls <root> [awk program] — one record per invocation of the
 # checker in the shipped files under <root> that is not exempt above, found
@@ -297,7 +301,7 @@ EOLIFT
 # <file>\t<line>\t<function's first line>\t<function>\t<the call's command>
 # The command is the call's own: the line cut at `;`, `&&` and `||` around
 # the call, joined to the line before only when that line ends in a pipe.
-CALLS_AWK=$(
+calls_awk() {
 	cat <<'EOAWK'
 # scan <line> <file> — print a record for each call on one logical line
 function scan(line, file,    cut, i, s, off, from, to, tail, before, after, command) {
@@ -348,7 +352,8 @@ FNR == 1 { fn = "-"; start = 1; pipe_head = ""; cont = "" }
 /^}/ || one { fn = "-"; start = 1; one = 0 }
 END { if (cont != "") scan(cont, cont_file) }
 EOAWK
-)
+}
+CALLS_AWK=$(calls_awk)
 checker_calls() (
 	awk_prog=${2:-$CALLS_AWK}
 	cd "$1" || exit 2
