@@ -34,7 +34,8 @@ t_init
 STOP_DATE=2026-11-24
 
 # mirror_findings <items-dir> — one line per factory ticket under <items-dir>
-# that breaks the stop; exit 1 when any, 0 when none. A ticket is an item whose
+# that breaks the stop, and one when no ticket was read at all, since a scan of
+# nothing holds nothing; exit 1 when any, 0 when none. A ticket is an item whose
 # front matter says `type: ticket`; its line is one that reads exactly
 # `GitHub issue: #<digits>`, so the form quoted in prose is not one. ISO dates
 # compare as strings.
@@ -49,13 +50,21 @@ mirror_findings() {
 			!fm && /^GitHub issue: #[0-9]+$/ { line = $0 }
 			END {
 				if (type != "ticket") exit
+				print "read"
 				if (created !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)
 					printf "%s: no created date the stop can be judged against\n", id
 				else if (line != "" && created >= stop)
 					printf "%s: created %s, on or after the stop date %s, carries \"%s\"\n", id, created, stop, line
 			}
 		' "$f"
-	done | awk '{ print } END { exit NR > 0 }'
+	done | awk -v dir="$1" '
+		$0 == "read" { read++; next }
+		{ print; bad = 1 }
+		END {
+			if (!read) { printf "no factory ticket read under %s\n", dir; bad = 1 }
+			exit bad
+		}
+	'
 }
 
 # ticket <dir> <id> <created> [<body line>] — write one fixture ticket.
@@ -99,6 +108,17 @@ ticket "$d" T-98 '' 'GitHub issue: #982'
 out=$(mirror_findings "$d") && fail "a ticket with no created date passed unjudged" ||
 	case $out in *T-98*) pass "a ticket with no created date is reported, named" ;;
 	*) fail "the undated report does not name T-98: $out" ;; esac
+
+# --- a scan that read no ticket is reported, never passed ---
+d="$SCRATCH/no-items"
+out=$(mirror_findings "$d" 2>/dev/null) && fail "a scan of a missing items directory passed, having read nothing" ||
+	case $out in *"no factory ticket read"*) pass "a scan of a missing items directory is reported" ;;
+	*) fail "the report does not say no ticket was read: $out" ;; esac
+
+mkdir -p "$d/PRD-20" && printf -- '---\nid: PRD-20\ntype: prd\n---\n' >"$d/PRD-20/prd.md"
+out=$(mirror_findings "$d") && fail "a scan that read items but no ticket passed" ||
+	case $out in *"no factory ticket read"*) pass "a scan that read items but no ticket is reported" ;;
+	*) fail "the report does not say no ticket was read: $out" ;; esac
 
 # --- the same line in a non-ticket item, or quoted in prose, is not a mirror ---
 d="$SCRATCH/not-a-line"
