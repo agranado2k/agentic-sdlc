@@ -108,7 +108,8 @@ descendants() {
 			for (i = 1; i <= n; i++) { if (a[i] != root) print a[i]; q = q kids[a[i]] } } }'
 }
 
-base=$(mktemp -d "${TMPDIR:-/tmp}/kit-mutation.XXXXXX") || exit 2
+tmp=${TMPDIR:-/tmp}
+base=$(mktemp -d "${tmp%/}/kit-mutation.XXXXXX") || exit 2
 work="$base/run"
 git worktree add --detach -q "$work" HEAD || exit 2
 recover="git -C '$root' worktree remove --force '$work' && rm -rf '$base'"
