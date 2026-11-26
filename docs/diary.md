@@ -3001,3 +3001,47 @@ yet passes the CI step with a notice; a held path absent at both the base
 and the head was never brought in and is not changed, so an unrelated pull
 request passes while approved tests still live off `main` (review of #1003).
 The kit's manifest sets `acceptance_tests_since: 2026-11-02`, the landing day.
+
+## 2026-11-26 — why a third of the mutants timed out: the host slept (#507)
+
+The 2026-11-21 run (`sh scripts/mutation.kit.sh` at `2521ada8`, Stryker
+10.0.0) took 2,135 min 37 s. Its log does end in a final table — `All files
+| 86.37 | 86.37 | 879 killed | 547 timeout | 225 survived | 0 no cov | 0
+errors`, 1,651 mutants — so the housekeeping finding's "no final table" was
+wrong; its figures stand.
+
+**Measured.** `pmset -g log` over the run's window: the host entered
+`Clamshell Sleep` on battery 6 minutes in and did not wake fully until 35
+hours later; it was asleep 124,320 s of 128,137 s (97 %), in 290 sleeps,
+133 of them a minute or longer, broken only by dark wakes of a few seconds.
+547 timeouts against 133 sleeps of a minute or more is 4.1 a sleep, and the
+config's concurrency is 4. Two bounded runs in a throwaway worktree on
+2026-11-24: 57 mutants (reviewer-unmapped, mutation-decision) in 181 s, 0
+timeouts, where the 11-21 run had 24 of the same 57 time out; and 28 mutants
+(reviewer-unmapped) with the Stryker tree stopped for 75 s once, which timed
+out 4 — and then the lid closed on that run for 17.6 minutes and it timed out
+4 more, exactly one per runner each time. node's clock on this Mac counts
+sleep (`process.hrtime` 2,118,640 s, CLOCK_MONOTONIC 2,118,636 s,
+CLOCK_UPTIME_RAW 1,689,850 s), so a mutant's 60 s timeout expires during the
+sleep and fires on wake. The same two-file run had Stryker's type-check
+preprocessor rewrite 43 files, all but two outside the mutate scope; with
+`disableTypeChecks: false` it touched only the mutated file.
+
+**Inferred, not measured.** A full awake run takes about 90 minutes on this
+laptop (1,651 mutants at the 3.2 s each the 57-mutant run took), so neither
+the header's "about eight minutes" nor the issue's "about 63" holds; no full
+run was made this session. Each mutant runs all 19 fixture files (4.4 s
+alone, load average 75 on 8 cores at concurrency 4), which is where a faster
+run would come from. The "Forced exit" the 2026-10-02 interruption printed
+fits npx forwarding SIGINT/SIGTERM to Stryker (npm's signal manager), so a
+single Ctrl-C arrives twice — read from npm's code, not reproduced.
+
+**Changed.** The wrapper now runs Stryker in a detached worktree of HEAD
+under TMPDIR, never the caller's tree; removes it after a successful run;
+keeps it after a failed, interrupted or host-paused run and prints the one
+command that removes it; and keeps a one-second heartbeat that stops the run
+with exit 3 on a gap of 30 s or more, since such a run's score counts the
+pause as kills. **No new baseline was recorded**: the 76.53 % of 2026-09-02
+stays the last measured one, and the 86.37 % of 2026-11-21 is not a baseline
+(a third of its kills are sleeps). The next full run, lid open and on power,
+records one.

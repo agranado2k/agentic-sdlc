@@ -23,29 +23,46 @@
 # need its own exemption from the gate's policy; JSON carries no reasoning,
 # so the reasoning lives here.
 #
-# In-place mode (the config's `inPlace`) exists because Stryker's sandbox copy
-# fails on the kit's per-skill symlinks. In place, Stryker backs the files it
-# mutates up to .stryker-tmp, mutates them in the tree, and restores them at
-# the end. Two consequences:
-#   - until that restore has happened the backup is the only copy of the
-#     originals, so this wrapper never deletes .stryker-tmp: Stryker removes
-#     it after a successful run, and after a failed one the wrapper names it
-#     as the recovery copy instead;
-#   - a restore rewrites content, not mode. One early run was seen to leave a
-#     file without its executable bit (which file was not recorded, and
-#     nothing in the mutate scope is executable today — so the guard is a
-#     belt over a buckle): any `100755 => 100644` drift left after the run
-#     gets its bit back with chmod, which touches no content, and is reported.
+# Where it runs. Stryker's sandbox copy fails on the kit's per-skill symlinks,
+# so the config runs it in place (`inPlace`): it backs up the files it
+# mutates to .stryker-tmp, mutates them in the tree and restores them at the
+# end. An interrupted run skips that restore, and a second signal while
+# Stryker shuts down skips it too ("Forced exit. Received signal again") —
+# npx forwards SIGINT/SIGTERM to Stryker, so one Ctrl-C arrives twice. So the
+# wrapper never lets Stryker near the caller's tree: it adds a detached
+# worktree of HEAD under TMPDIR, runs there, and removes it after a
+# successful run. Uncommitted edits are therefore not measured. A failed,
+# interrupted or paused run keeps the worktree for inspection and prints the
+# one command that removes it; the caller's tree is clean whatever happened.
+# The config's `disableTypeChecks: false` keeps Stryker from rewriting every
+# .mjs under lib/src/test with a `// @ts-nocheck` line — the kit type-checks
+# nothing, and that preprocessor was what touched 43 files outside the
+# mutate scope on a two-file run (2026-11-24) and dropped an executable bit.
+#
+# A host that sleeps voids the run. Stryker times a mutant on the wall clock
+# (60 s plus 1.5 x the suite's time), and on macOS node's clock keeps counting
+# while the host sleeps: every sleep longer than that times out each mutant in
+# flight, one per concurrent runner, and Stryker counts a timeout as killed.
+# The 2026-11-21 run went into clamshell sleep 6 minutes in and was asleep
+# 97 % of its 35.6 hours; its 547 timeouts against 133 sleeps of a minute or
+# more is about 4 a sleep, its concurrency (#507). So the wrapper keeps a
+# heartbeat, and a gap of PAUSE_SECONDS or more between two beats stops the
+# run with exit 3: its score would count the pause as kills. Keep the lid
+# open, on power, or prefix `caffeinate -i` against idle sleep on macOS.
 #
 # Keep the config's commandRunner in step with kit-ci.yml's harness job: JSON
 # cannot source anything, so the suite line is spelled twice.
 #
-# Usage: sh scripts/mutation.kit.sh            # ~8 minutes on a laptop; runs
-#                                               IN PLACE — clean validators
-#                                               tree, network required
+# Usage: sh scripts/mutation.kit.sh            # about 90 minutes on a laptop
+#                                               (1,651 mutants at 2521ada8;
+#                                               extrapolated from 57 mutants
+#                                               in 181 s, 2026-11-24); runs
+#                                               in a throwaway worktree of
+#                                               HEAD, network required
 #        sh scripts/mutation.kit.sh --dry-run  # print what would run
 #
-# Exit: Stryker's own; 2 on a usage error or when this is not the kit.
+# Exit: Stryker's own; 2 on a usage error or when this is not the kit; 3 when
+# the host paused the run; 128 + n when signal n interrupted it.
 
 set -u
 
@@ -80,27 +97,57 @@ if [ "${1:-}" = "--dry-run" ]; then
 	exit 0
 fi
 
-$CMD
+PAUSE_SECONDS=30
+
+# Every process below the given one, parents first, so a parent killed first
+# cannot start a replacement child.
+descendants() {
+	ps -A -o pid= -o ppid= | awk -v root="$1" '
+		{ kids[$2] = kids[$2] " " $1 }
+		END { q = root; while (q != "") { n = split(q, a, " "); q = "";
+			for (i = 1; i <= n; i++) { if (a[i] != root) print a[i]; q = q kids[a[i]] } } }'
+}
+
+tmp=${TMPDIR:-/tmp}
+base=$(mktemp -d "${tmp%/}/kit-mutation.XXXXXX") || exit 2
+work="$base/run"
+git worktree add --detach -q "$work" HEAD || { rm -rf "$base"; exit 2; }
+recover="git -C '$root' worktree remove --force '$work' && rm -rf '$base'"
+keep() {
+	echo "mutation.kit.sh: $1; the run's worktree is kept at $work" >&2
+	echo "mutation.kit.sh: remove it with: $recover" >&2
+}
+echo "mutation.kit.sh: measuring HEAD $(git rev-parse --short HEAD) in $work (uncommitted edits are not measured)" >&2
+
+(cd "$work" && exec $CMD) </dev/null &
+pid=$!
+stop() {
+	for p in $pid $(descendants "$pid"); do kill -KILL "$p" 2>/dev/null; done
+	wait "$pid" 2>/dev/null
+}
+trap 'stop; keep "interrupted"; exit 130' INT
+trap 'stop; keep "interrupted"; exit 143' TERM
+trap 'stop; keep "interrupted"; exit 129' HUP
+
+last=$(date +%s)
+while kill -0 "$pid" 2>/dev/null; do
+	sleep 1 &
+	wait $!
+	now=$(date +%s)
+	if [ $((now - last)) -ge "$PAUSE_SECONDS" ]; then
+		stop
+		keep "the host paused this run for $((now - last)) s (asleep, or stopped); every mutant in flight timed out and counts as killed, so its score is void"
+		exit 3
+	fi
+	last=$now
+done
+wait "$pid"
 status=$?
+trap - INT TERM HUP
 
-# Give back any executable bit the in-place restore dropped, loudly, and
-# never touch content. --raw -z: one NUL-terminated meta record then one path
-# record per entry, so a path with a space survives.
-git diff --raw -z -- . 2>/dev/null | tr '\0' '\n' |
-	awk 'NR % 2 == 1 { meta = $0; next } meta ~ /^:100755 100644 / { print }' |
-	while IFS= read -r f; do
-		chmod +x "$f" && echo "mutation.kit.sh: restored the executable bit on $f (the in-place run dropped it)" >&2
-	done
-
-# Content is never touched: a validator that still differs from the index
-# after the run is a restore that did not happen, and the operator needs to
-# see it, not have it silently reverted.
-if ! git diff --quiet -- scripts/docs-conformance 2>/dev/null; then
-	echo "mutation.kit.sh: scripts/docs-conformance differs from the index after the run — a restore may have failed; inspect before committing" >&2
+if [ "$status" -eq 0 ]; then
+	git worktree remove --force "$work" && rm -rf "$base"
+else
+	keep "Stryker exited $status"
 fi
-
-if [ "$status" -ne 0 ] && [ -d .stryker-tmp ]; then
-	echo "mutation.kit.sh: Stryker exited $status; .stryker-tmp is its backup of the originals — check the tree before removing it" >&2
-fi
-
 exit "$status"

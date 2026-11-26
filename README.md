@@ -910,9 +910,11 @@ skeleton (K0).
   own workflows go green (#882).
 - `sh tests/mutation-kit.test.sh` drives the kit's own mutation wrapper,
   `scripts/mutation.kit.sh`, through a stub Stryker: the pinned `--dry-run`
-  command, usage errors and a non-kit tree refused with exit 2, the exit code
-  propagated, a dropped executable bit handed back without touching content,
-  and Stryker's backup kept after a failed run.
+  command, usage errors and a non-kit tree refused with exit 2, the run made
+  in a throwaway worktree of HEAD that leaves the caller's tree clean, the
+  exit code propagated, and a failed, interrupted (exit 128 + n) or
+  host-paused (exit 3) run stopped with the command that removes its
+  worktree printed — and that command run (#507).
 - `sh tests/harness-fixture-cleanup.test.sh` runs the whole docs harness with
   a private temp directory and holds its `docs-conf-*` count unchanged — the
   fixture helper removes every fixture a test file made, failed tests' too —
