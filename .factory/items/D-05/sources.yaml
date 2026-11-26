@@ -7,3 +7,98 @@
   kind: operator
   claim: >-
     Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-2
+  url: https://github.com/unclebob/crapper
+  title: "crapper (unclebob, GitHub)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-3
+  url: https://github.com/unclebob/agnesse
+  title: "agnesse (unclebob, GitHub)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-4
+  url: https://github.com/unclebob/mutator
+  title: "mutator (unclebob, GitHub)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-5
+  url: https://medium.com/@adrianbailador/uncle-bobs-agent-pipeline-from-informal-specs-to-mutation-tested-net-code-ac2baa45cfd5
+  title: "Uncle Bob's agent pipeline: from informal specs to mutation-tested .NET code (Adrian Bailador, Medium)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-6
+  url: https://github.com/PrimeIntellect-ai
+  title: "Prime Intellect (PrimeIntellect-ai, GitHub organization)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-7
+  url: https://github.com/sashiko-dev/sashiko
+  title: "sashiko (sashiko-dev, GitHub)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-8
+  url: https://www.anthropic.com/research/formal-verification
+  title: "Formal verification (Anthropic research)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+- id: S-9
+  url: https://lean-lang.org/
+  title: "Lean, the programming language and theorem prover (lean-lang.org)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it whole through a restricted reader.
+
+# --- The operator's formal-verification companies table (notes/formal-verification-companies.md) ---
+
+- id: S-10
+  url: https://andtruth.com/
+  title: "&Truth (company site; repositories in notes/formal-verification-companies.md)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+
+- id: S-11
+  url: https://www.harmonic.fun/
+  title: "Harmonic (company site; repositories in notes/formal-verification-companies.md)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+
+- id: S-12
+  url: https://theorem.dev/
+  title: "Theorem (company site; repositories in notes/formal-verification-companies.md)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+
+- id: S-13
+  url: https://axiommath.ai/
+  title: "Axiom Math (company site; repositories in notes/formal-verification-companies.md)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+
+# --- The operator's pasted text, no URL given (notes/claude-code-verification.md) ---
+
+- id: S-14
+  url: notes/claude-code-verification.md
+  title: "How the Claude Code team thinks about verification (operator-pasted copy; published URL not given)"
+  kind: operator
+  claim: >-
+    Not read yet; phase 2 reads the copy, finds where it was published, and checks the two match.
