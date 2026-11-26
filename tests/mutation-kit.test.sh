@@ -32,6 +32,12 @@ esac
 expect_exit 0 "--dry-run exits 0 from a subdirectory — the root is resolved, not required" -- \
 	sh -c "cd '$ROOT/scripts' && sh mutation.kit.sh --dry-run"
 
+# Stryker's type-check preprocessor rewrites files outside the mutate scope
+# (#507: 43 of them in a two-file run); the config's one line is the fix.
+grep -q '^[[:space:]]*"disableTypeChecks": false[[:space:]]*$' scripts/mutation.kit.config.json &&
+	pass "the config turns off the type-check preprocessor that rewrote files outside the mutate scope" ||
+	fail "scripts/mutation.kit.config.json no longer sets \"disableTypeChecks\": false"
+
 # ---------------------------------------------------------------------------
 banner "2. A usage error exits 2 before anything runs"
 # ---------------------------------------------------------------------------
