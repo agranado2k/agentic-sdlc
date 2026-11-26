@@ -111,7 +111,7 @@ descendants() {
 tmp=${TMPDIR:-/tmp}
 base=$(mktemp -d "${tmp%/}/kit-mutation.XXXXXX") || exit 2
 work="$base/run"
-git worktree add --detach -q "$work" HEAD || exit 2
+git worktree add --detach -q "$work" HEAD || { rm -rf "$base"; exit 2; }
 recover="git -C '$root' worktree remove --force '$work' && rm -rf '$base'"
 keep() {
 	echo "mutation.kit.sh: $1; the run's worktree is kept at $work" >&2

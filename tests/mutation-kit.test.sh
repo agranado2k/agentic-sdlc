@@ -103,26 +103,48 @@ sh -c "$recover" && [ "$(leftovers)" = 0 ] && pass "the printed recovery command
 # ---------------------------------------------------------------------------
 banner "5. An interrupted run: the run stops, the tree is clean, recovery is printed"
 # ---------------------------------------------------------------------------
-cat >"$STUB/npx" <<STUB
+# One interrupt per trapped signal, each with its own exit code. perl resets
+# the signal to its default before the exec: a background job of a
+# non-interactive shell starts with SIGINT ignored, and a shell cannot trap a
+# signal ignored on entry.
+for pair in TERM:143 INT:130 HUP:129; do
+	sig=${pair%%:*} want=${pair#*:}
+	cat >"$STUB/npx" <<STUB
 #!/bin/sh
 echo \$\$ >'$SCRATCH/stryker.pid'
 echo "// MUTANT" >>scripts/docs-conformance/validators/skill-web.mjs
 exec sleep 300
 STUB
-rm -f "$SCRATCH/stryker.pid"
-(cd "$KIT" && TMPDIR="$RUNTMP" PATH="$STUB:$PATH" exec sh scripts/mutation.kit.sh) >"$SCRATCH/int.out" 2>&1 &
-wrapper=$!
-n=0; while [ ! -s "$SCRATCH/stryker.pid" ] && [ $n -lt 100 ]; do sleep 0.1; n=$((n + 1)); done
-kill -TERM "$wrapper"
-wait "$wrapper"; st=$?
-[ "$st" = 143 ] && pass "an interrupted run exits 128 + the signal" || fail "an interrupted run exited $st"
-kill -0 "$(cat "$SCRATCH/stryker.pid")" 2>/dev/null && fail "the Stryker process outlived the interrupt" || pass "the interrupt stops the Stryker process"
-grep -q "interrupted" "$SCRATCH/int.out" && pass "the run says it was interrupted" || fail "no interruption message: $(cat "$SCRATCH/int.out")"
-clean && pass "an interrupted run leaves the caller's tree clean" || fail "an interrupted run left changes in the caller's tree"
-recover=$(sed -n 's/^mutation.kit.sh: remove it with: //p' "$SCRATCH/int.out" | tail -1)
-[ -n "$recover" ] && sh -c "$recover" && [ "$(leftovers)" = 0 ] &&
-	pass "the printed recovery command cleans up after an interruption" ||
-	fail "recovery after an interruption failed: $(cat "$SCRATCH/int.out")"
+	rm -f "$SCRATCH/stryker.pid"
+	(cd "$KIT" && TMPDIR="$RUNTMP" PATH="$STUB:$PATH" exec perl -e '$SIG{INT} = $SIG{HUP} = $SIG{TERM} = "DEFAULT"; exec @ARGV' sh scripts/mutation.kit.sh) >"$SCRATCH/int.out" 2>&1 &
+	wrapper=$!
+	n=0; while [ ! -s "$SCRATCH/stryker.pid" ] && [ $n -lt 100 ]; do sleep 0.1; n=$((n + 1)); done
+	kill -"$sig" "$wrapper"
+	wait "$wrapper"; st=$?
+	[ "$st" = "$want" ] && pass "SIG$sig: the run exits $want (128 + the signal)" || fail "SIG$sig: the run exited $st, not $want"
+	kill -0 "$(cat "$SCRATCH/stryker.pid")" 2>/dev/null && fail "SIG$sig: the Stryker process outlived the interrupt" || pass "SIG$sig: the interrupt stops the Stryker process"
+	grep -q "interrupted" "$SCRATCH/int.out" && pass "SIG$sig: the run says it was interrupted" || fail "SIG$sig: no interruption message: $(cat "$SCRATCH/int.out")"
+	clean && pass "SIG$sig: the caller's tree is clean" || fail "SIG$sig: changes left in the caller's tree"
+	recover=$(sed -n 's/^mutation.kit.sh: remove it with: //p' "$SCRATCH/int.out" | tail -1)
+	[ -n "$recover" ] && sh -c "$recover" && [ "$(leftovers)" = 0 ] &&
+		pass "SIG$sig: the printed recovery command cleans up" ||
+		fail "SIG$sig: recovery failed: $(cat "$SCRATCH/int.out")"
+done
+
+# ---------------------------------------------------------------------------
+banner "5b. A worktree that cannot be added leaves no temporary directory behind"
+# ---------------------------------------------------------------------------
+REALGIT=$(command -v git)
+cat >"$STUB/git" <<STUB
+#!/bin/sh
+[ "\$1" = worktree ] && [ "\$2" = add ] && { echo "stub git: worktree add refused" >&2; exit 128; }
+exec '$REALGIT' "\$@"
+STUB
+chmod +x "$STUB/git"
+expect_exit 2 "a failed worktree add exits 2" -- run_wrapper
+[ -z "$(ls "$RUNTMP")" ] && pass "no kit-mutation directory is left under TMPDIR" ||
+	fail "the wrapper left $(ls "$RUNTMP") under TMPDIR"
+rm -f "$STUB/git"
 
 # ---------------------------------------------------------------------------
 banner "6. A run the host paused (slept) is stopped: its timeouts are the pause's"
