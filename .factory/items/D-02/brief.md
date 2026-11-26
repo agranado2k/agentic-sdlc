@@ -3,11 +3,13 @@ id: D-02
 type: discovery
 title: Outside reading on AI-native SDLC practice
 parent: agentic-sdlc
-stage: shaped
+stage: closed
 created: 2026-10-22
-updated: 2026-10-26
+updated: 2026-11-26
 closed_by: "agranado"
 closed_at: 2026-10-26T18:40Z
+stages:
+  - {stage: closed, at: 2026-11-26T21:24Z}
 ---
 
 ## Problem
