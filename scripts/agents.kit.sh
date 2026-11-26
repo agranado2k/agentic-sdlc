@@ -254,6 +254,8 @@ if [ "$_kit_tier" = reviewer ] && [ "$_kit_domain" = cross-provider ]; then
 	esac
 	_kit_form=${1:-}
 	[ -f "$AGENTS_CONFIG" ] || exec sh scripts/agents.lib.sh "$@"
+	# Every case pattern in here opens with its `(`: bash 3.2, macOS's /bin/sh,
+	# ends a `$(` at the first `)` it cannot pair (tests/shell-parse.test.sh).
 	_kit_answer=$(
 		. scripts/agents.lib.sh
 		agents_load_config >/dev/null 2>&1
@@ -264,14 +266,14 @@ if [ "$_kit_tier" = reviewer ] && [ "$_kit_domain" = cross-provider ]; then
 			_vw_h=$_ah_harness _vw_m=$_ah_model _vw_p=
 			_vw_on=${_ah_harness:-$_vw_self}
 			case $1 in
-			*:*) [ -n "$_ah_harness" ] || return 0 ;; # an undeclared prefix
+			(*:*) [ -n "$_ah_harness" ] || return 0 ;; # an undeclared prefix
 			esac
-			case $_vw_on in '' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 0 ;; esac
+			case $_vw_on in ('' | [!abcdefghijklmnopqrstuvwxyz]* | *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 0 ;; esac
 			eval "_vw_p=\${AGENT_KIT_PROVIDER_$(printf '%s' "$_vw_on" | tr 'a-z-' 'A-Z_'):-}"
 		}
 		_vw_unreachable() {
 			for _vw_n in ${AGENT_UNREACHABLE_MODELS:-}; do
-				case $_vw_n in "$1" | "$_vw_m" | "$(_kit_fold "$_vw_m")") return 0 ;; esac
+				case $_vw_n in ("$1" | "$_vw_m" | "$(_kit_fold "$_vw_m")") return 0 ;; esac
 			done
 			return 1
 		}
