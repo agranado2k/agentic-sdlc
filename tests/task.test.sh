@@ -58,6 +58,7 @@ assert_status 0 'status returns the admitted task-local contract' -- sh "$COMMAN
 assert_out_has 'kind|implementation'
 assert_out_has 'scope|Change only the example task boundary.'
 assert_out_has 'acceptance|Missing scope is refused before state exists.'
+assert_out_has 'phases|implementation technical-verification review delivery'
 assert_out_has 'endpoint|reviewed-pr'
 assert_out_has 'authorization|The operator authorized implementation, push, and review; merge stays human-only.'
 assert_out_has 'provenance|ticket:#fixture'
@@ -179,6 +180,47 @@ assert_status 2 'a worktree-status failure cannot look like a clean baseline' --
 assert_out_has 'cannot read worktree status'
 
 task_repo
+sed '$d' "$SCRATCH/small.task" >"$SCRATCH/no-final-newline.task"
+printf '%s' 'provenance|ticket:#fixture' >>"$SCRATCH/no-final-newline.task"
+assert_status 0 'a valid contract without a final newline starts normally' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/no-final-newline.task"
+assert_status 0 'status keeps the final contract record separate from generated receipts' -- \
+	sh "$COMMAND" status "$REPO"
+assert_out_has 'provenance|ticket:#fixture'
+assert_out_has "worktree|$(cd "$REPO" && pwd -P)"
+
+task_repo
+printf '%s\n' '#!/bin/sh' "printf '%s\\n' constant-textconv" >"$SCRATCH/constant-textconv"
+chmod +x "$SCRATCH/constant-textconv"
+printf '%s\n' '*.txt diff=constant' >"$REPO/.gitattributes"
+printf '%s\n' 'base bytes' >"$REPO/textconv.txt"
+git -C "$REPO" add .gitattributes textconv.txt
+git -C "$REPO" commit -q -m 'chore: add textconv fixture'
+git -C "$REPO" config diff.constant.textconv "$SCRATCH/constant-textconv"
+printf '%s\n' 'first changed bytes' >"$REPO/textconv.txt"
+git -C "$REPO" add textconv.txt
+assert_status 0 'a staged baseline with textconv starts' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/preserve.task"
+assert_status 0 'the first raw staged identity is reported' -- sh "$COMMAND" status "$REPO"
+FIRST_RAW_INDEX=$(printf '%s\n' "$LAST_OUT" | sed -n 's/^baseline-index|//p')
+
+task_repo
+printf '%s\n' '*.txt diff=constant' >"$REPO/.gitattributes"
+printf '%s\n' 'base bytes' >"$REPO/textconv.txt"
+git -C "$REPO" add .gitattributes textconv.txt
+git -C "$REPO" commit -q -m 'chore: add textconv fixture'
+git -C "$REPO" config diff.constant.textconv "$SCRATCH/constant-textconv"
+printf '%s\n' 'second changed bytes' >"$REPO/textconv.txt"
+git -C "$REPO" add textconv.txt
+assert_status 0 'a different staged baseline with the same textconv output starts' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/preserve.task"
+assert_status 0 'the second raw staged identity is reported' -- sh "$COMMAND" status "$REPO"
+SECOND_RAW_INDEX=$(printf '%s\n' "$LAST_OUT" | sed -n 's/^baseline-index|//p')
+[ "$FIRST_RAW_INDEX" != "$SECOND_RAW_INDEX" ] &&
+	pass 'baseline identity follows raw staged bytes rather than textconv output' ||
+	fail 'different staged bytes collapsed to one textconv-derived baseline identity'
+
+task_repo
 cat >"$SCRATCH/wave-incomplete.task" <<'EOF'
 task|1
 kind|implementation
@@ -199,7 +241,14 @@ assert_status 0 'a decomposed wave ends at bounded tickets' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/wave.task"
 assert_status 0 'wave status records the tickets endpoint' -- sh "$COMMAND" status "$REPO"
 assert_out_has 'endpoint|tickets'
-assert_out_lacks 'phase|implementation'
+assert_out_has 'phases|specification decomposition'
+
+task_repo
+sed 's/phases|specification decomposition/phases|specification decomposition implementation/' \
+	"$SCRATCH/wave.task" >"$SCRATCH/wave-implementation.task"
+assert_status 2 'a decomposition wave cannot include implementation' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/wave-implementation.task"
+assert_out_has 'phase implementation is not permitted for implementation/wave'
 
 task_repo
 cat >"$SCRATCH/investigation-wave.task" <<'EOF'
@@ -249,6 +298,44 @@ assert_status 0 'a read-only request also ends at its artifact' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/read-only.task"
 
 task_repo
+sed 's/phases|analysis artifact/phases|analysis review artifact/' \
+	"$SCRATCH/report.task" >"$SCRATCH/report-review.task"
+assert_status 0 'a report-only artifact may retain an independently required review' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/report-review.task"
+
+task_repo
+sed -e 's/size|small/size|wave/' \
+	-e 's/phases|analysis artifact/phases|specification analysis artifact/' \
+	"$SCRATCH/report.task" >"$SCRATCH/report-wave-incomplete.task"
+assert_status 2 'a multi-session report decomposes before analysis begins' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/report-wave-incomplete.task"
+assert_out_has 'missing required phase for report-only/wave: decomposition'
+sed 's/phases|specification analysis artifact/phases|specification decomposition analysis artifact/' \
+	"$SCRATCH/report-wave-incomplete.task" >"$SCRATCH/report-wave.task"
+assert_status 0 'a decomposed multi-session report retains its artifact endpoint' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/report-wave.task"
+
+task_repo
+sed 's/kind|report-only/kind|read-only/' \
+	"$SCRATCH/report-wave.task" >"$SCRATCH/read-wave.task"
+assert_status 0 'a decomposed multi-session read-only task retains its artifact endpoint' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/read-wave.task"
+
+task_repo
+sed 's/phases|specification decomposition analysis artifact/phases|analysis specification decomposition artifact/' \
+	"$SCRATCH/report-wave.task" >"$SCRATCH/report-wave-out-of-order.task"
+assert_status 2 'a report wave cannot analyze before specification and decomposition' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/report-wave-out-of-order.task"
+assert_out_has 'report-only wave phases must order specification, decomposition, analysis, artifact'
+
+task_repo
+sed 's/phases|specification decomposition analysis artifact/phases|specification decomposition analysis artifact implementation/' \
+	"$SCRATCH/report-wave.task" >"$SCRATCH/report-wave-implementation.task"
+assert_status 2 'a report wave cannot grow into implementation' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/report-wave-implementation.task"
+assert_out_has 'phase implementation is not permitted for report-only/wave'
+
+task_repo
 sed 's/endpoint|artifact/endpoint|reviewed-pr/' "$SCRATCH/report.task" >"$SCRATCH/report-pr.task"
 assert_status 2 'report-only scope cannot silently grow to a PR endpoint' -- \
 	sh "$COMMAND" start "$REPO" "$SCRATCH/report-pr.task"
@@ -275,6 +362,13 @@ assert_out_has 'endpoint|local-worktree'
 assert_out_has 'phases|implementation technical-verification review'
 assert_out_has 'exception|The operator explicitly said do not push.'
 assert_out_has 'consequence|No remote delivery or reviewed-PR completion may be claimed.'
+
+task_repo
+sed 's/phases|implementation technical-verification review/phases|implementation technical-verification/' \
+	"$SCRATCH/local.task" >"$SCRATCH/local-no-review.task"
+assert_status 2 'do-not-push does not waive independent review' -- \
+	sh "$COMMAND" start "$REPO" "$SCRATCH/local-no-review.task"
+assert_out_has 'missing required phase for implementation/small: review'
 
 task_repo
 sed '/^exception|/d' "$SCRATCH/local.task" >"$SCRATCH/local-no-exception.task"
