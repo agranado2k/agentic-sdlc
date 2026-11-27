@@ -1,104 +1,555 @@
 # Evidence behind D-05. One entry per source; `claim` is what we take from it.
+# Every page was read through a restricted reader on 2026-11-27, via a summarising fetch tool:
+# quotes in research.md are near-verbatim and are checked against the page before a record cites them.
+# D-02's 45 sources were re-read the same day for the harness; research.md cites them as D-02/S-n.
 
 # --- The operator's sources (phase 2) ---
 - id: S-1
   url: https://github.com/andrewyng/openworker/blob/main/harness/README.md
-  title: openworker harness README (andrewyng/openworker, GitHub)
+  title: openworker harness README (andrewyng/openworker, GitHub, undated)
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    A Rust agent engine with TypeScript and Rust SDKs: the engine owns the loop, approvals and
+    durable sessions, the app owns UI, credentials, models and tools. Its guides (S-15 to S-24)
+    hold the mechanisms. No measured results.
 
 - id: S-2
   url: https://github.com/unclebob/crapper
-  title: "crapper (unclebob, GitHub)"
+  title: "crapper (unclebob, GitHub, 0BSD)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    CRAP = CC² × (1 − coverage)³ + CC per function, seven languages, no POSIX sh; `--threshold`
+    exits 2 above it and `--changed` scores only the diff. A gate shaped for an agent. No measured
+    results.
 
 - id: S-3
   url: https://github.com/unclebob/agnesse
-  title: "agnesse (unclebob, GitHub)"
+  title: "agnesse (unclebob, GitHub, CPL 1.0)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    A FitNesse-derived acceptance-test wiki for an agent that writes pages and reads results:
+    Markdown tables as fixtures, JSON results, exit code = failing pages, an MCP server and a
+    re-run of failures only. No measured results.
 
 - id: S-4
   url: https://github.com/unclebob/mutator
-  title: "mutator (unclebob, GitHub)"
+  title: "mutator (unclebob, GitHub, 0BSD)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    Mutation testing in seven languages, no POSIX sh: score = killed / (killed + survived), exit 3
+    when a mutant survives, `--changed` for the diff, differential re-runs after a snapshot. No
+    measured results.
 
 - id: S-5
   url: https://medium.com/@adrianbailador/uncle-bobs-agent-pipeline-from-informal-specs-to-mutation-tested-net-code-ac2baa45cfd5
   title: "Uncle Bob's agent pipeline: from informal specs to mutation-tested .NET code (Adrian Bailador, Medium)"
   kind: operator
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    Unread: HTTP 403 on 2026-11-27, no workaround used. The operator may paste it as a note.
 
 - id: S-6
   url: https://github.com/PrimeIntellect-ai
-  title: "Prime Intellect (PrimeIntellect-ai, GitHub organization)"
+  title: "Prime Intellect (PrimeIntellect-ai, GitHub organization, 65 repositories)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    `verifiers` builds one environment for both RL training and evaluation; `prime-envs` smoke-tests
+    each changed environment in CI and counts a zero exit as a pass only when the episode succeeded;
+    `prime-agent` runs autonomously within turn, token and time budgets with user gates, warning
+    that a passed gate only checks what it verifies. READMEs of verifiers, prime-envs, prime-agent
+    and prime-rl read. No measured results.
 
 - id: S-7
   url: https://github.com/sashiko-dev/sashiko
-  title: "sashiko (sashiko-dev, GitHub)"
+  title: "sashiko (sashiko-dev, Linux Foundation project, GitHub)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    Agentic code review in parallel specialist stages, then verification and a per-finding check.
+    `sashiko benchmark` replays historical bugs with a judge against ground truth: 75.8% of Linux
+    bugs detected (v0.9.3), 58.5% on GCC, under 20% false positives by manual sample. README,
+    docs/benchmarking.md and CONTRIBUTING.md read; vendor-measured.
 
 - id: S-8
   url: https://www.anthropic.com/research/formal-verification
-  title: "Formal verification (Anthropic research)"
+  title: "LLMs are making formal software verification feasible at a much larger scale (Anthropic Frontier Red Team with Theorem, 2026-10-22)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    Claude writes Rocq proofs, the kernel checks them: 239 OSS-Fuzz entry points in 123 libraries
+    proven crash-free under 64 MB inputs, hundreds of bugs found. A typical proof is about 600,000
+    lines and proofs can take hundreds of millions of tokens; single-threaded static RISC-V musl
+    binaries only. Shared proofs cut tokens 17%. The appendix PDF was not extractable.
 
 - id: S-9
   url: https://lean-lang.org/
-  title: "Lean, the programming language and theorem prover (lean-lang.org)"
+  title: "Lean, the programming language and theorem prover (Lean FRO)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it whole through a restricted reader.
+    Program and specification in one language, checked by a minimal kernel. The transferable
+    pattern is AWS Cedar's (lean-lang.org/use-cases/cedar): an executable Lean model about a tenth
+    of the Rust code, differential tests against it on millions of random inputs, and no release
+    unless model, proofs and tests are current. No cost figures.
 
 # --- The operator's formal-verification companies table (notes/formal-verification-companies.md) ---
 
 - id: S-10
   url: https://andtruth.com/
-  title: "&Truth (company site; repositories in notes/formal-verification-companies.md)"
+  title: "&Truth (company site)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+    A stated mission only: prove code in any language safe, secure and correct. The table's
+    stealth, open-sourcing and Lean FRO claims are not on the page (erratum in the note).
 
 - id: S-11
   url: https://www.harmonic.fun/
-  title: "Harmonic (company site; repositories in notes/formal-verification-companies.md)"
+  title: "Harmonic (company site; Aristotle)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+    Aristotle takes a property in plain English and returns proved, refuted or open with its
+    assumptions, runnable on every commit. Vendor case studies only. The IMO2025 repository holds
+    Lean statements and proofs for problems 1 to 5, as the table says.
 
 - id: S-12
   url: https://theorem.dev/
-  title: "Theorem (company site; repositories in notes/formal-verification-companies.md)"
+  title: "Theorem (company site; github.com/theorem-labs, 36 repositories)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+    Proofs a customer's CI rechecks. oss-verify-proofs has 695 of 20,659 statements proved;
+    oss-verify is enrollment and build tooling; static-asan is now asan-static; xv6iris is 404.
+    Its oss-verify README addresses coding agents (not followed).
 
 - id: S-13
   url: https://axiommath.ai/
-  title: "Axiom Math (company site; repositories in notes/formal-verification-companies.md)"
+  title: "Axiom Math (company site; github.com/AxiomMath, 74 repositories)"
   kind: operator
+  read: 2026-11-27
   claim: >-
-    Not read yet; phase 2 reads it, and the repositories the operator's table lists under it, through a restricted reader.
+    Mathematics. AXLE is a client for a hosted Lean verification API; axplorer is a neural search
+    for combinatorial objects, not a proof explorer; the Stacks formalisation keeps AI-written
+    proofs apart from human-reviewed ones. No bearing on the harness beyond that split.
 
-# --- The operator's pasted text, no URL given (notes/claude-code-verification.md) ---
+# --- The operator's pasted text (notes/claude-code-verification.md) ---
 
 - id: S-14
-  url: notes/claude-code-verification.md
-  title: "How the Claude Code team thinks about verification (operator-pasted copy; published URL not given)"
+  url: https://claude.dev/blog/how-the-claude-code-team-thinks-about-verification/
+  title: "How the Claude Code team thinks about verification (Addy Osmani, claude.dev, 2026-11-16)"
   kind: operator
+  read: 2026-11-27
+  copy: notes/claude-code-verification.md
   claim: >-
-    Not read yet; phase 2 reads the copy, finds where it was published, and checks the two match.
+    The operator's copy matches the published article on eleven checkpoints. Verification loops
+    let one person run many agents; one reviewer tuned over rounds beats a stacked second one;
+    rules read from the base branch; three failing rounds bring a human; new gates start in observe
+    mode with a two-block escape; every commit stamped with how it was verified; reviewers graded
+    by reverts, incident replays and per-stage recall; misses become rules only past a bar.
+    Internal: a rubric grader added up to 10 points of task success.
+
+# --- One hop from S-1 (phase 2): the openworker harness guides ---
+
+- id: S-15
+  url: https://github.com/andrewyng/openworker/blob/main/docs/harness/guides/sessions.md
+  title: "Sessions and recovery (openworker docs, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Resume does not replay side effects; an action with an unknown outcome is inspected before a
+    retry. An agent definition is immutable: new instructions, tools or approvals need a new name.
+    Per-turn limits on model calls and output tokens.
+
+- id: S-16
+  url: https://github.com/andrewyng/openworker/blob/main/docs/harness/guides/guardrails.md
+  title: "Guardrails, hooks and compliance (openworker docs, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    A required check that is unavailable parks the session until restored and explicitly resumed;
+    detectors that fail never become allows; observer hooks cannot veto; checks stay on in every
+    approval mode.
+
+- id: S-17
+  url: https://github.com/andrewyng/openworker/blob/main/docs/harness/guides/openshell.md
+  title: "NVIDIA OpenShell integration (openworker docs, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    The loop and the tools can each run in a sandbox; the worker journals each tool proposal before
+    acknowledging it; the sandbox gets a placeholder credential while the real one stays trusted.
+
+- id: S-18
+  url: https://github.com/andrewyng/openworker/blob/main/docs/harness/guides/tools.md
+  title: "Tools and MCP (openworker docs, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    An agent lists only the tools it needs; a reused call id is rejected before dispatch; "path
+    scope is not isolation": hostile code needs an isolated backend.
+
+- id: S-19
+  url: https://github.com/andrewyng/openworker/blob/main/docs/harness/guides/observability.md
+  title: "Observe agent work (openworker docs, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Recording and export configured apart, content capture off by default; export failure never
+    replays a turn; missing usage is unknown, not zero; drops and write failures are counted;
+    evaluation records are idempotent by id.
+
+- id: S-20
+  url: https://github.com/andrewyng/openworker/blob/main/docs/harness/guides/providers.md
+  title: "Models and credentials (openworker docs, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    A session saves its resolved model; incomplete streamed tool calls cannot authorise execution;
+    request and generation timeouts; prompt caching on by default; missing usage is unknown.
+
+- id: S-21
+  url: https://github.com/andrewyng/openworker/blob/main/docs/harness/guides/releases.md
+  title: "Versions and installation (openworker docs, verified 2026-11-13)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Client SDK and runtime versioned apart; a skill records the SDK version it was tested against;
+    an upgrade backs up durable state first.
+
+- id: S-22
+  url: https://github.com/andrewyng/openworker/blob/main/harness/partner/README.md
+  title: "Custom applications and tool packages (openworker, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    A pointer page: partner apps link tool crates into their own harness process. Nothing further.
+
+- id: S-23
+  url: https://github.com/andrewyng/openworker/blob/main/harness/tools-sdk/README.md
+  title: "OpenWorker Tools SDK (openworker, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    The bundle's list is the selection; missing or duplicate tools fail with no fallback; sessions
+    pin the bundle, policies and executable bytes; on a limit, panic or timeout the turn stops
+    without replaying the action, and cancellation is not rollback.
+
+- id: S-24
+  url: https://github.com/andrewyng/openworker/blob/main/skills/openworker-harness-builder/references/local-script.md
+  title: "A plain Node.js file-organizing agent (openworker builder skill reference, undated)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Per-call approval for mutating operations only; resuming a session needs the identical agent
+    definition; the installer pins the exact tested SDK version.
+
+# --- Literature survey (phase 1), by sub-question ---
+
+# SQ1 · Evidence gates
+- id: S-25
+  url: https://www.artima.com/weblogs/viewpost.jsp?thread=210575
+  title: "Pardon My French, But This Code Is C.R.A.P. (2) (Alberto Savoia, Artima, 2007-07-19)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Defines CRAP(m) = comp(m)² × (1 − cov(m)/100)³ + comp(m) to flag complex, untested
+    methods first; the author warns it is "not perfect" and not a proxy for code quality.
+
+- id: S-26
+  url: https://research.google/pubs/state-of-mutation-testing-at-google/
+  title: "State of Mutation Testing at Google (Petrović, Ivanković; ICSE-SEIP 2018)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, abstract only (the PDF was not extractable). Diff-scoped, probabilistic mutation on
+    covered, non-"arid" changed lines makes mutation testing viable in code review: about 30% of
+    diffs with coverage, 6,000 engineers. "Traditional mutation analysis is computationally
+    prohibitive".
+
+- id: S-27
+  url: https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf
+  title: "QuickCheck: a lightweight tool for random testing of Haskell programs (Claessen, Hughes; ICFP 2000)"
+  kind: literature
+  claim: >-
+    Unread: the PDF came back as binary with no extractable text. Cited by S-29 as the origin of
+    property-based testing.
+
+- id: S-28
+  url: https://arxiv.org/abs/2501.12862
+  title: "Mutation-Guided LLM-based Test Generation at Meta (Foster, Harman et al.; FSE Companion 2025)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. An LLM writes mutants that current tests miss and a second LLM writes tests that kill
+    them; an LLM equivalence filter reaches 0.95 precision with pre-processing. Engineers accepted
+    73% of 191 tests. One model, Kotlin/Android, privacy faults only.
+
+- id: S-29
+  url: https://arxiv.org/abs/2510.09907
+  title: "Agentic Property-Based Testing: Finding Bugs Across the Python Ecosystem (Maaz, DeVoe, Hatfield-Dodds, Carlini; 2025-10)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. A Claude Code agent writes Hypothesis tests and triages failures: 984 reports on 100
+    packages, 56% valid by manual sample, 86% of the rubric's top 21; about $5,474 in all, about
+    $10 a valid bug. The agent cannot tell intended design from a bug.
+
+- id: S-30
+  url: https://arxiv.org/abs/2307.04346
+  title: "Can Large Language Models Write Good Property-Based Tests? (Vikram, Lemieux, Sunshine, Padhye; 2024-07)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. Only about a quarter of LLM-written property tests are both valid and sound, and they
+    cover about 21% of documented properties; generated tests need a validity, soundness and
+    property-mutant check before they count.
+
+# SQ2 · Evaluating the harness
+- id: S-31
+  url: https://arxiv.org/abs/2310.06770
+  title: "SWE-bench: Can Language Models Resolve Real-World GitHub Issues? (Jimenez et al.; ICLR 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Merged PRs become tasks graded by their hidden fail-to-pass and pass-to-pass tests; a
+    benchmark measures model and scaffold together. Passing tests does not guarantee good code.
+
+- id: S-32
+  url: https://arxiv.org/abs/2405.15793
+  title: "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering (Yang et al.; 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. The interface alone moved GPT-4 Turbo from 11.0% to 18.0% on SWE-bench Lite (n=300);
+    a lint guardrail on edits, capped search and a 100-line viewer each mattered in ablation. About
+    $1.60 per resolved issue.
+
+- id: S-33
+  url: https://arxiv.org/abs/2406.12045
+  title: "tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains (Yao et al.; Sierra, 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. pass^k, the chance all k trials succeed, shows single-run scores overstate reliability:
+    gpt-4o at 61% pass^1 fell under 25% at pass^8 in retail. Grades the end state, not the path.
+
+- id: S-34
+  url: https://openai.com/index/introducing-swe-bench-verified/
+  title: "Introducing SWE-bench Verified (OpenAI; 2024-08-13, updated 2025-02-24)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice. Three developers screened each of 1,699 samples; 68.3% were dropped as
+    underspecified or wrongly tested, leaving 500. A broken benchmark understates the agent.
+
+- id: S-35
+  url: https://arxiv.org/abs/2605.27922
+  title: "Harness-Bench: Evaluating Agent Harnesses across Models and Realistic Workflows (Yao et al.; 2026-05, v2 2026-10)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. 7 harnesses × 10 models on the same isolated tasks, one run each: the within-model spread
+    is 5.0 to 9.5 points for nine models and 39.2 for one, and no harness is best on every model;
+    one harness cost 2.97x another for a lower score. Its abstract and body disagree on the task
+    count, and neither gives the "52.4 to 76.2" D-02/S-12 attributes to it.
+
+# SQ3 · Guard and gate design
+- id: S-36
+  url: https://kubernetes.io/docs/concepts/security/pod-security-admission/
+  title: "Pod Security Admission (Kubernetes docs)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, partly through a summary. One policy runs per namespace in three independent modes:
+    enforce rejects, audit logs, warn tells the user; the last two let the action through, so a
+    policy can be watched before it blocks.
+
+- id: S-37
+  url: https://martinfowler.com/articles/feature-toggles.html
+  title: "Feature Toggles (aka Feature Flags) (Pete Hodgson, martinfowler.com, 2017-10-09)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, partly through a summary. Toggles differ by longevity and dynamism: canary cohorts, ops
+    kill switches, expiry "time bombs" and a cap on their number. Silent on fail-open defaults.
+
+- id: S-38
+  url: https://code.claude.com/docs/en/hooks
+  title: "Hooks reference (Claude Code docs)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, partly read. Exit 2 blocks; a crashed, invalid or timed-out hook fails open unless it
+    sets `onFailure: "block"` (v2.1.295 or later); a Stop hook that exits 2 keeps the turn going;
+    managed settings can allow only managed hooks.
+
+- id: S-39
+  url: https://arxiv.org/abs/2506.08837
+  title: "Design Patterns for Securing LLM Agents against Prompt Injections (Beurer-Kellner, Tramèr et al.; 2025-06)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Six patterns (action-selector, plan-then-execute, map-reduce, dual LLM,
+    code-then-execute, context-minimisation) constrain an agent once it has read untrusted input;
+    qualitative, and "they do not provide guarantees" for heuristic defences.
+
+- id: S-40
+  url: https://arxiv.org/abs/2503.18813
+  title: "Defeating Prompt Injections by Design (CaMeL; Debenedetti, Tramèr et al.; Google DeepMind, ETH; 2025)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. A privileged planner, a tool-less quarantined reader and an interpreter that tracks each
+    value's provenance and checks policies before every tool call: 77% of AgentDojo tasks with
+    provable security against 84% undefended, at about 2.8x tokens.
+
+# SQ4 · Run reliability
+- id: S-41
+  url: https://stripe.com/blog/idempotency
+  title: "Designing robust and predictable APIs with idempotency (Brandur Leach, Stripe, 2017-02-22)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. An idempotency key sent with every retry lets the server return the stored result instead
+    of repeating a side effect; backoff with jitter avoids synchronised retries.
+
+- id: S-42
+  url: https://sre.google/sre-book/addressing-cascading-failures/
+  title: "Addressing Cascading Failures (Mike Ulrich, Google SRE book, 2017)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, partly through a summary. Retry at one layer only (4 attempts over 3 layers is 64),
+    cap retries per request and per process, propagate one absolute deadline, and cancel doomed
+    work.
+
+- id: S-43
+  url: https://temporal.io/blog/durable-execution-meets-ai-why-temporal-is-the-perfect-foundation-for-ai
+  title: "Durable Execution meets AI (Cornelia Davis, Temporal, 2025-07-10)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, vendor. Every step's result is recorded and state is rebuilt by replaying the event
+    history after a crash; LLM and tool calls retry automatically as activities. Silent on
+    idempotency of side effects.
+
+- id: S-44
+  url: https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+  title: "Effective harnesses for long-running agents (Justin Young, Anthropic, 2025-11-26)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice. An initializer session writes a progress file and a first commit; each later session
+    reads them, runs a basic end-to-end check, makes one feature of progress and commits a clean
+    state. Qualitative only.
+
+- id: S-45
+  url: https://docs.langchain.com/oss/python/langgraph/durable-execution
+  title: "Persistence (LangGraph docs; the URL served this page, not durable execution)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, partly on-topic. Checkpointers save a thread's state for resume; in-memory savers lose
+    it on restart; checkpoints accumulate cost. Silent on side effects during replay.
+
+# SQ5 · Cost inside the harness
+- id: S-46
+  url: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+  title: "Effective context engineering for AI agents (Anthropic, 2025-09-29)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Context is a finite attention budget: compaction, notes outside the window, just-in-time
+    retrieval, sub-agents that return 1,000 to 2,000 tokens. No measurements.
+
+- id: S-47
+  url: https://research.trychroma.com/context-rot
+  title: "Context Rot: How Increasing Input Tokens Impacts LLM Performance (Hong, Troynikov, Huber; Chroma, 2025-07-14)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. Across 18 models, accuracy falls as input grows even on simple tasks; a focused
+    300-token prompt beat the full 113k-token one for every model family (LongMemEval, 306 prompts).
+
+- id: S-48
+  url: https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus
+  title: "Context Engineering for AI Agents: Lessons from Building Manus (Yichao Ji, Manus, 2025-07-18)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, vendor. KV-cache hit rate is the top production metric: a stable prefix, append-only
+    context, tools masked rather than removed, files as memory, failures kept in context. Cached
+    input at a tenth of the price; about 100:1 input to output.
+
+- id: S-49
+  url: https://www.anthropic.com/engineering/writing-tools-for-agents
+  title: "Writing effective tools for AI agents — with agents (Anthropic, 2025-09-11)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice. Consolidated, namespaced tools with concise response modes, truncation and actionable
+    errors cut the context each call spends; tune them on held-out tasks. One example: 206 tokens
+    down to 72.
+
+- id: S-50
+  url: https://docs.claude.com/en/docs/build-with-claude/prompt-caching
+  title: "Prompt caching (Anthropic API docs)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. A byte-identical prefix (tools, system, messages) is read at about 0.1x the input price,
+    written at 1.25x for 5 minutes or 2x for an hour; any change invalidates its level and all after
+    it.
+
+# SQ6 · Dissent
+- id: S-51
+  url: http://www.incompleteideas.net/IncIdeas/BitterLesson.html
+  title: "The Bitter Lesson (Rich Sutton, 2019)"
+  kind: literature
+  claim: >-
+    Unread: a self-signed certificate. Cited for the view that general methods that scale beat
+    hand-built structure.
+
+- id: S-52
+  url: https://arxiv.org/abs/2407.01489
+  title: "Agentless: Demystifying LLM-based Software Engineering Agents (Xia, Deng, Dunn, Zhang; UIUC, 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. A fixed localise, repair and validate pipeline, with no actions chosen by the model,
+    resolved 32% of SWE-bench Lite at $0.70 an issue; most of the gain came from selecting patches
+    by tests. Contamination not ruled out.
+
+- id: S-53
+  url: https://arxiv.org/abs/2407.01502
+  title: "AI Agents That Matter (Kapoor, Narayanan et al.; Princeton, 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. Accuracy alone is not progress: retry and escalation baselines matched leading coding
+    agents at a fraction of the cost (89.6% at $1.93 against 88.0% at $134.50 on HumanEval);
+    report cost beside accuracy and keep holdouts.
+
+- id: S-54
+  url: https://github.com/SWE-agent/mini-swe-agent
+  title: "mini-swe-agent: the minimal AI software engineering agent (SWE-agent org)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. About 100 lines, bash only, a linear history; the README claims over 74% on SWE-bench
+    Verified with no model, n or date given.
+
+- id: S-55
+  url: https://arxiv.org/abs/2510.20270
+  title: "ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases (Zhong, Raghunathan, Carlini; 2025-10-23)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. On tasks whose tests no correct code can pass, GPT-5 passed anyway 76% of the time on
+    one SWE-bench variant; hidden or read-only tests and a "flag for a human" exit cut it (54% to
+    9%); LLM monitors caught 42 to 65% on SWE-bench.
