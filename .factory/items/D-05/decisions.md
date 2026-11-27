@@ -1,1 +1,2 @@
 - 2026-11-16 **Discovery opened.** Topic: improving the SDLC agent harness. The operator gave S-1 as a source to deep-read in phase 2.
+- 2026-11-26 **Sources added.** The operator gave S-2 to S-14 to deep-read in phase 2: unclebob's crapper, agnesse and mutator and an article on his agent pipeline, Prime Intellect, sashiko, Anthropic's formal-verification research, Lean, four formal-verification companies from a table kept in notes/formal-verification-companies.md, and a pasted copy of a Claude Code team article on verification kept in notes/claude-code-verification.md.
