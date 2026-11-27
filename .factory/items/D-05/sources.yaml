@@ -247,3 +247,309 @@
   claim: >-
     Per-call approval for mutating operations only; resuming a session needs the identical agent
     definition; the installer pins the exact tested SDK version.
+
+# --- Literature survey (phase 1), by sub-question ---
+
+# SQ1 · Evidence gates
+- id: S-25
+  url: https://www.artima.com/weblogs/viewpost.jsp?thread=210575
+  title: "Pardon My French, But This Code Is C.R.A.P. (2) (Alberto Savoia, Artima, 2007-07-19)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Defines CRAP(m) = comp(m)² × (1 − cov(m)/100)³ + comp(m) to flag complex, untested
+    methods first; the author warns it is "not perfect" and not a proxy for code quality.
+
+- id: S-26
+  url: https://research.google/pubs/state-of-mutation-testing-at-google/
+  title: "State of Mutation Testing at Google (Petrović, Ivanković; ICSE-SEIP 2018)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, abstract only (the PDF was not extractable). Diff-scoped, probabilistic mutation on
+    covered, non-"arid" changed lines makes mutation testing viable in code review: about 30% of
+    diffs with coverage, 6,000 engineers. "Traditional mutation analysis is computationally
+    prohibitive".
+
+- id: S-27
+  url: https://www.cs.tufts.edu/~nr/cs257/archive/john-hughes/quick.pdf
+  title: "QuickCheck: a lightweight tool for random testing of Haskell programs (Claessen, Hughes; ICFP 2000)"
+  kind: literature
+  claim: >-
+    Unread: the PDF came back as binary with no extractable text. Cited by S-29 as the origin of
+    property-based testing.
+
+- id: S-28
+  url: https://arxiv.org/abs/2501.12862
+  title: "Mutation-Guided LLM-based Test Generation at Meta (Foster, Harman et al.; FSE Companion 2025)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. An LLM writes mutants that current tests miss and a second LLM writes tests that kill
+    them; an LLM equivalence filter reaches 0.95 precision with pre-processing. Engineers accepted
+    73% of 191 tests. One model, Kotlin/Android, privacy faults only.
+
+- id: S-29
+  url: https://arxiv.org/abs/2510.09907
+  title: "Agentic Property-Based Testing: Finding Bugs Across the Python Ecosystem (Maaz, DeVoe, Hatfield-Dodds, Carlini; 2025-10)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. A Claude Code agent writes Hypothesis tests and triages failures: 984 reports on 100
+    packages, 56% valid by manual sample, 86% of the rubric's top 21; about $5,474 in all, about
+    $10 a valid bug. The agent cannot tell intended design from a bug.
+
+- id: S-30
+  url: https://arxiv.org/abs/2307.04346
+  title: "Can Large Language Models Write Good Property-Based Tests? (Vikram, Lemieux, Sunshine, Padhye; 2024-07)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. Only about a quarter of LLM-written property tests are both valid and sound, and they
+    cover about 21% of documented properties; generated tests need a validity, soundness and
+    property-mutant check before they count.
+
+# SQ2 · Evaluating the harness
+- id: S-31
+  url: https://arxiv.org/abs/2310.06770
+  title: "SWE-bench: Can Language Models Resolve Real-World GitHub Issues? (Jimenez et al.; ICLR 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Merged PRs become tasks graded by their hidden fail-to-pass and pass-to-pass tests; a
+    benchmark measures model and scaffold together. Passing tests does not guarantee good code.
+
+- id: S-32
+  url: https://arxiv.org/abs/2405.15793
+  title: "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering (Yang et al.; 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. The interface alone moved GPT-4 Turbo from 11.0% to 18.0% on SWE-bench Lite (n=300);
+    a lint guardrail on edits, capped search and a 100-line viewer each mattered in ablation. About
+    $1.60 per resolved issue.
+
+- id: S-33
+  url: https://arxiv.org/abs/2406.12045
+  title: "tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains (Yao et al.; Sierra, 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. pass^k, the chance all k trials succeed, shows single-run scores overstate reliability:
+    gpt-4o at 61% pass^1 fell under 25% at pass^8 in retail. Grades the end state, not the path.
+
+- id: S-34
+  url: https://openai.com/index/introducing-swe-bench-verified/
+  title: "Introducing SWE-bench Verified (OpenAI; 2024-08-13, updated 2025-02-24)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice. Three developers screened each of 1,699 samples; 68.3% were dropped as
+    underspecified or wrongly tested, leaving 500. A broken benchmark understates the agent.
+
+- id: S-35
+  url: https://arxiv.org/abs/2605.27922
+  title: "Harness-Bench: Evaluating Agent Harnesses across Models and Realistic Workflows (Yao et al.; 2026-05, v2 2026-10)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. 7 harnesses × 10 models on the same isolated tasks, one run each: the within-model spread
+    is 5.0 to 9.5 points for nine models and 39.2 for one, and no harness is best on every model;
+    one harness cost 2.97x another for a lower score. Its abstract and body disagree on the task
+    count, and neither gives the "52.4 to 76.2" D-02/S-12 attributes to it.
+
+# SQ3 · Guard and gate design
+- id: S-36
+  url: https://kubernetes.io/docs/concepts/security/pod-security-admission/
+  title: "Pod Security Admission (Kubernetes docs)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, partly through a summary. One policy runs per namespace in three independent modes:
+    enforce rejects, audit logs, warn tells the user; the last two let the action through, so a
+    policy can be watched before it blocks.
+
+- id: S-37
+  url: https://martinfowler.com/articles/feature-toggles.html
+  title: "Feature Toggles (aka Feature Flags) (Pete Hodgson, martinfowler.com, 2017-10-09)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, partly through a summary. Toggles differ by longevity and dynamism: canary cohorts, ops
+    kill switches, expiry "time bombs" and a cap on their number. Silent on fail-open defaults.
+
+- id: S-38
+  url: https://code.claude.com/docs/en/hooks
+  title: "Hooks reference (Claude Code docs)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, partly read. Exit 2 blocks; a crashed, invalid or timed-out hook fails open unless it
+    sets `onFailure: "block"` (v2.1.295 or later); a Stop hook that exits 2 keeps the turn going;
+    managed settings can allow only managed hooks.
+
+- id: S-39
+  url: https://arxiv.org/abs/2506.08837
+  title: "Design Patterns for Securing LLM Agents against Prompt Injections (Beurer-Kellner, Tramèr et al.; 2025-06)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Six patterns (action-selector, plan-then-execute, map-reduce, dual LLM,
+    code-then-execute, context-minimisation) constrain an agent once it has read untrusted input;
+    qualitative, and "they do not provide guarantees" for heuristic defences.
+
+- id: S-40
+  url: https://arxiv.org/abs/2503.18813
+  title: "Defeating Prompt Injections by Design (CaMeL; Debenedetti, Tramèr et al.; Google DeepMind, ETH; 2025)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    New. A privileged planner, a tool-less quarantined reader and an interpreter that tracks each
+    value's provenance and checks policies before every tool call: 77% of AgentDojo tasks with
+    provable security against 84% undefended, at about 2.8x tokens.
+
+# SQ4 · Run reliability
+- id: S-41
+  url: https://stripe.com/blog/idempotency
+  title: "Designing robust and predictable APIs with idempotency (Brandur Leach, Stripe, 2017-02-22)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. An idempotency key sent with every retry lets the server return the stored result instead
+    of repeating a side effect; backoff with jitter avoids synchronised retries.
+
+- id: S-42
+  url: https://sre.google/sre-book/addressing-cascading-failures/
+  title: "Addressing Cascading Failures (Mike Ulrich, Google SRE book, 2017)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon, partly through a summary. Retry at one layer only (4 attempts over 3 layers is 64),
+    cap retries per request and per process, propagate one absolute deadline, and cancel doomed
+    work.
+
+- id: S-43
+  url: https://temporal.io/blog/durable-execution-meets-ai-why-temporal-is-the-perfect-foundation-for-ai
+  title: "Durable Execution meets AI (Cornelia Davis, Temporal, 2025-07-10)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, vendor. Every step's result is recorded and state is rebuilt by replaying the event
+    history after a crash; LLM and tool calls retry automatically as activities. Silent on
+    idempotency of side effects.
+
+- id: S-44
+  url: https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+  title: "Effective harnesses for long-running agents (Justin Young, Anthropic, 2025-11-26)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice. An initializer session writes a progress file and a first commit; each later session
+    reads them, runs a basic end-to-end check, makes one feature of progress and commits a clean
+    state. Qualitative only.
+
+- id: S-45
+  url: https://docs.langchain.com/oss/python/langgraph/durable-execution
+  title: "Persistence (LangGraph docs; the URL served this page, not durable execution)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, partly on-topic. Checkpointers save a thread's state for resume; in-memory savers lose
+    it on restart; checkpoints accumulate cost. Silent on side effects during replay.
+
+# SQ5 · Cost inside the harness
+- id: S-46
+  url: https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+  title: "Effective context engineering for AI agents (Anthropic, 2025-09-29)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. Context is a finite attention budget: compaction, notes outside the window, just-in-time
+    retrieval, sub-agents that return 1,000 to 2,000 tokens. No measurements.
+
+- id: S-47
+  url: https://research.trychroma.com/context-rot
+  title: "Context Rot: How Increasing Input Tokens Impacts LLM Performance (Hong, Troynikov, Huber; Chroma, 2025-07-14)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. Across 18 models, accuracy falls as input grows even on simple tasks; a focused
+    300-token prompt beat the full 113k-token one for every model family (LongMemEval, 306 prompts).
+
+- id: S-48
+  url: https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus
+  title: "Context Engineering for AI Agents: Lessons from Building Manus (Yichao Ji, Manus, 2025-07-18)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice, vendor. KV-cache hit rate is the top production metric: a stable prefix, append-only
+    context, tools masked rather than removed, files as memory, failures kept in context. Cached
+    input at a tenth of the price; about 100:1 input to output.
+
+- id: S-49
+  url: https://www.anthropic.com/engineering/writing-tools-for-agents
+  title: "Writing effective tools for AI agents — with agents (Anthropic, 2025-09-11)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Practice. Consolidated, namespaced tools with concise response modes, truncation and actionable
+    errors cut the context each call spends; tune them on held-out tasks. One example: 206 tokens
+    down to 72.
+
+- id: S-50
+  url: https://docs.claude.com/en/docs/build-with-claude/prompt-caching
+  title: "Prompt caching (Anthropic API docs)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Canon. A byte-identical prefix (tools, system, messages) is read at about 0.1x the input price,
+    written at 1.25x for 5 minutes or 2x for an hour; any change invalidates its level and all after
+    it.
+
+# SQ6 · Dissent
+- id: S-51
+  url: http://www.incompleteideas.net/IncIdeas/BitterLesson.html
+  title: "The Bitter Lesson (Rich Sutton, 2019)"
+  kind: literature
+  claim: >-
+    Unread: a self-signed certificate. Cited for the view that general methods that scale beat
+    hand-built structure.
+
+- id: S-52
+  url: https://arxiv.org/abs/2407.01489
+  title: "Agentless: Demystifying LLM-based Software Engineering Agents (Xia, Deng, Dunn, Zhang; UIUC, 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. A fixed localise, repair and validate pipeline, with no actions chosen by the model,
+    resolved 32% of SWE-bench Lite at $0.70 an issue; most of the gain came from selecting patches
+    by tests. Contamination not ruled out.
+
+- id: S-53
+  url: https://arxiv.org/abs/2407.01502
+  title: "AI Agents That Matter (Kapoor, Narayanan et al.; Princeton, 2024)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. Accuracy alone is not progress: retry and escalation baselines matched leading coding
+    agents at a fraction of the cost (89.6% at $1.93 against 88.0% at $134.50 on HumanEval);
+    report cost beside accuracy and keep holdouts.
+
+- id: S-54
+  url: https://github.com/SWE-agent/mini-swe-agent
+  title: "mini-swe-agent: the minimal AI software engineering agent (SWE-agent org)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. About 100 lines, bash only, a linear history; the README claims over 74% on SWE-bench
+    Verified with no model, n or date given.
+
+- id: S-55
+  url: https://arxiv.org/abs/2510.20270
+  title: "ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases (Zhong, Raghunathan, Carlini; 2025-10-23)"
+  kind: literature
+  read: 2026-11-27
+  claim: >-
+    Dissent. On tasks whose tests no correct code can pass, GPT-5 passed anyway 76% of the time on
+    one SWE-bench variant; hidden or read-only tests and a "flag for a human" exit cut it (54% to
+    9%); LLM monitors caught 42 to 65% on SWE-bench.
